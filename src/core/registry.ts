@@ -1,26 +1,33 @@
-import type { EmergenceLayer } from './layer';
+import type { HatchLayer } from './layer';
+import type { TimeSpec } from './timeAxis';
 
 type Listener = () => void;
 
-/** Holds the known layers and which are switched on. UI and renderer both listen to it. */
+/** Holds the known layers, their preferred time range, and which are switched on. */
 export class LayerRegistry {
-  private layers = new Map<string, EmergenceLayer>();
+  private layers = new Map<string, { layer: HatchLayer; time: TimeSpec }>();
   private active = new Set<string>();
   private listeners = new Set<Listener>();
 
-  register(layer: EmergenceLayer, activate = true): void {
+  register(layer: HatchLayer, time: TimeSpec, activate = true): void {
     if (this.layers.has(layer.id)) throw new Error(`Layer already registered: ${layer.id}`);
-    this.layers.set(layer.id, layer);
+    this.layers.set(layer.id, { layer, time });
     if (activate) this.active.add(layer.id);
     this.emit();
   }
 
-  all(): EmergenceLayer[] {
-    return [...this.layers.values()];
+  all(): HatchLayer[] {
+    return [...this.layers.values()].map((e) => e.layer);
   }
 
-  activeLayers(): EmergenceLayer[] {
+  activeLayers(): HatchLayer[] {
     return this.all().filter((l) => this.active.has(l.id));
+  }
+
+  /** The scrubber follows the first active layer's time spec. */
+  activeTime(): TimeSpec | null {
+    for (const [id, e] of this.layers) if (this.active.has(id)) return e.time;
+    return null;
   }
 
   isActive(id: string): boolean {

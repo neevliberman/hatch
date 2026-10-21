@@ -1,0 +1,34 @@
+# Nightly: save raw NWS gridded forecasts to the `forecast-archive` branch (archive/YYYY-MM-DD/<point>.json).
+# UNTESTED (written without network access). Runs year-round: the archive is the only record of past forecasts.
+name: forecast-archive
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch forecasts
+        run: python3 scripts/archive/save_forecasts.py "$RUNNER_TEMP/out"
+      - name: Commit to forecast-archive branch
+        run: |
+          set -euo pipefail
+          D=$(date -u +%F)
+          REPO="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          cd "$RUNNER_TEMP"
+          git clone --branch forecast-archive --single-branch "$REPO" fa 2>/dev/null || {
+            git init -q fa && cd fa && git checkout -q -b forecast-archive && git remote add origin "$REPO" && cd ..
+          }
+          cd fa
+          mkdir -p "archive/$D"
+          cp "$RUNNER_TEMP"/out/*.json "archive/$D/"
+          git config user.name "hatch-archive-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add archive
+          git diff --cached --quiet && { echo "nothing new"; exit 0; }
+          git commit -q -m "forecast archive $D"
+          git push origin forecast-archive

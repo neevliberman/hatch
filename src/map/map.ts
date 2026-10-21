@@ -1,10 +1,10 @@
 import { Deck, MapView, WebMercatorViewport } from '@deck.gl/core';
 import type { Layer, PickingInfo } from '@deck.gl/core';
-import { MIDWEST_BOUNDS } from '../core/grid';
+import { latLngToCell } from 'h3-js';
+import { GRID_RES, MIDWEST_BOUNDS } from '../core/grid';
 import type { LayerRegistry } from '../core/registry';
 import type { TimeAxis } from '../core/timeAxis';
 import { basemapLayers, theme } from './basemap';
-import { GRID_RES } from '../core/grid';
 
 export interface MapHandle {
   /** Re-render layers (call when time or layer set changes). */
@@ -17,7 +17,8 @@ interface Opts {
   container: HTMLDivElement;
   registry: LayerRegistry;
   time: TimeAxis;
-  onProbe: (cell: string | null, pinned: boolean) => void;
+  /** cell = H3 id under the pointer (null if none); lngLat is where; clicked distinguishes tap from hover. */
+  onProbe: (hit: { cell: string; lngLat: [number, number] } | null, clicked: boolean) => void;
   padding: () => { top: number; bottom: number };
 }
 
@@ -31,36 +32,44 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
     return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: 3, maxZoom: 11 };
   };
 
+  // deck.gl 9 creates its view manager asynchronously, so deck.getViewports() is NOT safe right after
+  // `new Deck()` (it asserts). Zoom is tracked from onViewStateChange instead.
+  const initial = fitState(padding());
+  let zoom = initial.zoom;
+
+  const hit = (info: PickingInfo) => {
+    if (!info.object || !info.coordinate) return null;
+    const [lng, lat] = info.coordinate as [number, number];
+    return { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
+  };
+
   const deck = new Deck({
     parent: container,
     views: new MapView({ repeat: false }),
-    initialViewState: fitState(padding()),
-    // No rotate/tilt: this is a flat data map. Keyboard off so arrow keys drive the time scrubber.
+    initialViewState: initial,
+    // No rotate/tilt: flat data map. Keyboard off so arrow keys drive the time scrubber.
     controller: { dragRotate: false, touchRotate: false, keyboard: false, doubleClickZoom: true },
     getCursor: ({ isDragging, isHovering }) => (isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab'),
     layers: [],
-    onHover: (info: PickingInfo) => onProbe(info.object ? hexId(info) : null, false),
-    onClick: (info: PickingInfo) => onProbe(info.object ? hexId(info) : null, true),
+    onViewStateChange: ({ viewState }) => {
+      zoom = viewState.zoom;
+    },
+    onHover: (info: PickingInfo) => onProbe(hit(info), false),
+    onClick: (info: PickingInfo) => onProbe(hit(info), true),
   });
 
   const refresh = () => {
-    const zoom = (deck.getViewports()[0]?.zoom as number | undefined) ?? 4;
     const { under, over } = basemapLayers();
-    const dataLayers: Layer[] = registry
-      .activeLayers()
-      .flatMap((l) => l.render({ t: time.cursor, res: GRID_RES, zoom, theme }));
+    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme }));
     deck.setProps({ layers: [...under, ...dataLayers, ...over] });
   };
 
   return {
     refresh,
     fit(p) {
-      deck.setProps({ initialViewState: { ...fitState(p), transitionDuration: 0 } });
+      const v = fitState(p);
+      zoom = v.zoom;
+      deck.setProps({ initialViewState: { ...v, transitionDuration: 0 } });
     },
   };
-}
-
-function hexId(info: PickingInfo): string | null {
-  const o = info.object as { id?: string } | undefined;
-  return o?.id ?? null;
 }

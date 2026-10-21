@@ -27,18 +27,17 @@ export interface LegendSpec {
 }
 
 /**
- * The seam every data layer plugs into (plan section 6).
- * The app owns space (H3 cells) and time (TimeAxis); a layer only turns (cell, time) into pixels.
+ * The seam every data layer plugs into (plan v2 section 6). Deliberately tiny:
+ * the app owns the map and the clock; a layer loads its own data and turns (time, zoom) into deck layers.
+ * Which time range a layer wants to be scrubbed over is registration metadata (see registry.ts), not part of this contract.
  */
-export interface EmergenceLayer {
+export interface HatchLayer {
   id: string;
   title: string;
-  kind: 'cell' | 'point' | 'volume';
-  time: { start: Date; end: Date; stepMs: number; forecastFrom?: Date };
-  resolutions: { min: number; max: number };
-  load(q: { cells: string[]; res: number; t0: number; t1: number }): Promise<void>;
-  render(ctx: { t: number; res: number; zoom: number; theme: Theme }): Layer[];
-  probe?(cell: string, t: number): ProbeCard;
+  render(ctx: { t: number; zoom: number; theme: Theme }): Layer[];
+  /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
   legend(): LegendSpec;
+  /** "What's here" for hover/tap. */
+  probe?(lngLat: [number, number], t: number): ProbeCard;
 }

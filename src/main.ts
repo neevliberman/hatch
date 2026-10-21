@@ -1,8 +1,7 @@
 import './style.css';
-import { buildGrid, GRID_RES } from './core/grid';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis } from './core/timeAxis';
-import { createDemoLayer } from './layers/demoHeatWave';
+import { createDemoLayer, demoTimeSpec } from './layers/demoHeatWave';
 import { createMap } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
@@ -11,23 +10,23 @@ import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-async function start() {
+function start() {
   const params = new URLSearchParams(location.search);
   const year = Number(params.get('year')) || new Date().getUTCFullYear();
-  const time = new TimeAxis(year);
-  const date = params.get('date'); // e.g. ?date=2026-06-20 (handy for screenshots)
-  if (date && !Number.isNaN(Date.parse(date))) time.setCursor(Date.parse(date + 'T00:00:00Z'));
 
   const registry = new LayerRegistry();
-  const grid = buildGrid(GRID_RES);
-  const demo = createDemoLayer(year);
-  registry.register(demo);
-  await demo.load({ cells: grid.map((c) => c.id), res: GRID_RES, t0: time.start, t1: time.end });
+  registry.register(createDemoLayer(), demoTimeSpec(year));
 
-  let probeCell: string | null = null;
+  // The scrubber range comes from the active layer's registered time spec.
+  const time = new TimeAxis(registry.activeTime() ?? demoTimeSpec(year));
+  const date = params.get('date'); // e.g. ?date=2026-06-20 (handy for screenshots)
+  if (date && !Number.isNaN(Date.parse(date))) time.setCursor(Date.parse(date + 'T00:00:00Z'));
+  let specKey = `${time.start}|${time.end}|${time.stepMs}`;
+
+  let hit: Parameters<typeof showProbe>[2] = null;
   let pinned = false;
   const probeEl = $('probe');
-  const updateProbe = () => showProbe(probeEl, registry, probeCell, time.cursor);
+  const updateProbe = () => showProbe(probeEl, registry, hit, time.cursor);
 
   const padding = () => ({ top: $('top').offsetHeight + $('layers').offsetHeight + 8, bottom: $('bar').offsetHeight + 8 });
   const map = createMap({
@@ -35,11 +34,11 @@ async function start() {
     registry,
     time,
     padding,
-    onProbe: (cell, isClick) => {
-      if (isClick) {
-        pinned = cell !== null && cell !== probeCell ? true : false;
-        probeCell = pinned ? cell : null;
-      } else if (!pinned) probeCell = cell;
+    onProbe: (h, clicked) => {
+      if (clicked) {
+        pinned = h !== null && h.cell !== hit?.cell;
+        hit = pinned ? h : null;
+      } else if (!pinned) hit = h;
       updateProbe();
     },
   });
@@ -49,7 +48,14 @@ async function start() {
     updateProbe();
   };
   time.subscribe(refresh);
-  registry.subscribe(refresh);
+  registry.subscribe(() => {
+    const spec = registry.activeTime();
+    if (spec && `${spec.start}|${spec.end}|${spec.stepMs}` !== specKey) {
+      specKey = `${spec.start}|${spec.end}|${spec.stepMs}`;
+      time.setSpec(spec);
+    }
+    refresh();
+  });
 
   mountScrubber($('bar'), time);
   mountLayerList($('layers'), registry);
@@ -59,7 +65,7 @@ async function start() {
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
   refresh();
-  (window as unknown as { __emergence: unknown }).__emergence = { time, registry, grid };
+  (window as unknown as { __hatch: unknown }).__hatch = { time, registry };
 }
 
 start();

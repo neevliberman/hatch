@@ -1,7 +1,7 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
-import { cellToLatLng } from 'h3-js';
-import { dayOfYear, TimeAxis } from '../core/timeAxis';
-import type { CaveatCard, EmergenceLayer, LegendSpec, ProbeCard } from '../core/layer';
+import { buildGrid, type Cell } from '../core/grid';
+import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
+import type { CaveatCard, HatchLayer, LegendSpec, ProbeCard } from '../core/layer';
 
 export const DEMO_LABEL = 'Demo: synthetic heat wave, not real data';
 
@@ -44,33 +44,23 @@ export function heatColor(v: number): [number, number, number, number] {
   ];
 }
 
-export function createDemoLayer(year: number): EmergenceLayer {
-  interface Row {
-    id: string;
-    lat: number;
-  }
-  let cells: Row[] = [];
+/** Registration metadata: scrub 1 Mar - 31 Oct of `year`, one day per step. */
+export function demoTimeSpec(year: number): TimeSpec {
+  return { start: Date.UTC(year, 2, 1), end: Date.UTC(year, 9, 31), stepMs: TimeAxis.DAY, initial: Date.UTC(year, 5, 15) };
+}
+
+/** Synthetic layer. It builds its own grid: a real layer would also fetch its own data here. */
+export function createDemoLayer(): HatchLayer {
+  const cells: Cell[] = buildGrid();
 
   return {
     id: 'demo-heatwave',
     title: DEMO_LABEL,
-    kind: 'cell',
-    time: {
-      start: new Date(Date.UTC(year, 2, 1)),
-      end: new Date(Date.UTC(year, 9, 31)),
-      stepMs: TimeAxis.DAY,
-    },
-    resolutions: { min: 4, max: 4 },
-
-    async load(q) {
-      // A real layer would fetch Arrow files here. The demo only needs each cell's latitude.
-      cells = q.cells.map((id) => ({ id, lat: cellToLatLng(id)[0] }));
-    },
 
     render({ t, theme }) {
       const doy = dayOfYear(t);
       return [
-        new H3HexagonLayer<Row>({
+        new H3HexagonLayer<Cell>({
           id: 'demo-heatwave-hexes',
           data: cells,
           getHexagon: (c) => c.id,
@@ -89,13 +79,12 @@ export function createDemoLayer(year: number): EmergenceLayer {
       ];
     },
 
-    probe(cell, t): ProbeCard {
-      const c = cells.find((x) => x.id === cell);
+    probe(lngLat, t): ProbeCard {
       const doy = dayOfYear(t);
-      const v = c ? syntheticHeat(c.lat, doy) : 0;
+      const v = syntheticHeat(lngLat[1], doy);
       return {
         title: 'SYNTHETIC value, not real data',
-        lines: [`warmth index ${v.toFixed(2)} (0-1)`, c ? `lat ${c.lat.toFixed(2)}, day-of-year ${doy}` : ''].filter(Boolean),
+        lines: [`warmth index ${v.toFixed(2)} (0-1)`, `lat ${lngLat[1].toFixed(2)}, day-of-year ${doy}`],
       };
     },
 
@@ -107,7 +96,7 @@ export function createDemoLayer(year: number): EmergenceLayer {
           'This layer is SYNTHETIC. It is a made-up function of latitude and day-of-year, not temperature, not degree-days, not sightings.',
           'It exists only to prove the plumbing: grid, time axis, scrubber, layer registry, probe and this drawer.',
           'Nothing here predicts when any insect emerges. Do not read anything into the colours.',
-          'Real layers (from M1) must fill this drawer with record counts, backtest error and threshold confidence intervals.',
+          'Real layers must fill this drawer with record counts, backtest error and threshold confidence intervals.',
         ],
       };
     },

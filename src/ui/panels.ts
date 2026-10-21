@@ -1,6 +1,5 @@
-import type { EmergenceLayer } from '../core/layer';
+import type { HatchLayer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
-import { DEMO_LABEL } from '../layers/demoHeatWave';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -48,16 +47,21 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): void {
 }
 
 /** Hover/tap probe card: the cell id plus each active layer's probe text. */
-export function showProbe(root: HTMLElement, registry: LayerRegistry, cell: string | null, t: number): void {
-  if (!cell) {
+export function showProbe(
+  root: HTMLElement,
+  registry: LayerRegistry,
+  hit: { cell: string; lngLat: [number, number] } | null,
+  t: number,
+): void {
+  if (!hit) {
     root.hidden = true;
     return;
   }
   const cards = registry
     .activeLayers()
-    .filter((l: EmergenceLayer) => l.probe)
-    .map((l) => ({ layer: l, card: l.probe!(cell, t) }));
-  root.innerHTML = `<div class="probe-cell">cell <code>${esc(cell)}</code></div>${cards
+    .filter((l: HatchLayer) => l.probe)
+    .map((l) => ({ layer: l, card: l.probe!(hit.lngLat, t) }));
+  root.innerHTML = `<div class="probe-cell">cell <code>${esc(hit.cell)}</code></div>${cards
     .map(
       ({ card }) =>
         `<div class="probe-card"><div class="probe-title">${esc(card.title)}</div>${card.lines
@@ -67,5 +71,3 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, cell: stri
     .join('')}`;
   root.hidden = false;
 }
-
-export { DEMO_LABEL };

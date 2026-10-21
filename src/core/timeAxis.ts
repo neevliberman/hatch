@@ -1,23 +1,38 @@
-const DAY = 86_400_000;
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const YEAR = 365.25 * DAY; // nominal; year-step axes use stepMs = YEAR and snap to whole steps
 
 type Listener = () => void;
 
+/** What a layer wants the scrubber to span. All values are absolute UTC milliseconds. */
+export interface TimeSpec {
+  start: number;
+  end: number;
+  /** Native step: DAY for a season layer, YEAR for a spread sim, MINUTE*5 for radar. */
+  stepMs: number;
+  /** Where the cursor starts (defaults to start). */
+  initial?: number;
+}
+
 /**
- * The single clock of the app. Everything is UTC milliseconds so there is no
- * timezone/DST drift (a "day" is always exactly 86,400,000 ms).
+ * The single clock of the app: absolute UTC ms, any range, any step.
  * Layers never keep their own clock; they are handed `cursor` at render time.
  */
 export class TimeAxis {
+  static readonly MINUTE = MINUTE;
+  static readonly HOUR = HOUR;
   static readonly DAY = DAY;
+  static readonly YEAR = YEAR;
 
-  year: number;
   start = 0;
   end = 0;
+  stepMs = DAY;
   cursor = 0;
   /** Real "now" (injectable for tests). Shown as a marker when it falls inside the range. */
   readonly now: number;
   playing = false;
-  /** Playback speed in days per second. */
+  /** Playback speed in steps per second. */
   speed = 14;
 
   private listeners = new Set<Listener>();
@@ -25,55 +40,59 @@ export class TimeAxis {
   private last = 0;
   private acc = 0;
 
-  constructor(year: number, now = Date.now()) {
+  constructor(spec: TimeSpec, now = Date.now()) {
     this.now = now;
-    this.year = year;
-    this.setYear(year, Date.UTC(year, 5, 15));
+    this.setSpec(spec);
   }
 
-  /** Season window: 1 Mar - 31 Oct (inclusive) of the chosen year. */
-  setYear(year: number, cursor?: number): void {
-    const keepDoy = this.cursor ? (this.cursor - this.start) / DAY : 0;
-    this.year = year;
-    this.start = Date.UTC(year, 2, 1);
-    this.end = Date.UTC(year, 9, 31);
-    this.setCursor(cursor ?? this.start + Math.round(keepDoy) * DAY);
+  setSpec(spec: TimeSpec): void {
+    this.pause();
+    this.start = spec.start;
+    this.end = spec.end;
+    this.stepMs = spec.stepMs;
+    this.cursor = this.snap(spec.initial ?? spec.start);
+    this.emit();
   }
 
-  get days(): number {
-    return Math.round((this.end - this.start) / DAY);
+  /** Number of steps across the range. */
+  get steps(): number {
+    return Math.floor((this.end - this.start) / this.stepMs);
   }
 
-  /** Cursor as a whole-day offset from the start (0..days). */
-  get dayIndex(): number {
-    return Math.round((this.cursor - this.start) / DAY);
+  get stepIndex(): number {
+    return Math.round((this.cursor - this.start) / this.stepMs);
   }
 
-  /** Where "now" sits as a 0..1 fraction of the range, or null if outside the season. */
+  /** Where "now" sits as a 0..1 fraction of the range, or null if outside. */
   get nowFraction(): number | null {
-    if (this.now < this.start || this.now > this.end + DAY) return null;
+    if (this.now < this.start || this.now > this.end) return null;
     return (this.now - this.start) / (this.end - this.start);
   }
 
+  private snap(ms: number): number {
+    const i = Math.round((ms - this.start) / this.stepMs);
+    return this.start + Math.min(this.steps, Math.max(0, i)) * this.stepMs;
+  }
+
   setCursor(ms: number): void {
-    const snapped = this.start + Math.round((ms - this.start) / DAY) * DAY;
-    const next = Math.min(this.end, Math.max(this.start, snapped));
+    const next = this.snap(ms);
     if (next === this.cursor) return;
     this.cursor = next;
     this.emit();
   }
 
-  setDayIndex(i: number): void {
-    this.setCursor(this.start + i * DAY);
+  setStepIndex(i: number): void {
+    this.setCursor(this.start + i * this.stepMs);
   }
 
-  step(days: number): void {
-    this.setCursor(this.cursor + days * DAY);
+  /** Move by n native steps. */
+  step(n: number): void {
+    this.setCursor(this.cursor + n * this.stepMs);
   }
 
   play(): void {
     if (this.playing) return;
-    if (this.cursor >= this.end) this.cursor = this.start;
+    if (this.cursor >= this.start + this.steps * this.stepMs) this.cursor = this.start;
     this.playing = true;
     this.last = performance.now();
     this.acc = 0;
@@ -84,7 +103,7 @@ export class TimeAxis {
       const whole = Math.floor(this.acc);
       if (whole >= 1) {
         this.acc -= whole;
-        if (this.cursor >= this.end) this.cursor = this.start - DAY; // loop
+        if (this.stepIndex >= this.steps) this.cursor = this.start - this.stepMs; // loop
         this.step(whole);
       }
       this.raf = requestAnimationFrame(tick);
@@ -115,8 +134,15 @@ export class TimeAxis {
   }
 }
 
-export function formatDay(ms: number): string {
-  return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+/** Format a cursor according to the axis step: years, days, or date+time for sub-day steps. */
+export function formatTime(ms: number, stepMs: number): string {
+  const d = new Date(ms);
+  if (stepMs >= YEAR * 0.99) return String(d.getUTCFullYear());
+  if (stepMs >= DAY) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return (
+    d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) +
+    ' UTC'
+  );
 }
 
 export function dayOfYear(ms: number): number {
