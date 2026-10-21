@@ -1,0 +1,30 @@
+{
+  "name": "emergence",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "geo": "node scripts/build-geo.mjs",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "build:single": "tsc --noEmit && vite build --config vite.single.config.ts",
+    "build:all": "npm run build && npm run build:single",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@deck.gl/core": "9.4.0",
+    "@deck.gl/geo-layers": "9.4.0",
+    "@deck.gl/layers": "9.4.0",
+    "h3-js": "4.5.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "7946.0.16",
+    "@types/topojson-client": "3.1.5",
+    "topojson-client": "3.1.0",
+    "typescript": "5.9.3",
+    "us-atlas": "3.0.1",
+    "vite": "7.3.2",
+    "vite-plugin-singlefile": "2.3.4"
+  }
+}
