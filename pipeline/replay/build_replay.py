@@ -16,13 +16,16 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "notebooks"))
+sys.path.insert(0, str(ROOT / "pipeline"))
 
 import h3  # noqa: E402
-from hatch_p1 import inat, model, run  # noqa: E402
+from hatch_p1 import inat, run  # noqa: E402
 from hatch_p1.daymet import _fetch_one, temperature_cube  # noqa: E402
 from hatch_p1.prep import BANDS, BAND_LABELS, RES, YEARS, clean  # noqa: E402
 
 OUT = ROOT / "src" / "data" / "luna-replay.json"
+HEADLINE = ROOT / "pipeline" / "fit" / "results" / "headline.json"   # written by pipeline/fit/run_p3.py
+MODEL_ID = "p3-v1"
 STATES = ROOT / "src" / "data" / "midwest-states.json"
 RAW = run.DATA / "luna_replay_inat.parquet"   # P1's columns + license_code
 TAXON = 47916
@@ -169,6 +172,56 @@ def daymet_cube(hexes, cache: Path):
     return years, tmin, tmax, len(bad)
 
 
+# ---------------------------------------------------------------- P3 forecast
+def _p3_fold(year):
+    from fit import evaluate as EV, model as M
+    return EV.loyo_fold(_P3["ctx"], _P3["H"], year, [M.SPECS[_P3["chosen"]]])
+
+
+_P3 = {}
+
+
+def p3_loyo(ctx, H, chosen, workers=4):
+    """Leave-one-year-out fits of the chosen P3 model (the same folds as pipeline/fit/run_p3.py).
+    Workers read the fold inputs from the module-level _P3, which only works with fork (Linux, the CI and cloud
+    runners this is built on). On macOS/Windows, run with workers=1 or use a Linux box."""
+    import multiprocessing as mp
+    _P3.update(ctx=ctx, H=H, chosen=chosen)
+    if workers <= 1:
+        return [_p3_fold(int(y)) for y in ctx.years]
+    with mp.get_context("fork").Pool(workers) as pool:
+        return pool.map(_p3_fold, [int(y) for y in ctx.years])
+
+
+def check_headline(rows, chosen, headline, tol=0.15):
+    # 0.15 d, not ~0: fits are multi-start numerical optimisations, and BLAS/thread differences between machines can
+    # shift a fold's optimum slightly. Anything bigger than that means the model or data changed.
+    """Refuse to write unless this run reproduces pipeline/fit/results/headline.json."""
+    from fit import evaluate as EV
+    models = [chosen, "p1", "cal"]
+    tab = EV.mae_table(EV.errors(rows, models), models).set_index("model")
+    want = headline["loyo"]["mae"]
+    bad = [f"{m}: got {tab.loc[m, 'mae']:.2f}, expected {want[m]['mae']:.2f}" for m in models
+           if abs(tab.loc[m, "mae"] - want[m]["mae"]) > tol]
+    if len(rows) != headline["loyo"]["band_years"]:
+        bad.append(f"band-years: got {len(rows)}, expected {headline['loyo']['band_years']}")
+    if bad:
+        raise SystemExit("ACCEPTANCE FAILED (P3 headline not reproduced): " + "; ".join(bad) + ". Not writing output.")
+    return tab
+
+
+def scorecard(rows, chosen, headline):
+    from fit import evaluate as EV
+    d = EV.errors(rows, [chosen, "p1", "cal"])
+    out = []
+    for b, g in d.groupby("band"):
+        out.append({"band": b, "band_years": int(len(g)),
+                    "mae": {k: round(float((g[f"{m}_eo"].abs().mean() + g[f"{m}_ep"].abs().mean()) / 2), 1)
+                            for k, m in (("heat", chosen), ("p1", "p1"), ("cal", "cal"))},
+                    "bias_peak": {k: round(float(g[f"{m}_ep"].mean()), 1) for k, m in (("heat", chosen), ("p1", "p1"))}})
+    return out
+
+
 # ---------------------------------------------------------------- main
 def main():
     t0 = time.time()
@@ -176,42 +229,50 @@ def main():
     cells = core_cells()
     print(f"{len(cells)} core cells", flush=True)
 
-    rec, cut = run.load(RAW.name)                      # P1 fit set, brood-split at frac=0.8
+    rec, cut = run.load(RAW.name)                      # P1 fit set, brood-split at frac=0.8 (display cut-offs)
     cleaned = clean(raw)                               # for "seen" (any brood)
     all_hexes = sorted(set(cells) | set(rec.hex.unique()))
-    years, tmin, tmax, n_filled = daymet_cube(all_hexes, run.DATA / "daymet")
-    hi = {h: i for i, h in enumerate(all_hexes)}
-    dd = model.dd_cube(tmin, tmax, BASE)
+    _, _, _, n_filled = daymet_cube(all_hexes, run.DATA / "daymet")   # fetch/fill check
 
-    r = rec.copy()
-    r["h"] = r.hex.map(hi)
-    r["y"] = r.year - years[0]
-    r["t"] = r.yday - 1
-    r["band"] = r.band.astype(str)
+    # ---- P3: leave-one-year-out fits, scores, guard
+    from fit import context, evaluate as EV, model as M
+    headline = json.loads(HEADLINE.read_text())
+    chosen = headline["chosen"]
+    spec = M.SPECS[chosen]
+    ctx = context.load_context(extra_hexes=cells)
+    H = EV.helpers(ctx)
+    folds = p3_loyo(ctx, H, chosen)
+    rows = [r for f in folds for r in f["rows"]]
+    tab = check_headline(rows, chosen, headline)
+    print(tab.round(2).to_string(), flush=True)
+    scores = [{"band": x["band"], "year": x["year"], "n": x["n"],
+               "obs_onset": round(x["onset"] + 1, 1), "obs_peak": round(x["peak"] + 1, 1),
+               "heat_onset": round(float(x[f"{chosen}_onset"]) + 1, 1), "heat_peak": round(float(x[f"{chosen}_peak"]) + 1, 1),
+               "cal_onset": round(x["cal_onset"] + 1, 1), "cal_peak": round(x["cal_peak"] + 1, 1),
+               "p1_onset": round(float(x["p1_onset"]) + 1, 1), "p1_peak": round(float(x["p1_peak"]) + 1, 1)}
+              for x in sorted(rows, key=lambda r: (r["band"], r["year"]))]
 
-    # ---- P1 scores (exploratory empirical heat vs calendar), LOYO
-    tg = model.targets(r)
-    heat = model.empirical_predictions(r, tg, dd, years)
-    cal = model.calendar_predictions(tg)
-    mh, mc = model.score(tg, heat), model.score(tg, cal)
-    print(f"band-years {mh['n_band_years']}  heat MAE {mh['mae']:.2f} (on {mh['mae_onset']:.2f} pk {mh['mae_peak']:.2f})"
-          f"  calendar MAE {mc['mae']:.2f} (on {mc['mae_onset']:.2f} pk {mc['mae_peak']:.2f})", flush=True)
-    if not (len(tg) == 31 and abs(mh["mae"] - 4.0) < 0.15 and abs(mc["mae"] - 7.3) < 0.15):
-        raise SystemExit("ACCEPTANCE FAILED: expected 31 band-years, heat ~4.0 d, calendar ~7.3 d. Not writing output.")
-    m = tg.merge(heat, on=["band", "year"]).merge(cal, on=["band", "year"], suffixes=("_h", "_c"))
-    scores = [{"band": x.band, "year": int(x.year), "n": int(x.n),
-               "obs_onset": round(float(x.onset) + 1, 1), "obs_peak": round(float(x.peak) + 1, 1),
-               "heat_onset": round(float(x.onset_pred_h) + 1, 1), "heat_peak": round(float(x.peak_pred_h) + 1, 1),
-               "cal_onset": round(float(x.onset_pred_c) + 1, 1), "cal_peak": round(float(x.peak_pred_c) + 1, 1)}
-              for x in m.itertuples()]
-
-    # ---- per-cell forecast, leave-one-year-out
+    # ---- per-cell forecast, leave-one-year-out (each year uses the fit that never saw it; u = 0).
+    # A cell's curve is its expected first-brood sightings (flight share x typical state effort, up to the
+    # fold's brood cut-off): the same quantity the scores test, so hexes and dots are judged alike.
+    hi = {h: i for i, h in enumerate(ctx.hexes)}
     cidx = np.array([hi[c] for c in cells])
+    clat = np.array([h3.cell_to_latlng(c)[0] for c in cells])
+    from fit import data as fdata
+    cstate = np.array([fdata.STATES.index(s) for s in fdata.state_of(clat, [h3.cell_to_latlng(c)[1] for c in cells])])
+    cband = [BAND_LABELS[i] for i in band_index(clat)]
     forecast = {}
-    for yi, y in enumerate(years):
-        train_dd = model.dd_at_sightings(r[r.year != y], dd)
-        forecast[str(int(y))] = [cell_forecast(dd[c, yi, :], train_dd) for c in cidx]
-    forecast["typical"] = [typical([forecast[str(int(y))][k] for y in years]) for k in range(len(cells))]
+    for f in folds:
+        yi = int(f["year"] - ctx.years[0])
+        train_years = [i for i in range(len(ctx.years)) if i != yi]
+        eprof = EV.effort_profile(ctx.E, train_years)[cstate]
+        cut_idx = np.array([f["cuts"][b] - 1 for b in cband])
+        share = M.cell_sighting_share(f["fits"][chosen].without_year(), spec, ctx.inc[cidx, yi, :].astype(float),
+                                      clat, cut_idx, eprof)
+        forecast[str(int(f["year"]))] = [first_reach(s) for s in share]
+    forecast = {str(int(y)): forecast[str(int(y))] for y in ctx.years}
+    forecast["typical"] = [typical([forecast[str(int(y))][k] for y in ctx.years]) for k in range(len(cells))]
+    years = ctx.years
 
     # ---- display sightings
     disp, lic_dropped = display_set(raw, [cut[b] for b in BAND_LABELS])
@@ -222,6 +283,8 @@ def main():
     seen = seen_flags(cells, cleaned.hex.unique())
 
     lo_hi = list(zip(BANDS[:-1], BANDS[1:]))
+    lm = headline["loyo"]["mae"]
+    pooled = [f["fits"][chosen] for f in folds]
     out = {
         "version": 1,
         "generated": dt.date.today().isoformat(),
@@ -241,6 +304,21 @@ def main():
                    "cells": len(cells), "seen_cells": int(sum(seen)), "daymet_filled": int(n_filled),
                    "licence_dropped": int(lic_dropped)},
         "licences": licences,
+        # ---- added in P3 (optional; older readers ignore them)
+        "model": {
+            "id": MODEL_ID, "spec": chosen,
+            "summary": "skew-normal warmth targets, base 10 C from 1 March, 7-day flight life, moth-effort background",
+            "median_dd_at_lat": {str(lt): round(float(np.median([M.median_dd(p.params, spec, lt) for p in pooled])), 1)
+                                 for lt in (38, 42, 46)},
+            "loyo_mae": {k: round(float(lm[m]["mae"]), 2) for k, m in (("heat", chosen), ("p1", "p1"), ("cal", "cal"))},
+            "holdout_mae": {k: round(float(headline["holdout"]["mae"][m]["mae"]), 2)
+                            for k, m in (("heat", chosen), ("p1", "p1"), ("cal", "cal"), ("cal_lat", "cal_lat"))},
+            "noise_floor": round(float(headline["loyo"]["noise_floor"]["records"]), 2),
+        },
+        "interval": {"level": 0.8,
+                     "onset": [round(v, 1) for v in headline["loyo_residual_q10_q90"]["onset"]],
+                     "peak": [round(v, 1) for v in headline["loyo_residual_q10_q90"]["peak"]]},
+        "scorecard": scorecard(rows, chosen, headline),
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, separators=(",", ":")))

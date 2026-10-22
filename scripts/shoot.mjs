@@ -60,9 +60,10 @@ for (const [name, width, height, mobile] of shots) {
     await page.waitForTimeout(2500);
     const png = await page.screenshot({ path: `${out}/${prefix}-${name}-${label}.png` });
     if (label === 'offseason') {
-      if (!(await page.locator('#drawer.open').count())) problems.push(`${tag}: drawer did not auto-open on first visit`);
+      // Since #9 a first visit gets a gentle hint on the About button instead of an auto-opened drawer.
+      if (!(await page.locator('.hint').count())) problems.push(`${tag}: no first-visit hint`);
       const cd = await page.locator('#countdown').textContent();
-      if (!/Lunas due in ~\d+ days/.test(cd ?? '')) problems.push(`${tag}: no off-season countdown: ${cd}`);
+      if (!/Next real season: .* \d+ days from now/.test(cd ?? '')) problems.push(`${tag}: no off-season countdown: ${cd}`);
       await ctx.close();
       continue;
     }
