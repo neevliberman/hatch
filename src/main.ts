@@ -35,12 +35,25 @@ function start() {
   let hit: ProbeHit | null = null;
   let pinned = false;
   const probeEl = $('probe');
-  const updateProbe = () => showProbe(probeEl, registry, hit, time.cursor);
+  // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
+  // Touch screens and "My area" keep it docked above the time bar.
+  const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
+  const updateProbe = () => {
+    showProbe(probeEl, registry, hit, time.cursor);
+    const px = hover.matches && !probeEl.hidden ? hit?.px : undefined;
+    probeEl.classList.toggle('at-pointer', !!px);
+    probeEl.classList.toggle('pinned', !!px && pinned);
+    if (!px) return probeEl.style.removeProperty('transform');
+    const { width: w, height: h } = probeEl.getBoundingClientRect();
+    const x = px[0] + 16 + w > window.innerWidth - 8 ? px[0] - 16 - w : px[0] + 16;
+    const y = Math.min(Math.max(8, px[1] - h / 2), window.innerHeight - h - 8);
+    probeEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  };
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
   const padding = () => {
-    const top = $('sub').getBoundingClientRect().bottom + 8;
+    const top = $('top').getBoundingClientRect().bottom + 8;
     const bottom = $('bottom').offsetHeight + 8;
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k) };
@@ -99,7 +112,19 @@ function start() {
   mountLayerList($('layers'), registry);
   mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
-  $('why').addEventListener('click', () => toggleDrawer(true));
+  // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,
+  // so the tap visibly lands even when the drawer is already open.
+  $('why').addEventListener('click', () => {
+    toggleDrawer(true);
+    const drawer = $('drawer');
+    const target = drawer.querySelector<HTMLElement>('[data-why]');
+    if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    else drawer.scrollTo({ top: 0, behavior: 'smooth' });
+    const flash = target ?? drawer.querySelector<HTMLElement>('.cav') ?? drawer;
+    flash.classList.remove('flash');
+    void flash.offsetWidth; // restart the animation on a repeat tap
+    flash.classList.add('flash');
+  });
 
   // Keep the address bar in step with the view, so any link copied or shared reopens the same season and day.
   const viewUrl = () => {

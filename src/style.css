@@ -27,7 +27,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--a
 
 button, select { font: inherit; color: inherit; touch-action: manipulation; }
 /* Pinching the panels would zoom the whole page and strand it; the map has its own pinch zoom. The drawer still pinches. */
-#top, #sub, #bottom { touch-action: pan-x pan-y; }
+#top, #bottom { touch-action: pan-x pan-y; }
 .icon-btn { min-width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--panel); color: var(--text); cursor: pointer; display: inline-grid; place-items: center;
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
@@ -45,16 +45,16 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);
   align-self: center; }
 
-#sub { position: absolute; top: calc(64px + env(safe-area-inset-top)); left: var(--gl); right: var(--gr); pointer-events: none;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-#layers { pointer-events: none; min-width: 0; }
+#layers { pointer-events: none; min-width: 0; padding: 0 var(--gr) 8px var(--gl); }
+#layers[hidden] { display: none; }
 .season { margin-left: auto; min-width: 0; display: flex; }
 .season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
   padding: 0 10px; color: var(--text); }
-/* One compact card (caveat + countdown) and two icon buttons share a single row, so the map keeps the screen. */
-#row { display: flex; align-items: flex-start; gap: 8px; max-width: 100%; }
-#note { pointer-events: auto; min-width: 0; padding: 5px 10px; font-size: 12.5px; line-height: 1.35; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 10px; }
+/* The caveat, countdown and two buttons live in a strip on top of the time bar, off the map. */
+#strip { pointer-events: auto; display: flex; align-items: center; gap: 10px; background: var(--panel-solid);
+  border-top: 1px solid var(--line); padding: 8px var(--gr) 0 var(--gl); }
+#strip + #bar { border-top: 0; padding-top: 6px; }
+#note { min-width: 0; flex: 1; font-size: 12.5px; line-height: 1.35; }
 #honesty, #countdown { margin: 0; }
 #honesty b { font-weight: 600; }
 #why { margin-left: 4px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
@@ -65,12 +65,21 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #actions .icon-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; font-size: 12.5px; }
 #actions .icon-btn:disabled { opacity: 0.6; cursor: progress; }
 #locate svg { color: var(--accent); }
-/* No room in the row: the status line floats just below the buttons, right-aligned, still announced. */
-#action-msg { position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; color: var(--muted);
-  padding: 4px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+/* The My area / Share status shows as a toast under the header, clear of the cards above the time bar. */
+#action-msg { position: fixed; top: calc(62px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3;
+  width: max-content; max-width: calc(100% - 24px); text-align: center; font-size: 12px; color: var(--text);
+  padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4); }
 #action-msg:empty { display: none; }
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
 #recenter[hidden] { display: none; }
+/* With a mouse the hex card is a tooltip beside the pointer (placed from main.ts); it only takes clicks once pinned. */
+#probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: max-content; max-width: 300px; pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+#probe.at-pointer.pinned { pointer-events: auto; border-color: rgba(200, 215, 245, 0.5); }
+/* "why?" lands on the drawer section it explains; a short glow shows where. */
+.flash { animation: flash 1.4s ease-out; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }
 .lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
 .lg-items li { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; flex: none; background: var(--c); }
@@ -149,9 +158,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 @media (max-width: 700px) {
   :root { --gutter: 12px; }
   .brand small { display: none; }
-  #sub { top: calc(62px + env(safe-area-inset-top)); }
-  #layers { display: none; } /* one layer: the season menu and honesty line already name it */
-  #note { font-size: 12px; padding: 4px 8px; }
+  #note { font-size: 12px; }
   /* Phones get the short wording: the season is in the menu above, the detail is one tap away under "why?". */
   .long, .more, #actions .lbl { display: none; }
   #actions .icon-btn { padding: 0; }
@@ -184,9 +191,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .brand { padding: 4px 10px; font-size: 16px; }
   .brand small { display: none; }
   .icon-btn, .season select { height: 40px; }
-  #sub { top: calc(52px + env(safe-area-inset-top)); flex-direction: row; align-items: center; flex-wrap: nowrap; }
-  #layers { display: none; }
-  #note { font-size: 12px; padding: 4px 8px; }
+  #strip { padding-top: 4px; }
+  #action-msg { top: calc(52px + env(safe-area-inset-top)); }
+  #note p { display: inline; }
+  #countdown::before { content: ' · '; }
+  #note { font-size: 12px; }
   .long, .more, #actions .lbl { display: none; }
   #actions .icon-btn { padding: 0; }
   .season select { font-size: 16px; }

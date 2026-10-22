@@ -11,6 +11,8 @@ export interface ProbeHit {
   cell: string;
   lngLat: [number, number];
   picked?: { layerId: string; object: unknown };
+  /** Screen position of the pointer, when the hit came from the pointer (not from "My area"). */
+  px?: [number, number];
 }
 
 export interface MapHandle {
@@ -61,6 +63,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove 
       cell: latLngToCell(lat, lng, GRID_RES),
       lngLat: [lng, lat],
       picked: info.layer ? { layerId: info.layer.id, object: info.object } : undefined,
+      px: [info.x, info.y],
     };
   };
 

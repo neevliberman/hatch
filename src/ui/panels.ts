@@ -25,6 +25,7 @@ export function mountLayerList(root: HTMLElement, registry: LayerRegistry): void
   });
   registry.subscribe(render);
   render();
+  root.hidden = registry.all().length < 2; // one layer: a lone checkbox could only blank the map
 }
 
 export function mountLegend(root: HTMLElement, registry: LayerRegistry): void {
