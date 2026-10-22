@@ -49,6 +49,8 @@ const STAGE_COLOR: Record<Stage, RGBA> = {
 };
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = [11, 15, 23, 150];
+// One object for every render, so deck.gl doesn't rebuild the pattern each playback frame.
+const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
 let stripeAtlas: HTMLCanvasElement | null = null;
 const stripes = () => {
   if (stripeAtlas) return stripeAtlas;
@@ -232,7 +234,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           pickable: false,
           extensions: [new FillStyleExtension({ pattern: true })],
           fillPatternAtlas: stripes(),
-          fillPatternMapping: { stripes: { x: 0, y: 0, width: 16, height: 16 } },
+          fillPatternMapping: STRIPE_MAPPING,
           fillPatternMask: true,
           getFillPattern: () => 'stripes',
           fillPatternSizeUnits: 'pixels',
@@ -355,7 +357,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         sci: data.species.sci,
         creature: 'moth',
         accent: css(MOON),
-        hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how close it gets.',
+        hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how well it matches.',
         steps: [
           { title: 'Warm days count', text: 'Starting March 1, every day warmer than 50 °F (10 °C) adds to a running total. Hotter days add more, up to 86 °F.' },
           { title: 'The jar fills', text: 'In past years, moths came out once the total reached about this line.' },
@@ -392,7 +394,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
             label: s,
             shape: 'hex' as const,
           })),
-          { color: css(STAGE_COLOR.peak), label: 'no moths seen nearby', shape: 'striped' },
+          { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
           { color: css(MOON), label: 'moth seen', shape: 'dot' },
           { color: css(SECOND), label: 'seen, 2nd wave', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },

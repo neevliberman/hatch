@@ -84,7 +84,8 @@ function start() {
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
-        const same = pinned && h !== null && hit !== null && h.cell === hit.cell && h.picked?.object === hit.picked?.object;
+        // A hex pinned from My area or the city menu has no picked object, so the cell alone decides.
+        const same = pinned && h !== null && hit !== null && h.cell === hit.cell && (!hit.picked || h.picked?.object === hit.picked.object);
         pinned = h !== null && !same;
         hit = pinned ? h : null;
         map.setMarker(null); // any tap replaces the "My area" pin
@@ -224,7 +225,11 @@ function start() {
     const sel = (e.target as Element).closest<HTMLSelectElement>('select[data-place]');
     if (!sel?.value) return;
     const [lat, lng] = sel.value.split(',').map(Number) as [number, number];
-    showPlace(lat, lng);
+    const name = sel.selectedOptions[0]?.text ?? '';
+    sel.value = ''; // so picking the same city again (after the pin moved) still fires
+    if (!showPlace(lat, lng)) return say(`No forecast for ${name}`);
+    // On a phone the panel hides the map, so close it to show the picked hexagon and its card.
+    if (phone.matches) toggleDrawer(false);
   });
 
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.

@@ -158,7 +158,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
             extruded: false,
             getLineColor: [245, 215, 110, 255],
             lineWidthUnits: 'pixels',
-            getLineWidth: 2,
+            getLineWidth: 3,
           }),
         ]
       : [];
