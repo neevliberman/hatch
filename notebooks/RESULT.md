@@ -2,7 +2,7 @@
 
 **Verdict.**
 - **Frozen test: NO-GO.** The pre-registered heat model (bell curve, base 10 °C) loses to the calendar.
-- **Exploratory signal: strong.** The same model with a skewed curve beats the calendar by 3.3 days (95% CI 0.9-5.5). It isn't the pre-registered test, so it has to be confirmed in P3 on data it hasn't seen (the 2026 season, or a spatial holdout).
+- **Exploratory signal: promising.** The same model with a skewed curve beats the calendar by 3.3 days (95% CI 0.9-5.4). It isn't the pre-registered test, so it has to be confirmed in P3 on data it hasn't seen (the 2026 season, or a spatial holdout).
 - **"The model learned the threshold": NO-GO.** Fix the base at 10 °C.
 
 Notebook: [p1_luna_gonogo.ipynb](p1_luna_gonogo.ipynb) · choices frozen before results: [FROZEN_CHOICES.md](FROZEN_CHOICES.md) (with change log)
