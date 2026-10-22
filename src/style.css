@@ -57,6 +57,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #note { min-width: 0; flex: 1; font-size: 12.5px; line-height: 1.35; }
 #honesty, #countdown { margin: 0; }
 #honesty b { font-weight: 600; }
+.unconfirmed { font-style: normal; font-weight: 600; color: var(--warn); }
 #why { margin-left: 4px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
   font-size: inherit; min-height: 24px; }
 #countdown { color: var(--muted); }
@@ -69,13 +70,17 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #action-msg { position: fixed; top: calc(62px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3;
   width: max-content; max-width: calc(100% - 24px); text-align: center; font-size: 12px; color: var(--text);
   padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4); }
-#action-msg:empty { display: none; }
+/* Kept rendered (just invisible) when empty: live regions that appear and fill at once are often not announced. */
+#action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
 #recenter[hidden] { display: none; }
 /* With a mouse the hex card is a tooltip beside the pointer (placed from main.ts); it only takes clicks once pinned. */
-#probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: max-content; max-width: 300px; pointer-events: none;
+#probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: max-content; max-width: min(300px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px); overflow-y: auto; pointer-events: none;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
-#probe.at-pointer.pinned { pointer-events: auto; border-color: rgba(200, 215, 245, 0.5); }
+#probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
+#probe.at-pointer::after { content: 'Click to pin'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+#probe.at-pointer.pinned::after { content: 'Pinned · click the map to close'; color: var(--accent); }
 /* "why?" lands on the drawer section it explains; a short glow shows where. */
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
@@ -155,6 +160,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .cav h3 { margin: 8px 0 6px; font-size: 15px; }
 .cav ul { margin: 0; padding-left: 18px; } .cav li { margin: 6px 0; }
 
+/* Desktop: an open About drawer sits beside the controls instead of over My area, Share and the end of the time bar. */
+@media (min-width: 701px) and (min-height: 501px) {
+  #app:has(#drawer.open) #bottom { right: min(400px, 100%); }
+}
+
 @media (max-width: 700px) {
   :root { --gutter: 12px; }
   .brand small { display: none; }
@@ -170,7 +180,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .lg-title { display: none; } /* the swatch names say what they are; the drawer explains the colours */
   #probe { max-width: none; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
-  #floats:has(#probe:not([hidden])) #legend { display: none; }
+  #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
   .bar-row { flex-wrap: wrap; gap: 8px 10px; }
   .date { font-size: 17px; order: 2; flex-basis: 100%; display: none; }
@@ -200,7 +210,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   #actions .icon-btn { padding: 0; }
   .season select { font-size: 16px; }
   #floats { flex-direction: row; align-items: flex-end; padding-bottom: 6px; }
-  #floats:has(#probe:not([hidden])) #legend { display: none; }
+  #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .legend-card { width: auto; max-width: min(640px, 70vw); padding: 5px 10px; }
   .lg-title { display: none; }
   .lg-items { font-size: 11.5px; gap: 2px 10px; }

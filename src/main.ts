@@ -40,21 +40,26 @@ function start() {
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
   const updateProbe = () => {
     showProbe(probeEl, registry, hit, time.cursor);
-    const px = hover.matches && !probeEl.hidden ? hit?.px : undefined;
+    // A pinned card stays on its hex as the map pans or zooms: re-project the hex rather than reuse the click point.
+    const px = hover.matches && !probeEl.hidden && hit?.px ? (pinned ? (map.project(hit.lngLat) ?? hit.px) : hit.px) : undefined;
     probeEl.classList.toggle('at-pointer', !!px);
     probeEl.classList.toggle('pinned', !!px && pinned);
+    // A card that follows the pointer would make a screen reader read out every hex swept over; announce it once pinned.
+    probeEl.setAttribute('aria-live', px && !pinned ? 'off' : 'polite');
     if (!px) return probeEl.style.removeProperty('transform');
     const { width: w, height: h } = probeEl.getBoundingClientRect();
-    const x = px[0] + 16 + w > window.innerWidth - 8 ? px[0] - 16 - w : px[0] + 16;
-    const y = Math.min(Math.max(8, px[1] - h / 2), window.innerHeight - h - 8);
+    const x = Math.max(8, px[0] + 16 + w > window.innerWidth - 8 ? px[0] - 16 - w : px[0] + 16);
+    const y = Math.max(8, Math.min(px[1] - h / 2, window.innerHeight - h - 8));
     probeEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   };
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
+  const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
   const padding = () => {
     const top = $('top').getBoundingClientRect().bottom + 8;
-    const bottom = $('bottom').offsetHeight + 8;
+    // On wide screens the legend and card sit in the bottom-left corner, beside the map rather than under it.
+    const bottom = (phone.matches ? $('bottom').offsetHeight : $('bottom').offsetHeight - $('floats').offsetHeight) + 8;
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k) };
   };
@@ -64,6 +69,7 @@ function start() {
     time,
     padding,
     onMove: (moved) => ($('recenter').hidden = !moved),
+    onView: () => pinned && updateProbe(),
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
@@ -114,16 +120,20 @@ function start() {
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,
   // so the tap visibly lands even when the drawer is already open.
+  let flashTimer = 0;
   $('why').addEventListener('click', () => {
     toggleDrawer(true);
     const drawer = $('drawer');
     const target = drawer.querySelector<HTMLElement>('[data-why]');
-    if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    else drawer.scrollTo({ top: 0, behavior: 'smooth' });
+    const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    if (target) target.scrollIntoView({ block: 'start', behavior });
+    else drawer.scrollTo({ top: 0, behavior });
     const flash = target ?? drawer.querySelector<HTMLElement>('.cav') ?? drawer;
     flash.classList.remove('flash');
     void flash.offsetWidth; // restart the animation on a repeat tap
     flash.classList.add('flash');
+    clearTimeout(flashTimer);
+    flashTimer = window.setTimeout(() => flash.classList.remove('flash'), 1500);
   });
 
   // Keep the address bar in step with the view, so any link copied or shared reopens the same season and day.
@@ -235,10 +245,10 @@ function start() {
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => map.fit(padding()), 150);
+    resizeTimer = window.setTimeout(() => (map.fit(padding()), updateProbe()), 150);
   });
   refresh();
-  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna };
+  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map };
 }
 
 start();

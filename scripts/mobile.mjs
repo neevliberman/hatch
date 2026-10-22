@@ -161,6 +161,8 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     // Pinch the map open (Chromium only: it alone takes raw multi-touch here): the recenter button must appear and work.
     if (engine === 'chromium') {
       if (await page.locator('#recenter').isVisible()) fail('recenter button shows before the map was moved');
+      const zoom = () => page.evaluate(() => window.__hatch.map.zoom());
+      const z0 = await zoom();
       const cdp = await ctx.newCDPSession(page);
       const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
       const [cx, cy] = [width / 2, (sub.y + sub.height + bot.y) / 2];
@@ -177,7 +179,9 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         (await page.evaluate(audit)).bad.forEach((m) => fail(`zoomed in, ${m}`));
         await tap('#recenter');
         await page.waitForTimeout(400);
-        if (await page.locator('#recenter').isVisible()) fail('recenter did not bring back the whole Midwest');
+        const z1 = await zoom();
+        // The refit can land a little further out than the first view (an open card leaves less room), never further in.
+        if (await page.locator('#recenter').isVisible() || z1 > z0 + 0.05) fail(`recenter did not bring back the whole Midwest (zoom ${z0} -> ${z1})`);
       }
     }
 
