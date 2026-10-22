@@ -177,7 +177,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         const s = picked.object as Sighting;
         const lines = [
           s.flags & SECOND_BROOD
-            ? 'Late: after this latitude\u2019s late-June cut-off, so counted as second brood (shown, not forecast)'
+            ? 'Late: after this latitude\u2019s late-June or early-July cut-off, so counted as second brood (shown, not forecast)'
             : 'First brood (the one we forecast)',
         ];
         if (s.flags & APPROXIMATE) lines.push('Location blurred or rough: shown in grey');
@@ -229,7 +229,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         `How good is it? In a first test, each year was guessed without seeing that year's moths. Scored for each latitude band as a whole, the heat forecast called the start and the peak about ${all.heat.toFixed(1)} days off on average; the plain calendar (“it's usually early June here”) was about ${all.calendar.toFixed(1)} days off. Promising, not proven: this version was picked after the first try lost, so it still has to pass on the 2026 season before we claim it.`,
         'Watch for a pattern: the forecast peak tends to run a few days early in the south and late in the north. The first test found lunas in the north come out with less warmth saved up than southern ones (local adaptation or daylength, still an open question), and one Midwest-wide model splits the difference.',
         'This is a replay, not a real forecast: it uses the temperatures that actually happened. A spring forecast would have to use weather forecasts and will be less sharp.',
-        'Amber dots came after a fixed late-June cut-off for their latitude (south of 45°N), so they are counted as the summer second brood. Some are really late first-brood moths from a cold year. They are shown as seen; the forecast covers the first brood only.',
+        'Amber dots came after a fixed cut-off for their latitude (late June, or early July at 43-45°N), so they are counted as the summer second brood. Some are really late first-brood moths from a cold year. They are shown as seen; the forecast covers the first brood only.',
         'Grey dots have a blurred or rough location (privacy settings or a big error circle).',
         'Sightings show where people look as much as where moths are: towns and porch lights are over-counted, and an empty spot does not mean no moths.',
         'Faint hexes have never had a luna recorded nearby, so their forecast has nothing to check against.',
