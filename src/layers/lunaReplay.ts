@@ -120,28 +120,34 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
     const place = lngLat ? 'this spot' : 'Chicago';
     const busy = `busiest ${f(q25)} to ${f(q75)}`;
     const sentence = {
-      'not yet': `Near ${place}, it is too early on ${f(doy)}. First moths about ${f(q05)}, ${busy}.`,
-      starting: `Near ${place}, moths are starting on ${f(doy)}. First ones about ${f(q05)}, ${busy}.`,
-      peak: `Near ${place}, ${f(doy)} is peak time. Busiest days run ${f(q25)} to ${f(q75)}.`,
-      'winding down': `Near ${place}, the season is winding down on ${f(doy)}. Busiest days were ${f(q25)} to ${f(q75)}.`,
-      over: `Near ${place}, the first wave is over by ${f(doy)}. It started about ${f(q05)}.`,
+      'not yet': `On ${f(doy)}, the forecast says it is too early near ${place}. First moths about ${f(q05)}, ${busy}.`,
+      starting: `On ${f(doy)}, the forecast says moths are just starting near ${place}. Expect them ${busy}.`,
+      peak: `On ${f(doy)}, the forecast says it is peak time near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
+      'winding down': `On ${f(doy)}, the forecast says the season is winding down near ${place}. Busiest days were ${f(q25)} to ${f(q75)}.`,
+      over: `By ${f(doy)}, the forecast says the first wave is over near ${place}. It started about ${f(q05)}.`,
     }[stage];
     const end = q95 ?? 273;
     const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
     return {
       title: lngLat ? 'The hexagon you tapped' : 'Example: the Chicago area',
       sentence,
-      span: [91, 213],
+      // The slider's range, 1 Apr - 30 Sep, with a label on the first of each month (real days of year, so leap years line up).
+      span: [dayOfYear(Date.UTC(year, 3, 1)), dayOfYear(Date.UTC(year, 8, 30))],
+      months: [3, 4, 5, 6, 7, 8].map((m) => {
+        const ms = Date.UTC(year, m, 1);
+        return { doy: dayOfYear(ms), label: new Date(ms).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }) };
+      }),
       segments: [
         { from: 0, to: q05, label: 'not yet', color: css(STAGE_COLOR['not yet']) },
         { from: q05, to: q25, label: 'starting', color: css(STAGE_COLOR.starting) },
         { from: q25, to: q75, label: 'peak', color: css(STAGE_COLOR.peak) },
         { from: q75, to: end, label: 'winding down', color: css(STAGE_COLOR['winding down']) },
-        { from: end, to: 366, label: 'over', color: css(STAGE_COLOR.over) },
+        { from: end, to: 367, label: 'over', color: css(STAGE_COLOR.over) },
       ],
-      ticks: sightingsFor(mode).filter((s) => s.cell === cell && !(s.flags & SECOND_BROOD)).map(day),
+      ticks: sightingsFor(mode)
+        .filter((s) => s.cell === cell && !(s.flags & (SECOND_BROOD | APPROXIMATE)))
+        .map(day),
       today: doy,
-      fmt: f,
     };
   };
 
@@ -272,7 +278,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The forecast runs a few days early in the south and late in the north. Northern moths may need less warmth. Nobody knows why yet.',
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all research grade records. Captive or reared moths were removed.',
-        'The heat model was chosen after a first attempt lost. It must pass the 2026 season before we say it works.',
+        'The heat model was chosen after a first attempt lost. It is being tested on the 2026 season before we say it works.',
       ];
       if (yr && yr.n)
         bullets.push(
@@ -289,6 +295,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
     explainer(): Explainer {
       const sc = mode === TYPICAL ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
+      const one = (d: number) => d.toFixed(1);
       return {
         name: 'Luna moth',
         sci: data.species.sci,
@@ -297,23 +304,26 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         hook: 'A map of when luna moths appear in seven Midwest states. Warm days set the forecast. Real photos check it.',
         steps: [
           { title: 'Warm days count', text: 'From 1 March, each day above 10 °C (50 °F) adds warmth to a jar.' },
-          { title: 'The jar fills', text: 'Past moths came out once a spot had saved up enough warmth.' },
+          { title: 'The jar fills', text: 'Past moths came out after about this much warmth was saved.' },
           { title: 'Moths fly', text: 'Warm spring, early moths. Cold spring, late moths.' },
         ],
-        spotIntro: 'Tap a hexagon to see its season.',
+        spotIntro: 'Tap a hexagon on the map to see its season here.',
         spot: (lngLat, t) => spotStory(lngLat, t),
         score: {
           title: 'How good is it?',
           text:
-            `Without seeing a year's moths, the heat forecast missed the start and peak by about ${all.heat.toFixed(0)} days. ` +
-            `The calendar alone missed by about ${all.calendar.toFixed(0)} days. Promising, not proven.` +
-            (all === sc && mode !== TYPICAL ? ` Scores for ${mode} only.` : ''),
+            (sc.n
+              ? `Without seeing ${mode === TYPICAL ? "a year's" : `${mode}'s`} moths, the heat forecast missed the start and peak by about ${one(sc.heat)} days. ` +
+                `Just using the usual date for each area missed by about ${one(sc.calendar)} days. ` +
+                (sc.heat < sc.calendar ? 'Promising, not proven.' : 'This time the usual date did as well or better.') +
+                (mode !== TYPICAL && sc.n < 3 ? ` Based on only ${sc.n} latitude band${sc.n > 1 ? 's' : ''}.` : '')
+              : `${mode} had too few sightings to score. These bars are all years together.`),
           bars: [
-            { label: 'Heat forecast', days: all.heat, best: true },
-            { label: 'Calendar guess', days: all.calendar },
+            { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
+            { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
         },
-        finePrintLabel: 'Fine print',
+        finePrintLabel: 'Limits and fine print',
       };
     },
 

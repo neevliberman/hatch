@@ -1,3 +1,4 @@
+import type { Explainer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import { explainerHtml, spotHtml } from './explainer';
 
@@ -17,11 +18,12 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   let spot: [number, number] | null = null;
   let spotT = 0;
   const lastSpot = new WeakMap<HTMLElement, string>();
+  // Explainers built at the last render, so playback (which calls fillSpots every frame) doesn't rebuild them.
+  let explainers = new Map<string, Explainer>();
   const fillSpots = () => {
-    for (const l of registry.activeLayers()) {
-      const el = drawer.querySelector<HTMLElement>(`[data-spot="${CSS.escape(l.id)}"]`);
-      const ex = l.explainer?.();
-      if (!el || !ex) continue;
+    for (const [id, ex] of explainers) {
+      const el = drawer.querySelector<HTMLElement>(`[data-spot="${CSS.escape(id)}"]`);
+      if (!el) continue;
       const html = spotHtml(ex.spot(spot, spotT));
       if (html === lastSpot.get(el)) continue; // playback calls this every frame; skip unchanged days
       el.innerHTML = html;
@@ -31,16 +33,22 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   const render = () => {
     const layers = registry.activeLayers();
     const credits = layers.flatMap((l) => l.credits?.() ?? []);
+    explainers = new Map();
+    // A season change re-renders; keep folded sections the way the reader left them.
+    const opened = new Set([...drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key));
     drawer.innerHTML = `
       <div class="drawer-head"><h2>About this map</h2>
-        <button class="icon-btn" id="drawer-close" aria-label="Close caveats">&times;</button></div>
+        <button class="icon-btn" id="drawer-close" aria-label="Close About this map">&times;</button></div>
       ${
         layers.length
           ? layers
               .map((l) => {
                 const c = l.caveats();
                 const ex = c.severity === 'synthetic' ? undefined : l.explainer?.();
-                if (ex) return explainerHtml(l.id, ex, c);
+                if (ex) {
+                  explainers.set(l.id, ex);
+                  return explainerHtml(l.id, ex, c);
+                }
                 return `<section class="cav ${c.severity}" data-why>
                   ${c.severity === 'synthetic' ? '<div class="badge">SYNTHETIC DATA</div>' : ''}
                   <h3>${esc(c.title)}</h3>
@@ -49,8 +57,9 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
               .join('')
           : '<p class="muted">No layers are active.</p>'
       }
-      ${credits.length ? `<details class="cav credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></details>` : ''}`;
+      ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></details>` : ''}`;
     drawer.querySelector('#drawer-close')!.addEventListener('click', () => toggle(false));
+    drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]').forEach((d) => (d.open = opened.has(d.dataset.key)));
     fillSpots();
   };
 

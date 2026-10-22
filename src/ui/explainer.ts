@@ -25,18 +25,18 @@ const CREATURES: Record<Explainer['creature'], { wings: string; body: string }> 
 };
 
 /** The looping picture strip: the sun pays warm days into a jar; when it is full, the animal flies out. */
-function strip(ex: Explainer): string {
+function strip(id: string, ex: Explainer): string {
+  const clip = `ex-jar-${id.replace(/[^\w-]/g, '')}`;
   const c = CREATURES[ex.creature];
   const coins = [0, 1, 2].map((i) => `<circle r="3.2" class="coin" style="animation-delay:${i * 0.9}s"/>`).join('');
-  return `<svg class="ex-art" viewBox="0 0 300 96" role="img" aria-label="${esc(
-    ex.steps.map((s) => `${s.title}: ${s.text}`).join(' '),
-  )}">
+  // The captions below say the same thing in words, so screen readers skip the drawing.
+  return `<svg class="ex-art" viewBox="0 0 300 96" aria-hidden="true">
     <g transform="translate(50 42)" class="sun"><circle r="13"/>
       <g class="rays">${Array.from({ length: 8 }, (_, i) => `<path d="M0-18v-7" transform="rotate(${i * 45})"/>`).join('')}</g></g>
     <g transform="translate(82 42)">${coins}</g>
     <g transform="translate(150 42)" class="jar">
-      <clipPath id="ex-jar-clip"><path d="M-17-20h34v34a8 8 0 0 1-8 8h-18a8 8 0 0 1-8-8Z"/></clipPath>
-      <g clip-path="url(#ex-jar-clip)"><rect class="fill" x="-20" y="-22" width="40" height="46"/></g>
+      <clipPath id="${clip}"><path d="M-17-20h34v34a8 8 0 0 1-8 8h-18a8 8 0 0 1-8-8Z"/></clipPath>
+      <g clip-path="url(#${clip})"><rect class="fill" x="-20" y="-22" width="40" height="46"/></g>
       <path class="glass" d="M-17-20h34v34a8 8 0 0 1-8 8h-18a8 8 0 0 1-8-8Z"/>
       <path class="lid" d="M-20-24h40"/><path class="mark" d="M-17-13h34"/></g>
     <g transform="translate(250 46)"><g class="bug"><g class="flap">${c.wings}</g>${c.body}</g></g>
@@ -47,7 +47,7 @@ function strip(ex: Explainer): string {
 
 /** One place's season as a strip: coloured stages, ticks for real sightings, a marker on today. */
 export function spotHtml(s: SpotStory | null): string {
-  if (!s) return '<p class="muted">No forecast for this spot.</p>';
+  if (!s) return '<p class="muted">No forecast here. Hatch covers land in seven Midwest states.</p>';
   const [a, b] = s.span;
   const pct = (d: number) => `${(((Math.min(b, Math.max(a, d)) - a) / (b - a)) * 100).toFixed(2)}%`;
   const width = (from: number, to: number) => `${(((Math.min(b, to) - Math.max(a, from)) / (b - a)) * 100).toFixed(2)}%`;
@@ -59,16 +59,17 @@ export function spotHtml(s: SpotStory | null): string {
     .filter((d) => d >= a && d <= b)
     .map((d) => `<i class="tick-s" style="left:${pct(d)}"></i>`)
     .join('');
-  // Axis labels on the first of each month inside the span (days of year in a non-leap year).
-  const months = [91, 121, 152, 182, 213, 244]
-    .filter((d) => d >= a && d < b)
-    .map((d) => `<span style="left:${pct(d)}">${esc(s.fmt(d).split(' ')[0]!)}</span>`)
+  const months = s.months
+    .filter((m) => m.doy >= a && m.doy < b)
+    .map((m) => `<span style="left:${pct(m.doy)}">${esc(m.label)}</span>`)
     .join('');
   return `<div class="spot-title">${esc(s.title)}</div>
     <p class="spot-say">${esc(s.sentence)}</p>
     <div class="spot-strip" aria-hidden="true">${segs}${ticks}<b class="today" style="left:${pct(s.today)}"></b></div>
     <div class="spot-axis" aria-hidden="true">${months}</div>
-    <div class="spot-key"><span><i class="k-tick"></i>a real sighting here</span><span><i class="k-today"></i>the day on the slider</span></div>`;
+    <div class="spot-key">${s.segments
+      .map((g) => `<span><i class="k-seg" style="background:${g.color}"></i>${esc(g.label)}</span>`)
+      .join('')}<span><i class="k-tick"></i>real sighting (${s.ticks.length} here)</span><span><i class="k-today"></i>the date you picked</span></div>`;
 }
 
 /** The whole species section of the drawer. Its spot card is filled separately, so it can follow the map. */
@@ -78,21 +79,22 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
   return `<section class="ex" style="--ac:${esc(ex.accent)}">
     <h3 class="ex-name">${esc(ex.name)} <i>${esc(ex.sci)}</i></h3>
     <p class="ex-hook">${esc(ex.hook)}</p>
-    <figure class="ex-fig">${strip(ex)}</figure>
-    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}</p><div data-spot="${esc(id)}"></div></div>
+    <figure class="ex-fig">${strip(id, ex)}</figure>
+    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> On a phone, close this panel first, then reopen it.</span></p><div data-spot="${esc(id)}"></div></div>
     ${
       score
         ? `<div class="ex-score" data-why><div class="ex-h">${esc(score.title)}</div>
+        <div class="ex-sub">Average miss, in days. Shorter is better.</div>
         ${score.bars
           .map(
             (x) => `<div class="bar-l"><span>${esc(x.label)}</span><i class="${x.best ? 'best' : ''}" style="width:${((x.days / max) * 100).toFixed(1)}%"></i>
-            <b>~${x.days.toFixed(0)} days off</b></div>`,
+            <b>${x.days.toFixed(1)} days</b></div>`,
           )
           .join('')}
         <p>${esc(score.text)}</p></div>`
         : ''
     }
-    <details class="ex-fine"><summary>${esc(ex.finePrintLabel)}</summary>
+    <details class="ex-fine" data-key="fine-${esc(id)}"><summary>${esc(ex.finePrintLabel)}</summary>
       <ul>${cav.bullets.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>
   </section>`;
 }

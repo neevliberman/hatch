@@ -49,11 +49,11 @@ export interface SpotStory {
   sentence: string;
   /** Days of year the strip spans, with the stages laid along it and real sightings as ticks. */
   span: [number, number];
+  /** Axis labels: the day of year each month starts. */
+  months: { doy: number; label: string }[];
   segments: SpotSegment[];
   ticks: number[];
   today: number;
-  /** Formats a day of year for the strip's axis labels. */
-  fmt(doy: number): string;
 }
 
 /**
@@ -63,7 +63,7 @@ export interface SpotStory {
 export interface Explainer {
   name: string;
   sci: string;
-  /** Which drawing to use for the animal; the strip and timeline take their colour from `accent`. */
+  /** Which drawing (ui/explainer.ts) to use for the animal; the strip and timeline take their colour from `accent`. */
   creature: 'moth' | 'firefly';
   accent: string;
   hook: string;
