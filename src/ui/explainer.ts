@@ -45,6 +45,25 @@ function strip(id: string, ex: Explainer): string {
   <ol class="ex-steps">${ex.steps.map((s) => `<li><b>${esc(s.title)}</b>${esc(s.text)}</li>`).join('')}</ol>`;
 }
 
+/** Cities for the spot picker, so keyboard and screen-reader users can choose a place without the map. South to north. */
+export const CITIES = [
+  { name: 'Carbondale, IL', lat: 37.73, lng: -89.22 },
+  { name: 'Cincinnati, OH', lat: 39.1, lng: -84.51 },
+  { name: 'Indianapolis, IN', lat: 39.77, lng: -86.16 },
+  { name: 'Springfield, IL', lat: 39.8, lng: -89.65 },
+  { name: 'Columbus, OH', lat: 39.96, lng: -83.0 },
+  { name: 'Des Moines, IA', lat: 41.59, lng: -93.62 },
+  { name: 'Cleveland, OH', lat: 41.5, lng: -81.69 },
+  { name: 'Chicago, IL', lat: 41.88, lng: -87.63 },
+  { name: 'Detroit, MI', lat: 42.33, lng: -83.05 },
+  { name: 'Grand Rapids, MI', lat: 42.96, lng: -85.67 },
+  { name: 'Madison, WI', lat: 43.07, lng: -89.4 },
+  { name: 'Milwaukee, WI', lat: 43.04, lng: -87.91 },
+  { name: 'Minneapolis, MN', lat: 44.98, lng: -93.27 },
+  { name: 'Marquette, MI', lat: 46.54, lng: -87.4 },
+  { name: 'Duluth, MN', lat: 46.79, lng: -92.1 },
+];
+
 /** One place's season as a strip: coloured stages, ticks for real sightings, a marker on today. */
 export function spotHtml(s: SpotStory | null): string {
   if (!s) return '<p class="muted">No forecast here. Hatch covers land in seven Midwest states.</p>';
@@ -80,11 +99,15 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
     <h3 class="ex-name">${esc(ex.name)} <i>${esc(ex.sci)}</i></h3>
     <p class="ex-hook">${esc(ex.hook)}</p>
     <figure class="ex-fig">${strip(id, ex)}</figure>
-    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> Close this panel, tap a hexagon, then tap i to come back.</span></p><div data-spot="${esc(id)}"></div></div>
+    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> Close this panel first.</span></p>
+      <label class="ex-place">Or pick a city <select data-place><option value="">Choose…</option>${CITIES.map(
+        (c) => `<option value="${c.lat},${c.lng}">${esc(c.name)}</option>`,
+      ).join('')}</select></label>
+      <div data-spot="${esc(id)}"></div></div>
     ${
       score
         ? `<div class="ex-score" data-why><div class="ex-h">${esc(score.title)}</div>
-        <div class="ex-sub">Average days off. A shorter bar is better. The usual date is the average of the other years.</div>
+        <div class="ex-sub">Days off, on average. Shorter is better.</div>
         ${score.bars
           .map(
             (x) => `<div class="bar-l"><span>${esc(x.label)}</span><i class="${x.best ? 'best' : ''}" style="width:${((x.days / max) * 100).toFixed(1)}%"></i>

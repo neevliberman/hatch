@@ -1,5 +1,6 @@
 import { Deck, MapView, WebMercatorViewport } from '@deck.gl/core';
 import { ScatterplotLayer } from '@deck.gl/layers';
+import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import type { Layer, PickingInfo } from '@deck.gl/core';
 import { latLngToCell } from 'h3-js';
 import { GRID_RES, MIDWEST_BOUNDS } from '../core/grid';
@@ -22,6 +23,8 @@ export interface MapHandle {
   fit(padding: { top: number; bottom: number }): void;
   /** Show a "you are here" ring at lngLat (null hides it). */
   setMarker(lngLat: [number, number] | null): void;
+  /** Outline the hexagon whose card is pinned (null clears it). */
+  setPicked(cell: string | null): void;
   /** Screen position of lngLat in the current view, and the current zoom (null before the first frame). */
   project(lngLat: [number, number]): [number, number] | null;
   zoom(): number | null;
@@ -50,14 +53,21 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.removeAttribute('aria-describedby');
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
-    return { refresh() {}, fit() {}, setMarker() {}, project: () => null, zoom: () => null };
+    return { refresh() {}, fit() {}, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   const fitState = (p: { top: number; bottom: number }) => {
     const { width, height } = size();
-    const vp = new WebMercatorViewport({ width, height }).fitBounds(MIDWEST_BOUNDS, {
+    let vp = new WebMercatorViewport({ width, height }).fitBounds(MIDWEST_BOUNDS, {
       padding: { top: p.top, bottom: p.bottom, left: 12, right: 12 },
     });
+    // On a tall phone the width limits the fit, which would centre the Midwest and leave a gap above it. Pin its
+    // north edge under the header instead: the spare room goes to the bottom, where the hex card docks.
+    const gap = vp.project([MIDWEST_BOUNDS[0][0], MIDWEST_BOUNDS[1][1]])[1]! - p.top;
+    if (gap > 1) {
+      const [longitude, latitude] = vp.unproject([width / 2, height / 2 + gap]);
+      vp = new WebMercatorViewport({ width, height, longitude, latitude, zoom: vp.zoom });
+    }
     return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: 3, maxZoom: 11 };
   };
 
@@ -135,10 +145,28 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         ]
       : [];
 
+  let picked: string | null = null;
+  const pickedLayers = (): Layer[] =>
+    picked
+      ? [
+          new H3HexagonLayer<string>({
+            id: 'picked-hex',
+            data: [picked],
+            getHexagon: (d) => d,
+            filled: false,
+            stroked: true,
+            extruded: false,
+            getLineColor: [245, 215, 110, 255],
+            lineWidthUnits: 'pixels',
+            getLineWidth: 3,
+          }),
+        ]
+      : [];
+
   const refresh = () => {
     const { under, over } = basemapLayers();
     const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme }));
-    deck.setProps({ layers: [...under, ...dataLayers, ...over, ...markerLayers()] });
+    deck.setProps({ layers: [...under, ...dataLayers, ...over, ...pickedLayers(), ...markerLayers()] });
   };
 
   return {
@@ -154,6 +182,11 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     setMarker(lngLat) {
       marker = lngLat;
+      refresh();
+    },
+    setPicked(cell) {
+      if (cell === picked) return;
+      picked = cell;
       refresh();
     },
     project(lngLat) {

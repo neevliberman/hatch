@@ -1,6 +1,6 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { ScatterplotLayer } from '@deck.gl/layers';
-import { DataFilterExtension } from '@deck.gl/extensions';
+import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps } from '@deck.gl/extensions';
 import { latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
@@ -38,13 +38,34 @@ export function stageAt(q: readonly (number | null)[] | undefined, doy: number):
 type RGBA = [number, number, number, number];
 // Forecast hexes live in blue (season coming) -> bright teal (peak) -> dusky violet (season gone), so the
 // north/south ends of the wave never share a colour. The moths themselves are the only moonlight green on the map.
-// Lightness climbs to the peak and falls after it, and "not yet" is near-empty, so the two ends never look alike.
+// Lightness climbs to the peak and falls after it (starting is brighter than winding down, over is darkest), and
+// "not yet" is near-empty, so the stages read in order even for colour-blind eyes.
 const STAGE_COLOR: Record<Stage, RGBA> = {
   'not yet': [26, 34, 56, 90],
-  starting: [40, 110, 170, 210],
+  starting: [70, 150, 215, 215],
   peak: [72, 190, 202, 230],
-  'winding down': [140, 112, 192, 210],
+  'winding down': [118, 92, 170, 210],
   over: [80, 68, 110, 170],
+};
+// Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
+const STRIPES: RGBA = [11, 15, 23, 150];
+// One object for every render, so deck.gl doesn't rebuild the pattern each playback frame.
+const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
+let stripeAtlas: HTMLCanvasElement | null = null;
+const stripes = () => {
+  if (stripeAtlas) return stripeAtlas;
+  const c = Object.assign(document.createElement('canvas'), { width: 16, height: 16 });
+  const g = c.getContext('2d')!;
+  g.strokeStyle = '#fff';
+  g.lineWidth = 3;
+  // Three strokes so the diagonal tiles without seams.
+  for (const o of [-16, 0, 16]) {
+    g.beginPath();
+    g.moveTo(o, 16);
+    g.lineTo(o + 16, 0);
+    g.stroke();
+  }
+  return (stripeAtlas = c);
 };
 const MOON: RGBA = [196, 255, 206, 255];
 const SECOND: RGBA = [255, 196, 120, 255];
@@ -102,10 +123,8 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
   const forecast = () => data.forecast[mode] ?? data.forecast[TYPICAL]!;
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
 
-  const cellColor = (i: number, seen: boolean, doy: number): RGBA => {
-    const c = STAGE_COLOR[stageAt(forecast()[i], doy)];
-    return seen ? c : [c[0], c[1], c[2], Math.round(c[3] * 0.35)];
-  };
+  const unseen = cells.filter((c) => !c.seen);
+  const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
 
   // The default spot until a hex is tapped: Chicago's western suburbs (the city's own hex centre is in the lake).
   const HOME: [number, number] = [-88.0, 41.9];
@@ -191,7 +210,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           id: 'luna-forecast',
           data: cells,
           getHexagon: (c) => c.id,
-          getFillColor: (c) => cellColor(c.i, c.seen, doy),
+          getFillColor: (c) => cellColor(c.i, doy),
           getLineColor: theme.hexEdge,
           stroked: true,
           filled: true,
@@ -202,6 +221,24 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           autoHighlight: true,
           highlightColor: [255, 255, 255, 50],
           updateTriggers: { getFillColor: [doy, mode] },
+        }),
+        new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
+          id: 'luna-unseen',
+          data: unseen,
+          getHexagon: (c) => c.id,
+          getFillColor: STRIPES,
+          stroked: false,
+          filled: true,
+          extruded: false,
+          highPrecision: true,
+          pickable: false,
+          extensions: [new FillStyleExtension({ pattern: true })],
+          fillPatternAtlas: stripes(),
+          fillPatternMapping: STRIPE_MAPPING,
+          fillPatternMask: true,
+          getFillPattern: () => 'stripes',
+          fillPatternSizeUnits: 'pixels',
+          getFillPatternScale: 0.75,
         }),
         new ScatterplotLayer<Sighting>({
           id: 'luna-glow',
@@ -244,9 +281,9 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         const lines = [
           s.flags & SECOND_BROOD
             ? 'Seen after late June or early July here, so counted as the second wave. The map does not forecast this wave.'
-            : 'First wave of the year (the one the map forecasts)',
+            : 'First wave of the year (the one the map forecasts).',
         ];
-        if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is gray');
+        if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is gray.');
         return {
           title: `Luna moth seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
           lines,
@@ -259,7 +296,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       const q = forecast()[i] ?? [];
       const [q05, q25, q50, q75] = q;
       const stage = stageAt(q, doy);
-      const lines = [`Forecast for ${fmtDoy(year, doy)}: ${stage}`];
+      const lines = [`Forecast for ${fmtDoy(year, doy)}: ${stage}.`];
       if (q05 != null && q50 != null && q25 != null && q75 != null)
         lines.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
@@ -269,7 +306,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc)
         lines.push(
-          `Peak this year in this strip of the map (${band.label}°N): seen ${fmtDoy(year, sc.obs_peak)}, forecast ${fmtDoy(year, sc.heat_peak)}, usual date ${fmtDoy(year, sc.cal_peak)}`,
+          `Peak this year in this strip of the map (${band.label}°N): seen ${fmtDoy(year, sc.obs_peak)}, forecast ${fmtDoy(year, sc.heat_peak)}, usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
       const here = sightingsFor(mode).filter((s) => s.cell === cell);
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
@@ -278,10 +315,10 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       lines.push(
         here.length
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in this hexagon${mode === TYPICAL ? ' (all years)' : ''}` +
-              (firstDays.length ? `. Middle date of the first wave: ${fmtDoy(year, median)}` : '')
-          : `No sightings in this hexagon${mode === TYPICAL ? '' : ' this year'}`,
+              (firstDays.length ? `. Middle date of the first wave: ${fmtDoy(year, median)}.` : '.')
+          : `No sightings in this hexagon${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      if (!cells[i]!.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown faint.');
+      if (!cells[i]!.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown striped.');
       return { title: `Luna moth, ${modeLabel(mode)}`, lines };
     },
 
@@ -293,7 +330,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of adult luna moths that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days, about how long an adult lives.`,
         'Amber dots are late moths counted as the second wave. Some may be late first wave moths from a cold year.',
         'Gray dots mean the photo\u2019s location was blurred or rough, so the dot may sit off its true spot.',
-        'Faint hexagons have no luna sightings nearby, ever. There is nothing to check the forecast against there.',
+        'Striped hexagons have no luna sightings nearby, ever. There is nothing to check the forecast against there.',
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The forecast runs a few days early in the south and late in the north. Northern moths may need less warmth. We don\u2019t know why yet.',
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
@@ -314,13 +351,13 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
     explainer(): Explainer {
       const sc = mode === TYPICAL ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
-      const one = (d: number) => d.toFixed(1);
+      const days = (d: number) => `${Math.round(d)} day${Math.round(d) === 1 ? '' : 's'}`;
       return {
         name: 'Luna moth',
         sci: data.species.sci,
         creature: 'moth',
         accent: css(MOON),
-        hook: 'This map predicts when luna moths come out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how close it gets.',
+        hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how well it matches.',
         steps: [
           { title: 'Warm days count', text: 'Starting March 1, every day warmer than 50 °F (10 °C) adds to a running total. Hotter days add more, up to 86 °F.' },
           { title: 'The jar fills', text: 'In past years, moths came out once the total reached about this line.' },
@@ -332,12 +369,13 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           title: 'How sure is it?',
           text:
             (sc.n
-              ? `Tested on ${mode === TYPICAL ? 'years' : mode} it had not learned from, the heat forecast was off by about ${one(sc.heat)} days, on average, for when moths started and peaked. ` +
-                `Simply guessing each area\u2019s usual date was off by about ${one(sc.calendar)} days. ` +
-                (sc.heat < sc.calendar ? 'So far the heat forecast is closer. ' : 'This time the usual date did as well or better. ') +
+              ? `We checked the forecast against ${mode === TYPICAL ? 'past years' : mode}, which it hadn\u2019t learned from. ` +
+                `It missed the real start and peak by about ${days(sc.heat)} on average. ` +
+                `Guessing each area\u2019s usual date missed by about ${days(sc.calendar)}. ` +
+                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ') +
                 (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'Not proven yet. We picked this version after a first try did no better than the usual date, so it still has to pass a test on places and seasons it hasn\u2019t seen.',
+            'Our first version did no better than that guess, so we replaced it. This one still has to pass a test on places and seasons it hasn\u2019t seen.',
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
@@ -349,13 +387,14 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
 
     legend(): LegendSpec {
       return {
-        title: 'Forecast: first wave of moths',
+        title: 'Forecast: when moths come out',
         items: [
           ...STAGES.map((s) => ({
             color: css(STAGE_COLOR[s]),
             label: s,
             shape: 'hex' as const,
           })),
+          { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
           { color: css(MOON), label: 'moth seen', shape: 'dot' },
           { color: css(SECOND), label: 'seen, 2nd wave', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },
