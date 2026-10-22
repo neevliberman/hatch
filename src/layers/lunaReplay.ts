@@ -28,6 +28,10 @@ export const GLOW_DAYS = 10;
  */
 export const FINE_ZOOM: Record<number, number> = { 5: 6.4, 6: 7.9 };
 const HYSTERESIS = 0.3;
+/** Spatial holdout (learn IL/IN/OH, test WI/MN): only claimed when the shipped model's own numbers show a pass. */
+const hoHeat = data.model?.holdout_mae?.heat;
+const hoCal = data.model?.holdout_mae?.cal;
+const holdoutPass = Number.isFinite(hoHeat) && Number.isFinite(hoCal) && hoHeat! < hoCal!;
 /** Year used to put dates on the "typical year" axis. Any non-leap year works. */
 const TYPICAL_AXIS_YEAR = 2025;
 
@@ -495,7 +499,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The first version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run from about 1 day early in the far south to 3 or 4 days late further north.',
         `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
-        `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota about ${Math.round(data.model?.holdout_mae.heat ?? 5)} days off. Their own usual dates were about ${Math.round(data.model?.holdout_mae.cal ?? 7)} days off. But we chose this version after seeing that test, so it is a second look, not proof. The version we picked first failed it.`,
+        ...(holdoutPass
+          ? [
+              `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota about ${Math.round(hoHeat!)} days off. Their own usual dates were about ${Math.round(hoCal!)} days off. That gap is small enough that it could be chance. We also chose this version after seeing that test, so it is a second look, not proof. The version we picked first failed it.`,
+            ]
+          : []),
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
         'This version is about as accurate as the last one, with much less south/north lean. Both beat each area\u2019s usual date.',
       ];
@@ -538,7 +546,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
                 (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ') +
                 (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'Not proven yet. It passes on years it never saw. It also did well on states it never saw (Wisconsin and Minnesota), but we chose it after seeing that test. The real test is the 2026 season, once its weather data is out in mid-2027.',
+            'Not proven yet. It passes on years it never saw. ' +
+            (holdoutPass
+              ? 'It also did well on states it never saw (Wisconsin and Minnesota), but we chose it after seeing that test. '
+              : '') +
+            'The real test is the 2026 season, once its weather data is out in mid-2027.',
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },

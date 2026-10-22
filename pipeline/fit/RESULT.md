@@ -78,7 +78,10 @@ Rules were written down before scoring: [FROZEN_P3.md](FROZEN_P3.md). How the mo
 | Band | 37-39 °N | 39-41 | 41-43 | 43-45 | 45-49 °N |
 |---|---|---|---|---|---|
 | P1 / P2 map | −6.1 | −3.4 | −0.6 | +1.7 | +3.9 |
-| P3 | +0.5 | +1.8 | +2.2 | +3.0 | +1.2 |
+| P3 (run 2) | +0.5 | +1.8 | +2.2 | +3.0 | +1.2 |
+| P3.1 (the map now) | −1.1 | +1.4 | +2.4 | +3.7 | +2.9 |
+
+Figures below are from P3 run 2, not P3.1.
 
 ![bias](results/p3_run2/figures/bias_by_band.png)
 ![predicted vs real](results/p3_run2/figures/predicted_vs_real.png)
