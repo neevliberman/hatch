@@ -37,7 +37,14 @@ function start() {
   const probeEl = $('probe');
   const updateProbe = () => showProbe(probeEl, registry, hit, time.cursor);
 
-  const padding = () => ({ top: $('sub').getBoundingClientRect().bottom + 8, bottom: $('bottom').offsetHeight + 8 });
+  // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
+  // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
+  const padding = () => {
+    const top = $('sub').getBoundingClientRect().bottom + 8;
+    const bottom = $('bottom').offsetHeight + 8;
+    const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
+    return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k) };
+  };
   const map = createMap({
     container: $<HTMLDivElement>('map'),
     registry,

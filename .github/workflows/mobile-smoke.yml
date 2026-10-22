@@ -1,0 +1,32 @@
+# Phone smoke test on every PR and push to main: iPhone (WebKit) and Android (Chromium) sizes, portrait and landscape.
+# Screenshots are uploaded as an artifact either way, so a failure can be looked at, not just read.
+name: mobile-smoke
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run build:single
+      - run: npm run mobile
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-screenshots
+          path: screenshots/mobile
+          retention-days: 14
