@@ -54,9 +54,12 @@ function start() {
     const y = Math.max(8, Math.min(px[1] - h / 2, window.innerHeight - h - 8));
     probeEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   };
+  // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
+  let followSpot = (_t: number) => {};
   const updateProbe = () => {
     showProbe(probeEl, registry, hit, time.cursor);
     placeProbe();
+    followSpot(time.cursor);
   };
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
@@ -124,6 +127,7 @@ function start() {
   mountLayerList($('layers'), registry);
   mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
+  followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t);
   // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,
   // so the tap visibly lands even when the drawer is already open.
   let flashTimer = 0;
