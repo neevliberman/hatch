@@ -1,0 +1,32 @@
+# Desktop smoke test on every PR and push to main: Chromium, Firefox and WebKit at laptop to 1440p sizes, mouse and keyboard.
+# Firefox only gets WebGL with a display, so the run goes under xvfb. Screenshots are uploaded either way.
+name: desktop-smoke
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run build:single
+      - run: xvfb-run -a npm run desktop
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-screenshots
+          path: screenshots/desktop
+          retention-days: 14
