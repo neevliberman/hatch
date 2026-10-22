@@ -45,8 +45,11 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   const gl = document.createElement('canvas').getContext('webgl2');
   gl?.getExtension('WEBGL_lose_context')?.loseContext(); // only a test: give the context back
   if (!gl) {
-    container.insertAdjacentHTML('beforeend', `<p id="no-webgl" role="status">This map needs WebGL, which this browser has
-      turned off. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
+    // Beside the map, not in it: the map's role="img" would hide the message from screen readers.
+    container.removeAttribute('role');
+    container.removeAttribute('aria-describedby');
+    container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
+      browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     return { refresh() {}, fit() {}, setMarker() {}, project: () => null, zoom: () => null };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });

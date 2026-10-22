@@ -12,14 +12,15 @@ function seasonWindow() {
   return { onset: Math.round(onset || 135), end: Math.round((peak || 172) + 14), south };
 }
 
-/** "Lunas due in ~205 days" off-season, or a note that the season is on: a short part, then detail phones may hide. */
+/** "Next real season: about Apr 17, 2027" off-season, or a note that the season is on: a short part, then detail phones may hide. */
 export function countdownParts(now: number): [string, string] {
   const { onset, end, south } = seasonWindow();
   const y = new Date(now).getUTCFullYear();
   const at = (year: number, doy: number) => Date.UTC(year, 0, doy);
   const fmt = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  if (now >= at(y, onset) && now < at(y, end)) return ['Luna season is on', ': the first brood is flying somewhere in the Midwest now.'];
+  if (now >= at(y, onset) && now < at(y, end)) return ['Luna season is on', '. The first wave is out somewhere in the Midwest right now.'];
   const next = now < at(y, onset) ? at(y, onset) : at(y + 1, onset);
   const days = Math.ceil((next - now) / DAY);
-  return [`Lunas due in ~${days} days`, ` (they usually start around ${fmt(next)} in the far south, ${south}°N).`];
+  // The slider shows a past season, so name the real next one by date, not just "in N days".
+  return [`Next real season: about ${fmt(next)}, ${new Date(next).getUTCFullYear()}`, `, first in the southern part of the map (${south}°N), ${days} days from now.`];
 }

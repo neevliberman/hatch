@@ -80,11 +80,11 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
     <h3 class="ex-name">${esc(ex.name)} <i>${esc(ex.sci)}</i></h3>
     <p class="ex-hook">${esc(ex.hook)}</p>
     <figure class="ex-fig">${strip(id, ex)}</figure>
-    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> On a phone, close this panel first, then reopen it.</span></p><div data-spot="${esc(id)}"></div></div>
+    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> Close this panel, tap a hexagon, then tap i to come back.</span></p><div data-spot="${esc(id)}"></div></div>
     ${
       score
         ? `<div class="ex-score" data-why><div class="ex-h">${esc(score.title)}</div>
-        <div class="ex-sub">Average miss, in days. Shorter is better.</div>
+        <div class="ex-sub">Average days off. A shorter bar is better. The usual date is the average of the other years.</div>
         ${score.bars
           .map(
             (x) => `<div class="bar-l"><span>${esc(x.label)}</span><i class="${x.best ? 'best' : ''}" style="width:${((x.days / max) * 100).toFixed(1)}%"></i>

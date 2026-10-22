@@ -13,7 +13,7 @@ import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const SEEN_DRAWER_KEY = 'hatch.drawerSeen.v1';
+const SEEN_KEY = 'hatch.seen.v2';
 
 function start() {
   const params = new URLSearchParams(location.search);
@@ -91,9 +91,12 @@ function start() {
     },
   });
 
+  // The map is a canvas, so screen readers get the day's picture in words (read with the map, not announced each frame).
+  const srSummary = $('sr-summary');
   const refresh = () => {
     map.refresh();
     updateProbe();
+    srSummary.textContent = luna.summary(time.cursor);
   };
   time.subscribe(refresh);
   registry.subscribe(() => {
@@ -108,10 +111,11 @@ function start() {
   // Season picker: switching keeps the cursor on the same calendar day.
   const picker = $<HTMLSelectElement>('season');
   picker.innerHTML = [TYPICAL, ...[...years].reverse()]
-    .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : m} (${firstBroodCount(m)})</option>`)
+    // The count is first-wave moths seen; "All years" goes without it so the closed menu fits a small phone.
+    .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : `${m} (${firstBroodCount(m).toLocaleString()} moths)`}</option>`)
     .join('');
   picker.value = initialMode;
-  picker.title = 'Season to replay (first-brood sightings in brackets)';
+  picker.title = `Season to replay (first-wave moths seen, in parentheses; ${firstBroodCount(TYPICAL).toLocaleString()} in all years)`;
   picker.addEventListener('change', () => {
     const now = new Date(time.cursor);
     luna.setMode(picker.value);
@@ -136,8 +140,13 @@ function start() {
     const drawer = $('drawer');
     const target = drawer.querySelector<HTMLElement>('[data-why]');
     const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-    if (target) target.scrollIntoView({ block: 'start', behavior });
-    else drawer.scrollTo({ top: 0, behavior });
+    // Scroll the drawer itself: scrollIntoView would also nudge the fixed page and leave a gap at the bottom.
+    const top = target ? target.getBoundingClientRect().top - drawer.getBoundingClientRect().top + drawer.scrollTop - 12 : 0;
+    drawer.scrollTo({ top, behavior });
+    if (target) {
+      target.tabIndex = -1;
+      target.focus({ preventScroll: true }); // a screen reader lands on the answer, not on the close button
+    }
     const flash = target ?? drawer.querySelector<HTMLElement>('.cav') ?? drawer;
     flash.classList.remove('flash');
     void flash.offsetWidth; // restart the animation on a repeat tap
@@ -186,7 +195,7 @@ function start() {
         say('Link copied');
       }
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') say('Could not share: copy the address bar instead');
+      if ((e as Error).name !== 'AbortError') say('Couldn\u2019t share. Copy the link from the address bar.');
     }
   });
 
@@ -224,9 +233,9 @@ function start() {
         pinned = true;
         map.setMarker(you);
         updateProbe();
-        say(here === first ? 'You are the yellow dot' : 'You are the yellow dot (card shows the nearest land hex)');
+        say(here === first ? 'You are the yellow dot' : 'You are the yellow dot (the card shows the nearest hexagon on land)');
       },
-      (err) => (done(), say(err.code === err.PERMISSION_DENIED ? 'Location permission was declined' : 'Could not get your location')),
+      (err) => (done(), say(err.code === err.PERMISSION_DENIED ? 'Location access is off for this site' : 'Could not get your location')),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     );
   });
@@ -239,15 +248,20 @@ function start() {
   moreEl.textContent = more;
   $('countdown').replaceChildren(short, moreEl);
 
-  // The drawer opens by itself once per browser, so the honesty is seen, not just available.
+  // First visit: the map comes first. The About button and Play glow briefly to show where the story and the
+  // replay are; the panel itself opens only when asked (or with ?caveats).
   let seen = true;
   try {
-    seen = localStorage.getItem(SEEN_DRAWER_KEY) === '1';
-    localStorage.setItem(SEEN_DRAWER_KEY, '1');
+    seen = localStorage.getItem(SEEN_KEY) === '1';
+    localStorage.setItem(SEEN_KEY, '1');
   } catch {
-    /* storage blocked: skip the auto-open rather than nag every visit */
+    /* storage blocked: skip the hint rather than repeat it every visit */
   }
-  if (!seen && !params.has('noauto')) toggleDrawer(true);
+  const hinted = ['info-btn', 't-play', 'why'];
+  if (!seen && !params.has('noauto') && !params.has('caveats')) for (const id of hinted.slice(0, 2)) $(id).classList.add('hint');
+  const clearHint = () => hinted.slice(0, 2).forEach((x) => $(x).classList.remove('hint'));
+  for (const id of hinted) $(id).addEventListener('click', clearHint);
+  time.subscribe(() => time.playing && clearHint());
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());

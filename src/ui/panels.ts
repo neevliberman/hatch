@@ -73,7 +73,7 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
           .map((x) => `<div>${esc(x)}</div>`)
           .join('')}${
           card.link
-            ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)} &#8599;</a>`
+            ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)}<span aria-hidden="true"> &#8599;</span><span class="sr"> (opens in a new tab)</span></a>`
             : ''
         }</div>`,
     )
