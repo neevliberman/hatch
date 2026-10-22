@@ -190,6 +190,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 #drawer { position: absolute; top: 0; right: 0; bottom: 0; width: var(--drawer-w); padding: 0 var(--gutter) 24px;
   background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; z-index: 5;
+  overscroll-behavior: none; scroll-padding-top: 64px; /* keyboard focus lands below the sticky title bar */
   transform: translateX(104%); transition: transform 0.22s ease; box-shadow: var(--shadow); }
 #drawer.open { transform: none; }
 /* The title and close button stay put while the drawer scrolls under them. */
