@@ -38,19 +38,25 @@ function start() {
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
-  const updateProbe = () => {
-    showProbe(probeEl, registry, hit, time.cursor);
+  // Placing is separate from rebuilding: a pan only moves the card, so a screen reader doesn't re-read it every frame.
+  const placeProbe = () => {
     // A pinned card stays on its hex as the map pans or zooms: re-project the hex rather than reuse the click point.
     const px = hover.matches && !probeEl.hidden && hit?.px ? (pinned ? (map.project(hit.lngLat) ?? hit.px) : hit.px) : undefined;
     probeEl.classList.toggle('at-pointer', !!px);
     probeEl.classList.toggle('pinned', !!px && pinned);
     // A card that follows the pointer would make a screen reader read out every hex swept over; announce it once pinned.
     probeEl.setAttribute('aria-live', px && !pinned ? 'off' : 'polite');
+    // A pinned hex panned off-screen hides its card until it comes back, rather than leaving it stuck at the edge.
+    probeEl.style.visibility = px && (px[0] < 0 || px[1] < 0 || px[0] > window.innerWidth || px[1] > window.innerHeight) ? 'hidden' : '';
     if (!px) return probeEl.style.removeProperty('transform');
     const { width: w, height: h } = probeEl.getBoundingClientRect();
     const x = Math.max(8, px[0] + 16 + w > window.innerWidth - 8 ? px[0] - 16 - w : px[0] + 16);
     const y = Math.max(8, Math.min(px[1] - h / 2, window.innerHeight - h - 8));
     probeEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  };
+  const updateProbe = () => {
+    showProbe(probeEl, registry, hit, time.cursor);
+    placeProbe();
   };
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
@@ -69,7 +75,7 @@ function start() {
     time,
     padding,
     onMove: (moved) => ($('recenter').hidden = !moved),
-    onView: () => pinned && updateProbe(),
+    onView: () => pinned && placeProbe(),
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
@@ -245,7 +251,7 @@ function start() {
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => (map.fit(padding()), updateProbe()), 150);
+    resizeTimer = window.setTimeout(() => (map.fit(padding()), placeProbe()), 150);
   });
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map };
