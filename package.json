@@ -11,11 +11,13 @@
     "build:single": "tsc --noEmit && vite build --config vite.single.config.ts",
     "build:all": "npm run build && npm run build:single",
     "preview": "vite preview",
-    "shoot": "node scripts/shoot.mjs screenshots p0",
-    "check": "npm run build && npm run build:single && npm run shoot"
+    "shoot": "node scripts/shoot.mjs screenshots p2",
+    "budget": "node scripts/budget.mjs",
+    "check": "npm run build && npm run build:single && npm run budget && npm run shoot"
   },
   "dependencies": {
     "@deck.gl/core": "9.4.0",
+    "@deck.gl/extensions": "9.4.0",
     "@deck.gl/geo-layers": "9.4.0",
     "@deck.gl/layers": "9.4.0",
     "@luma.gl/core": "9.4.0",

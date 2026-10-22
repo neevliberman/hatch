@@ -20,7 +20,7 @@ export interface Cell {
 }
 
 /**
- * Cover the six core states with H3 cells. polygonToCells wants [lat, lng] rings
+ * Cover the seven core states with H3 cells. polygonToCells wants [lat, lng] rings
  * (or pass isGeoJson=true for [lng, lat]); a cell belongs to a polygon if its CENTRE is inside.
  */
 export function buildGrid(res = GRID_RES): Cell[] {

@@ -1,5 +1,5 @@
 # Nightly: save raw NWS gridded forecasts to the `forecast-archive` branch (archive/YYYY-MM-DD/<point>.json).
-# UNTESTED (written without network access). Runs year-round: the archive is the only record of past forecasts.
+# Runs year-round: the archive is the only record of past forecasts. First green run 2026-10-22 (21/21 points).
 name: forecast-archive
 on:
   schedule:
@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write  # keepalive step below
 jobs:
   archive:
     runs-on: ubuntu-latest
@@ -32,3 +33,11 @@ jobs:
           git diff --cached --quiet && { echo "nothing new"; exit 0; }
           git commit -q -m "forecast archive $D"
           git push origin forecast-archive
+      # GitHub switches off scheduled workflows in public repos after 60 days without repo activity.
+      # Re-enabling the (already enabled) workflow through the API resets that clock, so a quiet repo keeps archiving.
+      - name: Keepalive
+        if: always()
+        continue-on-error: true  # a keepalive hiccup must not paint a good archive night red
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/forecast-archive.yml/enable"

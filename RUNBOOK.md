@@ -20,7 +20,7 @@ On a laptop with `npm i -D playwright && npx playwright install chromium`, leave
 2. `git log --oneline | head` and `git status`.
 3. `npm ci` (lockfile + exact pins make this reproducible), then `npm run check`.
 4. If `check` fails before you touched anything, suspect a Node or Chromium change first, not the code.
-5. Forecast archive: look at the `forecast-archive` branch on GitHub; there should be one `archive/YYYY-MM-DD/` folder per night. Gaps mean the Action failed (Actions tab). It is untested as of P0.
+5. Forecast archive: look at the `forecast-archive` branch on GitHub; there should be one `archive/YYYY-MM-DD/` folder per night. Gaps mean the Action failed (Actions tab). First green run 2026-10-22. The job also re-enables itself every night, because GitHub turns off schedules in public repos after 60 quiet days; if folders still stop appearing, check the Actions tab for a disabled workflow or a billing notice (the first run failed on a billing/spending-limit block before the repo went public).
 
 ## Gotchas
 - Never run `npm install` inside `/mnt/project-files` (network mount); work in `/home/claude/emergence` and copy out.

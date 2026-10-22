@@ -1,4 +1,4 @@
-import { formatTime, TimeAxis } from '../core/timeAxis';
+import { TimeAxis } from '../core/timeAxis';
 
 /** Pick sensible tick marks for any range: years, months, days or hours. */
 function makeTicks(start: number, end: number): { at: number; label: string }[] {
@@ -61,7 +61,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     range.max = String(time.steps);
     range.value = String(time.stepIndex);
     range.style.setProperty('--pct', `${(time.stepIndex / Math.max(1, time.steps)) * 100}%`);
-    dateEl.textContent = formatTime(time.cursor, time.stepMs);
+    dateEl.textContent = time.label(time.cursor);
     doyEl.textContent = time.cursor > time.now ? 'after today' : '';
     if (rangeKey !== `${time.start}|${time.end}`) {
       rangeKey = `${time.start}|${time.end}`;
@@ -82,6 +82,8 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const t = e.target as HTMLElement;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const onRange = t === range; // native range already handles arrows
+    // Other controls own their keys: Space ticks a checkbox or opens the season menu, arrows move inside a select.
+    if (!onRange && t.closest('input, select, textarea, a, [contenteditable]')) return;
     const onButton = t instanceof HTMLButtonElement;
     const big = e.shiftKey ? 7 : 1;
     switch (e.key) {

@@ -1,4 +1,5 @@
-import type { HatchLayer } from '../core/layer';
+import type { HatchLayer, ProbeCard } from '../core/layer';
+import type { ProbeHit } from '../map/map';
 import type { LayerRegistry } from '../core/registry';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -32,12 +33,17 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): void {
       .activeLayers()
       .map((l) => {
         const lg = l.legend();
-        const grad = lg.stops.map((s) => s.color).join(',');
-        const first = lg.stops[0]?.label ?? '';
-        const last = lg.stops[lg.stops.length - 1]?.label ?? '';
-        return `<div class="legend-card"><div class="lg-title">${esc(lg.title)}</div>
-          <div class="lg-ramp" style="background:linear-gradient(90deg,${grad})"></div>
-          <div class="lg-labels"><span>${esc(first)}</span><span>${esc(last)}</span></div>
+        const stops = lg.stops ?? [];
+        const ramp = stops.length
+          ? `<div class="lg-ramp" style="background:linear-gradient(90deg,${stops.map((s) => s.color).join(',')})"></div>
+          <div class="lg-labels"><span>${esc(stops[0]!.label)}</span><span>${esc(stops[stops.length - 1]!.label)}</span></div>`
+          : '';
+        const items = lg.items?.length
+          ? `<ul class="lg-items">${lg.items
+              .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
+              .join('')}</ul>`
+          : '';
+        return `<div class="legend-card"><div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
           ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
       })
       .join('');
@@ -46,28 +52,30 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): void {
   render();
 }
 
-/** Hover/tap probe card: the cell id plus each active layer's probe text. */
-export function showProbe(
-  root: HTMLElement,
-  registry: LayerRegistry,
-  hit: { cell: string; lngLat: [number, number] } | null,
-  t: number,
-): void {
-  if (!hit) {
+/** Hover/tap probe card: each active layer's answer to "what's here?". */
+export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: ProbeHit | null, t: number): void {
+  const cards = hit
+    ? registry
+        .activeLayers()
+        .filter((l: HatchLayer) => l.probe)
+        .map((l) => l.probe!(hit.lngLat, t, hit.picked))
+        .filter((c): c is ProbeCard => c !== null)
+    : [];
+  if (!cards.length) {
     root.hidden = true;
     return;
   }
-  const cards = registry
-    .activeLayers()
-    .filter((l: HatchLayer) => l.probe)
-    .map((l) => ({ layer: l, card: l.probe!(hit.lngLat, t) }));
-  root.innerHTML = `<div class="probe-cell">cell <code>${esc(hit.cell)}</code></div>${cards
+  root.innerHTML = cards
     .map(
-      ({ card }) =>
+      (card) =>
         `<div class="probe-card"><div class="probe-title">${esc(card.title)}</div>${card.lines
           .map((x) => `<div>${esc(x)}</div>`)
-          .join('')}</div>`,
+          .join('')}${
+          card.link
+            ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)} &#8599;</a>`
+            : ''
+        }</div>`,
     )
-    .join('')}`;
+    .join('');
   root.hidden = false;
 }

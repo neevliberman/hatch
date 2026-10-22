@@ -6,6 +6,7 @@
   --text: #e6ebf5;
   --muted: #98a3ba;
   --accent: #f5d76e;
+  --moon: #c4ffce;
   --warn: #ff9f43;
   --warn-bg: rgba(255, 159, 67, 0.14);
   --gutter: 16px;
@@ -39,7 +40,25 @@ button, select { font: inherit; color: inherit; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);
   align-self: center; }
 
-#layers { position: absolute; top: 64px; left: var(--gutter); right: var(--gutter); pointer-events: none; }
+#sub { position: absolute; top: 64px; left: var(--gutter); right: var(--gutter); pointer-events: none;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#layers { pointer-events: none; min-width: 0; }
+.season { margin-left: auto; margin-right: 8px; }
+.season select { pointer-events: auto; height: 44px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+  padding: 0 10px; color: var(--text); }
+#honesty, #countdown { pointer-events: auto; margin: 0; padding: 5px 10px; font-size: 12.5px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; max-width: 100%; }
+#honesty b { font-weight: 600; }
+#why { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
+  font-size: 12.5px; min-height: 24px; }
+#countdown { color: var(--muted); }
+.lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.lg-items li { display: inline-flex; align-items: center; gap: 5px; }
+.sw { display: inline-block; flex: none; background: var(--c); }
+.sw.hex { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); }
+.sw.dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 6px 2px color-mix(in srgb, var(--c) 55%, transparent); }
+.probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
+.cav.credits { font-size: 13px; color: var(--muted); }
 .layer { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
   padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
 .layer .name { font-weight: 600; }
@@ -52,7 +71,7 @@ button, select { font: inherit; color: inherit; }
   padding-bottom: env(safe-area-inset-bottom); }
 #floats { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 var(--gutter) 10px; }
 #legend, #probe { pointer-events: auto; }
-.legend-card { width: 220px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.legend-card { width: 260px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .lg-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
 .lg-ramp { height: 10px; border-radius: 5px; }
 .lg-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
@@ -60,7 +79,8 @@ button, select { font: inherit; color: inherit; }
 #probe { max-width: 300px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
 #probe[hidden] { display: none; }
 .probe-cell { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-.probe-title { font-weight: 700; color: var(--warn); }
+.probe-title { font-weight: 700; color: var(--moon); }
+.probe-card + .probe-card { margin-top: 8px; }
 
 #bar { pointer-events: auto; background: var(--panel-solid); border-top: 1px solid var(--line);
   padding: 10px var(--gutter) 12px; }
@@ -107,12 +127,15 @@ button, select { font: inherit; color: inherit; }
 @media (max-width: 700px) {
   :root { --gutter: 12px; }
   .brand small { display: none; }
-  #layers { top: 62px; }
+  #sub { top: 62px; }
+  #layers { display: none; } /* one layer: the season menu and honesty line already name it */
+  #honesty, #countdown { font-size: 12px; padding: 4px 8px; }
   .layer { align-items: flex-start; flex-wrap: wrap; row-gap: 4px; }
   .layer .name { flex: 1 1 0; min-width: 0; font-size: 13px; }
   #floats { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
-  .legend-card { width: 100%; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: center; padding: 6px 12px; }
-  .lg-title { margin: 0; } .lg-ramp { grid-column: 2; } .lg-labels { grid-column: 2; } .lg-note { grid-column: 1; grid-row: 2; margin: 0; }
+  .legend-card { width: 100%; padding: 6px 10px; }
+  .lg-title { margin-bottom: 3px; }
+  .lg-items { gap: 2px 10px; font-size: 11.5px; }
   #probe { max-width: none; }
   .bar-row { flex-wrap: wrap; gap: 8px 10px; }
   .date { font-size: 17px; order: 2; flex-basis: 100%; display: none; }

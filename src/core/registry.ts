@@ -30,6 +30,14 @@ export class LayerRegistry {
     return null;
   }
 
+  /** Change a layer's preferred time range (e.g. the replay switched year). */
+  setTime(id: string, time: TimeSpec): void {
+    const e = this.layers.get(id);
+    if (!e) return;
+    e.time = time;
+    this.emit();
+  }
+
   isActive(id: string): boolean {
     return this.active.has(id);
   }

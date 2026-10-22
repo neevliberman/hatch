@@ -4,8 +4,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { feature } from 'topojson-client';
 
 const topo = JSON.parse(readFileSync('node_modules/us-atlas/states-10m.json', 'utf8'));
-const CORE = { '55': 'WI', '17': 'IL', '27': 'MN', '19': 'IA', '26': 'MI', '18': 'IN' };
-const NEIGHBOR = { '39': 'OH', '29': 'MO', '38': 'ND', '46': 'SD', '31': 'NE', '21': 'KY' };
+const CORE = { '55': 'WI', '17': 'IL', '27': 'MN', '19': 'IA', '26': 'MI', '18': 'IN', '39': 'OH' };
+const NEIGHBOR = { '29': 'MO', '38': 'ND', '46': 'SD', '31': 'NE', '21': 'KY' };
 
 const round = (c) => (typeof c[0] === 'number' ? c.map((v) => +v.toFixed(3)) : c.map(round));
 const all = feature(topo, topo.objects.states).features;
