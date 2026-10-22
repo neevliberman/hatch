@@ -43,7 +43,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
   align-items: center; gap: 8px; padding: max(10px, env(safe-area-inset-top)) var(--gr) 0 var(--gl); pointer-events: none; }
 #top > * { pointer-events: auto; }
-.brand { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; display: flex; align-items: baseline; gap: 8px;
+.brand { margin: 0; font-weight: 700; font-size: 18px; letter-spacing: 0.02em; display: flex; align-items: baseline; gap: 8px;
   padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; flex: none; }
 .brand small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);
@@ -85,8 +85,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
 /* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
 #probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link { display: none; }
-#probe.at-pointer::after { content: 'Click for more'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
-#probe.at-pointer.pinned::after { content: 'Pinned · click the map to close'; color: var(--accent); }
+#probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+#probe.at-pointer.pinned::after { content: 'Kept open. Click the map to close.'; color: var(--accent); }
 /* "why?" lands on the drawer section it explains; a short glow shows where. */
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
@@ -137,8 +137,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .track input[type=range] { width: 100%; height: 36px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none;
   touch-action: pan-y; cursor: pointer; display: block; }
 .track input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
-  background: linear-gradient(90deg, var(--accent) var(--pct), rgba(160,180,220,0.22) var(--pct)); }
-.track input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(160,180,220,0.22); }
+  background: linear-gradient(90deg, var(--accent) var(--pct), rgba(160,180,220,0.5) var(--pct)); }
+.track input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(160,180,220,0.5); }
 .track input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
 .track input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--thumb); height: var(--thumb);
   margin-top: -8px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); box-shadow: 0 0 12px rgba(245,215,110,0.6); }
@@ -304,3 +304,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-sub { font-size: 12.5px; color: var(--muted); }
 .phone-only { display: none; }
 @media (max-width: 700px), (orientation: landscape) and (max-height: 500px) { .phone-only { display: inline; } }
+
+/* First visit: the About button and Play glow a few times to show where to start. */
+.hint { animation: hint 1.6s ease-in-out 1s 3; }
+@keyframes hint { 50% { box-shadow: 0 0 0 6px rgba(245, 215, 110, 0.35); } }
+@media (prefers-reduced-motion: reduce) {
+  .hint { animation: none; box-shadow: 0 0 0 2px rgba(245, 215, 110, 0.6); }
+  #drawer { transition: none; }
+}

@@ -68,6 +68,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     range.value = String(time.stepIndex);
     range.style.setProperty('--pct', `${(time.stepIndex / Math.max(1, time.steps)) * 100}%`);
     dateEl.textContent = time.label(time.cursor);
+    range.setAttribute('aria-valuetext', time.label(time.cursor));
     doyEl.textContent = time.cursor > time.now ? 'after today' : '';
     if (rangeKey !== `${time.start}|${time.end}`) {
       rangeKey = `${time.start}|${time.end}`;
@@ -92,12 +93,16 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     if (!onRange && t.closest('input, select, textarea, a, [contenteditable]')) return;
     const onButton = t instanceof HTMLButtonElement;
     const big = e.shiftKey ? 7 : 1;
+    // On the slider itself, plain arrows are the slider's own step: let the browser move it.
+    if (onRange && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     switch (e.key) {
       case 'ArrowLeft':
-        if (!onRange || e.shiftKey) (time.pause(), time.step(-big));
+        time.pause();
+        time.step(-big);
         break;
       case 'ArrowRight':
-        if (!onRange || e.shiftKey) (time.pause(), time.step(big));
+        time.pause();
+        time.step(big);
         break;
       case 'Home':
         time.pause();

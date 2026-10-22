@@ -100,11 +100,16 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       }
     };
 
-    // First visit: the caveats drawer opens by itself; a tap outside it must close it.
+    // First visit: the map comes first (the About button just glows); the i button opens the drawer, and a tap
+    // outside it must close it.
     await page.goto(file);
     await page.waitForTimeout(2500);
     await shot('1-first-visit');
-    if (!(await page.locator('#drawer.open').count())) fail('drawer did not open on first visit');
+    if (await page.locator('#drawer.open').count()) fail('the drawer covers the map on first visit');
+    if (!(await page.locator('#info-btn.hint').count())) fail('the About button does not stand out on first visit');
+    await tap('#info-btn');
+    await page.waitForTimeout(400);
+    if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
     // Tap empty map: left of a side drawer, or between the top panels and a bottom sheet.
     const box = await page.locator('#drawer').boundingBox();
     const top = await page.evaluate(() => document.querySelector('#top').getBoundingClientRect().bottom);

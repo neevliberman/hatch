@@ -102,11 +102,15 @@ for (const [engine, width, height] of screens) {
   // A step that throws (a click on a covered control waits, then gives up) fails this screen, not the whole run.
   try {
 
-  // First visit: the About drawer opens by itself; Escape closes it.
+  // First visit: the map comes first and the About button glows; i opens the drawer and Escape closes it.
   await page.goto(file);
   await page.waitForTimeout(2500);
   await shot('1-first-visit');
-  if (!(await drawerOpen(page))) fail('drawer did not open on first visit');
+  if (await drawerOpen(page)) fail('the drawer covers the map on first visit');
+  if (!(await page.locator('#info-btn.hint').count())) fail('the About button does not stand out on first visit');
+  await page.locator('#info-btn').click();
+  await page.waitForTimeout(400);
+  if (!(await drawerOpen(page))) fail('the i button did not open the drawer');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
   if (await drawerOpen(page)) fail('Escape did not close the drawer');
@@ -225,6 +229,13 @@ for (const [engine, width, height] of screens) {
     if (!f.ring) fail(`${f.id} shows no focus ring`);
   }
   if (order.join() !== TAB_ORDER.join()) fail(`Tab order is ${order.join(' > ')} (want ${TAB_ORDER.join(' > ')})`);
+  // On the focused slider, plain arrows step one day and the slider says the date, not a number.
+  const dr = await page.locator('#t-date').textContent();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(200);
+  if ((await page.locator('#t-date').textContent()) === dr) fail('Right arrow on the slider did not step the date');
+  if ((await page.locator('#t-range').getAttribute('aria-valuetext')) !== (await page.locator('#t-date').textContent()))
+    fail('the slider does not announce the date');
   await page.keyboard.press('Escape');
   await page.evaluate(() => document.activeElement?.blur());
   const d0 = await page.locator('#t-date').textContent();

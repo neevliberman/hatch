@@ -16,9 +16,10 @@
 </head>
 <body>
   <div id="app">
-    <div id="map" aria-label="Map of the Midwest: luna moth sightings over a hex grid coloured by the heat forecast"></div>
+    <div id="map" role="img" aria-label="Map of the Midwest: luna moth sightings over hexagons colored by the forecast" aria-describedby="sr-summary"></div>
+    <p id="sr-summary" class="sr"></p>
     <header id="top">
-      <div class="brand"><span class="dot"></span>Hatch <small>luna moths, replayed</small></div>
+      <h1 class="brand"><span class="dot"></span>Hatch <small>when luna moths fly</small></h1>
       <label class="season"><span class="sr">Season to replay</span><select id="season"></select></label>
       <button id="info-btn" class="icon-btn" aria-label="About this map" aria-expanded="false" aria-controls="drawer">i</button>
     </header>
@@ -34,8 +35,8 @@
       </button>
       <div id="strip">
         <div id="note">
-          <p id="honesty"><span>Real sightings<span class="long">, <b id="season-name"></b></span> · forecast is <span class="long">a first test, </span><em class="unconfirmed">not yet confirmed</em></span>
-            <button id="why" type="button">why?</button></p>
+          <p id="honesty"><span>Dots: real sightings<span class="long">, <b id="season-name"></b></span>. Colors: a forecast <em class="unconfirmed">still being tested</em>.</span>
+            <button id="why" type="button">How sure?</button></p>
           <p id="countdown"></p>
         </div>
         <div id="actions">
