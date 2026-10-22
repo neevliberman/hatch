@@ -149,7 +149,9 @@ function start() {
     const target = drawer.querySelector<HTMLElement>('[data-why]');
     const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     // Scroll the drawer itself: scrollIntoView would also nudge the fixed page and leave a gap at the bottom.
-    const top = target ? target.getBoundingClientRect().top - drawer.getBoundingClientRect().top + drawer.scrollTop - 12 : 0;
+    // The drawer's title bar sticks to its top, so land the target just below it.
+    const head = drawer.querySelector<HTMLElement>('.drawer-head')?.offsetHeight ?? 0;
+    const top = target ? target.getBoundingClientRect().top - drawer.getBoundingClientRect().top + drawer.scrollTop - head - 12 : 0;
     drawer.scrollTo({ top, behavior });
     if (target) {
       target.tabIndex = -1;

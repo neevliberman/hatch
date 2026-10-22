@@ -37,7 +37,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     // A season change re-renders; keep folded sections the way the reader left them.
     const opened = new Set([...drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key));
     drawer.innerHTML = `
-      <div class="drawer-head"><h2>About this map</h2>
+      <div class="drawer-head"><span class="drawer-grip" aria-hidden="true"></span><h2>About this map</h2>
         <button class="icon-btn" id="drawer-close" aria-label="Close About this map">&times;</button></div>
       ${
         layers.length
@@ -97,6 +97,45 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
       if (type === 'click') swallow = false;
     }, true);
   window.addEventListener('keydown', (e) => e.key === 'Escape' && toggle(false));
+
+  // On a phone in portrait the drawer is a bottom sheet: drag it down to close, like a native sheet. The title bar
+  // always drags; the text drags only once it is scrolled to the top (before that, a downward swipe scrolls it back up).
+  const narrow = window.matchMedia('(max-width: 700px)');
+  const sideways = window.matchMedia('(orientation: landscape) and (max-height: 500px)'); // there it is a side panel
+  let drag: { y0: number; t0: number; dy: number; head: boolean; on: boolean } | null = null;
+  drawer.addEventListener('touchstart', (e) => {
+    drag = null;
+    if (!narrow.matches || sideways.matches || e.touches.length !== 1) return;
+    const head = !!(e.target as Element).closest('.drawer-head');
+    if (head || drawer.scrollTop <= 0) drag = { y0: e.touches[0]!.clientY, t0: e.timeStamp, dy: 0, head, on: false };
+  }, { passive: true });
+  drawer.addEventListener('touchmove', (e) => {
+    if (!drag || e.touches.length !== 1) return;
+    const dy = e.touches[0]!.clientY - drag.y0;
+    if (!drag.on) {
+      if (!drag.head && (dy < 0 || drawer.scrollTop > 0)) return void (drag = null); // reading on: let the text scroll
+      if (dy < 8) return; // a tap with a wobble (say on the close button) stays a tap
+      drag.on = true;
+      drawer.classList.add('dragging');
+    }
+    e.preventDefault(); // the sheet moves, not the page or the text
+    drag.dy = Math.max(0, dy);
+    drawer.style.transform = `translateY(${drag.dy}px)`;
+  }, { passive: false });
+  const endDrag = (e: TouchEvent) => {
+    if (!drag?.on) return void (drag = null);
+    const { dy, t0 } = drag;
+    drag = null;
+    // Dropping the inline transform lets the transition carry the sheet from where the finger left it: shut, or back up.
+    drawer.classList.remove('dragging');
+    drawer.style.transform = '';
+    const flick = dy / Math.max(1, e.timeStamp - t0) > 0.6; // px per ms
+    if (e.type === 'touchend' && (dy > drawer.offsetHeight * 0.25 || (flick && dy > 40))) toggle(false);
+  };
+  drawer.addEventListener('touchend', endDrag);
+  drawer.addEventListener('touchcancel', endDrag);
+  // A hairline under the sticky title bar once text scrolls beneath it.
+  drawer.addEventListener('scroll', () => drawer.classList.toggle('scrolled', drawer.scrollTop > 0), { passive: true });
   registry.subscribe(render);
   render();
   drawer.inert = true;
