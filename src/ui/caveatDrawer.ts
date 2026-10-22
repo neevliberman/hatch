@@ -88,7 +88,8 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     e.stopPropagation();
     e.preventDefault();
   }, true);
-  for (const type of ['pointerup', 'click'] as const)
+  // A tap also sends the mouse events a mouse would (the move shows the hex card as a hover), so swallow those too.
+  for (const type of ['pointermove', 'pointerup', 'mousemove', 'mousedown', 'mouseup', 'click'] as const)
     document.addEventListener(type, (e) => {
       if (!swallow) return;
       e.stopPropagation();
