@@ -41,6 +41,14 @@ interface Opts {
 }
 
 export function createMap({ container, registry, time, onProbe, padding, onMove, onView }: Opts): MapHandle {
+  // deck.gl 9 needs WebGL2. Without it (GPU blocklisted, hardware acceleration off) say so, instead of an empty map.
+  const gl = document.createElement('canvas').getContext('webgl2');
+  gl?.getExtension('WEBGL_lose_context')?.loseContext(); // only a test: give the context back
+  if (!gl) {
+    container.insertAdjacentHTML('beforeend', `<p id="no-webgl" role="status">This map needs WebGL, which this browser has
+      turned off. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
+    return { refresh() {}, fit() {}, setMarker() {}, project: () => null, zoom: () => null };
+  }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   const fitState = (p: { top: number; bottom: number }) => {
     const { width, height } = size();
@@ -76,7 +84,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     };
   };
 
-  const deck = new Deck({
+  const deck: Deck<MapView> = new Deck({
     parent: container,
     views: new MapView({ repeat: false }),
     // Retina is plenty; 3x phones would triple the fill cost for no visible gain.
@@ -99,6 +107,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       overSighting = !!info.object && info.layer?.id !== 'luna-forecast';
       onProbe(hit(info), false);
     },
+    // The canvas gets a Tab stop for deck's keyboard controls, which are off: drop it, so Tab goes straight to the controls.
+    onLoad: (): void => deck.getCanvas()?.setAttribute('tabindex', '-1'),
     onClick: (info: PickingInfo) => onProbe(hit(info), true),
   });
 
