@@ -9,6 +9,8 @@ import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { countdownText } from './ui/countdown';
+import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
+import { GRID_RES } from './core/grid';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_DRAWER_KEY = 'hatch.drawerSeen.v1';
@@ -88,6 +90,78 @@ function start() {
   mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   $('why').addEventListener('click', () => toggleDrawer(true));
+
+  // Keep the address bar in step with the view, so any link copied or shared reopens the same season and day.
+  const viewUrl = () => {
+    const q = new URLSearchParams(location.search);
+    const d = new Date(time.cursor);
+    q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
+    if (picker.value === TYPICAL) q.delete('year');
+    else q.set('year', picker.value);
+    q.delete('noauto');
+    q.delete('today');
+    return `${location.pathname}?${q}`;
+  };
+  let urlTimer = 0;
+  const syncUrl = () => {
+    clearTimeout(urlTimer);
+    urlTimer = window.setTimeout(() => history.replaceState(null, '', viewUrl()), 300);
+  };
+  time.subscribe(syncUrl);
+  picker.addEventListener('change', syncUrl);
+
+  const msg = $('action-msg');
+  let msgTimer = 0;
+  const say = (text: string) => {
+    msg.textContent = text;
+    clearTimeout(msgTimer);
+    msgTimer = window.setTimeout(() => (msg.textContent = ''), 6000);
+  };
+
+  $('share').addEventListener('click', async () => {
+    const url = new URL(viewUrl(), location.href).href;
+    try {
+      if (navigator.share) await navigator.share({ title: 'Hatch: when luna moths fly', url });
+      else {
+        await navigator.clipboard.writeText(url);
+        say('Link copied');
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') say(url);
+    }
+  });
+
+  // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
+  $('locate').addEventListener('click', () => {
+    if (!navigator.geolocation) return say('Location is not available in this browser');
+    say('Finding you…');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const you: [number, number] = [coords.longitude, coords.latitude];
+        map.setMarker(you);
+        // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so
+        // fall back to the nearest land hex within two rings.
+        const ring = gridDisk(latLngToCell(coords.latitude, coords.longitude, GRID_RES), 2)
+          .map((c) => {
+            const [lat, lng] = cellToLatLng(c);
+            return { cell: c, lngLat: [lng, lat] as [number, number], d: (lat - coords.latitude) ** 2 + (lng - coords.longitude) ** 2 };
+          })
+          .sort((a, b) => a.d - b.d);
+        const first = { cell: ring[0]!.cell, lngLat: you };
+        const here: ProbeHit | undefined = [first, ...ring].find((h) => luna.probe?.(h.lngLat, time.cursor));
+        if (!here) {
+          say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)');
+          return;
+        }
+        hit = here;
+        pinned = true;
+        updateProbe();
+        say('Your hex is marked in yellow');
+      },
+      (err) => say(err.code === err.PERMISSION_DENIED ? 'Location permission was declined' : 'Could not get your location'),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
+    );
+  });
 
   // ?today=2027-01-15 fakes the clock, to check the off-season countdown.
   const today = params.get('today');

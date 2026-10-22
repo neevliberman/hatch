@@ -21,14 +21,20 @@ function makeTicks(start: number, end: number): { at: number; label: string }[] 
   return out;
 }
 
+const svg = (d: string) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
+const PREV = svg('M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z');
+const NEXT = svg('M8.6 18.6 10 20l8-8-8-8-1.4 1.4 6.6 6.6z');
+const PLAY = svg('M8 5v14l11-7z');
+const PAUSE = svg('M7 5h4v14H7zm6 0h4v14h-4z');
+
 /** Bottom bar bound to a TimeAxis: play/pause, step, slider, month ticks, "now" marker, keyboard. */
 export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
   root.innerHTML = `
     <div class="bar-row">
       <div class="btns">
-        <button id="t-prev" class="icon-btn" aria-label="Back one step (Left arrow)">&#9664;</button>
+        <button id="t-prev" class="icon-btn" aria-label="Back one day (Left arrow)">${PREV}</button>
         <button id="t-play" class="icon-btn play" aria-label="Play (Space)"></button>
-        <button id="t-next" class="icon-btn" aria-label="Forward one step (Right arrow)">&#9654;</button>
+        <button id="t-next" class="icon-btn" aria-label="Forward one day (Right arrow)">${NEXT}</button>
       </div>
       <div class="date"><span id="t-date"></span><small id="t-doy"></small></div>
     </div>
@@ -69,7 +75,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     }
     play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : 'Play (Space)');
     play.classList.toggle('on', time.playing);
-    play.innerHTML = time.playing ? '&#10073;&#10073;' : '&#9654;';
+    play.innerHTML = time.playing ? PAUSE : PLAY;
   };
 
   range.addEventListener('input', () => time.setStepIndex(Number(range.value)));
