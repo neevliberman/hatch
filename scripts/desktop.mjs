@@ -27,8 +27,10 @@ const screens = [
   ['webkit', 1440, 900],
 ].filter((s) => engines.includes(s[0]));
 
-// The seven states must fill this share of the screen's height or width (whichever binds), so panels can't squeeze them.
+// The seven states must fill this share of the screen's height, or (on a tall, narrow window, where width binds) of its
+// width once scaled by WIDE, the share of the width the states fill when width is what limits the fit.
 const MIN_MIDWEST = 0.45;
+const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
 const TAB_ORDER = ['season', 'info-btn', 'why', 'locate', 'share', 't-prev', 't-play', 't-next', 't-range'];
 const problems = [];
@@ -38,7 +40,7 @@ for (const e of new Set(screens.map((s) => s[0]))) {
     e === 'chromium'
       ? { executablePath: process.env.CHROMIUM || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }
       : e === 'firefox'
-        ? { headless: false } // headless Firefox gets no WebGL; xvfb gives it a display
+        ? { headless: false, firefoxUserPrefs: { 'webgl.force-enabled': true } } // headless Firefox gets no WebGL; xvfb gives it a display
         : {},
   );
 }
@@ -97,6 +99,8 @@ for (const [engine, width, height] of screens) {
   page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
   page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
   const shot = (step) => page.screenshot({ path: `${out}/${name}-${step}.png` });
+  // A step that throws (a click on a covered control waits, then gives up) fails this screen, not the whole run.
+  try {
 
   // First visit: the About drawer opens by itself; Escape closes it.
   await page.goto(file);
@@ -113,14 +117,13 @@ for (const [engine, width, height] of screens) {
   const png = await shot('2-map');
   const m = await midwest(page, png);
   if (m.colours < 6) fail('map looks blank');
-  else if (Math.max(m.w / 0.9, m.h) < MIN_MIDWEST)
-    fail(`the Midwest is drawn only ${Math.round(m.w * 100)}% wide x ${Math.round(m.h * 100)}% tall (need ${MIN_MIDWEST * 100}% tall)`);
+  else if (Math.max(m.w / WIDE, m.h) < MIN_MIDWEST)
+    fail(`the Midwest is drawn only ${Math.round(m.w * 100)}% wide x ${Math.round(m.h * 100)}% tall (need ${MIN_MIDWEST * 100}% of the height or ${Math.round(MIN_MIDWEST * WIDE * 100)}% of the width)`);
   const a = await page.evaluate(audit);
   a.bad.forEach(fail);
   if (a.scrolls) fail('page scrolls');
 
   // Hover a hex: a card appears and does not sit under the pointer. Hex centre = middle of the coloured box.
-  const mid = await page.evaluate(() => [innerWidth / 2, innerHeight / 2]);
   let spot = null;
   for (const [fx, fy] of [[0.5, 0.45], [0.45, 0.4], [0.55, 0.5], [0.4, 0.35], [0.6, 0.55]]) {
     const p = [Math.round(width * fx), Math.round(height * fy)];
@@ -131,30 +134,34 @@ for (const [engine, width, height] of screens) {
       break;
     }
   }
-  if (!spot) fail(`hovering the map showed no card (tried around ${mid})`);
+  if (!spot) fail(`hovering the map showed no card (tried 5 spots near the middle)`);
   else {
     await shot('3-hover');
     const covers = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('#probe') !== null, spot);
     if (covers) fail('the hover card sits under the pointer');
     // Click pins it: it stays after the pointer leaves; clicking the same spot again lets it go.
+    // deck holds a single click back for the double-click window, so wait for the result rather than a fixed time.
     await page.mouse.click(...spot);
+    await page.waitForTimeout(600);
     await page.mouse.move(2, height / 2, { steps: 4 });
     await page.waitForTimeout(350);
     if (await page.locator('#probe').isHidden()) fail('clicking the map did not pin the card');
     await page.mouse.click(...spot);
     await page.mouse.move(2, height / 2, { steps: 4 });
-    await page.waitForTimeout(350);
-    if (await page.locator('#probe').isVisible()) fail('clicking the pinned spot again did not let the card go');
+    await page.locator('#probe').waitFor({ state: 'hidden', timeout: 2000 })
+      .catch(() => fail('clicking the pinned spot again did not let the card go'));
   }
 
   // Wheel over the map zooms it; the page itself never scrolls.
-  const before = await page.screenshot();
-  await page.mouse.move(...(spot ?? mid));
+  const zoom = () => page.evaluate(() => window.__hatch.map.zoom());
+  const z0 = await zoom();
+  await page.mouse.move(...(spot ?? [width / 2, height / 2]));
   await page.mouse.wheel(0, -500);
   await page.waitForTimeout(800);
   await page.mouse.move(2, height / 2);
   await page.waitForTimeout(300);
-  if (before.equals(await shot('4-zoomed'))) fail('mouse wheel over the map did not zoom it');
+  await shot('4-zoomed');
+  if (!((await zoom()) > z0)) fail('mouse wheel over the map did not zoom it');
   if (await page.evaluate(() => scrollX || scrollY)) fail('the wheel scrolled the page');
 
   // "why?" opens the drawer, and still visibly lands when the drawer is already open.
@@ -165,11 +172,12 @@ for (const [engine, width, height] of screens) {
     await shot('5-why');
     await page.locator('#drawer').evaluate((d) => d.scrollTo(0, d.scrollHeight));
     const y0 = await page.locator('#drawer').evaluate((d) => d.scrollTop);
-    const why = await page.evaluate(() => {
+    const whyReachable = await page.evaluate(() => {
       const b = document.getElementById('why').getBoundingClientRect();
       return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.id === 'why';
     });
-    if (why) {
+    if (!whyReachable) fail('"why?" is covered by the open drawer');
+    else {
       await page.locator('#why').click();
       await page.waitForTimeout(800);
       // Something must visibly answer: the drawer scrolls, or a highlighted section shows in view.
@@ -241,8 +249,11 @@ for (const [engine, width, height] of screens) {
   if (Math.abs(r.h - f.h) > 0.08 || Math.abs(r.w - f.w) > 0.08)
     fail(`after a resize the Midwest is ${Math.round(r.w * 100)}% x ${Math.round(r.h * 100)}%, a fresh load shows ${Math.round(f.w * 100)}% x ${Math.round(f.h * 100)}%`);
 
-  await ctx.close();
   console.log(`${tag}: Midwest ${Math.round(m.w * 100)}% x ${Math.round(m.h * 100)}% of the screen`);
+  } catch (e) {
+    fail(`stopped: ${e.message.split('\n')[0]}`);
+  }
+  await ctx.close();
 }
 
 // No WebGL (old GPU driver, hardware acceleration off): the page must say so, not show an empty map.

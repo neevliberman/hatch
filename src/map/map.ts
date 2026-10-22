@@ -42,8 +42,10 @@ interface Opts {
 
 export function createMap({ container, registry, time, onProbe, padding, onMove, onView }: Opts): MapHandle {
   // deck.gl 9 needs WebGL2. Without it (GPU blocklisted, hardware acceleration off) say so, instead of an empty map.
-  if (!document.createElement('canvas').getContext('webgl2')) {
-    container.insertAdjacentHTML('beforeend', `<p id="no-webgl" role="alert">This map needs WebGL, which this browser has
+  const gl = document.createElement('canvas').getContext('webgl2');
+  gl?.getExtension('WEBGL_lose_context')?.loseContext(); // only a test: give the context back
+  if (!gl) {
+    container.insertAdjacentHTML('beforeend', `<p id="no-webgl" role="status">This map needs WebGL, which this browser has
       turned off. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     return { refresh() {}, fit() {}, setMarker() {}, project: () => null, zoom: () => null };
   }
