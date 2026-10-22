@@ -61,3 +61,8 @@ If one has to change, the change is logged at the bottom with the reason, and bo
   but the broods overlap, so the dip only falls to 72% of the spring peak. At 50% that band would be scored as one brood,
   mixing July second-brood moths into the "first brood" peak. 80% splits 37-39 (day 177), 39-41 (180), 41-43 (176), 43-45 (190); 45-49 stays one brood.
   The original 50% rule is still run as a sensitivity check and reported.
+- **2026-10-22, bug fixes after review (not choice changes).** (1) Daymet keeps 29 Feb and drops 31 Dec, so its yday is the
+  calendar day of year; the code had shifted leap-year sightings by one day. (2) Simulate-and-recover drew days ∝ φ(DD), which is not
+  the fitter's own model; it now draws the daily increment of Φ(DD) (the fitter's model exactly), with and without real effort.
+- **Known, measured, not fixed:** brood cut-offs are computed from all years pooled, including the held-out year. Recomputing them
+  per fold moves cut-offs 0-9 days and changes MAEs by <0.2 d (reviewer check).

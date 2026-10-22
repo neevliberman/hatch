@@ -5,6 +5,7 @@ pause between calls to stay well under iNat's rate limit.
 """
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -26,7 +27,11 @@ def _get(path, params):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
                 return json.load(r)
-        except Exception:
+        except urllib.error.HTTPError as e:
+            if e.code != 429 and e.code < 500:
+                raise  # a 4xx is our bug; retrying won't help
+            time.sleep(2 ** attempt)
+        except (urllib.error.URLError, TimeoutError):
             time.sleep(2 ** attempt)
     raise RuntimeError(f"failed: {url}")
 
@@ -71,6 +76,7 @@ def fetch_taxon(taxon_id, out: Path, refresh=False):
         last = res[-1]["id"]
         time.sleep(1)
     df = pd.DataFrame(rows)
+    out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out)
     return df
 
@@ -91,5 +97,6 @@ def fetch_daily_effort(taxon_id, without_taxon_id, years, out: Path, refresh=Fal
         time.sleep(1)
     df = pd.concat(parts)
     df["date"] = pd.to_datetime(df["date"])
+    out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out)
     return df

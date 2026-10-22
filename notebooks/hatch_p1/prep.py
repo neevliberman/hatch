@@ -14,10 +14,9 @@ def clean(df, years=YEARS):
     d = d.dropna(subset=["date", "lat", "lng"])
     d["year"] = d["date"].dt.year
     d["doy"] = d["date"].dt.dayofyear
-    # Daymet uses a 365-day year that drops 31 Dec; before that, leap years
-    # shift by one day after 28 Feb. Key everything by Daymet's yday.
-    leap = d["date"].dt.is_leap_year & (d["doy"] > 59)
-    d["yday"] = d["doy"] - leap.astype(int)
+    # Daymet keeps 29 Feb and drops 31 Dec in leap years, so its yday equals the
+    # calendar day of year for every day we use (we stop at day 240).
+    d["yday"] = d["doy"]
     d["hex"] = [h3.latlng_to_cell(a, b, RES) for a, b in zip(d["lat"], d["lng"])]
     d["band"] = pd.cut(d["lat"], BANDS, labels=BAND_LABELS, right=False)
     keep = (

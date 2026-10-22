@@ -86,7 +86,7 @@ code("""for name, p in [('(c) vs (a)', c), ('(d) vs (a)', d)]:
     print(f'{name}: calendar MAE minus model MAE = {diff:+.1f} days (95% CI over years {ci[0]:+.1f} to {ci[1]:+.1f})')
 diff, ci = model.paired_bootstrap(tg, c, d)
 print(f'(d) vs (c): {diff:+.1f} days (95% CI {ci[0]:+.1f} to {ci[1]:+.1f})')"""),
-md("""**What happened.** Heat nails the **peak** (≈4 days off vs ≈7 for the calendar, close to the ~3.5-day noise floor)
+md("""**What happened.** Heat nails the **peak** (≈4 days off vs ≈7 for the calendar, not far above the noise floor)
 but misses the **onset** by ~19 days, always too early. That is the bell curve: the real spread of degree-days at sightings is
 skewed (long warm tail), so a symmetric curve puts its 10% point far too low. (d) "improves" by sliding the base to 0 °C, the
 edge of the grid, which flattens the skew. That is the fitter compensating for the wrong curve, not learning biology."""),
@@ -94,15 +94,20 @@ md("""## 6. Simulate-and-recover
 Fake sightings from a known base (8, 10, 12 °C) using real temperatures, real places and counts, and real daily moth effort.
 Can the (d) fitter find the base again? Pass = within ±1 °C."""),
 code("""eff = effort_matrix(effort, years)
-sim = recover(r, cubes, years, eff, reps=20)
+# 'model exactly true': fake sightings follow the fitter's own curve. 'with effort': plus real day-to-day moth effort.
+sim = pd.concat([recover(r, cubes, years, None, reps=20).assign(setup='model exactly true'),
+                 recover(r, cubes, years, eff, reps=20, seed=1).assign(setup='with real effort')])
 sim['within_1C'] = (sim.recovered - sim.true_base).abs() <= 1
 sim.to_csv('figures/sim_recover.csv', index=False)
-summary = sim.groupby('true_base').agg(median=('recovered', 'median'), lo=('recovered', lambda x: x.quantile(.1)),
+summary = sim.groupby(['setup', 'true_base']).agg(median=('recovered', 'median'), lo=('recovered', lambda x: x.quantile(.1)),
                                        hi=('recovered', lambda x: x.quantile(.9)), within_1C=('within_1C', 'mean'))
 summary"""),
 code("""fig, ax = plt.subplots(figsize=(5.5, 4))
-for tb, g in sim.groupby('true_base'):
-    ax.scatter(np.full(len(g), tb) + np.random.default_rng(0).uniform(-.25, .25, len(g)), g.recovered, s=14, c=EMBER, alpha=.7)
+jit = np.random.default_rng(0)
+for (setup, tb), g in sim.groupby(['setup', 'true_base']):
+    off, col = (-.18, MOON) if setup == 'model exactly true' else (.18, EMBER)
+    ax.scatter(np.full(len(g), tb + off) + jit.uniform(-.1, .1, len(g)), g.recovered, s=14, c=col, alpha=.7,
+               label=setup if tb == 8.0 else None)
 ax.plot([7, 13], [7, 13], c='k', lw=1, ls='--'); ax.fill_between([7, 13], [6, 12], [8, 14], color=MOON, alpha=.15, label='±1 °C pass band')
 ax.set_xlabel('true base (°C)'); ax.set_ylabel('recovered base (°C)'); ax.set_xlim(7, 13); ax.set_ylim(-0.5, 15.5)
 ax.set_title('Can the fitter find a base we planted?', loc='left'); ax.legend(frameon=False)
@@ -131,6 +136,9 @@ md("""## 8. Sensitivity and one exploratory check (not frozen; labelled as such)
   training sightings. This is *not* a frozen baseline; it is the P3 item "compare a skewed curve", run early because
   section 5 pointed straight at it. Bases 10 °C and 5 °C, nothing else tried."""),
 code("""rec50, cut50 = load('luna_inat.parquet', frac=0.5)
+e50 = model.empirical_predictions(r50 := index(rec50, hexes, years), tg50 := model.targets(r50), dd10, years)
+d50, ci50 = model.paired_bootstrap(tg50, model.calendar_predictions(tg50), e50)
+print(f'50% rule, skew-aware base 10 °C: {model.score(tg50, e50)["mae"]:.1f} d | vs calendar {d50:+.1f} d (95% CI {ci50[0]:+.1f} to {ci50[1]:+.1f})')
 r50 = index(rec50, hexes, years); tg50 = model.targets(r50)
 print('50% rule cut-offs:', cut50)
 print('50% rule  (a):', {k: round(v, 1) for k, v in model.score(tg50, model.calendar_predictions(tg50)).items()})
