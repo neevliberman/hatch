@@ -34,7 +34,7 @@ def fake_records(rec, dd, eff, mu, sigma, rng, last_day=239):
         if eff is not None:
             p = p * eff[y, : last_day + 1]
         if p.sum() <= 0:
-            continue
+            raise ValueError(f"hex {h}, year {y}: no day has any chance of a sighting")
         p /= p.sum()
         for t in rng.choice(last_day + 1, n, p=p):
             rows.append((h, y, band, t))
