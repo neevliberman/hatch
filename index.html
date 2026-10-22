@@ -24,13 +24,21 @@
     </header>
     <div id="sub">
     <section id="layers" aria-label="Layers"></section>
-    <p id="honesty"><span>Real sightings, <b id="season-name"></b> · forecast is a first test, not yet confirmed</span>
-      <button id="why" type="button">why?</button></p>
-    <p id="countdown"></p>
-    <div id="actions">
-      <button id="locate" type="button" class="pill">My area</button>
-      <button id="share" type="button" class="pill">Share this view</button>
-      <span id="action-msg" role="status" aria-live="polite"></span>
+    <div id="row">
+      <div id="note">
+        <p id="honesty"><span>Real sightings<span class="long">, <b id="season-name"></b></span> · forecast is <span class="long">a first test, </span>not yet confirmed</span>
+          <button id="why" type="button">why?</button></p>
+        <p id="countdown"></p>
+      </div>
+      <div id="actions">
+        <button id="locate" type="button" class="icon-btn" aria-label="My area" title="My area: show the forecast where you are">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A9 9 0 0 0 13 3.06V1h-2v2.06A9 9 0 0 0 3.06 11H1v2h2.06A9 9 0 0 0 11 20.94V23h2v-2.06A9 9 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>
+          <span class="lbl">My area</span></button>
+        <button id="share" type="button" class="icon-btn" aria-label="Share this view" title="Share a link to this season and day">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2 7.5 6.5l1.4 1.4L11 5.8V15h2V5.8l2.1 2.1 1.4-1.4L12 2zM5 10v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10h-2v10H7V10H5z"/></svg>
+          <span class="lbl">Share</span></button>
+        <span id="action-msg" role="status" aria-live="polite"></span>
+      </div>
     </div>
     </div>
     <aside id="drawer" aria-hidden="true" aria-label="Caveats"></aside>
@@ -39,6 +47,9 @@
         <div id="legend"></div>
         <div id="probe" role="status" aria-live="polite" hidden></div>
       </div>
+      <button id="recenter" type="button" class="icon-btn" aria-label="Back to the whole Midwest" title="Back to the whole Midwest" hidden>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M5 15H3v4a2 2 0 0 0 2 2h4v-2H5v-4zM5 5h4V3H5a2 2 0 0 0-2 2v4h2V5zm14-2h-4v2h4v4h2V5a2 2 0 0 0-2-2zm0 16h-4v2h4a2 2 0 0 0 2-2v-4h-2v4zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+      </button>
       <footer id="bar" aria-label="Time controls"></footer>
     </div>
   </div>

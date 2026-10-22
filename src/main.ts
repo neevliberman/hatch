@@ -8,7 +8,7 @@ import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
-import { countdownText } from './ui/countdown';
+import { countdownParts } from './ui/countdown';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 
@@ -50,6 +50,7 @@ function start() {
     registry,
     time,
     padding,
+    onMove: (moved) => ($('recenter').hidden = !moved),
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
@@ -187,7 +188,11 @@ function start() {
 
   // ?today=2027-01-15 fakes the clock, to check the off-season countdown.
   const today = params.get('today');
-  $('countdown').textContent = countdownText(today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now());
+  const [short, more] = countdownParts(today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now());
+  const moreEl = document.createElement('span');
+  moreEl.className = 'more';
+  moreEl.textContent = more;
+  $('countdown').replaceChildren(short, moreEl);
 
   // The drawer opens by itself once per browser, so the honesty is seen, not just available.
   let seen = true;
@@ -201,6 +206,7 @@ function start() {
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
+  $('recenter').addEventListener('click', () => map.fit(padding()));
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);

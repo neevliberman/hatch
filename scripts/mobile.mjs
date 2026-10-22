@@ -158,10 +158,33 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       if (!/[?&]date=\d{2}-\d{2}/.test(url ?? '')) fail(`share produced no view link: ${url}`);
     }
 
+    // Pinch the map open (Chromium only: it alone takes raw multi-touch here): the recenter button must appear and work.
+    if (engine === 'chromium') {
+      if (await page.locator('#recenter').isVisible()) fail('recenter button shows before the map was moved');
+      const cdp = await ctx.newCDPSession(page);
+      const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+      const [cx, cy] = [width / 2, (sub.y + sub.height + bot.y) / 2];
+      await touch('touchStart', [[cx - 30, cy], [cx + 30, cy]]);
+      for (let i = 1; i <= 10; i++) {
+        await touch('touchMove', [[cx - 30 - i * 8, cy], [cx + 30 + i * 8, cy]]);
+        await page.waitForTimeout(16);
+      }
+      await touch('touchEnd', []);
+      await page.waitForTimeout(500);
+      if (await page.locator('#recenter').isHidden()) fail('pinching the map did not show the recenter button');
+      else {
+        await shot('5-zoomed');
+        (await page.evaluate(audit)).bad.forEach((m) => fail(`zoomed in, ${m}`));
+        await tap('#recenter');
+        await page.waitForTimeout(400);
+        if (await page.locator('#recenter').isVisible()) fail('recenter did not bring back the whole Midwest');
+      }
+    }
+
     if (await tap('#info-btn')) {
       await page.waitForTimeout(400);
       if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
-      await shot('5-drawer');
+      await shot('6-drawer');
       await tap('#drawer-close');
     }
     await ctx.close();

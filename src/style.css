@@ -51,23 +51,26 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .season { margin-left: auto; min-width: 0; display: flex; }
 .season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
   padding: 0 10px; color: var(--text); }
-#honesty, #countdown { pointer-events: auto; margin: 0; padding: 5px 10px; font-size: 12.5px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 10px; max-width: 100%; }
+/* One compact card (caveat + countdown) and two icon buttons share a single row, so the map keeps the screen. */
+#row { display: flex; align-items: flex-start; gap: 8px; max-width: 100%; }
+#note { pointer-events: auto; min-width: 0; padding: 5px 10px; font-size: 12.5px; line-height: 1.35; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; }
+#honesty, #countdown { margin: 0; }
 #honesty b { font-weight: 600; }
-#why { margin-left: 6px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
-  font-size: 12.5px; min-height: 24px; }
+#why { margin-left: 4px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
+  font-size: inherit; min-height: 24px; }
 #countdown { color: var(--muted); }
 #countdown:empty { display: none; }
-#actions { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.pill { height: 40px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel);
-  cursor: pointer; font-size: 12.5px; -webkit-tap-highlight-color: transparent; }
-.pill:disabled { opacity: 0.6; cursor: progress; }
-.pill:hover { border-color: rgba(200, 215, 245, 0.5); }
-.pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#locate::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent); vertical-align: 0; }
-#action-msg { font-size: 12px; color: var(--muted); padding: 4px 8px; background: var(--panel); border-radius: 8px; }
+#actions { pointer-events: auto; position: relative; flex: none; display: flex; gap: 6px; }
+#actions .icon-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; font-size: 12.5px; }
+#actions .icon-btn:disabled { opacity: 0.6; cursor: progress; }
+#locate svg { color: var(--accent); }
+/* No room in the row: the status line floats just below the buttons, right-aligned, still announced. */
+#action-msg { position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 12px; color: var(--muted);
+  padding: 4px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 #action-msg:empty { display: none; }
+#recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
+#recenter[hidden] { display: none; }
 .lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
 .lg-items li { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; flex: none; background: var(--c); }
@@ -148,13 +151,16 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .brand small { display: none; }
   #sub { top: calc(62px + env(safe-area-inset-top)); }
   #layers { display: none; } /* one layer: the season menu and honesty line already name it */
-  #honesty, #countdown { font-size: 12px; padding: 4px 8px; }
+  #note { font-size: 12px; padding: 4px 8px; }
+  /* Phones get the short wording: the season is in the menu above, the detail is one tap away under "why?". */
+  .long, .more, #actions .lbl { display: none; }
+  #actions .icon-btn { padding: 0; }
   .layer { align-items: flex-start; flex-wrap: wrap; row-gap: 4px; }
   .layer .name { flex: 1 1 0; min-width: 0; font-size: 13px; }
   #floats { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
   .legend-card { width: 100%; padding: 6px 10px; }
-  .lg-title { margin-bottom: 3px; }
   .lg-items { gap: 2px 10px; font-size: 11.5px; }
+  .lg-title { display: none; } /* the swatch names say what they are; the drawer explains the colours */
   #probe { max-width: none; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
   #floats:has(#probe:not([hidden])) #legend { display: none; }
@@ -180,21 +186,13 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .icon-btn, .season select { height: 40px; }
   #sub { top: calc(52px + env(safe-area-inset-top)); flex-direction: row; align-items: center; flex-wrap: nowrap; }
   #layers { display: none; }
-  #honesty, #countdown { flex: 0 1 auto; min-width: 0; font-size: 12px; padding: 4px 8px; line-height: 1.3; }
-  #countdown { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* Two lines, not an ellipsis: the tail ("not yet confirmed") is the caveat that matters. "why?" always stays visible. */
-  #honesty { display: flex; align-items: center; flex-shrink: 0.5; }
-  #honesty span { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  #why { flex: none; }
-  #actions { flex: none; flex-wrap: nowrap; }
-  #actions { position: relative; }
-  /* No room in the row: the status line drops below it, right-aligned, still announced. */
-  #action-msg { position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; }
-  .pill { height: 36px; }
+  #note { font-size: 12px; padding: 4px 8px; }
+  .long, .more, #actions .lbl { display: none; }
+  #actions .icon-btn { padding: 0; }
   .season select { font-size: 16px; }
   #floats { flex-direction: row; align-items: flex-end; padding-bottom: 6px; }
   #floats:has(#probe:not([hidden])) #legend { display: none; }
-  .legend-card { width: auto; max-width: 60vw; padding: 5px 10px; }
+  .legend-card { width: auto; max-width: min(640px, 70vw); padding: 5px 10px; }
   .lg-title { display: none; }
   .lg-items { font-size: 11.5px; gap: 2px 10px; }
   #probe { max-width: 50vw; max-height: 40vh; overflow-y: auto; font-size: 12px; padding: 6px 10px; }

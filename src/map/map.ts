@@ -29,9 +29,11 @@ interface Opts {
   /** cell = H3 id under the pointer (null if none); lngLat is where; picked = the data object hit; clicked distinguishes tap from hover. */
   onProbe: (hit: ProbeHit | null, clicked: boolean) => void;
   padding: () => { top: number; bottom: number };
+  /** Called when the view leaves (true) or comes back to (false) the fitted whole-Midwest view. */
+  onMove?: (moved: boolean) => void;
 }
 
-export function createMap({ container, registry, time, onProbe, padding }: Opts): MapHandle {
+export function createMap({ container, registry, time, onProbe, padding, onMove }: Opts): MapHandle {
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   const fitState = (p: { top: number; bottom: number }) => {
     const { width, height } = size();
@@ -45,6 +47,12 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
   // `new Deck()` (it asserts). Zoom is tracked from onViewStateChange instead.
   const initial = fitState(padding());
   let zoom = initial.zoom;
+  // The fitted view, to tell when a pan or zoom has left it (that's when the recenter button shows).
+  let fitted = initial;
+  let moved = false;
+  const setMoved = (m: boolean) => {
+    if (m !== moved) onMove?.((moved = m));
+  };
 
   const hit = (info: PickingInfo): ProbeHit | null => {
     if (!info.object || !info.coordinate) return null;
@@ -68,6 +76,10 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
     layers: [],
     onViewStateChange: ({ viewState }) => {
       zoom = viewState.zoom;
+      // Half a zoom step, or the centre shifting by ~a tenth of the screen, counts as having moved.
+      const scale = 360 / (512 * 2 ** fitted.zoom) * size().width;
+      setMoved(Math.abs(viewState.zoom - fitted.zoom) > 0.5 ||
+        Math.abs(viewState.longitude - fitted.longitude) > scale * 0.1 || Math.abs(viewState.latitude - fitted.latitude) > scale * 0.08);
     },
     onHover: (info: PickingInfo) => onProbe(hit(info), false),
     onClick: (info: PickingInfo) => onProbe(hit(info), true),
@@ -104,6 +116,8 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
     fit(p) {
       const v = fitState(p);
       zoom = v.zoom;
+      fitted = v;
+      setMoved(false);
       deck.setProps({ initialViewState: { ...v, transitionDuration: 0 } });
     },
     setMarker(lngLat) {
