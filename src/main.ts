@@ -25,7 +25,9 @@ function start() {
   const md = params.get('date')?.match(/(\d{2})-(\d{2})$/);
   const [month, day] = md ? [Number(md[1]) - 1, Number(md[2])] : [5, 10];
 
-  const luna = createLunaLayer(initialMode);
+  // Finer hexagons load when the user zooms in; when they arrive (or the level changes) redraw and re-sync the card.
+  let onLunaData = () => {};
+  const luna = createLunaLayer(initialMode, () => onLunaData());
   const registry = new LayerRegistry();
   registry.register(luna, replayTimeSpec(initialMode, month, day));
 
@@ -57,6 +59,8 @@ function start() {
   // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
   let followSpot = (_t: number) => {};
   const updateProbe = () => {
+    // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
+    if (hit && (!hit.picked || hit.picked.layerId === 'luna-forecast')) hit.cell = luna.cellAt(hit.lngLat) ?? hit.cell;
     showProbe(probeEl, registry, hit, time.cursor);
     // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
     map.setPicked(pinned && hit && (!hit.picked || hit.picked.layerId === 'luna-forecast') ? hit.cell : null);
@@ -102,6 +106,7 @@ function start() {
     srSummary.textContent = luna.summary(time.cursor);
   };
   time.subscribe(refresh);
+  onLunaData = refresh;
   registry.subscribe(() => {
     const next = registry.activeTime();
     if (next && next !== spec) {

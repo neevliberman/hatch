@@ -30,3 +30,19 @@ Fields added in P3 (all optional; P2 readers ignore them):
 LOYO means leave-one-year-out. Analogy: to grade a weather forecaster on 2019, you hide everything that
 happened in 2019 and let them learn from the other ten years only. So a replayed year never "saw" its own moths,
 and the replay is an honest guess, not a memory.
+
+## Finer hexes (res 5 and 6)
+
+`build_fine.py` evaluates the same forecast at res 5 (~17 km across) and res 6 (~6 km) for every cell whose centre is in
+a core state, so the map can sharpen as you zoom in. Each finer hex uses the 1 km Daymet temperatures at its own
+centre: lake-shore cooling, city heat and river valleys show up. Nothing is refit. `build_replay.py` writes
+`fold_fits.json` (the chosen model's leave-one-year-out fits, year effect dropped, and each fold's brood cut-offs), and
+`build_fine.py` reuses those folds with the same per-cell state effort profile, latitude strip and cut-off as res 4.
+It refuses to write unless those fits reproduce the shipped res-4 forecast exactly. Daymet is read in chunks of 1,500
+cells, so res 6 (~27,000 cells) stays well under 1 GB of memory.
+
+Run `python3 pipeline/replay/build_fine.py` after `build_replay.py` (`--res 5` or `--res 6` to build one level; the
+manifest keeps levels built earlier). Output goes to `public/fine/` as static files the app fetches when the user zooms
+in (format in the module docstring): `manifest.json`, then per level `r{res}/cells.bin` (cell list and "seen" flag,
+inherited from the res-4 parent) and one `r{res}/{mode}.bin` per season (5 bytes per cell: day of year minus 60, 255 =
+never). A finer hex is not scored on its own: all accuracy figures stay at the latitude-strip level.

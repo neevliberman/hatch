@@ -16,9 +16,18 @@ import {
   type Mode,
   type Sighting,
 } from './lunaData';
+import { fineDays, fineLevel, fineManifest, parentOf, type FineLevel } from './fineData';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
 export const GLOW_DAYS = 10;
+/**
+ * Finer hexagons as you zoom in: res 4 (~45 km across) for the whole region, res 5 (~17 km) from FINE_ZOOM[5],
+ * res 6 (~6 km) from FINE_ZOOM[6]. Each switch happens when the new hexes are ~10-15 px across, about as big as the
+ * res-4 hexes look on the whole-Midwest view. Coming back out switches HYSTERESIS later, so a zoom that hovers on
+ * a threshold doesn't flicker between levels.
+ */
+export const FINE_ZOOM: Record<number, number> = { 5: 6.4, 6: 7.9 };
+const HYSTERESIS = 0.3;
 /** Year used to put dates on the "typical year" axis. Any non-leap year works. */
 const TYPICAL_AXIS_YEAR = 2025;
 
@@ -34,6 +43,19 @@ export function stageAt(q: readonly (number | null)[] | undefined, doy: number):
   if (q95 == null || doy < q95) return 'winding down';
   return 'over';
 }
+
+/** stageAt for a finer level's packed days (5 bytes per cell, day of year minus 60, 255 = never). */
+function stageAtBytes(days: Uint8Array, i: number, doy: number): Stage {
+  const d = doy - 60;
+  const q = (k: number) => days[i * 5 + k]!;
+  if (q(0) === 255 || d < q(0)) return 'not yet';
+  if (q(1) === 255 || d < q(1)) return 'starting';
+  if (q(3) === 255 || d < q(3)) return 'peak';
+  if (q(4) === 255 || d < q(4)) return 'winding down';
+  return 'over';
+}
+const bytesToQ = (days: Uint8Array, i: number) =>
+  [0, 1, 2, 3, 4].map((k) => (days[i * 5 + k] === 255 ? null : days[i * 5 + k]! + 60));
 
 type RGBA = [number, number, number, number];
 // Forecast hexes live in blue (season coming) -> bright teal (peak) -> dusky violet (season gone), so the
@@ -112,9 +134,25 @@ export interface LunaLayer extends HatchLayer {
   setMode(mode: Mode): void;
   /** The day's map in one sentence, for screen readers: how many hexagons are at each stage, and moths seen. */
   summary(t: number): string;
+  /** Resolution of the hexagons on screen now (4, 5 or 6). */
+  res(): number;
+  /** The hexagon the card describes at lngLat, at the resolution on screen (null outside the map). */
+  cellAt(lngLat: [number, number]): string | null;
 }
 
-export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
+interface FineCell {
+  id: string;
+  i: number;
+  seen: boolean;
+}
+interface Shown {
+  level: FineLevel;
+  data: FineCell[];
+  unseen: FineCell[];
+}
+
+/** onData: called when finer hexes finish loading or the level on screen changes (the map should redraw). */
+export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = () => {}): LunaLayer {
   let mode = initial;
   let shown = sightingsFor(mode);
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
@@ -126,19 +164,74 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
   const unseen = cells.filter((c) => !c.seen);
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
 
+  // ---- finer levels: the level the zoom asks for, what has loaded, and what is on screen
+  let wantRes = 4;
+  let shownRes = 4;
+  const shown5or6 = new Map<number, Shown>();
+  const fineDaysLoaded = new Map<string, Uint8Array>();
+  const loading = new Set<string>();
+  let fineLevels: number[] = [];
+  void fineManifest().then((m) => {
+    fineLevels = m ? Object.keys(m.levels).map(Number) : [];
+    if (fineLevels.length && wantRes > 4) onData();
+  });
+  const resForZoom = (zoom: number) => {
+    let r = wantRes;
+    while (r < 6 && zoom >= FINE_ZOOM[r + 1]!) r++;
+    while (r > 4 && zoom < FINE_ZOOM[r]! - HYSTERESIS) r--;
+    return (wantRes = r);
+  };
+  const load = (res: number) => {
+    const key = `${res}/${mode}`;
+    if (loading.has(key)) return;
+    loading.add(key);
+    void Promise.all([fineLevel(res), fineDays(res, mode)]).then(([level, days]) => {
+      if (!level || !days || days.length !== level.cells.length * 5) return; // missing or stale file: stay coarser
+      if (!shown5or6.has(res)) {
+        const fc = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
+        shown5or6.set(res, { level, data: fc, unseen: fc.filter((c) => !c.seen) });
+      }
+      fineDaysLoaded.set(key, days);
+      if (wantRes >= res) onData();
+    });
+  };
+  /** Finest level at or below the wanted one whose cells and current-season days are in memory. */
+  const pickRes = (want: number) => {
+    for (let r = want; r > 4; r--) {
+      if (!fineLevels.includes(r)) continue;
+      if (shown5or6.has(r) && fineDaysLoaded.has(`${r}/${mode}`)) return r;
+      load(r);
+    }
+    return 4;
+  };
+  /** Forecast quantiles, "seen" and the cell id at lngLat on the level on screen. */
+  const lookup = (lngLat: [number, number]) => {
+    if (shownRes > 4) {
+      const s = shown5or6.get(shownRes)!;
+      const days = fineDaysLoaded.get(`${shownRes}/${mode}`);
+      const cell = latLngToCell(lngLat[1], lngLat[0], shownRes);
+      const i = s.level.index.get(cell);
+      if (days && i !== undefined) return { cell, q: bytesToQ(days, i), seen: s.level.seen[i] === 1, parent: parentOf(cell) };
+      if (days) return null;
+    }
+    const cell = latLngToCell(lngLat[1], lngLat[0], GRID_RES);
+    const i = cellIndex.get(cell);
+    if (i === undefined) return null;
+    return { cell, q: forecast()[i] ?? [], seen: cells[i]!.seen, parent: cell };
+  };
+
   // The default spot until a hex is tapped: Chicago's western suburbs (the city's own hex centre is in the lake).
   const HOME: [number, number] = [-88.0, 41.9];
   const spotStory = (lngLat: [number, number] | null, t: number): SpotStory | null => {
     const at = lngLat ?? HOME;
-    const cell = latLngToCell(at[1], at[0], GRID_RES);
-    const i = cellIndex.get(cell);
-    if (i === undefined) return null;
-    const [q05, q25, , q75, q95] = forecast()[i] ?? [];
+    const hit = lookup(at);
+    if (!hit) return null;
+    const [q05, q25, , q75, q95] = hit.q;
     if (q05 == null || q25 == null || q75 == null) return null;
     const year = yearOf();
     const f = (d: number) => fmtDoy(year, d);
     const doy = dayOfYear(t);
-    const stage = stageAt(forecast()[i], doy);
+    const stage = stageAt(hit.q, doy);
     const place = lngLat ? 'this spot' : 'Chicago';
     const busy = `busiest ${f(q25)} to ${f(q75)}`;
     const sentence = {
@@ -167,7 +260,8 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         { from: end, to: 367, label: 'over', color: css(STAGE_COLOR.over) },
       ],
       ticks: sightingsFor(mode)
-        .filter((s) => s.cell === cell && !(s.flags & (SECOND_BROOD | APPROXIMATE)))
+        // Sightings are counted on the res-4 hexagon, even when a finer one is on screen.
+        .filter((s) => s.cell === hit.parent && !(s.flags & (SECOND_BROOD | APPROXIMATE)))
         .map(day),
       today: doy,
     };
@@ -181,6 +275,8 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       mode = m;
       shown = sightingsFor(m);
     },
+    res: () => shownRes,
+    cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
     summary(t) {
       const doy = dayOfYear(t);
@@ -193,8 +289,13 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         `${lit} moth${lit === 1 ? '' : 's'} seen in the last ${GLOW_DAYS} days.`;
     },
 
-    render({ t, theme }) {
+    render({ t, zoom, theme }) {
       const doy = dayOfYear(t);
+      const res = pickRes(resForZoom(zoom));
+      if (res !== shownRes) {
+        shownRes = res;
+        queueMicrotask(onData); // the card and its outline follow the new level
+      }
       // Time reaches the dots only through the filter range (a GPU uniform), so scrubbing never re-uploads them.
       const filter = {
         getFilterValue: (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy),
@@ -205,7 +306,50 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         filterTransformColor: true,
         extensions: filterExt,
       };
+      const fine = res > 4 ? shown5or6.get(res)! : null;
+      const days = fine ? fineDaysLoaded.get(`${res}/${mode}`)! : null;
+      const hexLayers = fine && days
+        ? [
+            new H3HexagonLayer<FineCell>({
+              id: 'luna-forecast',
+              data: fine.data,
+              getHexagon: (c) => c.id,
+              getFillColor: (c) => STAGE_COLOR[stageAtBytes(days, c.i, doy)],
+              getLineColor: theme.hexEdge,
+              stroked: true,
+              filled: true,
+              extruded: false,
+              // Res 5 is drawn as true polygons (a zoomed-in view can still span a few states). Res 6 (~27,000
+              // cells, only shown when zoomed in close) uses one instanced hexagon shape: much lighter on phones.
+              highPrecision: res === 5 ? true : 'auto',
+              lineWidthMinPixels: 0.4,
+              pickable: true,
+              autoHighlight: true,
+              highlightColor: [255, 255, 255, 50],
+              updateTriggers: { getFillColor: [doy, mode, res] },
+            }),
+            new H3HexagonLayer<FineCell, FillStyleExtensionProps<FineCell>>({
+              id: 'luna-unseen',
+              data: fine.unseen,
+              getHexagon: (c) => c.id,
+              getFillColor: STRIPES,
+              stroked: false,
+              filled: true,
+              extruded: false,
+              highPrecision: true,
+              pickable: false,
+              extensions: [new FillStyleExtension({ pattern: true })],
+              fillPatternAtlas: stripes(),
+              fillPatternMapping: STRIPE_MAPPING,
+              fillPatternMask: true,
+              getFillPattern: () => 'stripes',
+              fillPatternSizeUnits: 'pixels',
+              getFillPatternScale: 0.75,
+            }),
+          ]
+        : null;
       return [
+        ...(hexLayers ?? [
         new H3HexagonLayer<(typeof cells)[number]>({
           id: 'luna-forecast',
           data: cells,
@@ -240,6 +384,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           fillPatternSizeUnits: 'pixels',
           getFillPatternScale: 0.75,
         }),
+        ]),
         new ScatterplotLayer<Sighting>({
           id: 'luna-glow',
           data: shown,
@@ -290,10 +435,10 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           link: { href: `https://www.inaturalist.org/observations/${s.id}`, label: 'See the photo on iNaturalist' },
         };
       }
-      const cell = latLngToCell(lngLat[1], lngLat[0], GRID_RES);
-      const i = cellIndex.get(cell);
-      if (i === undefined) return null;
-      const q = forecast()[i] ?? [];
+      const at = lookup(lngLat);
+      if (!at) return null;
+      const fine = shownRes > 4;
+      const q = at.q;
       const [q05, q25, q50, q75] = q;
       const stage = stageAt(q, doy);
       const lines = [`Forecast for ${fmtDoy(year, doy)}: ${stage}.`];
@@ -308,15 +453,17 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         lines.push(
           `Peak this year in this strip of the map (${band.label}°N): seen ${fmtDoy(year, sc.obs_peak)}, forecast ${fmtDoy(year, sc.heat_peak)}, usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
-      const here = sightingsFor(mode).filter((s) => s.cell === cell);
+      // Sightings are counted on the res-4 hexagon: a small one would almost always have none.
+      const here = sightingsFor(mode).filter((s) => s.cell === at.parent);
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
       const firstDays = here.filter((s) => !(s.flags & SECOND_BROOD)).map(day).sort((a, b) => a - b);
       const median = firstDays.length % 2 ? firstDays[(firstDays.length - 1) / 2]! : (firstDays[firstDays.length / 2 - 1]! + firstDays[firstDays.length / 2]!) / 2;
+      const where = fine ? 'the wider area (one zoomed-out hexagon)' : 'this hexagon';
       lines.push(
         here.length
-          ? `${here.length} sighting${here.length > 1 ? 's' : ''} in this hexagon${mode === TYPICAL ? ' (all years)' : ''}` +
+          ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}` +
               (firstDays.length ? `. Middle date of the first wave: ${fmtDoy(year, median)}.` : '.')
-          : `No sightings in this hexagon${mode === TYPICAL ? '' : ' this year'}.`,
+          : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
       // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
       // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
@@ -324,7 +471,8 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       const pk = data.interval?.peak;
       if (pk && q50 != null && mode !== TYPICAL)
         lines.push(`Peak here likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      if (!cells[i]!.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown striped.');
+      if (!at.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown striped.');
+      if (fine) lines.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
       return { title: `Luna moth, ${modeLabel(mode)}`, lines };
     },
 
@@ -337,6 +485,13 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         'Amber dots are late moths counted as the second wave. Some may be late first wave moths from a cold year.',
         'Gray dots mean the photo\u2019s location was blurred or rough, so the dot may sit off its true spot.',
         'Striped hexagons have no luna sightings nearby, ever. There is nothing to check the forecast against there.',
+        ...(fineLevels.length
+          ? [
+              `Zoom in and the hexagons get smaller, down to about ${fineLevels.includes(6) ? 6 : 17} km across. Each small one uses the temperatures at its own centre, so cool lake shores, warm cities and river valleys show up.`,
+              'Small hexagons use the same model, but nobody has checked it at that scale. Its accuracy was only measured for whole strips of the map. So a small hexagon\u2019s date is no surer than a big one\u2019s.',
+              'A small hexagon is striped when the big hexagon it sits in is. Its card counts the sightings in that big hexagon.',
+            ]
+          : []),
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
         `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
