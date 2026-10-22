@@ -262,6 +262,10 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       const lines = [`Forecast for ${fmtDoy(year, doy)}: ${stage}`];
       if (q05 != null && q50 != null && q25 != null && q75 != null)
         lines.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      const pk = data.interval?.peak;
+      // The band comes from past misses: 8 times in 10, the real peak landed inside it.
+      if (pk && q50 != null)
+        lines.push(`Peak most likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])} (8 in 10 past peaks fell in a window this wide).`);
       const band = bandOf(lngLat[1]);
       const sc =
         mode === TYPICAL
@@ -295,7 +299,8 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         'Gray dots mean the photo\u2019s location was blurred or rough, so the dot may sit off its true spot.',
         'Faint hexagons have no luna sightings nearby, ever. There is nothing to check the forecast against there.',
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
-        'The forecast runs a few days early in the south and late in the north. Northern moths may need less warmth. We don\u2019t know why yet.',
+        'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. It now runs 0 to 3 days late everywhere.',
+        'When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (about 7 days off, against 7). So it is not ready for places it has never seen.',
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
         'Our first forecast did no better than each area\u2019s usual date, so we replaced it with this one.',
       ];
@@ -337,7 +342,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
                 (sc.heat < sc.calendar ? 'So far the heat forecast is closer. ' : 'This time the usual date did as well or better. ') +
                 (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'Not proven yet. We picked this version after a first try did no better than the usual date, so it still has to pass a test on places and seasons it hasn\u2019t seen.',
+            'Not proven yet. It passes on years it never saw, but it failed a test on states it never saw (Wisconsin and Minnesota). The real test is the 2026 season, once its weather data is out in mid-2027.',
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },

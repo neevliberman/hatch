@@ -24,7 +24,23 @@ export interface ReplayFile {
     heat_peak: number;
     cal_onset: number;
     cal_peak: number;
+    /** What the previous (P1/P2) model said; heat_* is the current model. */
+    p1_onset?: number;
+    p1_peak?: number;
   }[];
+  /** Added in P3: which model made the forecast and its headline scores (days, onset+peak average). */
+  model?: {
+    id: string;
+    spec: string;
+    summary: string;
+    loyo_mae: { heat: number; p1: number; cal: number };
+    holdout_mae: { heat: number; p1: number; cal: number; cal_lat: number };
+    noise_floor: number;
+  };
+  /** Added in P3: 80% band for a forecast date, as day offsets [low, high] of real minus forecast. */
+  interval?: { level: number; onset: [number, number]; peak: [number, number] };
+  /** Added in P3: per latitude band, average days off and mean peak bias (forecast minus real). */
+  scorecard?: { band: string; band_years: number; mae: { heat: number; p1: number; cal: number }; bias_peak: { heat: number; p1: number } }[];
   /** [iNat id, year, day of year, lat, lng, flags] */
   sightings: [number, number, number, number, number, number][];
   counts: Record<string, number>;
