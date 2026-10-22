@@ -11,6 +11,9 @@
   --warn-bg: rgba(255, 159, 67, 0.14);
   --gutter: 16px;
   --thumb: 22px;
+  /* Side gutters that also clear a landscape iPhone's notch (viewport-fit=cover lets the page run under it). */
+  --gl: max(var(--gutter), env(safe-area-inset-left));
+  --gr: max(var(--gutter), env(safe-area-inset-right));
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -22,7 +25,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .muted { color: var(--muted); }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
 
-button, select { font: inherit; color: inherit; }
+button, select { font: inherit; color: inherit; touch-action: manipulation; }
+/* Pinching the panels would zoom the whole page and strand it; the map has its own pinch zoom. The drawer still pinches. */
+#top, #sub, #bottom { touch-action: pan-x pan-y; }
 .icon-btn { min-width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--panel); color: var(--text); cursor: pointer; display: inline-grid; place-items: center;
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
@@ -32,41 +37,44 @@ button, select { font: inherit; color: inherit; }
 #info-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 20px; }
 
 #top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
-  align-items: center; padding: 10px var(--gutter) 0; pointer-events: none; }
+  align-items: center; gap: 8px; padding: 10px var(--gr) 0 var(--gl); pointer-events: none; }
 #top > * { pointer-events: auto; }
 .brand { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; display: flex; align-items: baseline; gap: 8px;
-  padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; flex: none; }
 .brand small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);
   align-self: center; }
 
-#sub { position: absolute; top: 64px; left: var(--gutter); right: var(--gutter); pointer-events: none;
+#sub { position: absolute; top: 64px; left: var(--gl); right: var(--gr); pointer-events: none;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 #layers { pointer-events: none; min-width: 0; }
-.season { margin-left: auto; margin-right: 8px; }
-.season select { pointer-events: auto; height: 44px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+.season { margin-left: auto; min-width: 0; display: flex; }
+.season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
   padding: 0 10px; color: var(--text); }
 #honesty, #countdown { pointer-events: auto; margin: 0; padding: 5px 10px; font-size: 12.5px; background: var(--panel);
   border: 1px solid var(--line); border-radius: 10px; max-width: 100%; }
 #honesty b { font-weight: 600; }
-#why { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
+#why { margin-left: 6px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
   font-size: 12.5px; min-height: 24px; }
 #countdown { color: var(--muted); }
 #countdown:empty { display: none; }
 #actions { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.pill { height: 36px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel);
+.pill { height: 40px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel);
   cursor: pointer; font-size: 12.5px; -webkit-tap-highlight-color: transparent; }
 .pill:disabled { opacity: 0.6; cursor: progress; }
 .pill:hover { border-color: rgba(200, 215, 245, 0.5); }
 .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #locate::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
   background: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent); vertical-align: 0; }
-#action-msg { font-size: 12px; color: var(--muted); }
+#action-msg { font-size: 12px; color: var(--muted); padding: 4px 8px; background: var(--panel); border-radius: 8px; }
 #action-msg:empty { display: none; }
 .lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
 .lg-items li { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; flex: none; background: var(--c); }
-.sw.hex { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); }
+.sw.hex { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  /* The darkest classes (not yet, over) vanish on the dark panel without an outline: a lighter hex behind an inset one. */
+  position: relative; background: rgba(200, 215, 245, 0.45); }
+.sw.hex::after { content: ''; position: absolute; inset: 1.5px; background: var(--c); clip-path: inherit; }
 .sw.dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 6px 2px color-mix(in srgb, var(--c) 55%, transparent); }
 .probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
 .cav.credits { font-size: 13px; color: var(--muted); }
@@ -80,7 +88,7 @@ button, select { font: inherit; color: inherit; }
 
 #bottom { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; pointer-events: none;
   padding-bottom: env(safe-area-inset-bottom); }
-#floats { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 var(--gutter) 10px; }
+#floats { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 var(--gr) 10px var(--gl); }
 #legend, #probe { pointer-events: auto; }
 .legend-card { width: 260px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .lg-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
@@ -94,7 +102,7 @@ button, select { font: inherit; color: inherit; }
 .probe-card + .probe-card { margin-top: 8px; }
 
 #bar { pointer-events: auto; background: var(--panel-solid); border-top: 1px solid var(--line);
-  padding: 10px var(--gutter) 12px; }
+  padding: 10px var(--gr) 12px var(--gl); }
 .bar-row { display: flex; align-items: center; gap: 14px; }
 .btns { display: flex; gap: 6px; }
 .play { min-width: 56px; }
@@ -148,10 +156,52 @@ button, select { font: inherit; color: inherit; }
   .lg-title { margin-bottom: 3px; }
   .lg-items { gap: 2px 10px; font-size: 11.5px; }
   #probe { max-width: none; }
+  /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
+  #floats:has(#probe:not([hidden])) #legend { display: none; }
+  .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
   .bar-row { flex-wrap: wrap; gap: 8px 10px; }
   .date { font-size: 17px; order: 2; flex-basis: 100%; display: none; }
   .date { display: block; order: 0; flex: 1; }
   .btns .icon-btn { min-width: 44px; }
   #drawer { top: auto; width: 100%; height: 70%; border-left: 0; border-top: 1px solid var(--line); transform: translateY(104%); border-radius: 16px 16px 0 0; }
+  #drawer.open { transform: none; }
+}
+
+@media (max-width: 340px) {
+  .brand { font-size: 16px; padding: 6px 8px; gap: 6px; }
+}
+
+/* Phones on their side: about 280-430px tall, often wider than 700px. Squeeze every panel into single rows. */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --gutter: 12px; }
+  #top { padding-top: 6px; }
+  .brand { padding: 4px 10px; font-size: 16px; }
+  .brand small { display: none; }
+  .icon-btn, .season select { height: 40px; }
+  #sub { top: 52px; flex-direction: row; align-items: center; flex-wrap: nowrap; }
+  #layers { display: none; }
+  #honesty, #countdown { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; padding: 4px 8px; }
+  #honesty { display: flex; align-items: center; } /* the text gets the ellipsis; "why?" always stays visible */
+  #honesty span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #why { flex: none; }
+  #actions { flex: none; flex-wrap: nowrap; }
+  #action-msg { display: none; }
+  .pill { height: 36px; }
+  .season select { font-size: 16px; }
+  #floats { flex-direction: row; align-items: flex-end; padding-bottom: 6px; }
+  #floats:has(#probe:not([hidden])) #legend { display: none; }
+  .legend-card { width: auto; max-width: 60vw; padding: 5px 10px; }
+  .lg-title { display: none; }
+  .lg-items { font-size: 11.5px; gap: 2px 10px; }
+  #probe { max-width: 50vw; max-height: 40vh; overflow-y: auto; font-size: 12px; padding: 6px 10px; }
+  #bar { display: flex; align-items: center; gap: 12px; padding-top: 6px; padding-bottom: 4px; }
+  .bar-row { flex: none; gap: 8px; }
+  .btns .icon-btn { min-width: 40px; }
+  .date { font-size: 15px; white-space: nowrap; }
+  .track { flex: 1; margin-top: 0; padding-bottom: 0; }
+  .track input[type=range] { height: 30px; }
+  .track .ticks { position: relative; bottom: auto; height: 16px; margin-top: -2px; }
+  #drawer { top: 0; height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
+    padding-right: var(--gr); transform: translateX(104%); }
   #drawer.open { transform: none; }
 }

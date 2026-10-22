@@ -38,6 +38,11 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   };
 
   btn.addEventListener('click', () => toggle(!drawer.classList.contains('open')));
+  // On a phone the drawer covers most of the screen, so a tap anywhere outside it closes it, like a native sheet.
+  document.addEventListener('pointerdown', (e) => {
+    const t = e.target as Node;
+    if (drawer.classList.contains('open') && !drawer.contains(t) && !btn.contains(t) && !(t as Element).closest?.('#why')) toggle(false);
+  });
   window.addEventListener('keydown', (e) => e.key === 'Escape' && toggle(false));
   registry.subscribe(render);
   render();
