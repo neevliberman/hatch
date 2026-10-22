@@ -26,7 +26,7 @@ from hatch_p1.prep import BANDS, BAND_LABELS, RES, YEARS, clean  # noqa: E402
 OUT = ROOT / "src" / "data" / "luna-replay.json"
 FOLD_FITS = ROOT / "pipeline" / "replay" / "fold_fits.json"   # read by build_fine.py (finer hexes, no refit)
 HEADLINE = ROOT / "pipeline" / "fit" / "results" / "headline.json"   # written by pipeline/fit/run_p3.py
-MODEL_ID = "p3-v1"
+MODEL_IDS = {"p31_flat": "p3.1-v1"}   # model id written to the JSON, by headline.json "chosen"; default "p3-v1"
 STATES = ROOT / "src" / "data" / "midwest-states.json"
 RAW = run.DATA / "luna_replay_inat.parquet"   # P1's columns + license_code
 TAXON = 47916
@@ -330,8 +330,9 @@ def main():
         "licences": licences,
         # ---- added in P3 (optional; older readers ignore them)
         "model": {
-            "id": MODEL_ID, "spec": chosen,
-            "summary": "skew-normal warmth targets, base 10 C from 1 March, 7-day flight life, moth-effort background",
+            "id": MODEL_IDS.get(chosen, "p3-v1"), "spec": chosen,
+            "summary": "skew-normal warmth targets" + (" (at or above 0 degree-days)" if spec.positive else "")
+                       + ", base 10 C from 1 March, 7-day flight life, moth-effort background",
             "median_dd_at_lat": {str(lt): round(float(np.median([M.median_dd(p.params, spec, lt) for p in pooled])), 1)
                                  for lt in (38, 42, 46)},
             "loyo_mae": {k: round(float(lm[m]["mae"]), 2) for k, m in (("heat", chosen), ("p1", "p1"), ("cal", "cal"))},
