@@ -28,6 +28,8 @@ export interface MapHandle {
   /** Screen position of lngLat in the current view, and the current zoom (null before the first frame). */
   project(lngLat: [number, number]): [number, number] | null;
   zoom(): number | null;
+  /** Jump to lngLat at a zoom level (used by the zoomed-in smoke test, scripts/fine.mjs). */
+  view(lngLat: [number, number], zoom: number): void;
 }
 
 interface Opts {
@@ -53,7 +55,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.removeAttribute('aria-describedby');
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
-    return { refresh() {}, fit() {}, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null };
+    return { refresh() {}, fit() {}, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {} };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   const fitState = (p: { top: number; bottom: number }) => {
@@ -82,6 +84,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // same fit would be ignored; a vanishing zoom nudge that alternates makes each fit a new value.
   let nudge = 0;
   let overSighting = false;
+  let redrawQueued = false;
   const setMoved = (m: boolean) => {
     if (m !== moved) onMove?.((moved = m));
   };
@@ -89,8 +92,10 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   const hit = (info: PickingInfo): ProbeHit | null => {
     if (!info.object || !info.coordinate) return null;
     const [lng, lat] = info.coordinate as [number, number];
+    // A forecast hexagon is its own cell (res 4, 5 or 6 by zoom); anything else is placed on the res-4 grid.
+    const id = (info.object as { id?: unknown }).id;
     return {
-      cell: latLngToCell(lat, lng, GRID_RES),
+      cell: info.layer?.id === 'luna-forecast' && typeof id === 'string' ? id : latLngToCell(lat, lng, GRID_RES),
       lngLat: [lng, lat],
       picked: info.layer ? { layerId: info.layer.id, object: info.object } : undefined,
       px: [info.x, info.y],
@@ -115,6 +120,14 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       setMoved(Math.abs(viewState.zoom - fitted.zoom) > 0.5 ||
         Math.abs(viewState.longitude - fitted.longitude) > scale * 0.1 || Math.abs(viewState.latitude - fitted.latitude) > scale * 0.08);
       if (onView) requestAnimationFrame(onView); // after deck has drawn the new view
+      // Layers can depend on zoom (finer hexagons when zoomed in): redraw once per frame while the view moves.
+      if (!redrawQueued) {
+        redrawQueued = true;
+        requestAnimationFrame(() => {
+          redrawQueued = false;
+          refresh();
+        });
+      }
     },
     onHover: (info: PickingInfo) => {
       overSighting = !!info.object && info.layer?.id !== 'luna-forecast';
@@ -178,6 +191,14 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       setMoved(false);
       nudge = nudge ? 0 : 1e-9;
       deck.setProps({ initialViewState: { ...v, zoom: v.zoom + nudge, transitionDuration: 0 } });
+      if (onView) requestAnimationFrame(onView);
+    },
+    view([longitude, latitude], z) {
+      zoom = z;
+      setMoved(true);
+      nudge = nudge ? 0 : 1e-9;
+      deck.setProps({ initialViewState: { ...fitted, longitude, latitude, zoom: z + nudge, transitionDuration: 0 } });
+      refresh();
       if (onView) requestAnimationFrame(onView);
     },
     setMarker(lngLat) {
