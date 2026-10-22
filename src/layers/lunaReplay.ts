@@ -286,7 +286,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       // Last, so the short hover card (first lines only) and phone layouts keep their size; the pinned card shows it.
       const pk = data.interval?.peak;
       if (pk && q50 != null && mode !== TYPICAL)
-        lines.push(`Strip's peak likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+        lines.push(`Peak here likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       if (!cells[i]!.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown faint.');
       return { title: `Luna moth, ${modeLabel(mode)}`, lines };
     },
@@ -302,7 +302,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         'Faint hexagons have no luna sightings nearby, ever. There is nothing to check the forecast against there.',
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
-        `For a single year, a hexagon\u2019s card gives a "peak likely" window. It comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
+        `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
         'When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (about 7 days off, against 7). So it is not ready for places it has never seen.',
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
         'This version is about as accurate as the last one, with much less south/north lean. Both beat each area\u2019s usual date.',
