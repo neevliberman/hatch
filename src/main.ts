@@ -58,6 +58,8 @@ function start() {
   let followSpot = (_t: number) => {};
   const updateProbe = () => {
     showProbe(probeEl, registry, hit, time.cursor);
+    // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
+    map.setPicked(pinned && hit && (!hit.picked || hit.picked.layerId === 'luna-forecast') ? hit.cell : null);
     placeProbe();
     followSpot(time.cursor);
   };
@@ -199,6 +201,32 @@ function start() {
     }
   });
 
+  // Pin the card (and the About panel's spot) on the hexagon at lat/lng. Lakeshore cities (Chicago, Milwaukee,
+  // Cleveland) can sit in a hex whose centre is in the lake, so fall back to the nearest land hex within two rings.
+  const showPlace = (lat: number, lng: number): 'exact' | 'nearby' | null => {
+    const ring = gridDisk(latLngToCell(lat, lng, GRID_RES), 2)
+      .map((c) => {
+        const [la, ln] = cellToLatLng(c);
+        return { cell: c, lngLat: [ln, la] as [number, number], d: (la - lat) ** 2 + (ln - lng) ** 2 };
+      })
+      .sort((a, b) => a.d - b.d);
+    const first = { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
+    const here: ProbeHit | undefined = [first, ...ring].find((h) => luna.probe?.(h.lngLat, time.cursor));
+    if (!here) return null;
+    hit = here;
+    pinned = true;
+    map.setMarker(null);
+    updateProbe();
+    return here === first ? 'exact' : 'nearby';
+  };
+  // The About panel's city menu: a way to read a place's season without pointing at the map.
+  $('drawer').addEventListener('change', (e) => {
+    const sel = (e.target as Element).closest<HTMLSelectElement>('select[data-place]');
+    if (!sel?.value) return;
+    const [lat, lng] = sel.value.split(',').map(Number) as [number, number];
+    showPlace(lat, lng);
+  });
+
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
     if (!navigator.geolocation) return say('Location is not available in this browser');
@@ -213,27 +241,14 @@ function start() {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         done();
-        const you: [number, number] = [coords.longitude, coords.latitude];
-        // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so
-        // fall back to the nearest land hex within two rings.
-        const ring = gridDisk(latLngToCell(coords.latitude, coords.longitude, GRID_RES), 2)
-          .map((c) => {
-            const [lat, lng] = cellToLatLng(c);
-            return { cell: c, lngLat: [lng, lat] as [number, number], d: (lat - coords.latitude) ** 2 + (lng - coords.longitude) ** 2 };
-          })
-          .sort((a, b) => a.d - b.d);
-        const first = { cell: latLngToCell(coords.latitude, coords.longitude, GRID_RES), lngLat: you };
-        const here: ProbeHit | undefined = [first, ...ring].find((h) => luna.probe?.(h.lngLat, time.cursor));
-        if (!here) {
+        const at = showPlace(coords.latitude, coords.longitude);
+        if (!at) {
           map.setMarker(null);
           say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)');
           return;
         }
-        hit = here;
-        pinned = true;
-        map.setMarker(you);
-        updateProbe();
-        say(here === first ? 'You are the yellow dot' : 'You are the yellow dot (the card shows the nearest hexagon on land)');
+        map.setMarker([coords.longitude, coords.latitude]);
+        say(at === 'exact' ? 'You are the yellow dot' : 'You are the yellow dot (the card shows the nearest hexagon on land)');
       },
       (err) => (done(), say(err.code === err.PERMISSION_DENIED ? 'Location access is off for this site' : 'Could not get your location')),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },

@@ -26,7 +26,7 @@ export interface LegendSpec {
   /** Colour stops from low to high, drawn as a ramp. */
   stops?: { color: string; label: string }[];
   /** Discrete keys, drawn as labelled swatches (hex) or glowing dots (dot). */
-  items?: { color: string; label: string; shape: 'hex' | 'dot' }[];
+  items?: { color: string; label: string; shape: 'hex' | 'dot' | 'striped' }[];
   note?: string;
 }
 
