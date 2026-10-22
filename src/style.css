@@ -10,6 +10,8 @@
   --warn: #ff9f43;
   --warn-bg: rgba(255, 159, 67, 0.14);
   --gutter: 16px;
+  /* Narrower on mid-size windows so an open About drawer leaves most of the map visible. */
+  --drawer-w: min(400px, max(300px, 36vw), 100%);
   --thumb: 22px;
   /* Side gutters that also clear a landscape iPhone's notch (viewport-fit=cover lets the page run under it). */
   --gl: max(var(--gutter), env(safe-area-inset-left));
@@ -79,7 +81,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   max-height: calc(100vh - 16px); overflow-y: auto; pointer-events: none;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
 #probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
-#probe.at-pointer::after { content: 'Click to pin'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+/* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
+#probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link { display: none; }
+#probe.at-pointer::after { content: 'Click for more'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
 #probe.at-pointer.pinned::after { content: 'Pinned · click the map to close'; color: var(--accent); }
 /* "why?" lands on the drawer section it explains; a short glow shows where. */
 .flash { animation: flash 1.4s ease-out; }
@@ -149,7 +153,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 1px 5px; border-radius: 4px; }
 .now::after { content: ''; position: absolute; left: 50%; top: 14px; width: 2px; height: 14px; background: var(--accent); transform: translateX(-50%); }
 
-#drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(400px, 100%); padding: 14px var(--gutter) 24px;
+#drawer { position: absolute; top: 0; right: 0; bottom: 0; width: var(--drawer-w); padding: 14px var(--gutter) 24px;
   background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; z-index: 5;
   transform: translateX(104%); transition: transform 0.22s ease; box-shadow: -10px 0 30px rgba(0,0,0,0.4); }
 #drawer.open { transform: none; }
@@ -162,7 +166,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 /* Desktop: an open About drawer sits beside the controls instead of over My area, Share and the end of the time bar. */
 @media (min-width: 701px) and (min-height: 501px) {
-  #app:has(#drawer.open) #bottom { right: min(400px, 100%); }
+  #app:has(#drawer.open) #bottom { right: var(--drawer-w); }
 }
 
 @media (max-width: 700px) {

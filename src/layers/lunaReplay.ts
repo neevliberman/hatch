@@ -307,7 +307,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           { title: 'The jar fills', text: 'Past moths came out after about this much warmth was saved.' },
           { title: 'Moths fly', text: 'Warm spring, early moths. Cold spring, late moths.' },
         ],
-        spotIntro: 'Tap a hexagon on the map to see its season here.',
+        spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
         spot: (lngLat, t) => spotStory(lngLat, t),
         score: {
           title: 'How good is it?',
