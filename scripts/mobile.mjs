@@ -38,10 +38,10 @@ for (const e of new Set(phones.map((p) => p[1]))) {
 
 // Runs in the page: how much map is left, and which visible controls are off-screen, too small, or covered.
 const audit = () => {
-  const sub = document.querySelector('#sub').getBoundingClientRect();
+  const sub = document.querySelector('#top').getBoundingClientRect();
   const bottom = document.querySelector('#bottom').getBoundingClientRect();
   const bad = [];
-  for (const el of document.querySelectorAll('#top button, #top select, #sub button, #bottom button, #bottom input, #bottom a')) {
+  for (const el of document.querySelectorAll('#top button, #top select, #bottom button, #bottom input, #bottom a')) {
     const b = el.getBoundingClientRect();
     if (!b.width || !b.height || el.closest('[hidden]')) continue;
     const name = el.id || el.textContent.trim().slice(0, 24);
@@ -67,7 +67,7 @@ const blank = async (page) => {
     const c = new OffscreenCanvas(bmp.width, bmp.height);
     const g = c.getContext('2d');
     g.drawImage(bmp, 0, 0);
-    const sub = document.querySelector('#sub').getBoundingClientRect().bottom * devicePixelRatio;
+    const sub = document.querySelector('#top').getBoundingClientRect().bottom * devicePixelRatio;
     const bot = document.querySelector('#bottom').getBoundingClientRect().top * devicePixelRatio;
     const d = g.getImageData(0, Math.floor(sub), bmp.width, Math.max(1, Math.floor(bot - sub))).data;
     const seen = new Set();
@@ -107,7 +107,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     if (!(await page.locator('#drawer.open').count())) fail('drawer did not open on first visit');
     // Tap empty map: left of a side drawer, or between the top panels and a bottom sheet.
     const box = await page.locator('#drawer').boundingBox();
-    const top = await page.evaluate(() => document.querySelector('#sub').getBoundingClientRect().bottom);
+    const top = await page.evaluate(() => document.querySelector('#top').getBoundingClientRect().bottom);
     const bottom = box.x > 40 ? (await page.locator('#bottom').boundingBox()).y : box.y;
     await page.touchscreen.tap(box.x > 40 ? box.x / 2 : width / 2, (top + bottom) / 2);
     await page.waitForTimeout(400);
@@ -123,7 +123,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     if (await blank(page)) fail('map looks blank');
 
     // Tap the middle of the map: a card must appear, and the actions must stay reachable.
-    const sub = await page.locator('#sub').boundingBox();
+    const sub = await page.locator('#top').boundingBox();
     const bot = await page.locator('#bottom').boundingBox();
     await page.touchscreen.tap(width / 2, (sub.y + sub.height + bot.y) / 2);
     await page.waitForTimeout(500);
@@ -158,10 +158,37 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       if (!/[?&]date=\d{2}-\d{2}/.test(url ?? '')) fail(`share produced no view link: ${url}`);
     }
 
+    // Pinch the map open (Chromium only: it alone takes raw multi-touch here): the recenter button must appear and work.
+    if (engine === 'chromium') {
+      if (await page.locator('#recenter').isVisible()) fail('recenter button shows before the map was moved');
+      const zoom = () => page.evaluate(() => window.__hatch.map.zoom());
+      const z0 = await zoom();
+      const cdp = await ctx.newCDPSession(page);
+      const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+      const [cx, cy] = [width / 2, (sub.y + sub.height + bot.y) / 2];
+      await touch('touchStart', [[cx - 30, cy], [cx + 30, cy]]);
+      for (let i = 1; i <= 10; i++) {
+        await touch('touchMove', [[cx - 30 - i * 8, cy], [cx + 30 + i * 8, cy]]);
+        await page.waitForTimeout(16);
+      }
+      await touch('touchEnd', []);
+      await page.waitForTimeout(500);
+      if (await page.locator('#recenter').isHidden()) fail('pinching the map did not show the recenter button');
+      else {
+        await shot('5-zoomed');
+        (await page.evaluate(audit)).bad.forEach((m) => fail(`zoomed in, ${m}`));
+        await tap('#recenter');
+        await page.waitForTimeout(400);
+        const z1 = await zoom();
+        // The refit can land a little further out than the first view (an open card leaves less room), never further in.
+        if (await page.locator('#recenter').isVisible() || z1 > z0 + 0.05) fail(`recenter did not bring back the whole Midwest (zoom ${z0} -> ${z1})`);
+      }
+    }
+
     if (await tap('#info-btn')) {
       await page.waitForTimeout(400);
       if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
-      await shot('5-drawer');
+      await shot('6-drawer');
       await tap('#drawer-close');
     }
     await ctx.close();

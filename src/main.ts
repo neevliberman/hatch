@@ -8,7 +8,7 @@ import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
-import { countdownText } from './ui/countdown';
+import { countdownParts } from './ui/countdown';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 
@@ -35,18 +35,40 @@ function start() {
   let hit: ProbeHit | null = null;
   let pinned = false;
   const probeEl = $('probe');
+  // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
+  // Touch screens and "My area" keep it docked above the time bar.
+  const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
+  // Placing is separate from rebuilding: a pan only moves the card, so a screen reader doesn't re-read it every frame.
+  const placeProbe = () => {
+    // A pinned card stays on its hex as the map pans or zooms: re-project the hex rather than reuse the click point.
+    const px = hover.matches && !probeEl.hidden && hit?.px ? (pinned ? (map.project(hit.lngLat) ?? hit.px) : hit.px) : undefined;
+    probeEl.classList.toggle('at-pointer', !!px);
+    probeEl.classList.toggle('pinned', !!px && pinned);
+    // A card that follows the pointer would make a screen reader read out every hex swept over; announce it once pinned.
+    probeEl.setAttribute('aria-live', px && !pinned ? 'off' : 'polite');
+    // A pinned hex panned off-screen hides its card until it comes back, rather than leaving it stuck at the edge.
+    probeEl.style.visibility = px && (px[0] < 0 || px[1] < 0 || px[0] > window.innerWidth || px[1] > window.innerHeight) ? 'hidden' : '';
+    if (!px) return probeEl.style.removeProperty('transform');
+    const { width: w, height: h } = probeEl.getBoundingClientRect();
+    const x = Math.max(8, px[0] + 16 + w > window.innerWidth - 8 ? px[0] - 16 - w : px[0] + 16);
+    const y = Math.max(8, Math.min(px[1] - h / 2, window.innerHeight - h - 8));
+    probeEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  };
   // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
   let followSpot = (_t: number) => {};
   const updateProbe = () => {
     showProbe(probeEl, registry, hit, time.cursor);
+    placeProbe();
     followSpot(time.cursor);
   };
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
+  const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
   const padding = () => {
-    const top = $('sub').getBoundingClientRect().bottom + 8;
-    const bottom = $('bottom').offsetHeight + 8;
+    const top = $('top').getBoundingClientRect().bottom + 8;
+    // On wide screens the legend and card sit in the bottom-left corner, beside the map rather than under it.
+    const bottom = (phone.matches ? $('bottom').offsetHeight : $('bottom').offsetHeight - $('floats').offsetHeight) + 8;
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k) };
   };
@@ -55,6 +77,8 @@ function start() {
     registry,
     time,
     padding,
+    onMove: (moved) => ($('recenter').hidden = !moved),
+    onView: () => pinned && placeProbe(),
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
@@ -104,7 +128,23 @@ function start() {
   mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t);
-  $('why').addEventListener('click', () => toggleDrawer(true));
+  // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,
+  // so the tap visibly lands even when the drawer is already open.
+  let flashTimer = 0;
+  $('why').addEventListener('click', () => {
+    toggleDrawer(true);
+    const drawer = $('drawer');
+    const target = drawer.querySelector<HTMLElement>('[data-why]');
+    const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    if (target) target.scrollIntoView({ block: 'start', behavior });
+    else drawer.scrollTo({ top: 0, behavior });
+    const flash = target ?? drawer.querySelector<HTMLElement>('.cav') ?? drawer;
+    flash.classList.remove('flash');
+    void flash.offsetWidth; // restart the animation on a repeat tap
+    flash.classList.add('flash');
+    clearTimeout(flashTimer);
+    flashTimer = window.setTimeout(() => flash.classList.remove('flash'), 1500);
+  });
 
   // Keep the address bar in step with the view, so any link copied or shared reopens the same season and day.
   const viewUrl = () => {
@@ -193,7 +233,11 @@ function start() {
 
   // ?today=2027-01-15 fakes the clock, to check the off-season countdown.
   const today = params.get('today');
-  $('countdown').textContent = countdownText(today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now());
+  const [short, more] = countdownParts(today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now());
+  const moreEl = document.createElement('span');
+  moreEl.className = 'more';
+  moreEl.textContent = more;
+  $('countdown').replaceChildren(short, moreEl);
 
   // The drawer opens by itself once per browser, so the honesty is seen, not just available.
   let seen = true;
@@ -207,13 +251,14 @@ function start() {
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
+  $('recenter').addEventListener('click', () => map.fit(padding()));
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => map.fit(padding()), 150);
+    resizeTimer = window.setTimeout(() => (map.fit(padding()), placeProbe()), 150);
   });
   refresh();
-  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna };
+  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map };
 }
 
 start();

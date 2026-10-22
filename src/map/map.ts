@@ -11,6 +11,8 @@ export interface ProbeHit {
   cell: string;
   lngLat: [number, number];
   picked?: { layerId: string; object: unknown };
+  /** Screen position of the pointer, when the hit came from the pointer (not from "My area"). */
+  px?: [number, number];
 }
 
 export interface MapHandle {
@@ -20,6 +22,9 @@ export interface MapHandle {
   fit(padding: { top: number; bottom: number }): void;
   /** Show a "you are here" ring at lngLat (null hides it). */
   setMarker(lngLat: [number, number] | null): void;
+  /** Screen position of lngLat in the current view, and the current zoom (null before the first frame). */
+  project(lngLat: [number, number]): [number, number] | null;
+  zoom(): number | null;
 }
 
 interface Opts {
@@ -29,9 +34,13 @@ interface Opts {
   /** cell = H3 id under the pointer (null if none); lngLat is where; picked = the data object hit; clicked distinguishes tap from hover. */
   onProbe: (hit: ProbeHit | null, clicked: boolean) => void;
   padding: () => { top: number; bottom: number };
+  /** Called when the view leaves (true) or comes back to (false) the fitted whole-Midwest view. */
+  onMove?: (moved: boolean) => void;
+  /** Called after any pan or zoom has been drawn. */
+  onView?: () => void;
 }
 
-export function createMap({ container, registry, time, onProbe, padding }: Opts): MapHandle {
+export function createMap({ container, registry, time, onProbe, padding, onMove, onView }: Opts): MapHandle {
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   const fitState = (p: { top: number; bottom: number }) => {
     const { width, height } = size();
@@ -45,6 +54,16 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
   // `new Deck()` (it asserts). Zoom is tracked from onViewStateChange instead.
   const initial = fitState(padding());
   let zoom = initial.zoom;
+  // The fitted view, to tell when a pan or zoom has left it (that's when the recenter button shows).
+  let fitted = initial;
+  let moved = false;
+  // deck.gl only re-applies initialViewState when it differs from the last one, so a recenter that lands on the
+  // same fit would be ignored; a vanishing zoom nudge that alternates makes each fit a new value.
+  let nudge = 0;
+  let overSighting = false;
+  const setMoved = (m: boolean) => {
+    if (m !== moved) onMove?.((moved = m));
+  };
 
   const hit = (info: PickingInfo): ProbeHit | null => {
     if (!info.object || !info.coordinate) return null;
@@ -53,6 +72,7 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
       cell: latLngToCell(lat, lng, GRID_RES),
       lngLat: [lng, lat],
       picked: info.layer ? { layerId: info.layer.id, object: info.object } : undefined,
+      px: [info.x, info.y],
     };
   };
 
@@ -64,12 +84,21 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
     initialViewState: initial,
     // No rotate/tilt: flat data map. Keyboard off so arrow keys drive the time scrubber.
     controller: { dragRotate: false, touchRotate: false, keyboard: false, doubleClickZoom: true },
-    getCursor: ({ isDragging, isHovering }) => (isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab'),
+    // Pointer only over sightings (they open an iNaturalist photo); a hex just shows its card, so it keeps the arrow.
+    getCursor: ({ isDragging, isHovering }) => (isDragging ? 'grabbing' : isHovering ? (overSighting ? 'pointer' : 'default') : 'grab'),
     layers: [],
     onViewStateChange: ({ viewState }) => {
       zoom = viewState.zoom;
+      // Half a zoom step, or the centre shifting by ~a tenth of the screen, counts as having moved.
+      const scale = 360 / (512 * 2 ** fitted.zoom) * size().width;
+      setMoved(Math.abs(viewState.zoom - fitted.zoom) > 0.5 ||
+        Math.abs(viewState.longitude - fitted.longitude) > scale * 0.1 || Math.abs(viewState.latitude - fitted.latitude) > scale * 0.08);
+      if (onView) requestAnimationFrame(onView); // after deck has drawn the new view
     },
-    onHover: (info: PickingInfo) => onProbe(hit(info), false),
+    onHover: (info: PickingInfo) => {
+      overSighting = !!info.object && info.layer?.id !== 'luna-forecast';
+      onProbe(hit(info), false);
+    },
     onClick: (info: PickingInfo) => onProbe(hit(info), true),
   });
 
@@ -104,11 +133,24 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
     fit(p) {
       const v = fitState(p);
       zoom = v.zoom;
-      deck.setProps({ initialViewState: { ...v, transitionDuration: 0 } });
+      fitted = v;
+      setMoved(false);
+      nudge = nudge ? 0 : 1e-9;
+      deck.setProps({ initialViewState: { ...v, zoom: v.zoom + nudge, transitionDuration: 0 } });
+      if (onView) requestAnimationFrame(onView);
     },
     setMarker(lngLat) {
       marker = lngLat;
       refresh();
+    },
+    project(lngLat) {
+      const vp = deck.isInitialized ? deck.getViewports()[0] : undefined;
+      const p = vp?.project(lngLat);
+      return p ? [p[0]!, p[1]!] : null;
+    },
+    zoom() {
+      const vp = deck.isInitialized ? deck.getViewports()[0] : undefined;
+      return vp ? vp.zoom : null;
     },
   };
 }
