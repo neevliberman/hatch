@@ -82,6 +82,8 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const t = e.target as HTMLElement;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const onRange = t === range; // native range already handles arrows
+    // Other controls own their keys: Space ticks a checkbox or opens the season menu, arrows move inside a select.
+    if (!onRange && t.closest('input, select, textarea, a, [contenteditable]')) return;
     const onButton = t instanceof HTMLButtonElement;
     const big = e.shiftKey ? 7 : 1;
     switch (e.key) {

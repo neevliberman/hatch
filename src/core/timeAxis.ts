@@ -151,5 +151,5 @@ export function formatTime(ms: number, stepMs: number): string {
 
 export function dayOfYear(ms: number): number {
   const d = new Date(ms);
-  return Math.round((ms - Date.UTC(d.getUTCFullYear(), 0, 1)) / DAY) + 1;
+  return Math.floor((ms - Date.UTC(d.getUTCFullYear(), 0, 1)) / DAY) + 1;
 }

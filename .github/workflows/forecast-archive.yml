@@ -37,6 +37,7 @@ jobs:
       # Re-enabling the (already enabled) workflow through the API resets that clock, so a quiet repo keeps archiving.
       - name: Keepalive
         if: always()
+        continue-on-error: true  # a keepalive hiccup must not paint a good archive night red
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/forecast-archive.yml/enable"

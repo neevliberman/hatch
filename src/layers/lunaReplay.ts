@@ -58,14 +58,14 @@ const fmtDoy = (year: number, doy: number) =>
 export const modeLabel = (mode: Mode) =>
   mode === TYPICAL ? `typical year (${data.years[0]}-${data.years[data.years.length - 1]} pooled)` : mode;
 
-/** Scrub 1 Apr - 30 Sep. `doy` keeps the cursor on the same calendar day when switching years. */
-export function replayTimeSpec(mode: Mode, doy = 161): TimeSpec {
+/** Scrub 1 Apr - 30 Sep, starting on `month` (0-based) / `day`, so switching years keeps the calendar date. */
+export function replayTimeSpec(mode: Mode, month = 5, day = 10): TimeSpec {
   const year = mode === TYPICAL ? TYPICAL_AXIS_YEAR : Number(mode);
   return {
     start: Date.UTC(year, 3, 1),
     end: Date.UTC(year, 8, 30),
     stepMs: TimeAxis.DAY,
-    initial: doyToMs(year, doy),
+    initial: Date.UTC(year, month, day),
     label:
       mode === TYPICAL
         ? (ms) => `${new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} · typical year`
@@ -117,8 +117,9 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       const doy = dayOfYear(t);
       // Time reaches the dots only through the filter range (a GPU uniform), so scrubbing never re-uploads them.
       const filter = {
-        getFilterValue: (s: Sighting) => s.doy,
-        filterRange: [doy - GLOW_DAYS, doy + 0.5] as [number, number],
+        getFilterValue: (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy),
+        // Whole-day values: a dot is lit from its own day through GLOW_DAYS - 1 days later.
+        filterRange: [doy - GLOW_DAYS + 0.5, doy + 0.5] as [number, number],
         filterSoftRange: [doy - 0.5, doy + 0.5] as [number, number],
         filterTransformSize: true,
         filterTransformColor: true,
@@ -152,7 +153,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           radiusUnits: 'pixels',
           getRadius: 9,
           pickable: true, // the halo is the touch target: 18 px beats a 5 px dot on a phone
-          updateTriggers: { getFillColor: [mode] },
+          updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
         new ScatterplotLayer<Sighting>({
@@ -163,7 +164,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           radiusUnits: 'pixels',
           getRadius: 2.6,
           pickable: false,
-          updateTriggers: { getFillColor: [mode] },
+          updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
       ];
@@ -175,7 +176,9 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       if (picked && (picked.layerId === 'luna-glow' || picked.layerId === 'luna-dots')) {
         const s = picked.object as Sighting;
         const lines = [
-          s.flags & SECOND_BROOD ? 'Second brood (shown as seen; not forecast)' : 'First brood (the one we forecast)',
+          s.flags & SECOND_BROOD
+            ? 'Late: after this latitude\u2019s late-June cut-off, so counted as second brood (shown, not forecast)'
+            : 'First brood (the one we forecast)',
         ];
         if (s.flags & APPROXIMATE) lines.push('Location blurred or rough: shown in grey');
         return {
@@ -203,11 +206,13 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
           `${band.label}°N this year: real peak ${fmtDoy(year, sc.obs_peak)} · heat said ${fmtDoy(year, sc.heat_peak)} · calendar said ${fmtDoy(year, sc.cal_peak)}`,
         );
       const here = sightingsFor(mode).filter((s) => s.cell === cell);
-      const first = here.filter((s) => !(s.flags & SECOND_BROOD));
+      const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
+      const firstDays = here.filter((s) => !(s.flags & SECOND_BROOD)).map(day).sort((a, b) => a - b);
+      const median = firstDays.length % 2 ? firstDays[(firstDays.length - 1) / 2]! : (firstDays[firstDays.length / 2 - 1]! + firstDays[firstDays.length / 2]!) / 2;
       lines.push(
         here.length
           ? `Seen in this hex${mode === TYPICAL ? ' (all years)' : ''}: ${here.length} sighting${here.length > 1 ? 's' : ''}` +
-              (first.length ? `, first-brood middle ${fmtDoy(year, first[Math.floor(first.length / 2)]!.doy)}` : '')
+              (firstDays.length ? `, first-brood middle ${fmtDoy(year, median)}` : '')
           : `No sightings in this hex${mode === TYPICAL ? '' : ' this year'}`,
       );
       if (!cells[i]!.seen) lines.push('No lunas ever recorded nearby, so the forecast is drawn faint');
@@ -219,12 +224,12 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
       const yr = mode === TYPICAL ? null : scoreSummary(Number(mode));
       const c = data.counts;
       const bullets = [
-        `Dots are real iNaturalist sightings of adult luna moths (captive and reared ones removed), ${c.sightings?.toLocaleString() ?? '?'} in 7 states, ${data.years[0]}-${data.years[data.years.length - 1]}. Each one glows for ${GLOW_DAYS} days because an adult lives about a week.`,
+        `Dots are real iNaturalist sightings of adult luna moths (captive and reared ones removed), ${c.sightings?.toLocaleString() ?? '?'} in 7 states, ${data.years[0]}-${data.years[data.years.length - 1]}. Each one glows for ${GLOW_DAYS} days because an adult lives about a week. Only openly licensed records are drawn (about two in three); the forecast learned from all research-grade records.`,
         'Hex colours are the heat forecast. Think of a bank account: from 1 March every day above 10 °C pays in a little warmth, and lunas come out once enough is saved. The forecast reads each spot’s real daily temperatures and says where the first brood should be: not yet, starting, peak, winding down.',
-        `How good is it? In a first test, each year was guessed without seeing that year's moths. The heat forecast called the start and the peak about ${all.heat.toFixed(1)} days off on average; the plain calendar (“it's usually early June here”) was about ${all.calendar.toFixed(1)} days off. Promising, not proven: this version was picked after the first try lost, so it still has to pass on the 2026 season before we claim it.`,
-        'Watch for a pattern: the forecast tends to run a little early in the south and late in the north. The first test found lunas in the north come out with less warmth saved up than southern ones (local adaptation or daylength, still an open question), and one Midwest-wide model splits the difference.',
+        `How good is it? In a first test, each year was guessed without seeing that year's moths. Scored for each latitude band as a whole, the heat forecast called the start and the peak about ${all.heat.toFixed(1)} days off on average; the plain calendar (“it's usually early June here”) was about ${all.calendar.toFixed(1)} days off. Promising, not proven: this version was picked after the first try lost, so it still has to pass on the 2026 season before we claim it.`,
+        'Watch for a pattern: the forecast peak tends to run a few days early in the south and late in the north. The first test found lunas in the north come out with less warmth saved up than southern ones (local adaptation or daylength, still an open question), and one Midwest-wide model splits the difference.',
         'This is a replay, not a real forecast: it uses the temperatures that actually happened. A spring forecast would have to use weather forecasts and will be less sharp.',
-        'Amber dots are the southern second brood (July-August). They are shown as seen; the forecast covers the first brood only.',
+        'Amber dots came after a fixed late-June cut-off for their latitude (south of 45°N), so they are counted as the summer second brood. Some are really late first-brood moths from a cold year. They are shown as seen; the forecast covers the first brood only.',
         'Grey dots have a blurred or rough location (privacy settings or a big error circle).',
         'Sightings show where people look as much as where moths are: towns and porch lights are over-counted, and an empty spot does not mean no moths.',
         'Faint hexes have never had a luna recorded nearby, so their forecast has nothing to check against.',
@@ -251,7 +256,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
             shape: 'hex' as const,
           })),
           { color: css(MOON), label: 'sighting', shape: 'dot' },
-          { color: css(SECOND), label: '2nd brood', shape: 'dot' },
+          { color: css(SECOND), label: 'late / 2nd brood', shape: 'dot' },
           { color: css(GREY), label: 'rough spot', shape: 'dot' },
         ],
       };

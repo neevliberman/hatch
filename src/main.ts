@@ -1,6 +1,6 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
-import { dayOfYear, TimeAxis, type TimeSpec } from './core/timeAxis';
+import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec } from './layers/lunaReplay';
 import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
 import { createMap, type ProbeHit } from './map/map';
@@ -19,13 +19,13 @@ function start() {
   // Default: every year pooled by day of year (one season alone is too sparse to show the wave). ?year=2025 replays one season.
   const asked = params.get('year');
   const initialMode: Mode = asked && years.includes(asked) ? asked : TYPICAL;
-  // ?date=06-10 (or 2025-06-10) puts the cursor on that calendar day; default mid-June, when the wave crosses the middle.
+  // ?date=06-10 (or 2025-06-10) puts the cursor on that calendar day; default 10 June, when the wave crosses the middle.
   const md = params.get('date')?.match(/(\d{2})-(\d{2})$/);
-  const initialDoy = md ? dayOfYear(Date.UTC(2025, Number(md[1]) - 1, Number(md[2]))) : 161;
+  const [month, day] = md ? [Number(md[1]) - 1, Number(md[2])] : [5, 10];
 
   const luna = createLunaLayer(initialMode);
   const registry = new LayerRegistry();
-  registry.register(luna, replayTimeSpec(initialMode, initialDoy));
+  registry.register(luna, replayTimeSpec(initialMode, month, day));
 
   const time = new TimeAxis(registry.activeTime()!);
   let spec: TimeSpec | null = registry.activeTime();
@@ -35,7 +35,7 @@ function start() {
   const probeEl = $('probe');
   const updateProbe = () => showProbe(probeEl, registry, hit, time.cursor);
 
-  const padding = () => ({ top: $('top').offsetHeight + $('sub').offsetHeight + 8, bottom: $('bottom').offsetHeight + 8 });
+  const padding = () => ({ top: $('sub').getBoundingClientRect().bottom + 8, bottom: $('bottom').offsetHeight + 8 });
   const map = createMap({
     container: $<HTMLDivElement>('map'),
     registry,
@@ -74,12 +74,12 @@ function start() {
   picker.value = initialMode;
   picker.title = 'Season to replay (first-brood sightings in brackets)';
   picker.addEventListener('change', () => {
-    const doy = dayOfYear(time.cursor);
+    const now = new Date(time.cursor);
     luna.setMode(picker.value);
     hit = null;
     pinned = false;
     $('season-name').textContent = modeLabel(picker.value);
-    registry.setTime(luna.id, replayTimeSpec(picker.value, doy));
+    registry.setTime(luna.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
   });
   $('season-name').textContent = modeLabel(initialMode);
 
@@ -105,6 +105,11 @@ function start() {
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => map.fit(padding()), 150);
+  });
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna };
 }

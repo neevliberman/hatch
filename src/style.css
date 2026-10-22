@@ -42,9 +42,9 @@ button, select { font: inherit; color: inherit; }
 
 #sub { position: absolute; top: 64px; left: var(--gutter); right: var(--gutter); pointer-events: none;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.sub-row { display: flex; gap: 8px; align-items: center; max-width: 100%; }
 #layers { pointer-events: none; min-width: 0; }
-.season select { pointer-events: auto; height: 40px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+.season { margin-left: auto; margin-right: 8px; }
+.season select { pointer-events: auto; height: 44px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
   padding: 0 10px; color: var(--text); }
 #honesty, #countdown { pointer-events: auto; margin: 0; padding: 5px 10px; font-size: 12.5px; background: var(--panel);
   border: 1px solid var(--line); border-radius: 10px; max-width: 100%; }
@@ -128,7 +128,8 @@ button, select { font: inherit; color: inherit; }
   :root { --gutter: 12px; }
   .brand small { display: none; }
   #sub { top: 62px; }
-  #honesty, #countdown { font-size: 12px; }
+  #layers { display: none; } /* one layer: the season menu and honesty line already name it */
+  #honesty, #countdown { font-size: 12px; padding: 4px 8px; }
   .layer { align-items: flex-start; flex-wrap: wrap; row-gap: 4px; }
   .layer .name { flex: 1 1 0; min-width: 0; font-size: 13px; }
   #floats { flex-direction: column-reverse; align-items: stretch; gap: 8px; }

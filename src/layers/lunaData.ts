@@ -43,16 +43,21 @@ export interface Sighting {
   id: number;
   year: number;
   doy: number;
+  /** Day of year of the same calendar date in a non-leap year: where the dot sits on the pooled "typical year" axis. */
+  pdoy: number;
   lng: number;
   lat: number;
   flags: number;
   cell: string;
 }
 
+const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
 export const sightings: Sighting[] = data.sightings.map(([id, year, doy, lat, lng, flags]) => ({
   id,
   year,
   doy,
+  pdoy: isLeap(year) && doy >= 60 ? doy - 1 : doy,
   lat,
   lng,
   flags,

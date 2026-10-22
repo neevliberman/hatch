@@ -21,5 +21,5 @@ export function countdownText(now: number): string {
   if (now >= at(y, onset) && now < at(y, end)) return 'Luna season is on: the first brood is flying somewhere in the Midwest now.';
   const next = now < at(y, onset) ? at(y, onset) : at(y + 1, onset);
   const days = Math.ceil((next - now) / DAY);
-  return `Lunas due in ~${days} days (around ${fmt(next)} in the far south, ${south}°N). Until then, replay a past season.`;
+  return `Lunas due in ~${days} days (they usually start around ${fmt(next)} in the far south, ${south}°N).`;
 }
