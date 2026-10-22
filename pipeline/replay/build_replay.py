@@ -182,14 +182,20 @@ _P3 = {}
 
 
 def p3_loyo(ctx, H, chosen, workers=4):
-    """Leave-one-year-out fits of the chosen P3 model (the same folds as pipeline/fit/run_p3.py)."""
+    """Leave-one-year-out fits of the chosen P3 model (the same folds as pipeline/fit/run_p3.py).
+    Workers read the fold inputs from the module-level _P3, which only works with fork (Linux, the CI and cloud
+    runners this is built on). On macOS/Windows, run with workers=1 or use a Linux box."""
     import multiprocessing as mp
     _P3.update(ctx=ctx, H=H, chosen=chosen)
+    if workers <= 1:
+        return [_p3_fold(int(y)) for y in ctx.years]
     with mp.get_context("fork").Pool(workers) as pool:
         return pool.map(_p3_fold, [int(y) for y in ctx.years])
 
 
 def check_headline(rows, chosen, headline, tol=0.15):
+    # 0.15 d, not ~0: fits are multi-start numerical optimisations, and BLAS/thread differences between machines can
+    # shift a fold's optimum slightly. Anything bigger than that means the model or data changed.
     """Refuse to write unless this run reproduces pipeline/fit/results/headline.json."""
     from fit import evaluate as EV
     models = [chosen, "p1", "cal"]

@@ -281,11 +281,12 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
               (firstDays.length ? `. Middle date of the first wave: ${fmtDoy(year, median)}` : '')
           : `No sightings in this hexagon${mode === TYPICAL ? '' : ' this year'}`,
       );
-      // The window comes from past misses: 8 in 10 real peaks landed this close to the forecast. Last, so the short
-      // hover card (first lines only) and phone layouts keep their size; the pinned card shows it.
+      // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
+      // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
+      // Last, so the short hover card (first lines only) and phone layouts keep their size; the pinned card shows it.
       const pk = data.interval?.peak;
-      if (pk && q50 != null)
-        lines.push(`Peak likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      if (pk && q50 != null && mode !== TYPICAL)
+        lines.push(`Strip's peak likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       if (!cells[i]!.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown faint.');
       return { title: `Luna moth, ${modeLabel(mode)}`, lines };
     },
@@ -300,11 +301,11 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         'Gray dots mean the photo\u2019s location was blurred or rough, so the dot may sit off its true spot.',
         'Faint hexagons have no luna sightings nearby, ever. There is nothing to check the forecast against there.',
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
-        'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. It now runs 0 to 3 days late everywhere.',
-        'A hexagon\u2019s "peak likely" window is as wide as past misses: 8 in 10 real peaks landed inside a window that wide.',
+        'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
+        `For a single year, a hexagon\u2019s card gives a "peak likely" window. It comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
         'When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (about 7 days off, against 7). So it is not ready for places it has never seen.',
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
-        'Our first forecast did no better than each area\u2019s usual date, so we replaced it with this one.',
+        'This version is about as accurate as the last one, with much less south/north lean. Both beat each area\u2019s usual date.',
       ];
       if (yr && yr.n)
         bullets.push(
