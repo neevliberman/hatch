@@ -77,3 +77,15 @@ def test_recover_no_latitude_effect():
     recs = simulate.draw_records(dict(PLANT, beta=0.0, u=np.zeros(inc.shape[1])), spec, lat, inc, E, seed=5)
     f = M.fit(M.prepare(recs, inc, {"all": 239}, spec, E), spec)
     assert abs(f.params["beta"]) < 5
+
+
+def test_cell_sighting_share_matches_band_prediction_for_one_cell():
+    lat, inc, E = simulate.synthetic_world(seed=2)
+    spec = M.SPECS["p3_lat"]
+    p = dict(PLANT, u=np.array([]))
+    for y in range(inc.shape[1]):
+        eprof = E[0, y][None, :]
+        share = M.cell_sighting_share(p, spec, inc[:1, y], lat[:1], [200], eprof)[0]
+        o, pk = M.predict_band(p, spec, inc[:1, y], lat[:1], np.ones(1), 200, eprof)
+        assert int(np.searchsorted(share, 0.1)) == o and int(np.searchsorted(share, 0.5)) == pk
+        assert share[200] == pytest.approx(1.0) and share[201:].min() == pytest.approx(1.0)

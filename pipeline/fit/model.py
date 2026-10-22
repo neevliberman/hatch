@@ -319,6 +319,24 @@ def cell_share(p, spec, inc_rows, lat):
     return np.cumsum(a, axis=-1) / LIFE
 
 
+def cell_sighting_share(p, spec, inc_rows, lat, cut_idx, eprof=None):
+    """Cumulative share (0..1) of a cell's expected first-brood *sightings* by each day: flight share x
+    typical effort, from 1 March to the cell's brood cut-off. This is the quantity the scores test
+    (predict_band is the hex-weighted mix of these), so the map shows what was validated.
+    cut_idx: per-cell last day index. Cells with no expected sightings get all zeros."""
+    lat = np.asarray(lat, float)
+    doy = np.arange(1, inc_rows.shape[1] + 1)
+    dayl = daylength_hours(lat[:, None], doy[None, :]) / 12.0
+    a = flight(p, spec, inc_rows, dayl, lat)
+    a[:, :D0] = 0
+    a[np.arange(a.shape[1])[None, :] > np.asarray(cut_idx)[:, None]] = 0
+    if eprof is not None:
+        a = a * eprof
+    cs = np.cumsum(a, axis=-1)
+    tot = cs[:, -1:]
+    return np.divide(cs, tot, out=np.zeros_like(cs), where=tot > 0)
+
+
 def median_dd(p, spec, lat):
     """Degree-days (base 10) at which half the moths have reached their target, at latitude `lat`
     (for 'photo' this is in photothermal units)."""

@@ -71,8 +71,14 @@ def test_core_cells_sorted_unique():
 @pytest.mark.skipif(not OUT.exists(), reason="output not built")
 def test_output_schema():
     d = json.loads(OUT.read_text())
+    # P2 keys, in order, then the optional P3 additions (backwards compatible)
     assert list(d) == ["version", "generated", "species", "years", "quantiles", "cells", "seen",
-                       "forecast", "bands", "scores", "sightings", "counts", "licences"]
+                       "forecast", "bands", "scores", "sightings", "counts", "licences",
+                       "model", "interval", "scorecard"]
+    assert d["version"] == 1 and d["model"]["id"].startswith("p3")
+    lo, hi = d["interval"]["peak"]
+    assert d["interval"]["level"] == 0.8 and lo < 0 < hi
+    assert [x["band"] for x in d["scorecard"]] == ["37-39", "39-41", "41-43", "43-45", "45-49"]
     n = len(d["cells"])
     assert d["years"] == list(range(2015, 2026)) and d["quantiles"] == [0.05, 0.25, 0.5, 0.75, 0.95]
     assert len(d["seen"]) == n and set(d["seen"]) <= {0, 1}
@@ -85,7 +91,7 @@ def test_output_schema():
             assert v == sorted(v) and all(1 <= x <= 300 for x in v)
     assert [x["label"] for x in d["bands"]] == ["37-39", "39-41", "41-43", "43-45", "45-49"]
     assert set(d["scores"][0]) == {"band", "year", "n", "obs_onset", "obs_peak",
-                                   "heat_onset", "heat_peak", "cal_onset", "cal_peak"}
+                                   "heat_onset", "heat_peak", "cal_onset", "cal_peak", "p1_onset", "p1_peak"}
     s = d["sightings"]
     assert all(len(x) == 6 and 0 <= x[5] <= 3 and 60 <= x[2] <= 300 for x in s)
     assert [(x[1], x[2]) for x in s] == sorted((x[1], x[2]) for x in s)
