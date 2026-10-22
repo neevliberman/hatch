@@ -82,7 +82,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     const tag = `${phone} ${orient}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const ctx = await browsers[engine].newContext({
-      viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: engine === 'chromium',
+      viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true,
       geolocation: { latitude: 41.88, longitude: -87.63 }, permissions: ['geolocation'],
     });
     const page = await ctx.newPage();
@@ -105,10 +105,14 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     await page.waitForTimeout(2500);
     await shot('1-first-visit');
     if (!(await page.locator('#drawer.open').count())) fail('drawer did not open on first visit');
+    // Tap empty map: left of a side drawer, or between the top panels and a bottom sheet.
     const box = await page.locator('#drawer').boundingBox();
-    await page.touchscreen.tap(box.x > 40 ? box.x / 2 : width / 2, box.x > 40 ? height / 2 : Math.max(4, box.y / 2));
+    const top = await page.evaluate(() => document.querySelector('#sub').getBoundingClientRect().bottom);
+    const bottom = box.x > 40 ? (await page.locator('#bottom').boundingBox()).y : box.y;
+    await page.touchscreen.tap(box.x > 40 ? box.x / 2 : width / 2, (top + bottom) / 2);
     await page.waitForTimeout(400);
     if (await page.locator('#drawer.open').count()) fail('tapping outside the drawer did not close it');
+    if (await page.locator('#probe').isVisible()) fail('the tap that closed the drawer also opened a card');
 
     const a = await page.evaluate(audit);
     await shot('2-map');

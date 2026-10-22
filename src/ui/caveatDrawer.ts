@@ -38,11 +38,26 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   };
 
   btn.addEventListener('click', () => toggle(!drawer.classList.contains('open')));
-  // On a phone the drawer covers most of the screen, so a tap anywhere outside it closes it, like a native sheet.
+  // On a phone the drawer covers most of the screen, so a tap outside it closes it, like a native sheet. That tap
+  // stops there (no card pinned underneath). Desktop keeps the side panel open while you scrub.
+  const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
+  let swallow = false;
   document.addEventListener('pointerdown', (e) => {
-    const t = e.target as Node;
-    if (drawer.classList.contains('open') && !drawer.contains(t) && !btn.contains(t) && !(t as Element).closest?.('#why')) toggle(false);
-  });
+    const t = e.target as Element;
+    if (!phone.matches || !drawer.classList.contains('open') || drawer.contains(t) || btn.contains(t) || t.closest?.('#why')) return;
+    toggle(false);
+    swallow = true;
+    setTimeout(() => (swallow = false), 600); // a tap that never becomes a click must not eat the next real one
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+  for (const type of ['pointerup', 'click'] as const)
+    document.addEventListener(type, (e) => {
+      if (!swallow) return;
+      e.stopPropagation();
+      e.preventDefault();
+      if (type === 'click') swallow = false;
+    }, true);
   window.addEventListener('keydown', (e) => e.key === 'Escape' && toggle(false));
   registry.subscribe(render);
   render();

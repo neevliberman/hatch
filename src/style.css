@@ -37,7 +37,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #info-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 20px; }
 
 #top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
-  align-items: center; gap: 8px; padding: 10px var(--gr) 0 var(--gl); pointer-events: none; }
+  align-items: center; gap: 8px; padding: max(10px, env(safe-area-inset-top)) var(--gr) 0 var(--gl); pointer-events: none; }
 #top > * { pointer-events: auto; }
 .brand { font-weight: 700; font-size: 18px; letter-spacing: 0.02em; display: flex; align-items: baseline; gap: 8px;
   padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; flex: none; }
@@ -45,7 +45,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);
   align-self: center; }
 
-#sub { position: absolute; top: 64px; left: var(--gl); right: var(--gr); pointer-events: none;
+#sub { position: absolute; top: calc(64px + env(safe-area-inset-top)); left: var(--gl); right: var(--gr); pointer-events: none;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 #layers { pointer-events: none; min-width: 0; }
 .season { margin-left: auto; min-width: 0; display: flex; }
@@ -146,7 +146,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 @media (max-width: 700px) {
   :root { --gutter: 12px; }
   .brand small { display: none; }
-  #sub { top: 62px; }
+  #sub { top: calc(62px + env(safe-area-inset-top)); }
   #layers { display: none; } /* one layer: the season menu and honesty line already name it */
   #honesty, #countdown { font-size: 12px; padding: 4px 8px; }
   .layer { align-items: flex-start; flex-wrap: wrap; row-gap: 4px; }
@@ -174,18 +174,22 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 /* Phones on their side: about 280-430px tall, often wider than 700px. Squeeze every panel into single rows. */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --gutter: 12px; }
-  #top { padding-top: 6px; }
+  #top { padding-top: max(6px, env(safe-area-inset-top)); }
   .brand { padding: 4px 10px; font-size: 16px; }
   .brand small { display: none; }
   .icon-btn, .season select { height: 40px; }
-  #sub { top: 52px; flex-direction: row; align-items: center; flex-wrap: nowrap; }
+  #sub { top: calc(52px + env(safe-area-inset-top)); flex-direction: row; align-items: center; flex-wrap: nowrap; }
   #layers { display: none; }
-  #honesty, #countdown { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; padding: 4px 8px; }
-  #honesty { display: flex; align-items: center; } /* the text gets the ellipsis; "why?" always stays visible */
-  #honesty span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #honesty, #countdown { flex: 0 1 auto; min-width: 0; font-size: 12px; padding: 4px 8px; line-height: 1.3; }
+  #countdown { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Two lines, not an ellipsis: the tail ("not yet confirmed") is the caveat that matters. "why?" always stays visible. */
+  #honesty { display: flex; align-items: center; flex-shrink: 0.5; }
+  #honesty span { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   #why { flex: none; }
   #actions { flex: none; flex-wrap: nowrap; }
-  #action-msg { display: none; }
+  #actions { position: relative; }
+  /* No room in the row: the status line drops below it, right-aligned, still announced. */
+  #action-msg { position: absolute; top: calc(100% + 6px); right: 0; white-space: nowrap; }
   .pill { height: 36px; }
   .season select { font-size: 16px; }
   #floats { flex-direction: row; align-items: flex-end; padding-bottom: 6px; }
@@ -201,6 +205,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .track { flex: 1; margin-top: 0; padding-bottom: 0; }
   .track input[type=range] { height: 30px; }
   .track .ticks { position: relative; bottom: auto; height: 16px; margin-top: -2px; }
+  .now { top: -12px; } /* the "now" flag would poke up into the legend row; keep just its line */
+  .now b { visibility: hidden; }
   #drawer { top: 0; height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
     padding-right: var(--gr); transform: translateX(104%); }
   #drawer.open { transform: none; }
