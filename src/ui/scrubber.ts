@@ -94,7 +94,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const onButton = t instanceof HTMLButtonElement;
     const big = e.shiftKey ? 7 : 1;
     // On the slider itself, plain arrows are the slider's own step: let the browser move it.
-    if (onRange && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    if (onRange && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return time.pause();
     switch (e.key) {
       case 'ArrowLeft':
         time.pause();

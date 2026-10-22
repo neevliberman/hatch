@@ -243,7 +243,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         const s = picked.object as Sighting;
         const lines = [
           s.flags & SECOND_BROOD
-            ? 'Seen after this area\u2019s cut-off (late June or early July), so counted as the second wave. The map does not forecast this wave.'
+            ? 'Seen after late June or early July here, so counted as the second wave. The map does not forecast this wave.'
             : 'First wave of the year (the one the map forecasts)',
         ];
         if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is gray');
@@ -297,7 +297,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The forecast runs a few days early in the south and late in the north. Northern moths may need less warmth. We don\u2019t know why yet.',
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
-        'Our first forecast did no better than each area\u2019s usual date, so we replaced it with this one. Because we picked it after seeing those results, it still has to pass a test on places and seasons it hasn\u2019t seen.',
+        'Our first forecast did no better than each area\u2019s usual date, so we replaced it with this one.',
       ];
       if (yr && yr.n)
         bullets.push(
@@ -322,9 +322,9 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
         accent: css(MOON),
         hook: 'This map predicts when luna moths come out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how close it gets.',
         steps: [
-          { title: 'Warm days count', text: 'Starting March 1, every day warmer than 50 °F (10 °C) adds to a running total. Hotter days add more.' },
+          { title: 'Warm days count', text: 'Starting March 1, every day warmer than 50 °F (10 °C) adds to a running total. Hotter days add more, up to 86 °F.' },
           { title: 'The jar fills', text: 'In past years, moths came out once the total reached about this line.' },
-          { title: 'Moths fly', text: 'So a warm spring means early moths, and a cold spring means late ones.' },
+          { title: 'Moths come out', text: 'So a warm spring means early moths, and a cold spring means late ones.' },
         ],
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
         spot: (lngLat, t) => spotStory(lngLat, t),
@@ -337,7 +337,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
                 (sc.heat < sc.calendar ? 'So far the heat forecast is closer. ' : 'This time the usual date did as well or better. ') +
                 (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'It is not proven yet: we picked this version after a first try did no better than the usual date, so it still has to pass a test on places and seasons it hasn\u2019t seen.',
+            'Not proven yet. We picked this version after a first try did no better than the usual date, so it still has to pass a test on places and seasons it hasn\u2019t seen.',
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },

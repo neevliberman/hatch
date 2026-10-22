@@ -84,7 +84,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
     ${
       score
         ? `<div class="ex-score" data-why><div class="ex-h">${esc(score.title)}</div>
-        <div class="ex-sub">Average days off. A shorter bar is better. The usual date is the average from past years.</div>
+        <div class="ex-sub">Average days off. A shorter bar is better. The usual date is the average of the other years.</div>
         ${score.bars
           .map(
             (x) => `<div class="bar-l"><span>${esc(x.label)}</span><i class="${x.best ? 'best' : ''}" style="width:${((x.days / max) * 100).toFixed(1)}%"></i>

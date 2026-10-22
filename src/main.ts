@@ -111,10 +111,11 @@ function start() {
   // Season picker: switching keeps the cursor on the same calendar day.
   const picker = $<HTMLSelectElement>('season');
   picker.innerHTML = [TYPICAL, ...[...years].reverse()]
-    .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : m} (${firstBroodCount(m).toLocaleString()} moths)</option>`)
+    // The count is first-wave moths seen; "All years" goes without it so the closed menu fits a small phone.
+    .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : `${m} (${firstBroodCount(m).toLocaleString()} moths)`}</option>`)
     .join('');
   picker.value = initialMode;
-  picker.title = 'Season to replay (first-wave moths seen, in brackets)';
+  picker.title = `Season to replay (first-wave moths seen, in parentheses; ${firstBroodCount(TYPICAL).toLocaleString()} in all years)`;
   picker.addEventListener('change', () => {
     const now = new Date(time.cursor);
     luna.setMode(picker.value);
@@ -256,8 +257,11 @@ function start() {
   } catch {
     /* storage blocked: skip the hint rather than repeat it every visit */
   }
-  if (!seen && !params.has('noauto')) for (const id of ['info-btn', 't-play']) $(id).classList.add('hint');
-  for (const id of ['info-btn', 't-play']) $(id).addEventListener('click', () => ['info-btn', 't-play'].forEach((x) => $(x).classList.remove('hint')));
+  const hinted = ['info-btn', 't-play', 'why'];
+  if (!seen && !params.has('noauto') && !params.has('caveats')) for (const id of hinted.slice(0, 2)) $(id).classList.add('hint');
+  const clearHint = () => hinted.slice(0, 2).forEach((x) => $(x).classList.remove('hint'));
+  for (const id of hinted) $(id).addEventListener('click', clearHint);
+  time.subscribe(() => time.playing && clearHint());
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
