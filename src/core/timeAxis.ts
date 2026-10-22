@@ -13,6 +13,8 @@ export interface TimeSpec {
   stepMs: number;
   /** Where the cursor starts (defaults to start). */
   initial?: number;
+  /** Custom date label, e.g. "Jun 10 · typical year" when the year itself means nothing. */
+  label?: (ms: number) => string;
 }
 
 /**
@@ -29,6 +31,7 @@ export class TimeAxis {
   end = 0;
   stepMs = DAY;
   cursor = 0;
+  label: (ms: number) => string = (ms) => formatTime(ms, this.stepMs);
   /** Real "now" (injectable for tests). Shown as a marker when it falls inside the range. */
   readonly now: number;
   playing = false;
@@ -50,6 +53,7 @@ export class TimeAxis {
     this.start = spec.start;
     this.end = spec.end;
     this.stepMs = spec.stepMs;
+    this.label = spec.label ?? ((ms) => formatTime(ms, this.stepMs));
     this.cursor = this.snap(spec.initial ?? spec.start);
     this.emit();
   }

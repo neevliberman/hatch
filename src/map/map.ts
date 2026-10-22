@@ -6,6 +6,12 @@ import type { LayerRegistry } from '../core/registry';
 import type { TimeAxis } from '../core/timeAxis';
 import { basemapLayers, theme } from './basemap';
 
+export interface ProbeHit {
+  cell: string;
+  lngLat: [number, number];
+  picked?: { layerId: string; object: unknown };
+}
+
 export interface MapHandle {
   /** Re-render layers (call when time or layer set changes). */
   refresh(): void;
@@ -17,8 +23,8 @@ interface Opts {
   container: HTMLDivElement;
   registry: LayerRegistry;
   time: TimeAxis;
-  /** cell = H3 id under the pointer (null if none); lngLat is where; clicked distinguishes tap from hover. */
-  onProbe: (hit: { cell: string; lngLat: [number, number] } | null, clicked: boolean) => void;
+  /** cell = H3 id under the pointer (null if none); lngLat is where; picked = the data object hit; clicked distinguishes tap from hover. */
+  onProbe: (hit: ProbeHit | null, clicked: boolean) => void;
   padding: () => { top: number; bottom: number };
 }
 
@@ -37,15 +43,21 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
   const initial = fitState(padding());
   let zoom = initial.zoom;
 
-  const hit = (info: PickingInfo) => {
+  const hit = (info: PickingInfo): ProbeHit | null => {
     if (!info.object || !info.coordinate) return null;
     const [lng, lat] = info.coordinate as [number, number];
-    return { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
+    return {
+      cell: latLngToCell(lat, lng, GRID_RES),
+      lngLat: [lng, lat],
+      picked: info.layer ? { layerId: info.layer.id, object: info.object } : undefined,
+    };
   };
 
   const deck = new Deck({
     parent: container,
     views: new MapView({ repeat: false }),
+    // Retina is plenty; 3x phones would triple the fill cost for no visible gain.
+    useDevicePixels: Math.min(window.devicePixelRatio || 1, 2),
     initialViewState: initial,
     // No rotate/tilt: flat data map. Keyboard off so arrow keys drive the time scrubber.
     controller: { dragRotate: false, touchRotate: false, keyboard: false, doubleClickZoom: true },

@@ -1,4 +1,4 @@
-import { formatTime, TimeAxis } from '../core/timeAxis';
+import { TimeAxis } from '../core/timeAxis';
 
 /** Pick sensible tick marks for any range: years, months, days or hours. */
 function makeTicks(start: number, end: number): { at: number; label: string }[] {
@@ -61,7 +61,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     range.max = String(time.steps);
     range.value = String(time.stepIndex);
     range.style.setProperty('--pct', `${(time.stepIndex / Math.max(1, time.steps)) * 100}%`);
-    dateEl.textContent = formatTime(time.cursor, time.stepMs);
+    dateEl.textContent = time.label(time.cursor);
     doyEl.textContent = time.cursor > time.now ? 'after today' : '';
     if (rangeKey !== `${time.start}|${time.end}`) {
       rangeKey = `${time.start}|${time.end}`;

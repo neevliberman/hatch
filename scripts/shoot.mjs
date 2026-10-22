@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 
 const out = process.argv[2] ?? 'screenshots';
-const prefix = process.argv[3] ?? 'p0';
+const prefix = process.argv[3] ?? 'p2';
 const file = pathToFileURL(resolve(process.env.DIST ?? 'dist-single/index.html')).href;
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM || undefined,
@@ -39,28 +39,45 @@ const measure = async (b64) => {
   return { distinct: counts.size, dominant: Math.max(...counts.values()) / total };
 };
 
+// Each case: [tag, query]. ?noauto stops the once-per-browser drawer from covering the map.
+const cases = [
+  ['default', '?noauto'], // all years pooled, mid-June
+  ['2025-0610', '?year=2025&date=06-10&noauto'],
+  ['typical-0601', '?year=typical&date=06-01&noauto'], // unknown ?year falls back to pooled
+  ['2021-0520', '?year=2021&date=05-20&noauto'],
+  ['offseason', '?today=2027-01-15'], // drawer auto-opens on a first visit; countdown visible
+];
+
 for (const [name, width, height, mobile] of shots) {
-  for (const date of ['2026-04-20', '2026-07-05']) {
-    const tag = `${name} ${date}`;
+  for (const [label, query] of cases) {
+    const tag = `${name} ${label}`;
     const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: mobile ? 2 : 1, hasTouch: mobile, isMobile: mobile });
     const page = await ctx.newPage();
     page.on('request', (r) => !/^(file|data|blob):/.test(r.url()) && problems.push(`${tag}: external request ${r.url()}`));
     page.on('console', (m) => m.type() === 'error' && problems.push(`${tag}: console error: ${m.text()}`));
     page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
-    await page.goto(`${file}?date=${date}`);
+    await page.goto(`${file}${query}`);
     await page.waitForTimeout(2500);
-    const png = await page.screenshot({ path: `${out}/${prefix}-${name}-${date}.png` });
+    const png = await page.screenshot({ path: `${out}/${prefix}-${name}-${label}.png` });
+    if (label === 'offseason') {
+      if (!(await page.locator('#drawer.open').count())) problems.push(`${tag}: drawer did not auto-open on first visit`);
+      const cd = await page.locator('#countdown').textContent();
+      if (!/Lunas due in ~\d+ days/.test(cd ?? '')) problems.push(`${tag}: no off-season countdown: ${cd}`);
+      await ctx.close();
+      continue;
+    }
     const m = await page.evaluate(measure, png.toString('base64'));
     console.log(`${tag}: centre colours=${m.distinct}, dominant=${(m.dominant * 100).toFixed(0)}%`);
     if (m.distinct < 4 || m.dominant > 0.97) problems.push(`${tag}: map looks blank (single colour): ${JSON.stringify(m)}`);
-    if (date === '2026-07-05') {
-      await page.mouse.move(width * 0.5, height * 0.42);
-      if (mobile) await page.touchscreen.tap(width * 0.5, height * 0.42);
+    if (label === 'default') {
+      if (mobile) await page.touchscreen.tap(width * 0.5, height * 0.5);
+      else await page.mouse.click(width * 0.5, height * 0.5);
       await page.waitForTimeout(500);
-      await page.screenshot({ path: `${out}/${prefix}-${name}-${date}-probe.png` });
+      if (await page.locator('#probe').isHidden()) problems.push(`${tag}: tapping the map showed no probe card`);
+      await page.screenshot({ path: `${out}/${prefix}-${name}-${label}-probe.png` });
       await page.click('#info-btn');
       await page.waitForTimeout(500);
-      await page.screenshot({ path: `${out}/${prefix}-${name}-caveats.png` });
+      await page.screenshot({ path: `${out}/${prefix}-${name}-drawer.png` });
     }
     await ctx.close();
   }

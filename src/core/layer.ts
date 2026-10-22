@@ -17,12 +17,16 @@ export interface CaveatCard {
 export interface ProbeCard {
   title: string;
   lines: string[];
+  /** Optional outbound link (e.g. the iNaturalist photo). Linked, never rehosted. */
+  link?: { href: string; label: string };
 }
 
 export interface LegendSpec {
   title: string;
-  /** Colour stops from low to high. */
-  stops: { color: string; label: string }[];
+  /** Colour stops from low to high, drawn as a ramp. */
+  stops?: { color: string; label: string }[];
+  /** Discrete keys, drawn as labelled swatches (hex) or glowing dots (dot). */
+  items?: { color: string; label: string; shape: 'hex' | 'dot' }[];
   note?: string;
 }
 
@@ -38,6 +42,8 @@ export interface HatchLayer {
   /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
   legend(): LegendSpec;
-  /** "What's here" for hover/tap. */
-  probe?(lngLat: [number, number], t: number): ProbeCard;
+  /** "What's here" for hover/tap. `picked` is the data object under the pointer, if it belongs to this layer. */
+  probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }): ProbeCard | null;
+  /** Data sources to credit, rendered in the drawer. */
+  credits?(): string[];
 }

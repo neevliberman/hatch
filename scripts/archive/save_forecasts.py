@@ -4,12 +4,11 @@
 Usage: save_forecasts.py OUT_DIR
 Writes OUT_DIR/<point>.json. Exit 0 if at least one point saved, 1 if all failed.
 NWS keeps no old forecasts, so every night not saved is a backtest lost for good.
-UNTESTED: written without network access to api.weather.gov.
 """
 import json, sys, time, urllib.request, urllib.error
 from pathlib import Path
 
-UA = "hatch-forecast-archive (github.com/neevliberman/hatch; neevliberman@gmail.com)"
+UA = "hatch-forecast-archive (https://github.com/neevliberman/hatch/issues)"  # NWS wants a contact; a URL, not an email, since the repo is public
 POINTS = {  # name: (lat, lon), spread over WI IL MN IA MI IN OH
     "wi-milwaukee": (43.04, -87.91), "wi-madison": (43.07, -89.40), "wi-eauclaire": (44.81, -91.50), "wi-rhinelander": (45.64, -89.41),
     "il-chicago": (41.88, -87.63), "il-peoria": (40.69, -89.59), "il-carbondale": (37.73, -89.22),
