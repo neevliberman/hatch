@@ -89,3 +89,44 @@ def test_cell_sighting_share_matches_band_prediction_for_one_cell():
         o, pk = M.predict_band(p, spec, inc[:1, y], lat[:1], np.ones(1), 200, eprof)
         assert int(np.searchsorted(share, 0.1)) == o and int(np.searchsorted(share, 0.5)) == pk
         assert share[200] == pytest.approx(1.0) and share[201:].min() == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------- P3.1: warmth targets at or above zero
+def test_p31_bounds_keep_location_and_skew_nonnegative():
+    spec = M.SPECS["p31_flat"]
+    assert spec.mu == "flat" and spec.positive
+    assert M.bounds_for("mu0", spec)[0] == 0 and M.bounds_for("alpha", spec)[0] == 0
+    assert M.bounds_for("mu0", M.SPECS["p3_flat"])[0] < 0          # P3 itself is unchanged
+
+
+def test_targets_below_zero_never_fly():
+    """The likelihood puts zero weight on targets below 0 DD: the flight curve equals the curve conditioned on
+    target > 0, up to a per-place constant (which the per-place-year renormalisation cancels). So a fit gains
+    nothing from mass below 0, which is why P3.1 bounds the location instead."""
+    lat, inc, E = simulate.synthetic_world(seed=4)
+    spec = M.SPECS["p3_flat"]
+    p = {"mu0": -300.0, "beta": 0.0, "gamma": 0.0, "log_sigma": np.log(400), "alpha": 8.0, "u": np.array([])}
+    rows = inc[:, 0].astype(float)
+    a = M.flight(p, spec, rows, np.ones_like(rows), lat)
+    sig = np.exp(p["log_sigma"])
+    C = np.cumsum(rows, -1)
+    Cp = np.concatenate([np.zeros((len(lat), M.LIFE)), C], -1)
+    f0 = M.sn_cdf_exact(np.array(-p["mu0"] / sig), p["alpha"])
+    Ft = np.clip((M.sn_cdf((Cp - p["mu0"]) / sig, p["alpha"]) - f0) / (1 - f0), 0, 1)   # conditioned on target > 0
+    at = Ft[:, M.LIFE:] - Ft[:, :-M.LIFE]
+    assert np.allclose(a, at * (1 - f0), atol=1e-9)
+    assert np.allclose(a[:, :M.D0], 0)                                # nothing flies before 1 March
+
+
+def test_p31_fit_cannot_put_median_target_below_zero():
+    """Sightings drawn from P3's degenerate fit (location -500, median target ~ -225 DD): P3.1 must still
+    return a location >= 0 and a positive median target."""
+    lat, inc, E = simulate.synthetic_world(seed=6, n_hex=8, n_years=4)
+    bad = {"mu0": -500.0, "beta": 0.0, "gamma": 0.0, "log_sigma": np.log(480), "alpha": 12.0,
+           "u": np.zeros(inc.shape[1])}
+    recs = simulate.draw_records(bad, M.SPECS["p3_flat"], lat, inc, E, n_per=30, seed=6)
+    spec = M.SPECS["p31_flat"]
+    f = M.fit(M.prepare(recs, inc, {"all": 239}, spec, E), spec)
+    assert f.params["mu0"] >= 0 and f.params["alpha"] >= 0
+    assert float(M.median_dd(f.params, spec, 42.0)) > 0
+    assert float(M.median_dd(bad, M.SPECS["p3_flat"], 42.0)) < 0   # the unbounded model's median can go negative
