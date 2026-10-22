@@ -35,7 +35,12 @@ function start() {
   let hit: ProbeHit | null = null;
   let pinned = false;
   const probeEl = $('probe');
-  const updateProbe = () => showProbe(probeEl, registry, hit, time.cursor);
+  // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
+  let followSpot = (_t: number) => {};
+  const updateProbe = () => {
+    showProbe(probeEl, registry, hit, time.cursor);
+    followSpot(time.cursor);
+  };
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
@@ -98,6 +103,7 @@ function start() {
   mountLayerList($('layers'), registry);
   mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
+  followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t);
   $('why').addEventListener('click', () => toggleDrawer(true));
 
   // Keep the address bar in step with the view, so any link copied or shared reopens the same season and day.
