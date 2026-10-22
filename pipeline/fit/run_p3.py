@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fit import HERE, context, evaluate as EV, model as M  # noqa: E402
 
 RESULTS = HERE / "results"
+CACHE = HERE.parents[1] / "notebooks" / "data" / "p3_cache"   # gitignored; lets a killed run resume
 FIGS = HERE / "figures"
 CTX = None
 H = None
@@ -56,8 +57,28 @@ def _fit_json(f):
     return {"spec": f.spec.name, "params": p, "nll": f.nll, "n": f.n, "converged": f.converged}
 
 
+def _cached(name, fn):
+    """Run fn() once and keep its result in CACHE/name.pkl (delete the folder to start over)."""
+    import pickle
+    CACHE.mkdir(parents=True, exist_ok=True)
+    f = CACHE / f"{name}.pkl"
+    if f.exists():
+        print(f"[cache] {name}", flush=True)
+        return pickle.loads(f.read_bytes())
+    out = fn()
+    f.write_bytes(pickle.dumps(out))
+    return out
+
+
+def _full_fit(name):
+    rec = CTX.rec
+    cuts = EV.cutoffs(rec)
+    return _fit_json(EV.fit_spec(EV.first_brood(rec, cuts), CTX, cuts, M.SPECS[name]))
+
+
 def _boot(args):
-    kind, seed, name = args
+    """One bootstrap refit, warm-started from the all-data fit (already in the right basin)."""
+    kind, seed, name, start = args
     rng = np.random.default_rng(seed)
     rec = CTX.rec
     if kind == "years":
@@ -70,7 +91,7 @@ def _boot(args):
     b = pd.concat(parts, ignore_index=True)
     cuts = EV.cutoffs(b)
     spec = M.SPECS[name]
-    f = EV.fit_spec(EV.first_brood(b, cuts), CTX, cuts, spec)
+    f = EV.fit_spec(EV.first_brood(b, cuts), CTX, cuts, spec, start=start)
     out = {"kind": kind, "seed": seed, **{k: float(v) for k, v in f.params.items() if k != "u"}}
     for lt in (38.0, 42.0, 46.0):
         out[f"median_dd_{int(lt)}"] = float(M.median_dd(f.params, spec, lt))
@@ -90,7 +111,7 @@ def main():
     pool = mp.get_context("fork").Pool(a.workers)
 
     # ---- 1. choose lat vs photo (IL/IN/OH only, held-out log-likelihood)
-    sel = pool.map(_select, years)
+    sel = _cached("select", lambda: pool.map(_select, years))
     ll = {n: sum(s["loglik"][n][0] for s in sel) for n in ("p3_lat", "p3_photo", "p3_flat")}
     nrec = sum(s["loglik"]["p3_lat"][1] for s in sel)
     chosen = max(("p3_lat", "p3_photo"), key=ll.get)
@@ -99,13 +120,18 @@ def main():
     names = [chosen] + [n for n in M.SPECS if n != chosen]
 
     # ---- 2. LOYO, all states; 3. spatial holdout
-    hold_async = pool.apply_async(_holdout, (names,))
-    loyo = pool.map(_loyo, [(y, names) for y in years])
-    hold = hold_async.get()
+    def _fits():
+        hold_async = pool.apply_async(_holdout, (names,))
+        loyo = pool.map(_loyo, [(y, names) for y in years])
+        return loyo, hold_async.get()
+    loyo, hold = _cached("folds", _fits)
     print(f"[fits] done {time.time()-t0:.0f}s", flush=True)
 
     # ---- 4. bootstrap refits (parameter intervals)
-    boots = pool.map(_boot, [(k, s, chosen) for k in ("years", "observers") for s in range(a.boot_refits)])
+    full = _cached("full_fit", lambda: _full_fit(chosen))
+    start = {k: v for k, v in full["params"].items() if k != "u"}
+    boots = _cached(f"boots{a.boot_refits}", lambda: pool.map(
+        _boot, [(k, s, chosen, start) for k in ("years", "observers") for s in range(a.boot_refits)]))
     pool.close()
 
     # ---- 5. scores
@@ -146,6 +172,7 @@ def main():
         "loyo_residual_q10_q90": resid,
         "param_intervals": pci,
         "holdout_params": hold["fits"],
+        "all_data_fit": full,
         "seconds": round(time.time() - t0),
     }
     (RESULTS / "headline.json").write_text(json.dumps(headline, indent=1, default=float))

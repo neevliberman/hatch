@@ -42,6 +42,7 @@ def bias_by_band(d, chosen, path):
                 ax.text(xi, vi + (0.3 if vi >= 0 else -0.3), f"{vi:+.1f}", ha="center",
                         va="bottom" if vi >= 0 else "top", fontsize=8, color=INK)
         ax.axhline(0, color=INK, lw=1)
+        ax.margins(y=0.15)
         ax.set_xticks(x, [f"{b}°N" for b in bands])
         ax.set_title(title, fontsize=10, color=INK, loc="left")
     axes[0].set_ylabel("Forecast minus real (days)\nbelow 0 = forecast too early", fontsize=9, color=MUTED)
@@ -59,7 +60,8 @@ def predicted_vs_real(d, hd, chosen, path):
               (axes[1], hd, ["cal", "cal_lat", "p1", chosen], "Spatial holdout: learned IL/IN/OH, guessed WI/MN"))
     for ax, df, ms, title in panels:
         _style(ax)
-        lo, hi = df.peak.min() - 12, df.peak.max() + 12
+        allv = np.concatenate([df.peak.to_numpy()] + [df[f"{m}_peak"].to_numpy(float) for m in ms])
+        lo, hi = np.nanmin(allv) - 6, np.nanmax(allv) + 6
         ax.plot([lo, hi], [lo, hi], color=MUTED, lw=1, ls="--")
         for m in ms:
             key = "p3" if m == chosen else m
@@ -73,12 +75,17 @@ def predicted_vs_real(d, hd, chosen, path):
         ax.set_xlabel("Real peak", fontsize=9, color=MUTED)
         ax.set_title(title, fontsize=10, color=INK, loc="left")
     axes[0].set_ylabel("Forecast peak", fontsize=9, color=MUTED)
-    axes[1].legend(frameon=False, fontsize=8, loc="upper left")
+    axes[1].legend(frameon=False, fontsize=8, loc="lower right")
     fig.suptitle("Each dot is one latitude band in one year; on the dashed line = perfect", fontsize=11,
                  color=INK, x=0.01, ha="left")
     fig.tight_layout()
     fig.savefig(path, dpi=150, facecolor=SURFACE)
     plt.close(fig)
+
+
+def from_results(results, out, chosen):
+    import pandas as pd
+    make_all(pd.read_csv(results / "loyo_rows.csv"), pd.read_csv(results / "holdout_rows.csv"), chosen, out)
 
 
 def make_all(d, hd, chosen, out):
