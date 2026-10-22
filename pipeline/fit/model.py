@@ -243,12 +243,7 @@ def _start(spec, P):
     return x
 
 
-def fit(P: Prepared, spec: Spec, start=None, maxiter=500):
-    """Maximum (penalised) likelihood. Models with a latitude or daylength term start from the
-    'flat' fit (from a cold start the daylength model can stall in a poor local optimum)."""
-    if start is None and spec.mu != "flat":
-        f0 = fit(P, replace(spec, mu="flat"), maxiter=maxiter)
-        start = {k: v for k, v in f0.params.items() if k != "u"}
+def _fit_from(P, spec, start, maxiter):
     names = param_names(spec, P.n_years)
     s = _start(spec, P)
     if start:
@@ -258,6 +253,28 @@ def fit(P: Prepared, spec: Spec, start=None, maxiter=500):
     res = optimize.minimize(nll, x0, args=(names, spec, P), method="L-BFGS-B", bounds=bounds,
                             options={"maxiter": maxiter, "maxfun": 50000})
     return Fit(spec, unpack(res.x, names), names, res.x, float(res.fun), len(P.rg), bool(res.success))
+
+
+def fit(P: Prepared, spec: Spec, start=None, maxiter=500):
+    """Maximum (penalised) likelihood, best of several starts.
+
+    The likelihood has two basins: a strongly skewed curve (alpha ~ 10) and a wide, nearly
+    symmetric one. A single start can stall in the worse basin (it did in the first P3 run,
+    see FROZEN_P3.md change log), so the fit starts from both and keeps the lower value.
+    Models with a latitude or daylength term also start from the 'flat' fit.
+    """
+    if start is not None:
+        return _fit_from(P, spec, start, maxiter)
+    starts = [None]
+    if spec.skew:
+        C = np.cumsum(P.inc, 1)[P.rg, P.rk]
+        lo = float(np.percentile(C, 10))
+        starts += [{"alpha": a, "log_sigma": np.log(200.0), "mu0": lo} for a in (10.0, 0.5)]
+    if spec.mu != "flat":
+        f0 = fit(P, replace(spec, mu="flat"), maxiter=maxiter)
+        starts.append({k: v for k, v in f0.params.items() if k != "u"})
+    fits = [_fit_from(P, spec, st, maxiter) for st in starts]
+    return min(fits, key=lambda f: f.nll)
 
 
 def heldout_loglik(p, spec, P):
