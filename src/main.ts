@@ -49,6 +49,7 @@ function start() {
         const same = pinned && h !== null && hit !== null && h.cell === hit.cell && h.picked?.object === hit.picked?.object;
         pinned = h !== null && !same;
         hit = pinned ? h : null;
+        map.setMarker(null); // any tap replaces the "My area" pin
       } else if (!pinned) hit = h;
       updateProbe();
     },
@@ -80,6 +81,7 @@ function start() {
     luna.setMode(picker.value);
     hit = null;
     pinned = false;
+    map.setMarker(null);
     $('season-name').textContent = modeLabel(picker.value);
     registry.setTime(luna.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
   });
@@ -102,10 +104,14 @@ function start() {
     q.delete('today');
     return `${location.pathname}?${q}`;
   };
+  // Throttled, not debounced: playback updates every frame, and the address bar should still keep up.
   let urlTimer = 0;
   const syncUrl = () => {
-    clearTimeout(urlTimer);
-    urlTimer = window.setTimeout(() => history.replaceState(null, '', viewUrl()), 300);
+    if (urlTimer) return;
+    urlTimer = window.setTimeout(() => {
+      urlTimer = 0;
+      history.replaceState(null, '', viewUrl());
+    }, 400);
   };
   time.subscribe(syncUrl);
   picker.addEventListener('change', syncUrl);
@@ -127,18 +133,25 @@ function start() {
         say('Link copied');
       }
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') say(url);
+      if ((e as Error).name !== 'AbortError') say('Could not share: copy the address bar instead');
     }
   });
 
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
     if (!navigator.geolocation) return say('Location is not available in this browser');
+    const btn = $<HTMLButtonElement>('locate');
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    const done = () => {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+    };
     say('Finding you…');
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        done();
         const you: [number, number] = [coords.longitude, coords.latitude];
-        map.setMarker(you);
         // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so
         // fall back to the nearest land hex within two rings.
         const ring = gridDisk(latLngToCell(coords.latitude, coords.longitude, GRID_RES), 2)
@@ -147,18 +160,20 @@ function start() {
             return { cell: c, lngLat: [lng, lat] as [number, number], d: (lat - coords.latitude) ** 2 + (lng - coords.longitude) ** 2 };
           })
           .sort((a, b) => a.d - b.d);
-        const first = { cell: ring[0]!.cell, lngLat: you };
+        const first = { cell: latLngToCell(coords.latitude, coords.longitude, GRID_RES), lngLat: you };
         const here: ProbeHit | undefined = [first, ...ring].find((h) => luna.probe?.(h.lngLat, time.cursor));
         if (!here) {
+          map.setMarker(null);
           say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)');
           return;
         }
         hit = here;
         pinned = true;
+        map.setMarker(you);
         updateProbe();
-        say('Your hex is marked in yellow');
+        say(here === first ? 'You are the yellow dot' : 'You are the yellow dot (card shows the nearest land hex)');
       },
-      (err) => say(err.code === err.PERMISSION_DENIED ? 'Location permission was declined' : 'Could not get your location'),
+      (err) => (done(), say(err.code === err.PERMISSION_DENIED ? 'Location permission was declined' : 'Could not get your location')),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     );
   });
