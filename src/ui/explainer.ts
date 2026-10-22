@@ -55,8 +55,8 @@ export function spotHtml(s: SpotStory | null): string {
     .filter((g) => g.to > a && g.from < b)
     .map((g) => `<i class="seg" title="${esc(g.label)}" style="left:${pct(g.from)};width:${width(g.from, g.to)};background:${g.color}"></i>`)
     .join('');
-  const ticks = s.ticks
-    .filter((d) => d >= a && d <= b)
+  const shown = s.ticks.filter((d) => d >= a && d <= b);
+  const ticks = shown
     .map((d) => `<i class="tick-s" style="left:${pct(d)}"></i>`)
     .join('');
   const months = s.months
@@ -69,7 +69,7 @@ export function spotHtml(s: SpotStory | null): string {
     <div class="spot-axis" aria-hidden="true">${months}</div>
     <div class="spot-key">${s.segments
       .map((g) => `<span><i class="k-seg" style="background:${g.color}"></i>${esc(g.label)}</span>`)
-      .join('')}<span><i class="k-tick"></i>real sighting (${s.ticks.length} here)</span><span><i class="k-today"></i>the date you picked</span></div>`;
+      .join('')}<span><i class="k-tick"></i>real sighting (${shown.length} here)</span><span><i class="k-today"></i>the date you picked</span></div>`;
 }
 
 /** The whole species section of the drawer. Its spot card is filled separately, so it can follow the map. */

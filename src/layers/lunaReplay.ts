@@ -121,7 +121,7 @@ export function createLunaLayer(initial: Mode = TYPICAL): LunaLayer {
     const busy = `busiest ${f(q25)} to ${f(q75)}`;
     const sentence = {
       'not yet': `On ${f(doy)}, the forecast says it is too early near ${place}. First moths about ${f(q05)}, ${busy}.`,
-      starting: `On ${f(doy)}, the forecast says moths are just starting near ${place}. Expect them ${busy}.`,
+      starting: `On ${f(doy)}, the forecast says moths are just starting near ${place}. Busiest days should be ${f(q25)} to ${f(q75)}.`,
       peak: `On ${f(doy)}, the forecast says it is peak time near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
       'winding down': `On ${f(doy)}, the forecast says the season is winding down near ${place}. Busiest days were ${f(q25)} to ${f(q75)}.`,
       over: `By ${f(doy)}, the forecast says the first wave is over near ${place}. It started about ${f(q05)}.`,
