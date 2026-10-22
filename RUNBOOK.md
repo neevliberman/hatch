@@ -26,3 +26,6 @@ On a laptop with `npm i -D playwright && npx playwright install chromium`, leave
 - Never run `npm install` inside `/mnt/project-files` (network mount); work in `/home/claude/emergence` and copy out.
 - Don't call `deck.getViewports()` right after `new Deck()`; see `src/map/map.ts`.
 - `src/data/midwest-states.json` is generated: `npm run geo` (needs the us-atlas dev dependency).
+
+## Deploy
+Every push to `main` runs `.github/workflows/deploy-pages.yml`: `npm ci && npm run build`, then replaces the `gh-pages` branch with `dist/`. GitHub Pages serves that branch at https://neevliberman.github.io/hatch/ (Settings → Pages → source: `gh-pages`, root). To redeploy by hand: Actions → deploy-pages → Run workflow. The build uses a relative base (`./`), so it works under `/hatch/`.

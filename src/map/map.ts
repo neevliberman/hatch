@@ -1,4 +1,5 @@
 import { Deck, MapView, WebMercatorViewport } from '@deck.gl/core';
+import { ScatterplotLayer } from '@deck.gl/layers';
 import type { Layer, PickingInfo } from '@deck.gl/core';
 import { latLngToCell } from 'h3-js';
 import { GRID_RES, MIDWEST_BOUNDS } from '../core/grid';
@@ -17,6 +18,8 @@ export interface MapHandle {
   refresh(): void;
   /** Re-fit the Midwest into the free area between header and bottom bar. */
   fit(padding: { top: number; bottom: number }): void;
+  /** Show a "you are here" ring at lngLat (null hides it). */
+  setMarker(lngLat: [number, number] | null): void;
 }
 
 interface Opts {
@@ -70,10 +73,30 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
     onClick: (info: PickingInfo) => onProbe(hit(info), true),
   });
 
+  let marker: [number, number] | null = null;
+  const markerLayers = (): Layer[] =>
+    marker
+      ? [
+          new ScatterplotLayer<[number, number]>({
+            id: 'you-are-here',
+            data: [marker],
+            getPosition: (d) => d,
+            getRadius: 7,
+            radiusUnits: 'pixels',
+            stroked: true,
+            filled: true,
+            getFillColor: [245, 215, 110, 255],
+            getLineColor: [11, 15, 23, 255],
+            getLineWidth: 3,
+            lineWidthUnits: 'pixels',
+          }),
+        ]
+      : [];
+
   const refresh = () => {
     const { under, over } = basemapLayers();
     const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme }));
-    deck.setProps({ layers: [...under, ...dataLayers, ...over] });
+    deck.setProps({ layers: [...under, ...dataLayers, ...over, ...markerLayers()] });
   };
 
   return {
@@ -82,6 +105,10 @@ export function createMap({ container, registry, time, onProbe, padding }: Opts)
       const v = fitState(p);
       zoom = v.zoom;
       deck.setProps({ initialViewState: { ...v, transitionDuration: 0 } });
+    },
+    setMarker(lngLat) {
+      marker = lngLat;
+      refresh();
     },
   };
 }

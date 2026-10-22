@@ -81,6 +81,21 @@ for (const [name, width, height, mobile] of shots) {
     }
     await ctx.close();
   }
+  // "My area" with a faked location fix in Chicago: the pinned forecast card must appear.
+  {
+    const tag = `${name} locate`;
+    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: mobile ? 2 : 1, hasTouch: mobile, isMobile: mobile,
+      geolocation: { latitude: 41.88, longitude: -87.63 }, permissions: ['geolocation'] });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
+    await page.goto(`${file}?noauto`);
+    await page.waitForTimeout(1500);
+    await page.click('#locate');
+    await page.waitForTimeout(800);
+    if (await page.locator('#probe').isHidden()) problems.push(`${tag}: "My area" showed no forecast card`);
+    await page.screenshot({ path: `${out}/${prefix}-${name}-locate.png` });
+    await ctx.close();
+  }
 }
 await browser.close();
 if (problems.length) {

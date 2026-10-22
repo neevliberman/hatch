@@ -1,8 +1,10 @@
 # Hatch
 
+**Try it: https://neevliberman.github.io/hatch/** (redeploys on every merge to `main`).
+
 A **bug forecast** for the Midwest: scrub a season slider and watch where and when insects (luna moth first, fireflies second) are likely to be flying, on a hex map. Plan: `build-plan-v2.md` (in the project folder).
 
-**Status: P2, "Lunas, replayed".** One real layer: luna moth sightings from iNaturalist (2015-2025) over a hex map coloured by the heat forecast. Pick a season (or all years pooled), scrub or press play, tap a hex for its forecast, tap a dot for the sighting and a link to its iNaturalist photo. The forecast is P1's exploratory model, a first test that still has to be confirmed (see `notebooks/RESULT.md`).
+**Status: P2, "Lunas, replayed".** One real layer: luna moth sightings from iNaturalist (2015-2025) over a hex map coloured by the heat forecast. Pick a season (or all years pooled), scrub or press play, tap a hex for its forecast, tap a dot for the sighting and a link to its iNaturalist photo. **My area** asks for one location fix (used in your browser only, never stored or sent) and pins the forecast for your hex. **Share this view** copies a link that reopens the same season and day. The forecast is P1's exploratory model, a first test that still has to be confirmed (see `notebooks/RESULT.md`).
 
 ### What you are looking at (plain words)
 - **Dots** are real sightings. Each glows for 10 days and fades, because an adult luna lives about a week. Green = first brood, amber = after a late-June or early-July cut-off for that latitude, counted as second brood (shown, not forecast), grey = blurred location.
