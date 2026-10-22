@@ -24,6 +24,7 @@ from hatch_p1.daymet import _fetch_one, temperature_cube  # noqa: E402
 from hatch_p1.prep import BANDS, BAND_LABELS, RES, YEARS, clean  # noqa: E402
 
 OUT = ROOT / "src" / "data" / "luna-replay.json"
+FOLD_FITS = ROOT / "pipeline" / "replay" / "fold_fits.json"   # read by build_fine.py (finer hexes, no refit)
 HEADLINE = ROOT / "pipeline" / "fit" / "results" / "headline.json"   # written by pipeline/fit/run_p3.py
 MODEL_ID = "p3-v1"
 STATES = ROOT / "src" / "data" / "midwest-states.json"
@@ -222,6 +223,41 @@ def scorecard(rows, chosen, headline):
     return out
 
 
+def write_fold_fits(folds, chosen, path=FOLD_FITS):
+    """The chosen model's leave-one-year-out fits (year effect dropped) and brood cut-offs, so build_fine.py can
+    forecast finer hexes from exactly the same folds without refitting (repr floats round-trip exactly)."""
+    js = {"spec": chosen, "folds": {str(int(f["year"])): {
+        "params": {k: float(v) for k, v in f["fits"][chosen].params.items() if k != "u"},
+        "cuts": {b: int(c) for b, c in f["cuts"].items()}} for f in folds}}
+    path.write_text(json.dumps(js, indent=1) + "\n")
+
+
+# ---------------------------------------------------------------- per-cell forecast (shared with build_fine.py)
+def cell_forecasts(cells, inc, years, params, cuts, E, spec):
+    """Leave-one-year-out quantile days per cell: {"2015": [[q05..q95] per cell], ..., "typical": [...]}.
+
+    inc: daily degree-days [cell, year, 365] for `cells` (same order). params[year]: that fold's fitted
+    parameters with the year effect removed (u = 0). cuts[year]: that fold's {band: brood cut-off doy}.
+    A cell's curve is its expected first-brood sightings (flight share x typical state effort, up to the
+    fold's brood cut-off): the same quantity the scores test, so hexes and dots are judged alike.
+    """
+    from fit import data as fdata, evaluate as EV, model as M
+    clat = np.array([h3.cell_to_latlng(c)[0] for c in cells])
+    clng = np.array([h3.cell_to_latlng(c)[1] for c in cells])
+    cstate = np.array([fdata.STATES.index(s) for s in fdata.state_of(clat, clng)])
+    cband = [BAND_LABELS[i] for i in band_index(clat)]
+    forecast = {}
+    for y in years:
+        yi = int(y - years[0])
+        train_years = [i for i in range(len(years)) if i != yi]
+        eprof = EV.effort_profile(E, train_years)[cstate]
+        cut_idx = np.array([cuts[int(y)][b] - 1 for b in cband])
+        share = M.cell_sighting_share(params[int(y)], spec, inc[:, yi, :].astype(float), clat, cut_idx, eprof)
+        forecast[str(int(y))] = [first_reach(s) for s in share]
+    forecast["typical"] = [typical([forecast[str(int(y))][k] for y in years]) for k in range(len(cells))]
+    return forecast
+
+
 # ---------------------------------------------------------------- main
 def main():
     t0 = time.time()
@@ -257,22 +293,10 @@ def main():
     # fold's brood cut-off): the same quantity the scores test, so hexes and dots are judged alike.
     hi = {h: i for i, h in enumerate(ctx.hexes)}
     cidx = np.array([hi[c] for c in cells])
-    clat = np.array([h3.cell_to_latlng(c)[0] for c in cells])
-    from fit import data as fdata
-    cstate = np.array([fdata.STATES.index(s) for s in fdata.state_of(clat, [h3.cell_to_latlng(c)[1] for c in cells])])
-    cband = [BAND_LABELS[i] for i in band_index(clat)]
-    forecast = {}
-    for f in folds:
-        yi = int(f["year"] - ctx.years[0])
-        train_years = [i for i in range(len(ctx.years)) if i != yi]
-        eprof = EV.effort_profile(ctx.E, train_years)[cstate]
-        cut_idx = np.array([f["cuts"][b] - 1 for b in cband])
-        share = M.cell_sighting_share(f["fits"][chosen].without_year(), spec, ctx.inc[cidx, yi, :].astype(float),
-                                      clat, cut_idx, eprof)
-        forecast[str(int(f["year"]))] = [first_reach(s) for s in share]
-    forecast = {str(int(y)): forecast[str(int(y))] for y in ctx.years}
-    forecast["typical"] = [typical([forecast[str(int(y))][k] for y in ctx.years]) for k in range(len(cells))]
+    forecast = cell_forecasts(cells, ctx.inc[cidx], ctx.years, {int(f["year"]): f["fits"][chosen].without_year() for f in folds},
+                              {int(f["year"]): f["cuts"] for f in folds}, ctx.E, spec)
     years = ctx.years
+    write_fold_fits(folds, chosen)
 
     # ---- display sightings
     disp, lic_dropped = display_set(raw, [cut[b] for b in BAND_LABELS])
