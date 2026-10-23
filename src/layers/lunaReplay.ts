@@ -68,10 +68,7 @@ const bytesToQ = (days: Uint8Array, i: number) =>
   [0, 1, 2, 3, 4].map((k) => (days[i * 5 + k] === 255 ? null : days[i * 5 + k]! + 60));
 
 type RGBA = [number, number, number, number];
-// Forecast hexes live in blue (season coming) -> bright teal (peak) -> dusky violet (season gone), so the
-// north/south ends of the wave never share a colour. The moths themselves are the only moonlight green on the map.
-// Lightness climbs to the peak and falls after it (starting is brighter than winding down, over is darkest), and
-// "not yet" is near-empty, so the stages read in order even for colour-blind eyes.
+// Stage colours and why they read in order: see palette.stages in src/theme.ts.
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;

@@ -109,7 +109,10 @@ function start() {
     time,
     padding,
     covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter')],
-    onMove: (moved) => ($('recenter').hidden = !moved),
+    onMove: (moved) => {
+      $('recenter').hidden = !moved;
+      document.querySelector('.brand')!.classList.toggle('over-map', moved);
+    },
     onView: () => {
       if (pinned) placeProbe();
       syncUrl(); // a shared link reopens the same place and zoom
