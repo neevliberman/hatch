@@ -163,11 +163,11 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         if (await page.locator('#finder').isVisible()) fail('Esc did not close the name box');
         if ((await page.evaluate(() => document.activeElement?.id)) !== 'find') fail('Esc did not return focus to Find a town');
         await tap('#find');
-        // Typing must not jump away mid-name; Enter takes the best match.
+        // Typing must not jump away mid-name; picking a suggestion (a replacement of the whole text) does.
         await page.locator('#find-q').fill('Springfield');
         await page.waitForTimeout(500);
-        if (await page.locator('#finder').isHidden()) fail('typing a name jumped away before Enter');
-        await page.locator('#find-q').press('Enter');
+        if (await page.locator('#finder').isHidden()) fail('typing a name jumped away before it was picked');
+        await page.locator('#find-q').evaluate((el) => el.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', bubbles: true })));
         await page.waitForTimeout(1000);
         if (await page.locator('#finder').isVisible()) fail('picking a town did not close the name box');
         if (!/Springfield/.test((await page.locator('#probe').textContent()) ?? '')) fail('Find a town showed no card for Springfield');
