@@ -172,15 +172,17 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     onClick: (info: PickingInfo) => onProbe(hit(info), true),
     // Place names follow the drawn view (they skip the work when neither the view nor the dots changed).
     onAfterRender: () =>
-      labels.update(deck.isInitialized ? (deck.getViewports()[0] as WebMercatorViewport) : undefined, padding(),
+      labels?.update(deck.isInitialized ? (deck.getViewports()[0] as WebMercatorViewport) : undefined, padding(),
         registry.activeLayers().map((l) => l.points?.(time.cursor) ?? []), covers?.() ?? []),
   });
 
-  const labels = createLabels(container);
-  loadBasemap(initial.zoom, () => {
-    labels.setLabels(basemapLabels());
-    refresh();
-  });
+  // The one-file build has no basemap files beside it (see basemap.ts), so it leaves the names code out entirely.
+  const labels = __BASEMAP__ ? createLabels(container) : null;
+  if (labels)
+    loadBasemap(initial.zoom, () => {
+      labels.setLabels(basemapLabels());
+      refresh();
+    });
 
   let marker: [number, number] | null = null;
   const markerLayers = (): Layer[] =>
