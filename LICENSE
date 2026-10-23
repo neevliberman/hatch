@@ -23,7 +23,12 @@ SOFTWARE.
 ---
 
 This license covers the source code only. Data files in this repository keep
-their own terms (see "Data and credits" in README.md). In particular, the
-iNaturalist-derived sighting data in src/data/luna-replay.json carries its
-observers' CC0, CC BY and CC BY-NC licenses, so non-commercial terms apply to
-that file. The fonts in src/fonts are under the SIL Open Font License.
+their own terms (see "Data and credits" in README.md):
+
+- The iNaturalist sighting data (src/data/luna-replay.json and
+  public/firefly-replay.json) is a mix of CC0, CC BY and CC BY-NC records from
+  its observers, so attribution and non-commercial terms apply to those files.
+- The forecast files in public/fine/ are derived from Daymet (ORNL DAAC).
+- The map detail in public/basemap/ is from public-domain sources (US Census
+  Bureau, Natural Earth, US Forest Service).
+- The fonts in src/fonts are under the SIL Open Font License.

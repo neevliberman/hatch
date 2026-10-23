@@ -126,7 +126,7 @@ docs/             engineering notes and README media
 - **National forests:** [US Forest Service](https://data.fs.usda.gov/geodata/edw/datasets.php). Public domain.
 - **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
 
-**License:** the code is [MIT](LICENSE). The data keeps its own terms above: the sighting data in `src/data/luna-replay.json` is non-commercial (CC BY-NC records), and the fonts stay under the SIL Open Font License.
+**License:** the code is [MIT](LICENSE). The data keeps its own terms above. The sighting files (`src/data/luna-replay.json`, `public/firefly-replay.json`) mix CC0, CC BY and CC BY-NC records, so attribution and non-commercial terms apply to them. The fonts stay under the SIL Open Font License.
 
 ## Who made it
 
