@@ -1,0 +1,186 @@
+{
+ "loyo": [
+  {
+   "model": "p3_flat",
+   "n": 23,
+   "onset": 3.452,
+   "peak": 4.022,
+   "mae": 3.737
+  },
+  {
+   "model": "p1",
+   "n": 23,
+   "onset": 3.217,
+   "peak": 3.935,
+   "mae": 3.576
+  },
+  {
+   "model": "cal",
+   "n": 23,
+   "onset": 4.904,
+   "peak": 5.822,
+   "mae": 5.363
+  }
+ ],
+ "holdout": [
+  {
+   "model": "p3_flat",
+   "n": 4,
+   "onset": 1.45,
+   "peak": 3.5,
+   "mae": 2.475
+  },
+  {
+   "model": "p1",
+   "n": 4,
+   "onset": 1.15,
+   "peak": 5.0,
+   "mae": 3.075
+  },
+  {
+   "model": "cal",
+   "n": 4,
+   "onset": 3.867,
+   "peak": 4.333,
+   "mae": 4.1
+  },
+  {
+   "model": "cal_lat",
+   "n": 4,
+   "onset": 2.98,
+   "peak": 3.597,
+   "mae": 3.289
+  }
+ ],
+ "band_years": 23,
+ "holdout_band_years": 4,
+ "noise_floor": {
+  "records": 1.9841352674670654,
+  "observers": 2.0200242108859547,
+  "sd_onset": 1.746606996436233,
+  "sd_peak": 2.55051583018024
+ },
+ "interval": {
+  "level": 0.8,
+  "onset": [
+   -4.8,
+   4.8
+  ],
+  "peak": [
+   -5.4,
+   5.0
+  ]
+ },
+ "model": {
+  "id": "firefly-v0",
+  "spec": "p3_flat",
+  "summary": "luna's P3 model, refit on fireflies: skew-normal warmth targets, base 10 C from 1 March, 7-day flight life, beetle-effort background, one generation, no latitude term; exploratory",
+  "median_dd_at_lat": {
+   "38": 713.7,
+   "42": 713.7,
+   "46": 713.7
+  },
+  "loyo_mae": {
+   "heat": 3.74,
+   "p1": 3.58,
+   "cal": 5.36
+  },
+  "holdout_mae": {
+   "heat": 2.47,
+   "p1": 3.07,
+   "cal": 4.1,
+   "cal_lat": 3.29
+  },
+  "noise_floor": 1.98
+ },
+ "counts": {
+  "sightings": 2135,
+  "first_brood": 2135,
+  "second_brood": 0,
+  "approximate": 428,
+  "fit_records": 2359,
+  "observers": 1346,
+  "cells": 551,
+  "seen_cells": 390,
+  "licence_dropped": 787
+ },
+ "params": {
+  "2015": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.289029756103889,
+   "mu0": 412.1865179575866,
+   "log_sigma": 6.095668305247894
+  },
+  "2016": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.2430450111383955,
+   "mu0": 414.3653720087373,
+   "log_sigma": 6.093330210845106
+  },
+  "2017": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.453972630613711,
+   "mu0": 414.97071719175347,
+   "log_sigma": 6.095255122142675
+  },
+  "2018": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.269291913056952,
+   "mu0": 415.7916023019605,
+   "log_sigma": 6.099942943917936
+  },
+  "2019": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.197968224615131,
+   "mu0": 417.600328347657,
+   "log_sigma": 6.092090559153414
+  },
+  "2020": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 6.95287038667619,
+   "mu0": 419.99441289145614,
+   "log_sigma": 6.060527969358586
+  },
+  "2021": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.92916058308952,
+   "mu0": 403.1849900304958,
+   "log_sigma": 6.113088862703646
+  },
+  "2022": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 6.615832421754173,
+   "mu0": 412.176152396753,
+   "log_sigma": 6.062215072876867
+  },
+  "2023": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 6.591653899184859,
+   "mu0": 423.9364641491461,
+   "log_sigma": 6.062777928162011
+  },
+  "2024": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.984003809846238,
+   "mu0": 411.4775243773511,
+   "log_sigma": 6.13351221279396
+  },
+  "2025": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.481568988881582,
+   "mu0": 413.3162587136075,
+   "log_sigma": 6.114584636260601
+  }
+ }
+}

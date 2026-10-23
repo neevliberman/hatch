@@ -21,7 +21,8 @@
       <p id="sr-summary" class="sr"></p>
     </main>
     <header id="top">
-      <h1 class="brand"><span class="dot"></span>Hatch <small>when luna moths fly</small></h1>
+      <h1 class="brand"><span class="dot"></span>Hatch <small id="tagline">when luna moths fly</small></h1>
+      <label class="season species"><span class="sr">Species</span><select id="species"><option value="luna">Luna moth</option><option value="firefly">Firefly</option></select></label>
       <label class="season"><span class="sr">Season to replay</span><select id="season"></select></label>
       <button id="info-btn" class="icon-btn" aria-label="About this map" aria-expanded="false" aria-controls="drawer">i</button>
     </header>
@@ -37,7 +38,7 @@
       </button>
       <div id="strip">
         <div id="note">
-          <p id="honesty"><span>Dots: moths seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. Colors: a forecast <em class="unconfirmed">still being tested</em>.</span>
+          <p id="honesty"><span>Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. Colors: a forecast <em class="unconfirmed">still being tested</em>.</span>
             <button id="why" type="button">How sure?</button></p>
           <p id="countdown"></p>
         </div>

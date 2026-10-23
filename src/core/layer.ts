@@ -97,6 +97,6 @@ export interface HatchLayer {
 }
 
 /** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size (see lunaReplay.ts render). */
-export const isForecast = (layerId: string | undefined) => !!layerId?.startsWith('luna-forecast');
+export const isForecast = (layerId: string | undefined) => /^(luna|firefly)-forecast/.test(layerId ?? '');
 /** The hexagon layers (forecast and its stripes): the map draws lakes, rivers and roads over these, under the dots. */
-export const isHexes = (layerId: string) => /^luna-(forecast|unseen)/.test(layerId);
+export const isHexes = (layerId: string) => /^(luna|firefly)-(forecast|unseen)/.test(layerId);
