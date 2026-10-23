@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
-      - run: npm run build:single
+      - run: npm run build:all   # dist/ too: the live-mode checks serve it over http
       - run: xvfb-run -a npm run desktop
       - if: always()
         uses: actions/upload-artifact@v4
