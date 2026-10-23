@@ -1,4 +1,5 @@
 # Phone smoke test on every PR and push to main: iPhone (WebKit) and Android (Chromium) sizes, portrait and landscape.
+# Then the first-frames check (scripts/firstframes.mjs), which uses the same two engines.
 # Screenshots are uploaded as an artifact either way, so a failure can be looked at, not just read.
 name: mobile-smoke
 on:
@@ -27,9 +28,15 @@ jobs:
       - run: timeout 480 npx playwright install --with-deps chromium webkit || timeout 480 npx playwright install --with-deps chromium webkit
       - run: npm run build:single
       - run: npm run mobile
+      # The first seconds of load, which the step above skips: fails on a stretched or misplaced first map frame, and
+      # films each screen (phones and two desktops) for the visual review in CONTRIBUTING.md. About 40 s.
+      - if: success() || failure()
+        run: npm run firstframes
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mobile-screenshots
-          path: screenshots/mobile
+          path: |
+            screenshots/mobile
+            screenshots/firstframes
           retention-days: 14
