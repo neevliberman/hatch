@@ -48,6 +48,26 @@ export function mountFinder(
   let places: Promise<Place[]> | null = null;
   // A phone keyboard covers the bottom of the page without shrinking it: lift the box above the keyboard.
   const vv = window.visualViewport;
+  const keyboardUp = () => (vv ? innerHeight - vv.height - vv.offsetTop > 60 : false);
+  // Resolves when the visible area has stopped changing for 150 ms (300 ms before the keyboard starts going), or
+  // after 800 ms.
+  const settled = () =>
+    new Promise<void>((done) => {
+      let quiet = 0;
+      const finish = () => {
+        clearTimeout(quiet);
+        clearTimeout(cap);
+        vv?.removeEventListener('resize', bump);
+        done();
+      };
+      const bump = () => {
+        clearTimeout(quiet);
+        quiet = window.setTimeout(finish, 150);
+      };
+      const cap = window.setTimeout(finish, 800);
+      vv?.addEventListener('resize', bump);
+      quiet = window.setTimeout(finish, 300);
+    });
   const lift = () => {
     const hidden = vv ? Math.max(0, innerHeight - vv.height - vv.offsetTop) : 0;
     form.style.transform = hidden ? `translateY(${-hidden}px)` : '';
@@ -80,7 +100,11 @@ export function mountFinder(
     const p =
       ps.find((x) => x.name.toLowerCase() === q) ?? (exactOnly ? undefined : ps.find((x) => x.name.toLowerCase().startsWith(q)));
     if (!p) return exactOnly || say(`No town named ${typed.trim()} on this map`);
+    const keyboard = keyboardUp();
     open(false);
+    // Fly once the phone keyboard has gone: the screen settling under a flight would stop it halfway.
+    if (keyboard) await settled();
+    if (!form.hidden) return; // opened again for another search meanwhile
     go(p.lat, p.lng, p.name.replace(/ \(near .*\)$/, ''));
   };
   // A datalist pick fills the box in one go (no inputType, or a replacement); typing letter by letter waits for Enter,

@@ -179,13 +179,17 @@ export function seasonProfile(
   seen: Sighting[],
   day: (s: Sighting) => number,
   year: number,
-  waves: [string, (s: Sighting) => boolean][],
+  /** Each wave's note, which sightings belong to it, and a colour for a wave the forecast leaves out (washed in that
+   * colour under the sightings line, so the ribbon shows it was seen, not forecast). */
+  waves: [string, (s: Sighting) => boolean, string?][],
 ): SeasonProfile {
   // The same days the slider spans (replayTimeSpec), so day i of the ribbon sits under step i of the slider.
   const { start, end } = replayTimeSpec(String(year));
   const d0 = dayOfYear(start);
   const n = Math.round((end - start) / TimeAxis.DAY) + 1;
-  const bands = STAGES.map((s) => ({ color: `rgba(${STAGE_COLOR[s].slice(0, 3)},${STAGE_COLOR[s][3] / 255})`, share: Array<number>(n).fill(0) }));
+  // Solid colours, as the see-through map colours look on paper (the same as the key's swatches): the ribbon paints
+  // each band over the next (no seams where they meet), which would mix see-through ones.
+  const bands = STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), share: Array<number>(n).fill(0) }));
   // O(hexes + days): each hexagon adds +1 to a stage from the day it starts and -1 from the day the next stage starts
   // (the same chain as stageAt: a missing quantile ends it), then a running sum gives each day's count.
   const diff = STAGES.map(() => new Float64Array(n + 1));
@@ -223,7 +227,8 @@ export function seasonProfile(
     const at = h.indexOf(Math.max(...h));
     return h[at]! > 0 ? [{ at, text }] : [];
   });
-  return { bands, seen: perDay(() => true), notes };
+  const seenOnly = waves.flatMap(([, keep, color]) => (color ? [{ color, seen: perDay(keep) }] : []));
+  return { bands, seen: perDay(() => true), notes, ...(seenOnly.length ? { seenOnly } : {}) };
 }
 
 /** The map's first-frame wash for the hexagons `ids`: colour `c` of hexagon `i`, `wash` ms after the first frame
@@ -508,7 +513,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         // Live: this season's median forecast (a cell with none counts as "not yet") and this season's sightings.
         p = seasonProfile(forecast().map((q) => q ?? []), shown, (s) => (mode === TYPICAL ? s.pdoy : s.doy), yearOf(), [
           ['1st wave', (s) => !(s.flags & SECOND_BROOD)],
-          ['2nd wave', (s) => !!(s.flags & SECOND_BROOD)],
+          // Not forecast (the model covers the first wave only): washed in the 2nd-wave dots' colour.
+          ['2nd wave (seen)', (s) => !!(s.flags & SECOND_BROOD), css(SECOND)],
         ]);
         profiles.set(mode, p);
       }
