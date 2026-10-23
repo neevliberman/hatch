@@ -11,6 +11,7 @@ import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { countdownParts } from './ui/countdown';
+import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 import { isForecast } from './core/layer';
@@ -341,6 +342,11 @@ function start() {
     if (phone.matches) toggleDrawer(false);
   });
 
+  // Find a town: the same path as the city menu above.
+  mountFinder($('find'), $('finder'), (lat, lng, name) => {
+    if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`);
+  }, say);
+
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
     if (!navigator.geolocation) return say('Location is not available in this browser');
@@ -443,7 +449,7 @@ function start() {
   });
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open')) return;
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !$('finder').hidden) return;
     const hadFocus = probeEl.contains(document.activeElement);
     unpin();
     if (hadFocus) $('t-range').focus({ preventScroll: true });

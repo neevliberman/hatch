@@ -155,6 +155,28 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       else await tap('#key-fold');
     }
 
+    // Find a town: the search button opens the name box; typing a town and picking it pins its card.
+    if (await tap('#find')) {
+      if (await page.locator('#find-q').isHidden()) fail('Find a town did not open its name box');
+      else {
+        await page.keyboard.press('Escape');
+        if (await page.locator('#finder').isVisible()) fail('Esc did not close the name box');
+        if ((await page.evaluate(() => document.activeElement?.id)) !== 'find') fail('Esc did not return focus to Find a town');
+        await tap('#find');
+        // Typing must not jump away mid-name; picking a suggestion (a replacement of the whole text) does.
+        await page.locator('#find-q').fill('Springfield');
+        await page.waitForTimeout(500);
+        if (await page.locator('#finder').isHidden()) fail('typing a name jumped away before it was picked');
+        await page.locator('#find-q').evaluate((el) => el.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', bubbles: true })));
+        await page.waitForTimeout(1000);
+        if (await page.locator('#finder').isVisible()) fail('picking a town did not close the name box');
+        if (!/Springfield/.test((await page.locator('#probe').textContent()) ?? '')) fail('Find a town showed no card for Springfield');
+        await shot('3b-find-town');
+        if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
+        if (await page.locator('#recenter').isVisible()) await tap('#recenter');
+      }
+    }
+
     if (await tap('#locate')) {
       await page.waitForTimeout(1000);
       if (await page.locator('#probe').isHidden()) fail('"My area" showed no card');
