@@ -7,4 +7,6 @@ export default defineConfig({
   base: './',
   plugins: [viteSingleFile()],
   build: { outDir: 'dist-single', target: 'es2022', assetsInlineLimit: 100_000_000 },
+  // Map detail loads from files beside the page, which the one-file build has none of: leave that code out.
+  define: { __BASEMAP__: false },
 });

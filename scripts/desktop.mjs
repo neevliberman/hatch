@@ -218,7 +218,10 @@ for (const [engine, width, height] of screens) {
   await page.goto(file + '?noauto');
   await page.waitForTimeout(1500);
   const order = [];
-  for (let i = 0; i < TAB_ORDER.length + 3 && order.length < TAB_ORDER.length; i++) {
+  // Under 1000px the colour key can fold, so its fold button (or, folded, its "Key" chip) comes right after About.
+  const key = (await page.locator('#key-fold').isVisible()) ? 'key-fold' : (await page.locator('#key-chip').isVisible()) ? 'key-chip' : null;
+  const want = key ? [...TAB_ORDER.slice(0, 2), key, ...TAB_ORDER.slice(2)] : TAB_ORDER;
+  for (let i = 0; i < want.length + 3 && order.length < want.length; i++) {
     await page.keyboard.press('Tab');
     const f = await page.evaluate(() => {
       const el = document.activeElement;
@@ -227,14 +230,14 @@ for (const [engine, width, height] of screens) {
       return { id: el.id || el.tagName.toLowerCase(), ring: (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none' };
     });
     if (!f) continue;
-    if (!TAB_ORDER.includes(f.id)) {
+    if (!want.includes(f.id)) {
       fail(`Tab stops on ${f.id}, which is not a control`);
       continue;
     }
     order.push(f.id);
     if (!f.ring) fail(`${f.id} shows no focus ring`);
   }
-  if (order.join() !== TAB_ORDER.join()) fail(`Tab order is ${order.join(' > ')} (want ${TAB_ORDER.join(' > ')})`);
+  if (order.join() !== want.join()) fail(`Tab order is ${order.join(' > ')} (want ${want.join(' > ')})`);
   // On the focused slider, plain arrows step one day and the slider says the date, not a number.
   const dr = await page.locator('#t-date').textContent();
   await page.keyboard.press('ArrowRight');
@@ -429,6 +432,18 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         if (!/how this forecast is made/.test(about)) fail('the About panel has no live-mode card');
         if (!/Open-Meteo/.test(about)) fail('the credits do not name Open-Meteo');
         await shotL('3-about');
+        await page.keyboard.press('Escape');
+        // Fireflies have no live season: picking them from live mode lands on all years, and the menu drops live.
+        if (await page.locator('#species').isVisible()) {
+          await page.locator('#species').selectOption('firefly');
+          await page.waitForFunction(() => window.__hatch.current().id !== 'luna-replay', null, { timeout: 8000 }).catch(() => fail('the firefly never loaded'));
+          await page.waitForTimeout(500);
+          if ((await page.locator('#season').inputValue()) !== 'typical') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
+          if (await page.locator('#season option[value=live]').count()) fail('the firefly season menu offers live mode');
+          await page.locator('#species').selectOption('luna');
+          await page.waitForTimeout(500);
+          if (!(await page.locator('#season option[value=live]').count())) fail('back on luna, the live option is gone');
+        } else fail('no species menu over http');
       }
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);

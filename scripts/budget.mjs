@@ -4,6 +4,8 @@
 import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
+// 510 since the firefly and live mode (2026-10-23): their code ships in the page, their data is fetched only when used
+// (both together: ~507 KB).
 const LIMIT_KB = 510;
 const file = process.argv[2] ?? 'dist-single/index.html';
 const kb = gzipSync(readFileSync(file)).length / 1024;
