@@ -170,6 +170,7 @@ export function createFireflyLayer(
   return {
     id: 'firefly-replay',
     title: 'Common eastern firefly',
+    words: { tagline: 'when fireflies glow', plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies' },
     mode: () => mode,
     setMode(m) {
       mode = m;

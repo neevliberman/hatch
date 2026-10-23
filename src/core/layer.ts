@@ -103,9 +103,26 @@ export interface OffSeasonNote {
   at: { wide: [number, number]; phone: [number, number] };
 }
 
+/** A species' own words for the shared page frame, so the header, menus and share sheet never name a species
+ * themselves. Each string is used exactly as written. */
+export interface SpeciesWords {
+  /** The header's tagline after "Hatch": "when luna moths fly". */
+  tagline: string;
+  /** The animals, counted: the season menu's "2024 (310 moths)" and the dots line "Dots: moths seen ...". */
+  plural: string;
+  /** Whose sightings the map shows, in its screen-reader label: "luna moth" sightings. */
+  sightingsOf: string;
+  /** What the season menu's counts count, in its tooltip: "first-wave moths" seen. */
+  countedAs: string;
+  /** The share sheet's title, "Hatch: when ___ come out": "luna moths". */
+  shareName: string;
+}
+
 export interface HatchLayer {
   id: string;
   title: string;
+  /** The species' words for the page around the map; see SpeciesWords. */
+  words: SpeciesWords;
   /** `wash`: ms since the map's first frame while the forecast washes in (south first, 900 ms in all), else undefined.
    * `playing` (playback is gliding: not under reduced motion or on a slow device) and `frac` (how far into the next
    * step, 0 at rest) let a layer draw in-between frames during playback. */

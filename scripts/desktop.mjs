@@ -270,7 +270,16 @@ for (const [engine, width, height] of screens) {
   await page.setViewportSize({ width: Math.round(width * 0.75), height: Math.round(height * 0.85) });
   await page.waitForTimeout(800);
   await page.mouse.move(2, 200);
-  const r = await midwest(page, await shot('6-resized'));
+  // On ~2fps CI frames the refit can still be landing: take shots until two in a row agree (a few seconds at most).
+  let r = await midwest(page, await page.screenshot());
+  for (let i = 0; i < 5; i++) {
+    await page.waitForTimeout(700);
+    const again = await midwest(page, await page.screenshot());
+    const still = Math.abs(again.w - r.w) < 0.02 && Math.abs(again.h - r.h) < 0.02;
+    r = again;
+    if (still) break;
+  }
+  await shot('6-resized');
   await page.reload();
   await page.waitForTimeout(1500);
   await page.mouse.move(2, 200);

@@ -45,7 +45,7 @@ npm run mobile && npm run desktop && npm run firstframes   # writes screenshots/
 ```
 
 Or download the `mobile-screenshots` and `desktop-screenshots` artifacts from the pull request's CI run.
-`mobile-screenshots` holds the filmstrips too (`firstframes/*-filmstrip.png`).
+`mobile-screenshots` holds the phone shots in `mobile/` and the filmstrips in `firstframes/` (`*-filmstrip.png`).
 
 Then give a reviewer subagent the image paths and this prompt:
 
