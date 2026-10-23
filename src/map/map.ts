@@ -263,10 +263,6 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     // The canvas gets a Tab stop for deck's keyboard controls, which are off: drop it, so Tab goes straight to the controls.
     onLoad: (): void => deck.getCanvas()?.setAttribute('tabindex', '-1'),
-    // Touch taps are handled below; deck's own click for a touch arrives late, on the next touch.
-    onClick: (info: PickingInfo, e) => {
-      if ((e?.srcEvent as PointerEvent | undefined)?.pointerType !== 'touch') onProbe(hit(info), true);
-    },
     // Place names follow the drawn view (they skip the work when neither the view nor the dots changed).
     onAfterRender: () => {
       if (!drawn && !readyToShow()) return;
@@ -281,18 +277,33 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // While paused, today's newest dots breathe: a paper ring over each swells and settles by about half a pixel every
   // 2.4 s. CSS draws it (src/style.css, .breath), so the map itself never redraws for it. It rests after 15 s without
   // input and during playback; the browser stops it in a hidden tab; reduced motion never shows it.
-  // A tap on a touch screen pins its card. deck holds each tap back to rule out a double tap and only lets it go on
-  // the next touch (carrying that touch's spot), so a tap never pinned anything. A short, still, one-finger touch is
-  // a tap: pick under it here. Double-tap zoom still works, and pins the spot first.
+  // A tap or click pins its card, picked here rather than through deck's onClick. deck holds each tap back to rule out
+  // a double tap and only lets it go on the next touch (carrying that touch's spot), so a tap never pinned anything;
+  // and it drops a click whose press and lift land more than 250 ms apart, which a busy main thread (a big screen
+  // drawing slowly) stamps on an ordinary click. A short, still press of one finger or the main button is a tap.
+  // Double-tap and double-click zoom still work: the first press toggles the pin, the rest of a double click don't.
   let touchDown: { x: number; y: number; t: number } | null = null;
+  let lastClick = { x: 0, y: 0, t: -Infinity };
   container.addEventListener('pointerdown', (e) => {
-    touchDown = e.pointerType === 'touch' && e.isPrimary ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+    const ok = e.isPrimary && (e.pointerType === 'touch' || (e.button === 0 && !e.ctrlKey)); // ctrl-click: Mac menu
+    touchDown = ok ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+  });
+  // Mouse 5 px, finger or pen 10. A press that wandered further is a pan, even if it comes back.
+  const slop = (e: PointerEvent) => (e.pointerType === 'mouse' ? 5 : 10);
+  container.addEventListener('pointermove', (e) => {
+    if (touchDown && e.isPrimary && Math.hypot(e.clientX - touchDown.x, e.clientY - touchDown.y) > slop(e)) touchDown = null;
   });
   container.addEventListener('pointerup', (e) => {
     const d = touchDown;
     touchDown = null;
-    // 1 s, not the usual 0.5: a busy phone can stamp the lift late, and a press that long still didn't move.
-    if (!d || e.pointerType !== 'touch' || e.timeStamp - d.t > 1000 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+    // 1 s, not the usual 0.5: a busy device can stamp the lift late, and a press that long still didn't move.
+    if (!d || e.timeStamp - d.t > 1000 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop(e)) return;
+    if (e.pointerType !== 'touch') {
+      // Pressed within 300 ms and 10 px of the last lift: the 2nd (or 3rd...) click of a double click, which zooms.
+      const again = d.t - lastClick.t < 300 && Math.hypot(d.x - lastClick.x, d.y - lastClick.y) < 10;
+      lastClick = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      if (again) return;
+    }
     const r = container.getBoundingClientRect();
     const info = deck.pickObject({ x: e.clientX - r.left, y: e.clientY - r.top });
     onProbe(info ? hit(info) : null, true);
