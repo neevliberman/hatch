@@ -1,6 +1,6 @@
 # P3.1 result: no daylength term, warmth targets at or above zero (2026-10-22)
 
-**Outcome (2026-10-23): not adopted. The map stays on P3.** P3.1 tied P3 on past years and passed the WI/MN holdout as a second look. But on the 2026 season, the one test neither model had seen, it did clearly worse. As of 30 Sep, its sighting-weighted strip miss was 4.4-6.9 days against P3's 2.1-3.1 (the range is over three ways of summarising; see [DRYRUN_2026.md](../live/DRYRUN_2026.md)). It ran early in the south and late in the north. That is the lean the daylength term removes. It is one season and a rough check. Still, it is the only fresh evidence, so the pre-registered pick stands. Everything below is kept as the record.
+**Outcome (2026-10-23): not adopted. The map stays on P3.** P3.1 tied P3 on past years and passed the WI/MN holdout as a second look. But on the 2026 season, the one test neither model had seen, it did clearly worse. As of 30 Sep, its sighting-weighted strip miss was 4.4-6.9 days against P3's 2.1-3.1 (the range is over three ways of summarising; see [DRYRUN_2026.md](../live/DRYRUN_2026.md)). It ran early in the south and late in the north. That is the lean the daylength term removes. It is one season and a rough check. Still, it is the only fresh evidence, so the pre-registered pick stays on the map. This overrides the amendment's own rule (on a tie, P3.1 goes on the map) using a check that was not written down in advance, and whose three summaries were chosen after seeing the results. Everything below is kept as the record.
 
 **Verdict at the time (2026-10-22).**
 - **Ties P3 on leave-one-year-out.** P3.1 is 3.77 days off on average, P3 (daylength) 3.85. The difference is noise (P3 minus P3.1: +0.05, 95% CI −0.23 to +0.33).
@@ -81,7 +81,7 @@ Rules were written down before scoring: [FROZEN_P3.md](FROZEN_P3.md). How the mo
 |---|---|---|---|---|---|
 | P1 / P2 map | −6.1 | −3.4 | −0.6 | +1.7 | +3.9 |
 | P3 (run 2) | +0.5 | +1.8 | +2.2 | +3.0 | +1.2 |
-| P3.1 (the map now) | −1.1 | +1.4 | +2.4 | +3.7 | +2.9 |
+| P3.1 (not adopted) | −1.1 | +1.4 | +2.4 | +3.7 | +2.9 |
 
 ![bias](figures/bias_by_band.png)
 ![predicted vs real](figures/predicted_vs_real.png)
