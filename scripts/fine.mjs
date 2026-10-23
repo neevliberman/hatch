@@ -81,7 +81,8 @@ for (const [name, width, height, mobile] of shots) {
   for (const [label, query, lng, lat, zoom, want] of cases) {
     const res = Math.min(want, finest);
     const tag = `${name} ${label}`;
-    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: mobile ? 2 : 1, hasTouch: mobile, isMobile: mobile });
+    // Reduced motion: no first-frame wash or glides, so the back-out comparison isn't racing an animation on a slow runner.
+    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: mobile ? 2 : 1, hasTouch: mobile, isMobile: mobile, reducedMotion: 'reduce' });
     const page = await ctx.newPage();
     page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && problems.push(`${tag}: external request ${r.url()}`));
     page.on('requestfailed', (r) => problems.push(`${tag}: request failed ${r.url()}`));
@@ -89,6 +90,7 @@ for (const [name, width, height, mobile] of shots) {
     page.on('console', (m) => m.type() === 'error' && problems.push(`${tag}: console error: ${m.text()}`));
     page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
     await page.goto(`${origin}/${query}`);
+    await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: the map never drew its first frame`));
     await page.waitForTimeout(1200);
     if (label === 'wheel-back-out') {
       // Wheel in to the finest level and back out, as a person does (each level comes and goes many frames apart).
@@ -119,6 +121,7 @@ for (const [name, width, height, mobile] of shots) {
       // After zooming in and out, the map must look like a fresh load of the same view: no small hexagons left over.
       const fresh = await ctx.newPage();
       await fresh.goto(`${origin}/${query}`);
+      await fresh.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => {});
       await fresh.waitForTimeout(1200);
       await fresh.evaluate((c) => window.__hatch.map.focus(c.lngLat, c.zoom, window.__hatch.padding()), at);
       await fresh.waitForTimeout(1500);
