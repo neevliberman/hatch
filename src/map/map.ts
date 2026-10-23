@@ -143,7 +143,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     layers: [],
     onViewStateChange: ({ viewState }) => {
       zoom = viewState.zoom;
-      current = viewState;
+      // Only the view, not deck's whole viewState: that carries a stale width/height that would skew center().
+      current = { longitude: viewState.longitude, latitude: viewState.latitude, zoom: viewState.zoom };
       // Half a zoom step, or the centre shifting by ~a tenth of the screen, counts as having moved.
       const scale = 360 / (512 * 2 ** fitted.zoom) * size().width;
       setMoved(Math.abs(viewState.zoom - fitted.zoom) > 0.5 ||

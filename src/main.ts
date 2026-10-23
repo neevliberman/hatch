@@ -341,8 +341,9 @@ function start() {
   // Not mid-drag either: a re-fit would yank the map out from under the finger.
   let dragging = false;
   $('map').addEventListener('pointerdown', () => (dragging = true));
-  window.addEventListener('pointerup', () => (dragging = false));
-  window.addEventListener('pointercancel', () => (dragging = false));
+  // Capture phase: the phone drawer swallows the taps that close it, and this must still hear them end.
+  window.addEventListener('pointerup', () => (dragging = false), true);
+  window.addEventListener('pointercancel', () => (dragging = false), true);
   const refit = () => {
     clearTimeout(fitTimer);
     fitTimer = window.setTimeout(() => {
