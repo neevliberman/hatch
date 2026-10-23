@@ -120,7 +120,10 @@ function start() {
     time,
     padding,
     covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter')],
-    onMove: (moved) => ($('recenter').hidden = !moved),
+    onMove: (moved) => {
+      $('recenter').hidden = !moved;
+      document.querySelector('.brand')!.classList.toggle('over-map', moved);
+    },
     onView: () => {
       if (pinned) placeProbe();
       syncUrl(); // a shared link reopens the same place and zoom
@@ -128,8 +131,10 @@ function start() {
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
-        // A hex pinned from My area or the city menu has no picked object, so the cell alone decides.
-        const same = pinned && h !== null && hit !== null && h.cell === hit.cell && (!hit.picked || h.picked?.object === hit.picked.object);
+        // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
+        // landed on a neighbour (a point near a hex edge). A hex pinned from My area or the city menu has no picked
+        // object, so the cell alone decides.
+        const same = pinned && h !== null && hit !== null && (hit.picked ? h.picked?.object === hit.picked.object : h.cell === hit.cell);
         pinned = h !== null && !same;
         hit = pinned ? h : null;
         map.setMarker(null); // any tap replaces the "My area" pin
@@ -223,6 +228,13 @@ function start() {
   let fireflyFile: ReplayFile | null = null;
   // The one-file preview has no firefly file next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
+  // On narrow phones both header menus can't show full names, so each species is listed by its first word ("Luna", "Monarch").
+  const narrow = matchMedia('(max-width: 430px)');
+  const shortNames = () => {
+    for (const o of speciesSel.options) o.text = narrow.matches ? (o.dataset.full ??= o.text).split(' ')[0]! : (o.dataset.full ?? o.text);
+  };
+  shortNames();
+  narrow.addEventListener('change', shortNames);
   speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value === 'firefly' ? 'firefly' : 'luna'));
   // Until a ?species=firefly link has loaded, the address bar keeps asking for the firefly.
   if (params.get('species') === 'firefly' && __BASEMAP__) {

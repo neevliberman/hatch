@@ -67,7 +67,11 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     range.max = String(time.steps);
     range.value = String(time.stepIndex);
     range.style.setProperty('--pct', `${(time.stepIndex / Math.max(1, time.steps)) * 100}%`);
-    dateEl.textContent = time.label(time.cursor);
+    // "Jun 10 (all years)": the aside in brackets is set in the handwriting face.
+    const [day, aside] = time.label(time.cursor).split(/ (?=\()/);
+    const em = document.createElement('em');
+    em.textContent = aside ?? '';
+    dateEl.replaceChildren(day!, ...(aside ? [' ', em] : []));
     range.setAttribute('aria-valuetext', time.label(time.cursor));
     doyEl.textContent = time.cursor > time.now ? 'after today' : '';
     if (rangeKey !== `${time.start}|${time.end}`) {
@@ -79,11 +83,37 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     play.innerHTML = time.playing ? PAUSE : PLAY;
   };
 
-  range.addEventListener('input', () => time.setStepIndex(Number(range.value)));
-  range.addEventListener('pointerdown', () => time.pause());
-  play.addEventListener('click', () => time.toggle());
-  $('t-prev').addEventListener('click', () => (time.pause(), time.step(-1)));
-  $('t-next').addEventListener('click', () => (time.pause(), time.step(1)));
+  // The first Play of a visit starts from the beginning of the season, so it shows the wave rolling north
+  // rather than the end of it. Once the reader has moved the time themselves, Play starts where they left it.
+  let touched = false;
+  let glideRaf = 0;
+  let glideTimer = 0;
+  let gliding = false;
+  const touch = () => ((touched = true), (gliding = false), cancelAnimationFrame(glideRaf), clearTimeout(glideTimer));
+  const playFromStart = () => {
+    touched = true;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || time.stepIndex === 0) return (time.setStepIndex(0), time.play());
+    const from = time.stepIndex;
+    const { start, end } = time;
+    gliding = true;
+    const t0 = performance.now();
+    const frame = (t: number) => {
+      if (time.start !== start || time.end !== end) return touch(); // the season changed under the rewind
+      const k = Math.min(1, (t - t0) / 400);
+      time.setStepIndex(Math.round(from * (1 - (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2)))); // ease in-out
+      if (k < 1) glideRaf = requestAnimationFrame(frame);
+      else glideTimer = window.setTimeout(() => ((gliding = false), time.play()), 250);
+    };
+    glideRaf = requestAnimationFrame(frame);
+  };
+
+  range.addEventListener('input', () => (touch(), time.setStepIndex(Number(range.value))));
+  range.addEventListener('pointerdown', () => (touch(), time.pause()));
+  // A press during the rewind stops it, like Pause would.
+  const togglePlay = () => (gliding ? touch() : !touched && !time.playing ? playFromStart() : (touch(), time.toggle()));
+  play.addEventListener('click', togglePlay);
+  $('t-prev').addEventListener('click', () => (touch(), time.pause(), time.step(-1)));
+  $('t-next').addEventListener('click', () => (touch(), time.pause(), time.step(1)));
 
   window.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
@@ -94,7 +124,8 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const onButton = t instanceof HTMLButtonElement;
     const big = e.shiftKey ? 7 : 1;
     // On the slider itself, plain arrows are the slider's own step: let the browser move it.
-    if (onRange && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return time.pause();
+    if (onRange && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return (touch(), time.pause());
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) touch();
     switch (e.key) {
       case 'ArrowLeft':
         time.pause();
@@ -114,7 +145,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
         break;
       case ' ':
         if (onButton) return; // let the button's own click handle it
-        time.toggle();
+        togglePlay();
         break;
       default:
         return;
