@@ -111,7 +111,8 @@ function start() {
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
     // On a wide screen the open About panel sits beside the map: fit the Midwest into what is left.
     const drawer = $('drawer');
-    const right = !phone.matches && drawer.classList.contains('open') ? drawer.offsetWidth : 0;
+    // On a phone the My area / Share stack floats on the right edge: keep the Midwest clear of it.
+    const right = phone.matches ? $('actions').offsetWidth + 8 : drawer.classList.contains('open') ? drawer.offsetWidth : 0;
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2) };
   };
   const map = createMap({
@@ -119,7 +120,7 @@ function start() {
     registry,
     time,
     padding,
-    covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter')],
+    covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter, #actions > *')],
     onMove: (moved) => {
       $('recenter').hidden = !moved;
       document.querySelector('.brand')!.classList.toggle('over-map', moved);
@@ -242,7 +243,17 @@ function start() {
     void setSpecies('firefly').finally(() => (speciesPending = false));
   }
 
-  mountScrubber($('bar'), time);
+  const setRibbon = mountScrubber($('bar'), time);
+  // The slider's track pictures the active species' season; a season or species change redraws it.
+  // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
+  let ribbonFrame = 0;
+  const drawRibbon = () =>
+    (ribbonFrame ||= requestAnimationFrame(() => {
+      ribbonFrame = 0;
+      setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
+    }));
+  registry.subscribe(drawRibbon);
+  setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
   mountLayerList($('layers'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t, pinned ? hit?.label : undefined);
@@ -407,6 +418,19 @@ function start() {
     $('countdown').replaceChildren(short, moreEl);
   }
   showCountdown();
+  // A phone's bar has no room for it, so there it opens the About panel instead (re-added each time the panel redraws).
+  // Phones hide the strip's countdown; it shows in About instead, under the opening line.
+  const aboutCountdown = () => {
+    const text = $('countdown').hidden ? '' : ($('countdown').textContent ?? '').trim();
+    const hook = $('drawer').querySelector('.ex-hook');
+    if (!text || !hook) return;
+    const p = document.createElement('p');
+    p.className = 'cd';
+    p.textContent = text;
+    hook.after(p);
+  };
+  registry.subscribe(aboutCountdown);
+  aboutCountdown();
 
   // First visit: the map comes first. The About button and Play glow briefly to show where the story and the
   // replay are; the panel itself opens only when asked (or with ?caveats).

@@ -32,7 +32,7 @@ const screens = [
 const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
-const TAB_ORDER = ['season', 'info-btn', 'why', 'locate', 'find', 'share', 't-prev', 't-play', 't-next', 't-range'];
+const TAB_ORDER = ['season', 'info-btn', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
 const problems = [];
 const browsers = {};
 for (const e of new Set(screens.map((s) => s[0]))) {
@@ -220,8 +220,16 @@ for (const [engine, width, height] of screens) {
     const f = await page.evaluate(() => {
       const el = document.activeElement;
       if (!el || el === document.body) return null;
+      // The slider draws its ring on the thumb (a rectangle round the whole ribbon would be too loud). Chromium does
+      // not report a thumb's computed style, so check it is focus-visible and a stylesheet rings its thumb.
       const cs = getComputedStyle(el);
-      return { id: el.id || el.tagName.toLowerCase(), ring: (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none' };
+      const thumbRing = () =>
+        [...document.styleSheets].some((sh) => [...sh.cssRules].some((r) =>
+          r instanceof CSSStyleRule && r.selectorText.includes(':focus-visible::-webkit-slider-thumb') && r.style.boxShadow !== ''));
+      const ring = el.type === 'range'
+        ? el.matches(':focus-visible') && thumbRing()
+        : (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
+      return { id: el.id || el.tagName.toLowerCase(), ring };
     });
     if (!f) continue;
     if (!want.includes(f.id)) {
