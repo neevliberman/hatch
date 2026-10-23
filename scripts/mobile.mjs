@@ -94,8 +94,9 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       try {
         await page.locator(sel).tap({ timeout: 3000 });
         return true;
-      } catch {
-        fail(`could not tap ${sel}`);
+      } catch (e) {
+        // The last line of Playwright's log says why (hidden, moving, or which element sits on top).
+        fail(`could not tap ${sel} (${String(e.message).trim().split('\n').pop().replace(/\x1b\[\d+m/g, '').trim()})`);
         return false;
       }
     };
