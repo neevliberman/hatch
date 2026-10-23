@@ -4,6 +4,8 @@
 
 **Try it: [neevliberman.github.io/hatch](https://neevliberman.github.io/hatch/)** (works on phones too).
 
+TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari engines and on phone sizes on every pull request.
+
 ![A season of luna moths sweeping north across the Midwest, from mid-May to mid-July](docs/media/season.gif)
 
 *Hexagons are the forecast, dots are real moths people photographed. Spring warmth sweeps north from Illinois and Ohio to Minnesota, and the moths follow.*
@@ -14,7 +16,7 @@
 - **Pick a year** from 2015 to 2025, or "all years" pooled into one typical season.
 - **Hover or tap a hexagon** for its forecast: when the first moths show up and the busiest days.
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
-- **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies a link to the same place, season and day.
+- **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
 - **"How sure?"** is always on screen and opens the honest version: how far off the forecast is, and what it can't do yet.
 
 | Desktop | Phone |
@@ -37,31 +39,31 @@ flowchart LR
   C --> F["Adults fly ~1 week"]
   E["When people log moths<br/>(weekends, Moth Week)"] --> S
   F --> S["Expected sightings<br/>per hexagon, per day"]
-  S --> M["Map colours:<br/>not yet → peak → over"]
+  S --> M["Map colors:<br/>not yet → peak → over"]
 ```
 
-The curve's shape is learned from the data by maximum likelihood: the model picks the curve that makes the real sighting dates most likely. A warm spring fills the account early, so moths come early, and the map shows it.
+The curve's shape is learned from the data: the model tries many curve shapes and keeps the one that best explains the real sighting dates (maximum likelihood). A warm spring fills the account early, so moths come early, and the map shows it.
 
 ## How good is it
 
-The test is **leave-one-year-out**: to grade the forecast for 2019, the model is fit on the other ten years only, then asked to call 2019's first moths and peak. Like a teacher writing the exam without seeing this year's answers. The comparison is "the calendar": each area's usual date.
+The test is **leave-one-year-out**: to grade the forecast for 2019, the model is fit on the other ten years only, then asked to call 2019's first moths and peak. It is like grading a student on a test they have not seen. The baseline to beat is each area's usual date.
 
 | Way of guessing the date | Average days off (lower is better) |
 |---|---|
 | The usual calendar date for that area | 7.3 days |
-| Hatch's first model (the notebook test) | 4.1 days |
-| **Hatch's current model** | **about 3.8 days** |
+| Hatch's first model (a quick prototype in a notebook) | about 4.0 days |
+| **Hatch's current model** | **about 3.9 days** |
 | A perfect forecaster, given how noisy the sightings are | about 3.0 days |
 
-- **It roughly halves the calendar's error**, about 3 days better (95% confidence interval roughly 1 to 5 days), scored over 31 latitude strip-years across seven states.
+- **It cuts the usual date's error from 7.3 to about 3.9 days.** The true gain could be as small as 1 day or as large as 5 (95% confidence interval). Scored on 31 test cases, each one east-west band of the map in one year, across seven states.
 - **It ties the first model on accuracy.** The gain over that model is the next point, not fewer days off.
-- **It fixed an early bias.** An earlier version called the south about 6 days too early and the north 4 days too late. The current model is within about 4 days in every strip, mostly leaning a little late.
+- **It mostly fixed a bias.** An earlier version called the south about 6 days too early and the north 4 days too late. The current model is within about 4 days in every strip, mostly leaning a little late.
 - **The rules were written down before scoring** ([FROZEN_P3.md](pipeline/fit/FROZEN_P3.md)), and both runs are reported, including the one that went worse. Full numbers: [pipeline/fit/RESULT.md](pipeline/fit/RESULT.md).
 
 ## What it can't do yet
 
 - **It has never forecast a season live.** Every score above is a replay of past years using that year's real temperatures. The first true test is the 2026 season, once its temperature data is published (around mid-2027).
-- **Unseen places are shaky.** The first model failed a test where it learned on Illinois, Indiana and Ohio and guessed Wisconsin and Minnesota (7.4 days off). A simpler version does pass that test (5.1 days), but it was picked after seeing the failure, so it counts as a second look, not proof.
+- **Unseen places are shaky.** The model picked in advance failed a test where it learned on Illinois, Indiana and Ohio and guessed Wisconsin and Minnesota (7.4 days off). A simpler version does pass that test (5.1 days), but it was picked after seeing the failure, so it counts as a second look, not proof.
 - **Sightings are not moths.** The model sees when people photograph moths, not when moths emerge. It corrects for when people are out looking, but that correction could also soak up real changes in moth numbers.
 - **Accuracy is measured for whole latitude strips**, not single hexagons. Zoomed-in hexagons (down to about 6 km) use local temperatures, but nobody has scored them one by one.
 - **First wave only.** Lunas have a second summer wave in the south. It is shown as dots, not forecast.
@@ -71,7 +73,7 @@ The test is **leave-one-year-out**: to grade the forecast for 2019, the model is
 ```mermaid
 flowchart LR
   subgraph Offline["Python pipeline (run by hand)"]
-    I["iNaturalist<br/>~3,000 open-licence sightings"] --> P["Fit the model<br/>leave-one-year-out"]
+    I["iNaturalist<br/>confirmed luna sightings"] --> P["Fit the model<br/>leave-one-year-out"]
     D["Daymet<br/>daily 1 km temperatures"] --> P
     P --> J["Forecast files<br/>JSON + small binary tiles"]
   end
@@ -83,9 +85,9 @@ flowchart LR
   N["National Weather Service"] --> A["Nightly forecast archive<br/>(GitHub Actions)"]
 ```
 
-- **Front end:** TypeScript, [deck.gl](https://deck.gl/) on WebGL, [H3](https://h3geo.org/) hexagons, Vite. No framework and no map tile server: state outlines are bundled, so the app makes no outside requests. Scrubbing the timeline changes one GPU shader value instead of re-uploading 3,000 dots, so it stays smooth on phones.
+- **Front end:** TypeScript, [deck.gl](https://deck.gl/) on WebGL, [H3](https://h3geo.org/) hexagons, Vite. No framework and no map tile server: state outlines are bundled, so the app makes no outside requests. Scrubbing the timeline changes one number on the graphics card (a shader setting) instead of re-sending 3,000 dots, so it stays smooth on phones.
 - **Model and data:** Python (NumPy, SciPy, pandas). The fitter is tested by planting known values in a fake Midwest and checking it finds them again.
-- **Testing:** every pull request runs Playwright smoke tests on phone sizes (iPhone and Android, portrait and landscape) and desktop sizes in Chromium, Firefox and WebKit. They fail on any page error, a blank map, a covered or off-screen button, or a broken keyboard path. A bundle budget keeps the one-file build under 500 KB gzipped.
+- **Testing:** every pull request runs Playwright smoke tests (quick checks that the app loads and works) on phone sizes (iPhone and Android, portrait and landscape) and desktop sizes in Chromium, Firefox and WebKit. They fail on any page error, a blank map, a covered or off-screen button, or a broken keyboard path. `npm run check` also enforces a size limit: the whole app, in one file, stays under 500 KB compressed.
 - **Accessibility:** text meets WCAG 2.1 AA contrast, map marks meet 3:1, everything works by keyboard, and the map has a screen-reader summary.
 - **Forecast archive:** the National Weather Service keeps no old forecasts, so a nightly job saves them now for testing future live forecasts.
 
@@ -109,14 +111,14 @@ The Python side: `pip install -r notebooks/requirements.txt`, then see [pipeline
 src/              the web app (core/ clock and hex grid, layers/ the luna layer, map/, ui/)
 pipeline/fit/     the model, its tests and the scored result
 pipeline/replay/  builds the forecast files the app reads
-notebooks/        the first go/no-go notebook test
+notebooks/        the first prototype model (Jupyter notebook)
 scripts/          smoke tests, bundle budget, data build helpers
 docs/             engineering notes and README media
 ```
 
 ## Data and credits
 
-- **Sightings:** [iNaturalist](https://www.inaturalist.org/taxa/47916-Actias-luna) observers. Only CC0, CC BY and CC BY-NC records are used, so the derived data carries those observers' licences (non-commercial terms apply). Photos are linked, never copied, and every record keeps its observation id.
+- **Sightings:** [iNaturalist](https://www.inaturalist.org/taxa/47916-Actias-luna) observers. Only CC0, CC BY and CC BY-NC records are shown or redistributed, so the app's data carries those observers' licenses (non-commercial terms apply). The model also learned from the dates and places of other confirmed records, which are not shipped. Photos are linked, never copied, and every shown record keeps its observation id.
 - **Temperatures:** [Daymet](https://daymet.ornl.gov/) v4 daily 1 km data, Thornton et al., ORNL DAAC.
 - **State outlines:** US Census Bureau, via [us-atlas](https://github.com/topojson/us-atlas).
 - **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
