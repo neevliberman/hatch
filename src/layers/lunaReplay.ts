@@ -19,7 +19,7 @@ import {
   type Mode,
   type Sighting,
 } from './lunaData';
-import { fineDays, fineLevel, fineManifest, parentOf, type FineLevel } from './fineData';
+import { fineDays, fineLevel, fineManifest, parentOf, RETRY_MS, type FineLevel } from './fineData';
 import { isStale, type Live } from './liveData';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
@@ -32,6 +32,13 @@ export const GLOW_DAYS = 10;
  */
 export const FINE_ZOOM: Record<number, number> = { 5: 6.4, 6: 7.9 };
 const HYSTERESIS = 0.3;
+/** A finer level only goes on screen once the zoom has asked for it this long (not mid fly-to or mid pinch). */
+export const SETTLE_MS = 300;
+/**
+ * Phones draw res 5 with one instanced hexagon shape, as res 6 always is: true polygons for ~3,900 cells cost
+ * memory that iOS can answer by dropping the whole WebGL context (a blank map).
+ */
+export const COARSE = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 /** Spatial holdout (learn IL/IN/OH, test WI/MN): only claimed when the shipped model's own numbers show a pass. */
 const hoHeat = data.model?.holdout_mae?.heat;
 const hoCal = data.model?.holdout_mae?.cal;
@@ -279,27 +286,45 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
   // ---- finer levels: the level the zoom asks for, what has loaded, and what is on screen
   let wantRes = 4;
+  let wantSince = 0;
   let shownRes = 4;
+  /** The days drawn last at shownRes: kept on screen while a season switch loads its own, so the map doesn't flash coarse. */
+  let shownDays: Uint8Array | null = null;
   const shown5or6 = new Map<number, Shown>();
   const fineDaysLoaded = new Map<string, Uint8Array>();
-  const loading = new Set<string>();
+  /** Requests on their way or recently failed, by `${res}/${mode}` ('manifest' for the level list): no retry before RETRY_MS. */
+  const loading = new Map<string, number>();
   let fineLevels: number[] = [];
-  void fineManifest().then((m) => {
-    fineLevels = m ? Object.keys(m.levels).map(Number) : [];
-    if (fineLevels.length && wantRes > 4) onData();
-  });
+  const loadManifest = () => {
+    loading.set('manifest', Infinity);
+    void fineManifest().then((m) => {
+      fineLevels = m ? Object.keys(m.levels).map(Number) : [];
+      if (m) loading.delete('manifest');
+      else loading.set('manifest', performance.now() + RETRY_MS);
+      if (fineLevels.length && wantRes > 4) onData();
+    });
+  };
+  loadManifest();
   const resForZoom = (zoom: number) => {
     let r = wantRes;
     while (r < 6 && zoom >= FINE_ZOOM[r + 1]!) r++;
     while (r > 4 && zoom < FINE_ZOOM[r]! - HYSTERESIS) r--;
+    if (r !== wantRes) {
+      wantSince = performance.now();
+      if (r > shownRes) setTimeout(onData, SETTLE_MS + 20); // look again once the zoom has rested
+    }
     return (wantRes = r);
   };
   const load = (res: number) => {
     const key = `${res}/${mode}`;
-    if (loading.has(key)) return;
-    loading.add(key);
+    if ((loading.get(key) ?? 0) > performance.now()) return;
+    loading.set(key, Infinity);
     void Promise.all([fineLevel(res), fineDays(res, mode)]).then(([level, days]) => {
-      if (!level || !days || days.length !== level.cells.length * 5) return; // missing or stale file: stay coarser
+      if (!level || !days || days.length !== level.cells.length * 5) {
+        loading.set(key, performance.now() + RETRY_MS); // missing, stale or offline: stay coarser, ask again later
+        return;
+      }
+      loading.delete(key);
       if (!shown5or6.has(res)) {
         const fc = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
         shown5or6.set(res, { level, data: fc, unseen: fc.filter((c) => !c.seen) });
@@ -308,15 +333,21 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       if (wantRes >= res) onData();
     });
   };
-  /** Finest level at or below the wanted one whose cells and current-season days are in memory. */
-  const pickRes = (want: number) => {
-    if (mode === LIVE) return 4; // live has no finer files: big hexagons at every zoom
+  /** Finest level at or below the wanted one that can be drawn now, and the days to draw it with. */
+  const pickRes = (want: number): { res: number; days: Uint8Array | null } => {
+    if (mode === LIVE) return { res: 4, days: null }; // live has no finer files: big hexagons at every zoom
+    if (!fineLevels.length && want > 4 && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
+    // Going finer waits until the zoom has rested; going coarser (or staying) is immediate.
+    if (want > shownRes && performance.now() - wantSince < SETTLE_MS) want = shownRes;
     for (let r = want; r > 4; r--) {
       if (!fineLevels.includes(r)) continue;
-      if (shown5or6.has(r) && fineDaysLoaded.has(`${r}/${mode}`)) return r;
-      load(r);
+      const days = fineDaysLoaded.get(`${r}/${mode}`);
+      if (!days) load(r);
+      if (shown5or6.has(r) && days) return { res: r, days };
+      // A season switch: keep this level's last colours for the moment its new days are on their way.
+      if (r === shownRes && shownDays) return { res: r, days: shownDays };
     }
-    return 4;
+    return { res: 4, days: null };
   };
   /** Forecast quantiles, "seen" and the cell id at lngLat on the level on screen. */
   const lookup = (lngLat: [number, number]) => {
@@ -460,7 +491,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
     render({ t, zoom, theme }) {
       const doy = dayOfYear(t);
-      const res = pickRes(resForZoom(zoom));
+      const { res, days } = pickRes(resForZoom(zoom));
+      shownDays = days;
       if (res !== shownRes) {
         shownRes = res;
         queueMicrotask(onData); // the card and its outline follow the new level
@@ -476,7 +508,6 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         extensions: filterExt,
       };
       const fine = res > 4 ? shown5or6.get(res)! : null;
-      const days = fine ? fineDaysLoaded.get(`${res}/${mode}`)! : null;
       // Each level gets its own layer ids. Reusing one id across levels let deck.gl keep the bigger level's
       // triangles after a zoom out: the old small hexagons stayed drawn in the gaps along the shores.
       const hexLayers = fine && days
@@ -490,9 +521,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               stroked: true,
               filled: true,
               extruded: false,
-              // Res 5 is drawn as true polygons (a zoomed-in view can still span a few states). Res 6 (~27,000
-              // cells, only shown when zoomed in close) uses one instanced hexagon shape: much lighter on phones.
-              highPrecision: res === 5 ? true : 'auto',
+              // Res 5 is drawn as true polygons on desktop (a zoomed-in view can still span a few states). Res 6
+              // (~27,000 cells, only shown when zoomed in close), and res 5 on phones, use one instanced hexagon
+              // shape: much lighter on memory (see COARSE).
+              highPrecision: res === 5 && !COARSE ? true : 'auto',
               lineWidthMinPixels: 0.4,
               pickable: true,
               autoHighlight: true,
