@@ -215,6 +215,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     return { cell, q: forecast()[i] ?? [], seen: cells[i]!.seen, parent: cell };
   };
 
+  let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
+
   // The default spot until a hex is tapped: Chicago's western suburbs (the city's own hex centre is in the lake).
   const HOME: [number, number] = [-88.0, 41.9];
   const spotStory = (lngLat: [number, number] | null, t: number, name?: string): SpotStory | null => {
@@ -274,9 +276,14 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
     points(t) {
-      const doy = dayOfYear(t);
-      const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
-      return shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).map((s) => [s.lng, s.lat]);
+      // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
+      const key = `${dayOfYear(t)}|${mode}`;
+      if (lit.key !== key) {
+        const doy = dayOfYear(t);
+        const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
+        lit = { key, pts: shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).map((s) => [s.lng, s.lat]) };
+      }
+      return lit.pts;
     },
 
     summary(t) {

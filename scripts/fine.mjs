@@ -68,7 +68,7 @@ const cases = [
   ['lake-mi-shore-z8.6', '?date=05-28&noauto', -86.05, 42.55, 8.6, 6],
   ['detroit-z9', '?year=2025&date=05-30&noauto', -83.2, 42.4, 9.0, 6],
   ['mississippi-z8.2', '?date=05-24&noauto', -91.2, 43.2, 8.2, 6],
-  ['back-out-z5', '?noauto', -88.5, 42.5, 5.0, 4],
+  ['wheel-back-out', '?noauto', -88.5, 42.5, 5.0, 4],
 ];
 const shots = [
   ['desktop', 1440, 900, false],
@@ -88,7 +88,7 @@ for (const [name, width, height, mobile] of shots) {
     page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
     await page.goto(`${origin}/${query}`);
     await page.waitForTimeout(1200);
-    if (label === 'back-out-z5') {
+    if (label === 'wheel-back-out') {
       // Wheel in to the finest level and back out, as a person does (each level comes and goes many frames apart).
       // A jump straight from res 6 to res 4 hid a bug that left small hexagons drawn in the gaps along the shores.
       await page.evaluate(() => window.__hatch.map.view([-87.9, 42.0], 5));
@@ -101,7 +101,7 @@ for (const [name, width, height, mobile] of shots) {
       await page.waitForTimeout(1000);
     }
     // Back-out stays where the wheel left it: jumping again would redraw and hide what the zoom out left behind.
-    const at = label === 'back-out-z5' ? await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding())) : null;
+    const at = label === 'wheel-back-out' ? await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding())) : null;
     if (!at) await page.evaluate(([a, b, z]) => window.__hatch.map.view([a, b], z), [lng, lat, zoom]);
     const ok = await page.waitForFunction((r) => window.__hatch.luna.res() === r, res, { timeout: 8000 }).then(() => true, () => false);
     const got = await page.evaluate(() => window.__hatch.luna.res());
@@ -109,7 +109,7 @@ for (const [name, width, height, mobile] of shots) {
     await page.waitForTimeout(800);
     const png = await page.screenshot({ path: `${out}/${name}-${label}.png` });
     const m = await page.evaluate(measure, png.toString('base64'));
-    if (label === 'back-out-z5') {
+    if (label === 'wheel-back-out') {
       // After zooming in and out, the map must look like a fresh load of the same view: no small hexagons left over.
       const fresh = await ctx.newPage();
       await fresh.goto(`${origin}/${query}`);

@@ -36,13 +36,13 @@ export const palette = {
   dotShadow: [43, 36, 28, 40] as RGBA,
   marker: [140, 87, 12, 255] as RGBA,
   pick: INK,
-  // Map detail (map/basemap.ts): lakes in the water wash, rivers in blue ink on a paper casing, highways a faint
-  // sepia, forest outlines in leaf-green ink.
+  // Map detail (map/basemap.ts): lakes in the water wash, rivers in blue ink on a paper casing, highways as paper
+  // lines, forest outlines in leaf-green ink.
   water: [207, 220, 216, 255] as RGBA, // = bg
   riverInk: [52, 96, 128, 235] as RGBA,
   riverCase: [248, 242, 227, 170] as RGBA,
-  road: [110, 62, 40, 120] as RGBA,
-  forest: [36, 84, 46, 150] as RGBA,
+  road: [248, 242, 227, 190] as RGBA, // paper lines, like roads left blank on a printed map
+  forest: [24, 64, 34, 210] as RGBA,
   transparent: [0, 0, 0, 0] as RGBA,
 };
 

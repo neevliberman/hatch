@@ -88,7 +88,8 @@ export interface HatchLayer {
   probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }): ProbeCard | null;
   /** Visual About panel; see Explainer. */
   explainer?(): Explainer;
-  /** Points on the map at time t that place names must not cover (the sighting dots). */
+  /** Points on the map at time t that place names must not cover (the sighting dots). Return the same array while
+   * they are unchanged: the names are only re-placed when it changes. */
   points?(t: number): [number, number][];
   /** Data sources to credit, rendered in the drawer. */
   credits?(): string[];

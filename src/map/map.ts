@@ -170,10 +170,10 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // The canvas gets a Tab stop for deck's keyboard controls, which are off: drop it, so Tab goes straight to the controls.
     onLoad: (): void => deck.getCanvas()?.setAttribute('tabindex', '-1'),
     onClick: (info: PickingInfo) => onProbe(hit(info), true),
-    // Place names follow the drawn view (they skip the work when only the date changed).
+    // Place names follow the drawn view (they skip the work when neither the view nor the dots changed).
     onAfterRender: () =>
       labels.update(deck.isInitialized ? (deck.getViewports()[0] as WebMercatorViewport) : undefined, padding(),
-        () => registry.activeLayers().flatMap((l) => l.points?.(time.cursor) ?? []), refreshes, covers?.() ?? []),
+        registry.activeLayers().map((l) => l.points?.(time.cursor) ?? []), covers?.() ?? []),
   });
 
   const labels = createLabels(container);
@@ -220,10 +220,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         ]
       : [];
 
-  // Counts redraws of the layers (a new date, season or zoom), so the place names know when the dots may have moved.
-  let refreshes = 0;
   const refresh = () => {
-    refreshes++;
     const { under, mid, over } = basemapLayers(zoom);
     const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme }));
     // Lakes, rivers and roads go over the hexagons but under the sighting dots.

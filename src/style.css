@@ -376,12 +376,14 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .map-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .place { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; white-space: nowrap;
   color: var(--text); font: 400 12px/15px var(--font-body);
-  text-shadow: 0 0 2px #f8f2e3, 0 0 2px #f8f2e3, 0 0 3px #f8f2e3, 0 0 4px #f8f2e3; }
+  /* A solid paper halo: eight 1.5px offsets fill the gaps a blur alone leaves on the dark peak green. */
+  text-shadow: 1.5px 0 #f8f2e3, -1.5px 0 #f8f2e3, 0 1.5px #f8f2e3, 0 -1.5px #f8f2e3, 1px 1px #f8f2e3, -1px -1px #f8f2e3,
+    1px -1px #f8f2e3, -1px 1px #f8f2e3, 0 0 4px #f8f2e3; }
 .place-town::before, .place-city::before { content: ''; flex: none; width: 4px; height: 4px; border-radius: 50%;
   background: var(--text); box-shadow: 0 0 0 1.5px #f8f2e3; }
 .place.flip { flex-direction: row-reverse; }
 .place-city { font: 700 13px/16px var(--font-body); }
 .place-city::before { width: 5px; height: 5px; }
-.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: rgba(43, 36, 28, 0.62); }
+.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #5a4d3c; }
 .place-water { font: 600 17px/18px var(--font-note); color: #2c5873; }
 .place-park { font: 600 16px/18px var(--font-note); color: #24542e; }

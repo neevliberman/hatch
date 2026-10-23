@@ -48,13 +48,16 @@ function want(zoom: number) {
     if (asked.has(name)) continue;
     asked.add(name);
     fetch(new URL(`basemap/${name}.json`, document.baseURI).href)
-      .then((r) => (r.ok ? (r.json() as Promise<Part>) : null))
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json() as Promise<Part>;
+      })
       .then((p) => {
         if (p?.version !== 1) return;
         parts[name as 'overview' | 'detail'] = p;
         onLoad();
       })
-      .catch(() => {});
+      .catch(() => asked.delete(name)); // a dropped connection: try again on a later zoom
   }
 }
 
@@ -76,7 +79,7 @@ function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {
       filled: false,
       stroked: true,
       getLineColor: P.forest,
-      getLineWidth: 1.2,
+      getLineWidth: 1.6,
       lineWidthUnits: 'pixels',
       ...filter,
     }),

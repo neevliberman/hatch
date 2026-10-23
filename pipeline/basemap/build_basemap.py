@@ -42,7 +42,7 @@ POP_URL = 'https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/ci
 # Census state codes: the seven forecast states get their towns named; neighbours only their bigger cities.
 CORE = {'17': 'IL', '18': 'IN', '19': 'IA', '26': 'MI', '27': 'MN', '39': 'OH', '55': 'WI'}
 NEIGHBOURS = {'29': 'MO', '21': 'KY', '38': 'ND', '46': 'SD', '31': 'NE', '42': 'PA', '54': 'WV'}
-MIN_POP_CORE, MIN_POP_NEIGHBOUR = 1500, 40000
+MIN_POP_CORE, MIN_POP_NEIGHBOUR = 3000, 40000
 
 
 def fetch(name, url):
@@ -169,12 +169,21 @@ def roads():
     return feats
 
 
+def big_parts(g, min_km2=20):
+    """Only the pieces of a forest bigger than min_km2: the scattered small tracts read as specks, not forest."""
+    parts = [p for p in getattr(g, 'geoms', [g]) if p.geom_type == 'Polygon' and p.area * 111 * 111 * 0.72 >= min_km2]
+    return unary_union(parts) if parts else None
+
+
 def forests():
     feats, labels = [], []
     for g, rec in read('usfs', 'S_USA.AdministrativeForest'):
         if g.is_empty:
             continue
         name = rec['FORESTNAME']
+        g = big_parts(g.intersection(land()))
+        if g is None:
+            continue
         f = feature(g, 0.003, z=6.5)
         if f:
             feats.append(f)
@@ -182,6 +191,7 @@ def forests():
         labels.append([name.replace(' National Forests', ' NF').replace(' National Forest', ' NF'),
                        round(p.x, 3), round(p.y, 3), 6.5, 'park', round(g.area * 1000)])
     for g, rec in read('ne_10m_parks_and_protected_lands', '*_area'):
+        g = g.intersection(land())
         if g.is_empty:
             continue
         f = feature(g, 0.002, z=6.5)
@@ -231,10 +241,16 @@ def towns():
                 continue
             name = town_name(r['NAME'])
             # Big cities from the whole-Midwest view; a town of 2,000 from about town scale.
-            z = 4.3 + (6.0 - math.log10(n)) / 0.55
+            z = 4.6 + (6.0 - math.log10(n)) / 0.5
             labels.append([name, round(lng, 3), round(lat, 3), round(max(0.0, z), 1),
                            'city' if n >= 100000 else 'town', n])
-    return labels
+    # A city and a village of the same name side by side (Pewaukee, WI) would print twice: keep the bigger one.
+    labels.sort(key=lambda lab: -lab[5])
+    kept = []
+    for lab in labels:
+        if not any(k[0] == lab[0] and abs(k[1] - lab[1]) < 0.2 and abs(k[2] - lab[2]) < 0.15 for k in kept):
+            kept.append(lab)
+    return kept
 
 
 def states():
