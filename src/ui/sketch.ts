@@ -15,7 +15,7 @@ const rng = (seed: number) => {
 
 /** Smooth a hand-placed polyline (Catmull-Rom), `k` samples per span. */
 function smooth(pts: P[], k = 6): P[] {
-  if (pts.length < 3) return pts;
+  if (pts.length < 2) return pts;
   const out: P[] = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const [p0, p1, p2, p3] = [pts[Math.max(0, i - 1)]!, pts[i]!, pts[i + 1]!, pts[Math.min(pts.length - 1, i + 2)]!];
@@ -172,7 +172,6 @@ function creatureArt(kind: Explainer['creature'], moving: boolean): [Art, Art] {
       extra: '<text class="note" x="68" y="48" transform="rotate(-8 68 48)">zzz</text>',
     },
     {
-      wash: `<path class="wash leaf" d="${MOTH.wash.map((w) => blob(M(w).map(([x, y]) => [x + 2, y + 1.5] as P))).join('')}"/>`,
       // The same cocoon as in winter, its top torn open.
       ink: pen(loop(28, 64, 12, 5.5, -0.35, 0.5, 0), 1.4, 20) +
         pen([[16.7, 68.1], [19, 64.5], [21.5, 66.5], [24, 62.5], [27, 64.5], [30, 60.5], [33, 62.5], [36, 58.5], [39.3, 59.9]], 0.7, 21, false) +
@@ -182,13 +181,13 @@ function creatureArt(kind: Explainer['creature'], moving: boolean): [Art, Art] {
         MOTH.body.map((b, i) => pen(M(b), i < 2 ? 1.1 : 0.7, 30 + i)).join('') +
         pen([[87, 40], [91, 37]], 0.7, 35, false) + pen([[88, 47], [93, 46]], 0.7, 36, false),
       extra: `<path class="trail" d="M32 57c0-12 8-20 22-22"/>
-        <g class="${moving ? 'flap' : ''}" style="transform-origin:70px 27px">${`<path class="pen" d="${wings}"/>`}</g>`,
+        <g class="${moving ? 'flap' : ''}" style="transform-origin:70px 27px"><path class="wash leaf" d="${MOTH.wash.map((w) => blob(M(w).map(([x, y]) => [x + 2, y + 1.5] as P))).join('')}"/><path class="pen" d="${wings}"/></g>`,
     },
   ];
 }
 
-/** Panel 2: warm days counted as tally marks from March 1, until a little flag says "enough!". Hotter days are
- * pressed harder. When moving, the marks go down one bunch at a time, then the flag, then it all stays a while. */
+/** Panel 2: warm days counted as tally marks from March 1, until a little flag says "enough!". When moving, the
+ * marks go down one bunch at a time, then the flag, then it all stays a while. */
 function tally(moving: boolean): Art {
   const sun = pen(loop(14, 15, 6, 6, 0, 1.25), 1.3, 1) +
     [[15, 9], [55, 7], [100, 10], [150, 6], [-25, 8]]
@@ -198,14 +197,13 @@ function tally(moving: boolean): Art {
       })
       .join('');
   const groups: [number, number][] = [[32, 44], [46, 44], [60, 44], [74, 44], [10, 66], [24, 66], [38, 66]];
-  const hot = new Set([2, 3, 5]);
   const r = rng(5);
   const at = (i: number) => (0.04 + i * 0.07).toFixed(2);
   const show = (t: string) =>
     moving ? `<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;${t};${(+t + 0.02).toFixed(2)};0.95;1" dur="10s" repeatCount="indefinite"/>` : '';
   const marks = groups
     .map(([x, y], i) => {
-      const w = hot.has(i) ? 1.7 : 1.1;
+      const w = 1.1;
       let d = '';
       for (let k = 0; k < 4; k++) {
         const x0 = x + k * 2.6 + (r() - 0.5) * 0.6;
