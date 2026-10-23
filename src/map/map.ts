@@ -281,23 +281,28 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // a double tap and only lets it go on the next touch (carrying that touch's spot), so a tap never pinned anything;
   // and it drops a click whose press and lift land more than 250 ms apart, which a busy main thread (a big screen
   // drawing slowly) stamps on an ordinary click. A short, still press of one finger or the main button is a tap.
-  // Double-tap zoom still works, and pins the spot first; the second click of a double click leaves the pin alone.
+  // Double-tap and double-click zoom still work: the first press toggles the pin, the rest of a double click don't.
   let touchDown: { x: number; y: number; t: number } | null = null;
   let lastClick = { x: 0, y: 0, t: -Infinity };
   container.addEventListener('pointerdown', (e) => {
-    const ok = e.isPrimary && (e.pointerType === 'touch' || e.button === 0);
+    const ok = e.isPrimary && (e.pointerType === 'touch' || (e.button === 0 && !e.ctrlKey)); // ctrl-click: Mac menu
     touchDown = ok ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+  });
+  // Mouse 5 px, finger or pen 10. A press that wandered further is a pan, even if it comes back.
+  const slop = (e: PointerEvent) => (e.pointerType === 'mouse' ? 5 : 10);
+  container.addEventListener('pointermove', (e) => {
+    if (touchDown && e.isPrimary && Math.hypot(e.clientX - touchDown.x, e.clientY - touchDown.y) > slop(e)) touchDown = null;
   });
   container.addEventListener('pointerup', (e) => {
     const d = touchDown;
     touchDown = null;
     // 1 s, not the usual 0.5: a busy device can stamp the lift late, and a press that long still didn't move.
-    const still = e.pointerType === 'touch' ? 10 : 5;
-    if (!d || e.timeStamp - d.t > 1000 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > still) return;
+    if (!d || e.timeStamp - d.t > 1000 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop(e)) return;
     if (e.pointerType !== 'touch') {
-      const second = d.t - lastClick.t < 400 && Math.hypot(d.x - lastClick.x, d.y - lastClick.y) < 10;
-      lastClick = second ? { x: 0, y: 0, t: -Infinity } : { x: e.clientX, y: e.clientY, t: e.timeStamp };
-      if (second) return;
+      // Pressed within 300 ms and 10 px of the last lift: the 2nd (or 3rd...) click of a double click, which zooms.
+      const again = d.t - lastClick.t < 300 && Math.hypot(d.x - lastClick.x, d.y - lastClick.y) < 10;
+      lastClick = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      if (again) return;
     }
     const r = container.getBoundingClientRect();
     const info = deck.pickObject({ x: e.clientX - r.left, y: e.clientY - r.top });
