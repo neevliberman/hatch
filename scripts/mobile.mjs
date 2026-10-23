@@ -131,7 +131,13 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     const sheet = box.x <= 40;
     if (sheet && box.height > height * 0.6) fail(`the About sheet opens ${Math.round((box.height / height) * 100)}% tall, hiding the map`);
     const spot0 = await page.locator('[data-spot] .spot-title').first().textContent();
-    await page.touchscreen.tap(sheet ? width / 2 : box.x / 2, (top + (sheet ? box.y : (await page.locator('#bottom').boundingBox()).y)) / 2);
+    // On land, not a lake (the middle of the free map can be Lake Michigan), and clear of the panels: the first of a
+    // few inland spots (Wisconsin, Minnesota, Illinois) that sits in the free strip, else that strip's middle.
+    const free = { x1: sheet ? 0 : box.x, y0: top, y1: sheet ? box.y : (await page.locator('#bottom').boundingBox()).y };
+    const inland = await page.evaluate(({ x1, y0, y1 }) => [[-89.8, 44.6], [-94.3, 46.2], [-89.2, 40.1]]
+      .map((ll) => window.__hatch?.map.project(ll)).find((p) => p && p[0] > 8 && p[0] < (x1 || innerWidth) - 8 && p[1] > y0 + 8 && p[1] < y1 - 8),
+      free);
+    await page.touchscreen.tap(...(inland ?? [sheet ? width / 2 : box.x / 2, (free.y0 + free.y1) / 2]));
     await page.waitForTimeout(600);
     if (!(await page.locator('#drawer.open').count())) fail('a tap on the map beside the open drawer closed it');
     else if (sheet) {
