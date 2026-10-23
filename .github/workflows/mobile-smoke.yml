@@ -25,6 +25,8 @@ jobs:
       # The Ubuntu apt mirror sometimes stalls and the step would sit until the job's 30-minute limit: give each try 8
       # minutes, and after a failed try (a mirror mid-sync fails fast) wait, refresh the package lists and try again.
       - run: |
+          # The runner image can still be running its own apt-get at start: wait for its lock instead of failing at once.
+          echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-lock-wait
           for i in 1 2 3; do
             timeout 480 npx playwright install --with-deps chromium webkit && exit 0
             sleep 30; sudo apt-get update -q || true
