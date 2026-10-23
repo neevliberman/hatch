@@ -289,40 +289,29 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-name i { font-weight: 400; font-size: 13px; color: var(--muted); }
 .ex-hook { margin: 0 0 8px; color: var(--text); }
 .ex-fig { margin: 0; }
-/* The picture strip is pen on paper: ink lines, a watercolour wash under them, hatching for shade (src/ui/explainer.ts). */
+/* The picture strip is pen on paper: tapered ink strokes, a loose watercolour wash, a pencilled frame (src/ui/sketch.ts). */
 .ex-defs { position: absolute; width: 0; height: 0; }
 .ex-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
   font-size: 12.5px; line-height: 1.3; color: var(--muted); text-align: center; }
-/* A pen arrow between panels, so they read as one story: this, then this. */
-.ex-pic { position: relative; }
-.ex-then { position: absolute; right: -12px; top: 50%; width: 12px; transform: translateY(-50%);
-  font: 600 18px var(--font-note); color: var(--warn); text-align: center; }
 .ex-steps b { display: block; color: var(--text); font-size: 12.5px; margin: 2px 0; }
+.ex-pic { position: relative; }
+.ex-then { position: absolute; right: -13px; top: 50%; width: 14px; height: 16px; transform: translateY(-50%); overflow: visible; }
+.ex-then .pen { fill: var(--warn); }
 .ex-pane { display: block; width: 100%; height: auto; overflow: visible; }
-.ex-pane path, .ex-pane circle { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-.ex-pane .ghost { stroke-width: 0.6; opacity: 0.5; }
-.ex-pane .thin { stroke-width: 0.8; }
-.ex-pane .snow { stroke: var(--muted); stroke-width: 0.7; }
-.ex-pane .frame { stroke: var(--line-strong); stroke-width: 0.9; }
-.ex-pane .frame.ghost { stroke-width: 0.5; }
-.ex-pane .scr { stroke-width: 0.45; opacity: 0.7; }
-.ex-pane .dash { stroke: var(--warn); stroke-dasharray: 3 2.5; }
-.ex-pane .trail { stroke: var(--muted); stroke-width: 0.9; stroke-dasharray: 0.5 3; }
-.ex-pane .wash { stroke: none; opacity: 0.6; mix-blend-mode: multiply; }
-.ex-pane .wash.sun { fill: var(--sun); opacity: 0.45; }
+.ex-pane .pen { fill: var(--text); }
+.ex-pane .frame { fill: var(--line-strong); }
+.ex-pane .trail { fill: none; stroke: var(--muted); stroke-width: 0.9; stroke-linecap: round; stroke-dasharray: 0.4 3; }
+.ex-pane .wash { mix-blend-mode: multiply; }
+.ex-pane .wash.sun { fill: var(--sun); opacity: 0.4; }
 .ex-pane .wash.tan { fill: var(--wash-tan); opacity: 0.35; }
-.ex-pane .wash.leaf { fill: var(--wash-leaf); }
-.ex-pane .note { font: 600 12px var(--font-note); fill: var(--warn); }
-.ex-pane .drop { fill: var(--sun); stroke: none; opacity: 0; animation: ex-drop 2.4s ease-in infinite; }
-.ex-pane .drop.still { opacity: 0.8; animation: none; }
-.ex-pane .flap { animation: ex-flap 0.45s ease-in-out infinite alternate; }
-/* Warmth drips from the sun into the jar. */
-@keyframes ex-drop { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 50% { transform: translate(22px, -8px); }
-  85% { opacity: 1; } 100% { opacity: 0; transform: translate(43px, 2px); } }
-@keyframes ex-flap { from { transform: scaleX(1); } to { transform: scaleX(0.6); } }
-@media (prefers-reduced-motion: reduce) {
-  .ex-pane .flap, .ex-pane .drop { animation: none; }
-}
+.ex-pane .wash.leaf { fill: var(--wash-leaf); opacity: 0.55; }
+.ex-pane .wash.warn { fill: var(--warn); opacity: 0.35; }
+.ex-pane .note { font: 600 12px var(--font-note); fill: var(--text); }
+.ex-pane .note.small { font-size: 10.5px; fill: var(--muted); }
+.ex-pane .note.warn { font-size: 13px; fill: var(--warn); }
+.ex-pane .flap { animation: ex-flap 1.6s ease-in-out infinite alternate; }
+@keyframes ex-flap { 0%, 60% { transform: scaleX(1); } 100% { transform: scaleX(0.75); } }
+@media (prefers-reduced-motion: reduce) { .ex-pane .flap { animation: none; } }
 
 .ex-spot, .ex-score { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
 .ex-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }

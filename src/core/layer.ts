@@ -67,7 +67,7 @@ export interface Explainer {
   creature: 'moth' | 'firefly';
   accent: string;
   hook: string;
-  /** Captions for the three sketched panels: how it spends winter, warm days pile up, the insects come out. */
+  /** Captions for the three sketched panels: how it spends winter, warm days add up, the insects come out. */
   steps: [{ title: string; text: string }, { title: string; text: string }, { title: string; text: string }];
   spotIntro: string;
   /** The season at a place (null = the layer's default spot), on the day `t`, called `name` when it has one (a
