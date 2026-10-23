@@ -50,10 +50,14 @@ export const data = raw as unknown as ReplayFile;
 
 export const SECOND_BROOD = 1;
 export const APPROXIMATE = 2;
+/** Live sightings only: not yet confirmed by other iNaturalist users (needs ID). Drawn a little fainter. */
+export const UNCONFIRMED = 4;
 
 /** "typical" pools every year by day of year; otherwise a calendar year as a string. */
 export type Mode = string;
 export const TYPICAL: Mode = 'typical';
+/** This season, forecast every night from the weather so far (public/live/latest.json). */
+export const LIVE: Mode = 'live';
 
 export interface Sighting {
   id: number;
@@ -69,7 +73,8 @@ export interface Sighting {
 
 const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 
-export const sightings: Sighting[] = data.sightings.map(([id, year, doy, lat, lng, flags]) => ({
+/** One row of a sightings list ([iNat id, year, day of year, lat, lng, flags]) as a dot. */
+export const toSighting = ([id, year, doy, lat, lng, flags]: ReplayFile['sightings'][number]): Sighting => ({
   id,
   year,
   doy,
@@ -78,10 +83,17 @@ export const sightings: Sighting[] = data.sightings.map(([id, year, doy, lat, ln
   lng,
   flags,
   cell: latLngToCell(lat, lng, GRID_RES),
-}));
+});
 
-/** Sightings shown in a mode: one year, or all years pooled by day of year. */
+export const sightings: Sighting[] = data.sightings.map(toSighting);
+
+/** This season so far, from public/live/latest.json (src/layers/liveData.ts); empty until that file arrives. */
+let liveSightings: Sighting[] = [];
+export const setLiveSightings = (s: Sighting[]) => void (liveSightings = s);
+
+/** Sightings shown in a mode: one year, all years pooled by day of year, or this season's (live). */
 export function sightingsFor(mode: Mode): Sighting[] {
+  if (mode === LIVE) return liveSightings;
   return mode === TYPICAL ? sightings : sightings.filter((s) => String(s.year) === mode);
 }
 

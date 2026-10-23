@@ -36,7 +36,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
         <button id="t-play" class="icon-btn play" aria-label="Play (Space)"></button>
         <button id="t-next" class="icon-btn" aria-label="Forward one day (Right arrow)">${NEXT}</button>
       </div>
-      <div class="date"><span id="t-date"></span><small id="t-doy"></small></div>
+      <div class="date"><span id="t-date"></span><small id="t-doy"></small><span id="t-asof" class="asof" hidden></span></div>
     </div>
     <div class="track">
       <input id="t-range" type="range" min="0" step="1" aria-label="Date within season" />
@@ -49,6 +49,8 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
   const dateEl = $('t-date');
   const doyEl = $('t-doy');
   const ticks = $('t-ticks');
+  const asOfEl = $('t-asof');
+  const md = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
   let rangeKey = '';
   const drawTicks = () => {
@@ -56,7 +58,23 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const parts = makeTicks(time.start, time.end).map(
       (k) => `<span class="tick" style="left:${(((k.at - time.start) / span) * 100).toFixed(2)}%"><i></i>${k.label}</span>`,
     );
-    const nf = time.nowFraction;
+    // Live data: a "today" flag on the last day of observed weather, and a lighter track after it (the forecast part).
+    // It stands in for the clock's own "now" flag, which would sit a day later and say the same thing.
+    const a = time.asOf;
+    const af = a && a.at >= time.start && a.at <= time.end ? (a.at - time.start) / span : null;
+    range.style.setProperty('--fc', af === null ? '100%' : `${(af * 100).toFixed(2)}%`);
+    asOfEl.hidden = !a;
+    asOfEl.classList.toggle('stale', !!a?.stale);
+    if (a) {
+      asOfEl.innerHTML = `as of ${md(a.at)}${a.stale ? '<span class="long"> · data may be stale</span><span class="phone-only"> · stale?</span>' : ''}`;
+      asOfEl.title = a.stale
+        ? `Weather observed up to ${md(a.at)}. Tonight's update looks late, so this may be out of date. Later days are forecast.`
+        : `Weather observed up to ${md(a.at)}. Later days are forecast.`;
+    }
+    const nf = a ? null : time.nowFraction;
+    if (af !== null) {
+      parts.push(`<span class="now today" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>today</b></span>`);
+    }
     if (nf !== null) {
       parts.push(`<span class="now" style="left:${(nf * 100).toFixed(2)}%" title="Today"><b>now</b></span>`);
     }
@@ -68,10 +86,13 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     range.value = String(time.stepIndex);
     range.style.setProperty('--pct', `${(time.stepIndex / Math.max(1, time.steps)) * 100}%`);
     dateEl.textContent = time.label(time.cursor);
-    range.setAttribute('aria-valuetext', time.label(time.cursor));
-    doyEl.textContent = time.cursor > time.now ? 'after today' : '';
-    if (rangeKey !== `${time.start}|${time.end}`) {
-      rangeKey = `${time.start}|${time.end}`;
+    // Screen readers hear when a day is forecast, as sighted users see from the lighter track.
+    range.setAttribute('aria-valuetext', time.label(time.cursor) + (time.asOf && time.cursor > time.asOf.at ? ' (forecast)' : ''));
+    doyEl.textContent = time.asOf ? (time.cursor > time.asOf.at ? 'forecast' : '') : time.cursor > time.now ? 'after today' : '';
+    doyEl.classList.toggle('fc', !!time.asOf);
+    const key = `${time.start}|${time.end}|${time.asOf?.at}|${time.asOf?.stale}`;
+    if (rangeKey !== key) {
+      rangeKey = key;
       drawTicks();
     }
     play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : 'Play (Space)');

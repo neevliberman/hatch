@@ -1,8 +1,9 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
-import { createLunaLayer, modeLabel, replayTimeSpec } from './layers/lunaReplay';
-import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
+import { createLunaLayer, modeLabel, replayTimeSpec, setLive } from './layers/lunaReplay';
+import { data, firstBroodCount, LIVE, TYPICAL, type Mode } from './layers/lunaData';
+import { inSeason, loadLive } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
@@ -18,12 +19,16 @@ const SEEN_KEY = 'hatch.seen.v2';
 function start() {
   const params = new URLSearchParams(location.search);
   const years = data.years.map(String);
-  // Default: every year pooled by day of year (one season alone is too sparse to show the wave). ?year=2025 replays one season.
-  const asked = params.get('year');
+  // Default: every year pooled by day of year (one season alone is too sparse to show the wave). ?year=2025 replays one
+  // season; ?season=live (or ?year=live) asks for this year's nightly forecast, which arrives after the first paint.
+  const asked = params.get('season') ?? params.get('year');
   const initialMode: Mode = asked && years.includes(asked) ? asked : TYPICAL;
   // ?date=06-10 (or 2025-06-10) puts the cursor on that calendar day; default 10 June, when the wave crosses the middle.
   const md = params.get('date')?.match(/(\d{2})-(\d{2})$/);
   const [month, day] = md ? [Number(md[1]) - 1, Number(md[2])] : [5, 10];
+  // ?today=2027-01-15 fakes the clock: the off-season countdown, and whether live mode is in season or its file is late.
+  const todayParam = params.get('today');
+  const clock = todayParam && !Number.isNaN(Date.parse(todayParam)) ? Date.parse(todayParam) : Date.now();
   // ?at=41.88,-87.63,6.5 reopens a shared link at the same place and zoom. Anything not near the Midwest (a typo,
   // an empty part) is ignored rather than handed to the map, which would throw and stay blank.
   const atParts = params.get('at')?.split(',') ?? [];
@@ -151,15 +156,18 @@ function start() {
     .join('');
   picker.value = initialMode;
   picker.title = `Season to replay (first-wave moths seen, in parentheses; ${firstBroodCount(TYPICAL).toLocaleString()} in all years)`;
-  picker.addEventListener('change', () => {
+  // Live mode opens on its last day of observed weather (or the day a link asks for); the others keep the calendar day.
+  const switchMode = (m: Mode, at?: [number, number]) => {
     const now = new Date(time.cursor);
-    luna.setMode(picker.value);
+    luna.setMode(m);
     hit = null;
     pinned = false;
     map.setMarker(null);
-    $('season-name').textContent = modeLabel(picker.value);
-    registry.setTime(luna.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
-  });
+    $('season-name').textContent = modeLabel(m);
+    at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
+    registry.setTime(luna.id, replayTimeSpec(m, at?.[0], at?.[1], clock));
+  };
+  picker.addEventListener('change', () => switchMode(picker.value));
   $('season-name').textContent = modeLabel(initialMode);
 
   mountScrubber($('bar'), time);
@@ -197,7 +205,9 @@ function start() {
     const q = new URLSearchParams(location.search);
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
+    q.delete('season');
     if (picker.value === TYPICAL) q.delete('year');
+    else if (picker.value === LIVE) (q.delete('year'), q.set('season', LIVE));
     else q.set('year', picker.value);
     // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
     const c = map.center(padding());
@@ -309,9 +319,7 @@ function start() {
     );
   });
 
-  // ?today=2027-01-15 fakes the clock, to check the off-season countdown.
-  const today = params.get('today');
-  const [short, more] = countdownParts(today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now());
+  const [short, more] = countdownParts(clock);
   const moreEl = document.createElement('span');
   moreEl.className = 'more';
   moreEl.textContent = more;
@@ -384,6 +392,23 @@ function start() {
   });
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map };
+
+  // This year's nightly forecast, fetched after the first paint (none in the one-file build, or if the file is missing
+  // or broken). It goes at the top of the season menu, and becomes the default during its season (1 Mar - 30 Sep)
+  // when the link names no season or day, so shared links still open what they showed.
+  const cursor0 = time.cursor;
+  void loadLive().then((live) => {
+    // A placeholder file (written before the pipeline's first real run) only shows when a link asks for it.
+    if (!live || (live.stub && asked !== LIVE)) return;
+    setLive(live);
+    picker.prepend(new Option(modeLabel(LIVE), LIVE));
+    if (picker.value !== initialMode || time.cursor !== cursor0) return; // the user got there first: leave their choice
+    const explicit = params.has('season') || params.has('year') || params.has('date');
+    if (asked !== LIVE && (explicit || !inSeason(live, clock))) return;
+    picker.value = LIVE;
+    switchMode(LIVE, md ? [month, day] : undefined);
+    syncUrl();
+  });
 }
 
 start();
