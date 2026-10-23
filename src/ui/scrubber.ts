@@ -89,13 +89,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
   let glideRaf = 0;
   let glideTimer = 0;
   let gliding = false;
-  const touch = () => {
-    touched = true;
-    gliding = false;
-    cancelAnimationFrame(glideRaf);
-    clearTimeout(glideTimer);
-    glideRaf = glideTimer = 0;
-  };
+  const touch = () => ((touched = true), (gliding = false), cancelAnimationFrame(glideRaf), clearTimeout(glideTimer));
   const playFromStart = () => {
     touched = true;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches || time.stepIndex === 0) return (time.setStepIndex(0), time.play());
@@ -108,7 +102,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
       const k = Math.min(1, (t - t0) / 400);
       time.setStepIndex(Math.round(from * (1 - (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2)))); // ease in-out
       if (k < 1) glideRaf = requestAnimationFrame(frame);
-      else (glideRaf = 0), (glideTimer = window.setTimeout(() => ((gliding = false), (glideTimer = 0), time.play()), 250));
+      else glideTimer = window.setTimeout(() => ((gliding = false), time.play()), 250);
     };
     glideRaf = requestAnimationFrame(frame);
   };
