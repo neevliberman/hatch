@@ -64,6 +64,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #map { position: absolute; inset: 0; touch-action: none; background: var(--bg); }
 /* Hidden until its first frame is drawn at the real size, fitted for it (src/map/map.ts), so no zoomed-in flash. */
 #map:not(.drawn) > * { visibility: hidden; }
+#map-lost button { min-height: 32px; margin-left: 6px; padding: 0 12px; font: inherit; }
 #no-webgl, #map-lost { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); margin: 0;
   padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
 /* While the map's code downloads and draws, a pen caterpillar inches round a circle (src/ui/loader.ts). It fades on

@@ -97,8 +97,6 @@ export const stripes = () => {
 };
 const MOON: RGBA = palette.moth;
 const SECOND: RGBA = palette.second;
-/** The bottom bar's paper, --panel-solid in style.css. */
-const PAPER = [248, 242, 227];
 const GREY: RGBA = palette.rough;
 const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
 
@@ -189,9 +187,8 @@ export function seasonProfile(
   const { start, end } = replayTimeSpec(String(year));
   const d0 = dayOfYear(start);
   const n = Math.round((end - start) / TimeAxis.DAY) + 1;
-  // Solid colours, as the see-through map colours look on the bar's paper (--panel-solid): the ribbon paints each band
-  // over the next (no seams where they meet), which would mix see-through ones.
-  const onPaper = ([r, g, b, a]: RGBA) => `rgb(${[r, g, b].map((c, k) => Math.round((c * a + PAPER[k]! * (255 - a)) / 255)).join(',')})`;
+  // Solid colours, as the see-through map colours look on paper (the same as the key's swatches): the ribbon paints
+  // each band over the next (no seams where they meet), which would mix see-through ones.
   const bands = STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), share: Array<number>(n).fill(0) }));
   // O(hexes + days): each hexagon adds +1 to a stage from the day it starts and -1 from the day the next stage starts
   // (the same chain as stageAt: a missing quantile ends it), then a running sum gives each day's count.

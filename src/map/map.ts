@@ -134,6 +134,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // keyboard closing after Find a town) makes deck stop the glide where it is; it should land where it was going.
   let target: { longitude: number; latitude: number; zoom: number } | null = null;
   let grabbed = false;
+  let down = 0; // pointers on the map right now: a glide that starts under a finger is already grabbed
   const land = (v: { longitude: number; latitude: number; zoom: number }) => {
     nudge = nudge ? 0 : 1e-9;
     current = { longitude: v.longitude, latitude: v.latitude, zoom: v.zoom };
@@ -154,7 +155,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     };
     gliding = ms && !still.matches ? id : 0;
     target = gliding ? to : null;
-    grabbed = false;
+    grabbed = down > 0;
     return gliding
       ? {
           transitionDuration: ms,
@@ -232,7 +233,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         gliding = 0;
         target = null;
         requestAnimationFrame(() => land(back));
-        return;
+        return { ...viewState, ...back }; // deck draws what this returns
       }
       zoom = viewState.zoom;
       // Only the view, not deck's whole viewState: that carries a stale width/height that would skew center().
@@ -294,11 +295,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   container.addEventListener('pointercancel', () => (touchDown = null));
   // Capture phase: deck's own handler (on the canvas inside) stops the glide first, and must find this already set.
   for (const type of ['pointerdown', 'wheel']) container.addEventListener(type, () => (grabbed = true), { capture: true, passive: true });
+  container.addEventListener('pointerdown', () => down++, { capture: true });
+  for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => (down = Math.max(0, down - 1)), { capture: true });
   // A phone can take the graphics context back to save memory, which leaves only plain water. Say so, with a way back
   // (the link in the address bar keeps the place, zoom and day).
   container.addEventListener('webglcontextlost', () => {
     if (document.getElementById('map-lost')) return;
-    container.insertAdjacentHTML('afterend', `<p id="map-lost" role="status">The browser paused the map to save memory.
+    container.insertAdjacentHTML('afterend', `<p id="map-lost" role="alert">The browser paused the map to save memory.
       <button type="button">Redraw</button></p>`);
     document.querySelector('#map-lost button')!.addEventListener('click', () => location.reload());
   }, true);

@@ -49,7 +49,8 @@ export function mountFinder(
   // A phone keyboard covers the bottom of the page without shrinking it: lift the box above the keyboard.
   const vv = window.visualViewport;
   const keyboardUp = () => (vv ? innerHeight - vv.height - vv.offsetTop > 60 : false);
-  // Resolves when the visible area has stopped changing for 150 ms (the keyboard is down), or after 800 ms.
+  // Resolves when the visible area has stopped changing for 150 ms (300 ms before the keyboard starts going), or
+  // after 800 ms.
   const settled = () =>
     new Promise<void>((done) => {
       let quiet = 0;
@@ -65,7 +66,7 @@ export function mountFinder(
       };
       const cap = window.setTimeout(finish, 800);
       vv?.addEventListener('resize', bump);
-      bump();
+      quiet = window.setTimeout(finish, 300);
     });
   const lift = () => {
     const hidden = vv ? Math.max(0, innerHeight - vv.height - vv.offsetTop) : 0;
@@ -103,6 +104,7 @@ export function mountFinder(
     open(false);
     // Fly once the phone keyboard has gone: the screen settling under a flight would stop it halfway.
     if (keyboard) await settled();
+    if (!form.hidden) return; // opened again for another search meanwhile
     go(p.lat, p.lng, p.name.replace(/ \(near .*\)$/, ''));
   };
   // A datalist pick fills the box in one go (no inputType, or a replacement); typing letter by letter waits for Enter,
