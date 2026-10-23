@@ -85,7 +85,7 @@ flowchart LR
   N["National Weather Service"] --> A["Nightly forecast archive<br/>(GitHub Actions)"]
 ```
 
-- **Front end:** TypeScript, [deck.gl](https://deck.gl/) on WebGL, [H3](https://h3geo.org/) hexagons, Vite. No framework and no map tile server: state outlines are bundled, so the app makes no outside requests. Scrubbing the timeline changes one number on the graphics card (a shader setting) instead of re-sending 3,000 dots, so it stays smooth on phones.
+- **Front end:** TypeScript, [deck.gl](https://deck.gl/) on WebGL, [H3](https://h3geo.org/) hexagons, Vite. No framework and no map tile server: state outlines are bundled, and lakes, rivers, highways, forests and town names come from two small self-hosted files, so the app makes no outside requests. Scrubbing the timeline changes one number on the graphics card (a shader setting) instead of re-sending 3,000 dots, so it stays smooth on phones.
 - **Model and data:** Python (NumPy, SciPy, pandas). The fitter is tested by planting known values in a fake Midwest and checking it finds them again.
 - **Testing:** every pull request runs Playwright smoke tests (quick checks that the app loads and works) on phone sizes (iPhone and Android, portrait and landscape) and desktop sizes in Chromium, Firefox and WebKit. They fail on any page error, a blank map, a covered or off-screen button, or a broken keyboard path. `npm run check` also enforces a size limit: the whole app, in one file, stays under 500 KB compressed.
 - **Accessibility:** text meets WCAG 2.1 AA contrast, map marks meet 3:1, everything works by keyboard, and the map has a screen-reader summary.
@@ -111,6 +111,7 @@ The Python side: `pip install -r notebooks/requirements.txt`, then see [pipeline
 src/              the web app (core/ clock and hex grid, layers/ the luna layer, map/, ui/)
 pipeline/fit/     the model, its tests and the scored result
 pipeline/replay/  builds the forecast files the app reads
+pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests) from public-domain data
 notebooks/        the first prototype model (Jupyter notebook)
 scripts/          smoke tests, bundle budget, data build helpers
 docs/             engineering notes and README media
@@ -120,7 +121,9 @@ docs/             engineering notes and README media
 
 - **Sightings:** [iNaturalist](https://www.inaturalist.org/taxa/47916-Actias-luna) observers. Only CC0, CC BY and CC BY-NC records are shown or redistributed, so the app's data carries those observers' licenses (non-commercial terms apply). The model also learned from the dates and places of other confirmed records, which are not shipped. Photos are linked, never copied, and every shown record keeps its observation id.
 - **Temperatures:** [Daymet](https://daymet.ornl.gov/) v4 daily 1 km data, Thornton et al., ORNL DAAC.
-- **State outlines:** US Census Bureau, via [us-atlas](https://github.com/topojson/us-atlas).
+- **State outlines, town names and populations:** US Census Bureau (outlines via [us-atlas](https://github.com/topojson/us-atlas)). Public domain.
+- **Lakes, rivers, highways and national parks:** [Natural Earth](https://www.naturalearthdata.com/). Public domain.
+- **National forests:** [US Forest Service](https://data.fs.usda.gov/geodata/edw/datasets.php). Public domain.
 - **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
 
 ## Who made it
