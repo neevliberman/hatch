@@ -36,6 +36,7 @@ const DETAIL_ZOOM = 6.5;
 const WOODS_ZOOM = 6;
 const parts: { overview?: Part; detail?: Part; woods?: { version: number; woods: FeatureCollection } } = {};
 const asked = new Set<string>();
+const tries: Record<string, number> = {};
 let onLoad: () => void = () => {};
 
 export function loadBasemap(zoom: number, loaded: () => void) {
@@ -60,9 +61,13 @@ function want(zoom: number) {
       .then((p) => {
         if (p?.version !== 1) return;
         parts[name as keyof typeof parts] = p;
-        onLoad();
+        queueMicrotask(onLoad);
       })
-      .catch(() => asked.delete(name)); // a dropped connection: try again on a later zoom
+      // A dropped connection: try again on a later zoom, a few times. A missing or broken file stays given up on
+      // (this runs every frame, so retrying it would fetch on every frame).
+      .catch((e) => {
+        if (e instanceof TypeError && (tries[name] = (tries[name] ?? 0) + 1) < 3) asked.delete(name);
+      });
   }
 }
 
@@ -73,22 +78,22 @@ const zoomFilter = [new DataFilterExtension({ filterSize: 1 })];
 const getZ = (f: Feature) => (f.properties as Props).z;
 
 // Woods are drawn the way a map marks them: little trees scattered over the ground, not a fill that would hide
-// the forecast colour underneath. A 32 px tile with two trees, offset so the rows don't line up.
-const TREE_MAPPING = { trees: { x: 0, y: 0, width: 32, height: 32 } };
+// the forecast colour underneath. A 40 px tile with two trees, offset so the rows don't line up.
+const TREE_MAPPING = { trees: { x: 0, y: 0, width: 40, height: 40 } };
 let treeAtlas: HTMLCanvasElement | null = null;
 const trees = () => {
   if (treeAtlas) return treeAtlas;
-  const c = Object.assign(document.createElement('canvas'), { width: 32, height: 32 });
+  const c = Object.assign(document.createElement('canvas'), { width: 40, height: 40 });
   const g = c.getContext('2d')!;
   g.fillStyle = g.strokeStyle = '#fff'; // a mask: the colour comes from getFillColor
   g.lineWidth = 1.4;
-  for (const [x, y] of [[8, 8], [24, 24]] as const) {
+  for (const [x, y] of [[10, 10], [30, 30]] as const) {
     g.beginPath();
-    g.arc(x, y - 1.5, 3.4, 0, Math.PI * 2);
+    g.arc(x, y - 1.5, 3, 0, Math.PI * 2);
     g.fill();
     g.beginPath();
     g.moveTo(x, y + 1);
-    g.lineTo(x, y + 5);
+    g.lineTo(x, y + 4.5);
     g.stroke();
   }
   return (treeAtlas = c);

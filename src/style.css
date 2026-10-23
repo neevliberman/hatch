@@ -381,6 +381,6 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .place.flip { flex-direction: row-reverse; }
 .place-city { font: 700 13px/16px var(--font-body); }
 .place-city::before { width: 5px; height: 5px; }
-.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #85765f; }
+.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #776a55; }
 .place-water { font: 600 17px/18px var(--font-note); color: #2c5873; }
 .place-park { font: 600 16px/18px var(--font-note); color: #24542e; }

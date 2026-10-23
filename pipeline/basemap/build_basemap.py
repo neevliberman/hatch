@@ -318,6 +318,8 @@ def woods():
     for r in rings:  # contour rings nest (woods, clearing, woodlot in the clearing): even-odd fill
         g = g.symmetric_difference(r)
     g = big_parts(g.intersection(land()), min_km2=10)
+    if g is None or g.is_empty:
+        return []
     f = feature(g, 0.004, z=6.0)
     return [f] if f else []
 

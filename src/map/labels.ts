@@ -85,7 +85,8 @@ export function createLabels(container: HTMLElement) {
     update(vp: WebMercatorViewport | undefined, free: { top: number; bottom: number; right?: number }, dots: [number, number][][],
       covers: Element[]) {
       if (!vp) return;
-      layer.classList.add('ready'); // the first frame is drawn: fade the names in with the map, not before it
+      // Names fade in with the map (this runs after a frame is drawn), once there are names to show.
+      if (sorted.length) layer.classList.add('ready');
       // Panels floating over the map (the header's buttons, the legend, a card) count as taken space too.
       const at = container.getBoundingClientRect();
       const coverBoxes = covers.map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height)
