@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- The firefly for the header (24 px), seen from above: a lit tail glowing under dark wing covers. Heavy ink, like the moth. -->
+  <!-- The firefly for the header (24 px), seen from above: a big lit tail glowing below the wing covers. Heavy ink, like the moth. -->
   <defs>
-    <path id="w" d="M250 206 C206 204 176 236 176 296 C176 356 196 404 234 422 C248 384 252 330 250 206 Z" fill="#4a3d2c" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
+    <path id="w" d="M250 206 C206 204 180 234 180 290 C180 334 196 368 232 384 C246 352 252 310 250 206 Z" fill="#7a6243" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
   </defs>
   <circle cx="256" cy="256" r="256" fill="#f8f2e3"/>
-  <g transform="translate(256 262) scale(.8) translate(-256 -270)">
-  <circle cx="256" cy="430" r="104" fill="#f3d35a" opacity=".55"/>
-  <ellipse cx="256" cy="424" rx="46" ry="42" fill="#f3d35a" stroke="#2b241c" stroke-width="20"/>
-  <path d="M244 132 C226 96 204 72 172 54 M268 132 C286 96 308 72 340 54" fill="none" stroke="#2b241c" stroke-width="20" stroke-linecap="round"/>
-  <use href="#w" transform="rotate(4 250 206)"/>
-  <use href="#w" transform="translate(512 0) scale(-1 1) rotate(4 250 206)"/>
+  <g transform="translate(256 262) scale(.8) translate(-256 -278)">
+  <circle cx="256" cy="420" r="120" fill="#f3d35a" opacity=".85"/>
+  <ellipse cx="256" cy="414" rx="60" ry="54" fill="#f8d84a" stroke="#2b241c" stroke-width="22"/>
+  <path d="M242 132 C218 94 190 70 152 52 M270 132 C294 94 322 70 360 52" fill="none" stroke="#2b241c" stroke-width="26" stroke-linecap="round"/>
+  <use href="#w" transform="rotate(5 250 206)"/>
+  <use href="#w" transform="translate(512 0) scale(-1 1) rotate(5 250 206)"/>
   <path d="M256 112 C312 112 344 146 344 186 C344 206 330 214 256 214 C182 214 168 206 168 186 C168 146 200 112 256 112 Z" fill="#e8b84a" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
   <ellipse cx="256" cy="170" rx="22" ry="30" fill="#2b241c"/>
   </g>

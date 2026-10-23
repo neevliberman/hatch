@@ -70,7 +70,7 @@ function art(small) {
     `<path class="paper" d="${poly(s)}"/>`,
     `<path class="leaf" d="${hand(wash, { closed: true, seed: 25, bow: 0.6, wander: 0.4, round: 1.4 })}"/>`,
     pen(hand(s, { closed: true, seed: 9, bow: small ? 0.18 : 0.3 })),
-    ...[-1, 1].map((g) => pen(hand([[32 + g * 3.5, 23], [32 + g * 6, 16], [32 + g * 10.5, 10.5], [32 + g * 14, 11.5]], { seed: 30 + g, bow: 0.2, wander: 0, round: 0.8 }), W * 0.9)),
+    ...[-1, 1].map((g) => pen(hand([[32 + g * 3.5, 23], [32 + g * 6, 16], [32 + g * 10.5, 10.5], [32 + g * 14, 11.5]], { seed: 30 + g, bow: 0.2, wander: 0, round: 0.8 }), small ? W * 1.1 : W * 0.9)),
   ].join('');
 }
 const style = (dark) => `.ink{fill:none;stroke:${INK};stroke-linecap:round;stroke-linejoin:round}.paper,.tile{fill:${PAPER}}` +

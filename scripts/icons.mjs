@@ -9,12 +9,12 @@ const PAPER = '#f8f2e3';
 const logo = readFileSync('public/icons/hatch.svg', 'utf8').replace('<svg ', '<svg width="100%" height="100%" ');
 const favicon = readFileSync('public/favicon.svg', 'utf8').replace('<svg ', '<svg width="100%" height="100%" ');
 // [file, size, svg, padding as a share of the side]. The logo carries its own margin and paper. Maskable icons get
-// cropped to a circle or squircle by Android, so theirs shrinks into the middle 80% "safe zone"; iOS rounds the
+// cropped to a circle or squircle by Android, and the logo's own margin already keeps it inside the middle 80% "safe zone"; iOS rounds the
 // corners of apple-touch-icon itself.
 const icons = [
   ['icons/icon-192.png', 192, logo, 0],
   ['icons/icon-512.png', 512, logo, 0],
-  ['icons/icon-maskable-512.png', 512, logo, 0.1],
+  ['icons/icon-maskable-512.png', 512, logo, 0],
   ['icons/apple-touch-icon.png', 180, logo, 0],
   ['favicon-32.png', 32, favicon, 0],
 ];

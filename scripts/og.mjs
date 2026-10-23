@@ -51,11 +51,11 @@ p { font-size: 25px; line-height: 1.38; margin: 0; color: #2b241c; }
   <div class="logo">${logo.replace('<svg ', '<svg width="100%" height="100%" ').replace(/<rect class="tile"[^>]*>/, '')}</div>
   <h1>Hatch</h1>
   <div class="note">when do insects come out?</div>
-  <p>Watch luna moths and fireflies roll north with the warmth across the Midwest: a heat forecast, checked against real sightings.</p>
+  <p>Watch luna moths and fireflies roll north with the warmth across the Midwest. A heat forecast, checked against real sightings.</p>
 </div>
 <div class="url">neevliberman.github.io/hatch</div>
 <figure class="photo" style="margin:0"><span class="tape l"></span><span class="tape r"></span>
-  <img src="data:image/png;base64,${shot}" alt=""><figcaption>Luna moths on 10 June, every year since 2015</figcaption></figure>
+  <img src="data:image/png;base64,${shot}" alt=""><figcaption>Where luna moths were on 10 June, 2015 to now</figcaption></figure>
 </body></html>`);
 await card.evaluate(() => document.fonts.ready);
 await card.waitForTimeout(300);
