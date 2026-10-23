@@ -138,8 +138,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
 /* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
 #probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link { display: none; }
-#probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font: 600 17px/1.1 var(--font-note); color: var(--muted); }
-#probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); font: 700 12px var(--font-body); }
+#probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font: 600 15px/1.1 var(--font-note); color: var(--muted); }
+#probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); }
 .probe-close { float: right; width: 32px; height: 32px; margin: -4px -8px 2px 6px; border: 0; border-radius: 8px; background: none;
   color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .probe-close:hover { color: var(--text); background: var(--track-faint); }
