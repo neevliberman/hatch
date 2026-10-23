@@ -28,8 +28,8 @@ export interface MapHandle {
   moved(): boolean;
   /** Centre lngLat in the free area at a zoom level (the city menu, My area and shared links). */
   focus(lngLat: [number, number], zoom: number, padding: Padding): void;
-  /** The current centre and zoom, for links; null before the first frame. */
-  center(): { lngLat: [number, number]; zoom: number } | null;
+  /** The middle of the free area (between the panels) and the zoom, for links; null before the first frame. */
+  center(padding: Padding): { lngLat: [number, number]; zoom: number } | null;
   /** The zoom that fits the whole Midwest. */
   fitZoom(): number;
   /** Show a "you are here" ring at lngLat (null hides it). */
@@ -88,9 +88,9 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       const [longitude, latitude] = vp.unproject([width / 2, height / 2 + gap]);
       vp = new WebMercatorViewport({ width, height, longitude, latitude, zoom: vp.zoom });
     }
-    // Zoom stops a step out from the whole Midwest (not a speck in empty sea) and in at about town scale, where a
+    // Zoom stops half a step out from the whole Midwest (not a speck in empty sea) and in at about town scale, where a
     // finest hexagon (about 6 km) is still a few dozen pixels, rather than one blank hexagon filling the screen.
-    return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: Math.max(2, vp.zoom - 1), maxZoom: 9.5 };
+    return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: Math.max(2, vp.zoom - 0.5), maxZoom: 9.5 };
   };
   // A centre that puts lngLat in the middle of the free area (between the panels), not the middle of the screen.
   const focusState = (lngLat: [number, number], z: number, p: Padding) => {
@@ -226,12 +226,19 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     moved: () => moved,
     fitZoom: () => fitted.zoom,
-    center: () => ({ lngLat: [current.longitude, current.latitude], zoom: current.zoom }),
+    // The middle of the free area, not of the screen: focus() puts it back there, whatever the other screen's panels.
+    center(p) {
+      const { width, height } = size();
+      const vp = new WebMercatorViewport({ width, height, ...current });
+      const [lng, lat] = vp.unproject([(width - (p.right ?? 0)) / 2, p.top + (height - p.top - p.bottom) / 2]);
+      return { lngLat: [lng!, lat!], zoom: current.zoom };
+    },
     focus(lngLat, z, p) {
       const v = focusState(lngLat, Math.min(fitted.maxZoom, Math.max(fitted.minZoom, z)), p);
       handle.view([v.longitude, v.latitude], v.zoom);
     },
     view([longitude, latitude], z) {
+      z = Math.min(fitted.maxZoom, Math.max(fitted.minZoom, z));
       zoom = z;
       setMoved(true);
       nudge = nudge ? 0 : 1e-9;

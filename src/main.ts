@@ -24,9 +24,14 @@ function start() {
   // ?date=06-10 (or 2025-06-10) puts the cursor on that calendar day; default 10 June, when the wave crosses the middle.
   const md = params.get('date')?.match(/(\d{2})-(\d{2})$/);
   const [month, day] = md ? [Number(md[1]) - 1, Number(md[2])] : [5, 10];
-  // ?at=41.88,-87.63,6.5 reopens a shared link at the same place and zoom.
-  const atParam = params.get('at')?.split(',').map(Number);
-  const sharedAt = atParam?.length === 3 && atParam.every(Number.isFinite) ? atParam : null;
+  // ?at=41.88,-87.63,6.5 reopens a shared link at the same place and zoom. Anything not near the Midwest (a typo,
+  // an empty part) is ignored rather than handed to the map, which would throw and stay blank.
+  const atParts = params.get('at')?.split(',') ?? [];
+  const atNums = atParts.map((x) => (x.trim() === '' ? NaN : Number(x)));
+  const sharedAt =
+    atNums.length === 3 && atNums.every(Number.isFinite) && Math.abs(atNums[0]! - 43) < 12 && Math.abs(atNums[1]! + 89) < 16
+      ? (atNums as [number, number, number])
+      : null;
 
   // Finer hexagons load when the user zooms in; when they arrive (or the level changes) redraw and re-sync the card.
   let onLunaData = () => {};
@@ -81,10 +86,16 @@ function start() {
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
   const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
+  let legendH = 0;
   const padding = (): Padding => {
     const top = $('top').getBoundingClientRect().bottom + 8;
     // On wide screens the legend and card sit in the bottom-left corner, beside the map rather than under it.
-    const bottom = (phone.matches ? $('bottom').offsetHeight : $('bottom').offsetHeight - $('floats').offsetHeight) + 8;
+    // On a phone the legend sits under the map, so leave room for it, but not for a docked card: that comes and
+    // goes with every tap, and would make the map jump each time. (The card replaces the legend while it is up.)
+    const legend = $('legend').offsetHeight;
+    if (legend) legendH = legend;
+    const floats = $('floats');
+    const bottom = $('bottom').offsetHeight - floats.offsetHeight + (phone.matches ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0) + 8;
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
     // On a wide screen the open About panel sits beside the map: fit the Midwest into what is left.
     const drawer = $('drawer');
@@ -187,7 +198,7 @@ function start() {
     if (picker.value === TYPICAL) q.delete('year');
     else q.set('year', picker.value);
     // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
-    const c = map.center();
+    const c = map.center(padding());
     if (map.moved() && c) q.set('at', `${c.lngLat[1].toFixed(3)},${c.lngLat[0].toFixed(3)},${c.zoom.toFixed(1)}`);
     else q.delete('at');
     q.delete('noauto');
@@ -321,15 +332,21 @@ function start() {
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
-  if (sharedAt) map.view([sharedAt[1]!, sharedAt[0]!], sharedAt[2]!);
+  if (sharedAt) map.focus([sharedAt[1], sharedAt[0]], sharedAt[2], padding());
   $('recenter').addEventListener('click', () => map.fit(padding()));
   // Re-fit whenever the room for the map changes: the window, the panels (fonts arriving, a wrapped line, the
   // About panel opening beside the map) or the map itself (a late stylesheet). A view the user has panned or
   // zoomed is theirs, so it is left alone; the recenter button still fits it.
   let fitTimer = 0;
+  // Not mid-drag either: a re-fit would yank the map out from under the finger.
+  let dragging = false;
+  $('map').addEventListener('pointerdown', () => (dragging = true));
+  window.addEventListener('pointerup', () => (dragging = false));
+  window.addEventListener('pointercancel', () => (dragging = false));
   const refit = () => {
     clearTimeout(fitTimer);
     fitTimer = window.setTimeout(() => {
+      if (dragging) return refit();
       if (!map.moved()) map.fit(padding());
       placeProbe();
     }, 120);
@@ -342,12 +359,18 @@ function start() {
   new MutationObserver(refit).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
 
   // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
+  // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.
   probeEl.addEventListener('click', (e) => {
-    if ((e.target as Element).closest('.probe-close')) unpin();
+    if (!(e.target as Element).closest('.probe-close')) return;
+    unpin();
+    $('t-range').focus({ preventScroll: true });
   });
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && pinned && !$('drawer').classList.contains('open')) unpin();
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open')) return;
+    const hadFocus = probeEl.contains(document.activeElement);
+    unpin();
+    if (hadFocus) $('t-range').focus({ preventScroll: true });
   }, true);
   $('map').addEventListener('mouseleave', () => {
     if (!pinned && hit) (hit = null), updateProbe();
