@@ -37,7 +37,8 @@ export class TimeAxis {
   playing = false;
   /** Playback speed in steps per second. */
   speed = 14;
-  /** While playing, how far the clock is into the next step (0..1), for in-between frames. 0 at rest. */
+  /** While playing, how far the clock is into the next step (0..1), for in-between frames. 0 at rest, and always 0
+   * under reduced motion (no in-between frames at all then). */
   frac = 0;
   /** Optional story pacing: the speed (steps/s) wanted at a cursor. Playback eases toward it over ~0.5 s. */
   pace?: (cursor: number) => number;
@@ -47,6 +48,8 @@ export class TimeAxis {
   private raf = 0;
   private last = 0;
   private acc = 0;
+  /** Reduced motion: playback still steps a day at a time, but nothing glides between days. */
+  private readonly still = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
   constructor(spec: TimeSpec, now = Date.now()) {
     this.now = now;
@@ -66,6 +69,11 @@ export class TimeAxis {
   /** Number of steps across the range. */
   get steps(): number {
     return Math.floor((this.end - this.start) / this.stepMs);
+  }
+
+  /** Is playback drawing in-between frames (playing, and reduced motion is off)? */
+  get gliding(): boolean {
+    return this.playing && !this.still?.matches;
   }
 
   get stepIndex(): number {
@@ -112,14 +120,16 @@ export class TimeAxis {
       this.ease(dt);
       this.acc += dt * this.speed;
       const whole = Math.floor(this.acc);
+      const smooth = !this.still?.matches;
       if (whole >= 1) {
         this.acc -= whole;
-        this.frac = this.acc; // before the step, so its listeners already see the new day's fraction
-        this.step(whole);
+        this.frac = smooth ? this.acc : 0; // before the step, so its listeners already see the new day's fraction
+        this.step(whole); // the day's own listeners redraw this frame, so the frame listeners sit it out
         if (this.stepIndex >= this.steps) return this.pause(); // stop on the last day instead of looping
+      } else if (smooth) {
+        this.frac = this.acc;
+        this.frames.forEach((fn) => fn());
       }
-      this.frac = this.acc;
-      this.frames.forEach((fn) => fn());
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
@@ -146,7 +156,8 @@ export class TimeAxis {
     this.speed += Math.sign(d) * Math.min(Math.abs(d), dt * 20);
   }
 
-  /** Called on every animation frame while playing (frac changes), not only when the step does. */
+  /** Called on the in-between animation frames while playing (frac changes but the step does not; a frame that
+   * changes the step goes to subscribe() listeners instead, so no frame draws twice). Never under reduced motion. */
   onFrame(fn: Listener): void {
     this.frames.add(fn);
   }

@@ -169,31 +169,41 @@ function start() {
   // The map is a canvas, so screen readers get the day's picture in words (read with the map, not announced each frame).
   const srSummary = $('sr-summary');
   // After the season the map goes one flat colour, which reads as "no data". A margin note on empty paper (the
-  // layer's own words and sketch, HatchLayer.offSeason) says they are asleep: off the Ohio River on a wide screen, under the Midwest on a phone (above the legend). It only
-  // shows on the whole-Midwest view, so it never sits on hexes, and fades as soon as any hexagon starts.
+  // layer's own words, sketch and spot, HatchLayer.offSeason) says they are asleep. It only shows on the fitted view,
+  // so it never sits on hexes, and fades as soon as any hexagon starts.
   const note = document.createElement('div');
   note.id = 'asleep';
   note.setAttribute('aria-hidden', 'true'); // the screen-reader summary already says every hexagon is over
   let shownNote: unknown = null;
   $('app').append(note);
+  const hideNote = () => note.classList.remove('on');
   placeNote = () => {
-    // The active layers' own note (title, line, sketch), only when every one of them has one to show.
+    // Runs on every pan and zoom frame: the cheap tests first, and no layout read unless the note will show.
+    if (map.moved()) return hideNote();
+    // The active layers' own note, only when every one of them has one to show (the layers cache this per day).
     const notes = registry.activeLayers().map((l) => l.offSeason?.(time.cursor));
     const n = notes.length && notes.every(Boolean) ? notes[0]! : null;
-    if (n && n !== shownNote) {
+    if (!n) return hideNote();
+    if (n !== shownNote) {
       shownNote = n;
       note.innerHTML = `<svg viewBox="0 0 64 34">${n.sketch}</svg><b>${n.title}</b><span>${n.line}</span>`;
     }
-    const at = map.project(phone.matches ? [-86.6, 36.3] : [-79.6, 39.4]);
+    const at = map.project(phone.matches ? n.at.phone : n.at.wide);
+    if (!at) return hideNote();
     const { width: w, height: h } = note.getBoundingClientRect();
-    // Phone: centred under Kentucky, kept above the legend (or the card). Desktop: just east of Ohio, on the blank
-    // paper, and left out when an open About panel leaves no room there.
-    const show = !!at && !!n && !map.moved() && (phone.matches || at[0] + w < window.innerWidth - (padding().right ?? 0) - 8);
-    note.classList.toggle('on', show);
-    if (!show) return;
-    const floor = $(phone.matches ? 'floats' : 'bottom').getBoundingClientRect().top - h - 8;
+    // Phone: centred on its spot. Wide screen: starting at its spot, and left out when an open About panel leaves
+    // no room there.
+    if (!phone.matches && at[0] + w >= window.innerWidth - (padding().right ?? 0) - 8) return hideNote();
+    const y = phone.matches ? at[1] : at[1] - h / 2;
+    // Above the legend (or the card) on a phone; above the controls, and a card docked over them, on a wide screen
+    // (the wide legend sits in the far corner). When that would lift it off its empty paper onto the land (a short
+    // phone), it stays hidden instead.
+    const under = phone.matches ? $('floats') : probeEl.hidden || probeEl.classList.contains('at-pointer') ? $('strip') : probeEl;
+    const floor = under.getBoundingClientRect().top - h - 8;
+    if (y > floor) return hideNote();
     const x = Math.max(8, Math.min(phone.matches ? at[0] - w / 2 : at[0], window.innerWidth - w - 8));
-    note.style.transform = `translate(${Math.round(x)}px, ${Math.round(Math.min(phone.matches ? at[1] : at[1] - h / 2, floor))}px) rotate(-3deg)`;
+    note.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) rotate(-3deg)`;
+    note.classList.add('on');
   };
   const refresh = () => {
     map.refresh();

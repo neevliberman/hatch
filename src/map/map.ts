@@ -255,7 +255,9 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       refresh();
     });
 
+  // The marker and the pinned outline are built when they change, not on every frame (fresh data would re-upload).
   let marker: [number, number] | null = null;
+  let markerBuilt: Layer[] = [];
   const markerLayers = (): Layer[] =>
     marker
       ? [
@@ -276,6 +278,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       : [];
 
   let picked: string | null = null;
+  let pickedBuilt: Layer[] = [];
   const pickedLayers = (): Layer[] =>
     picked
       ? [
@@ -299,7 +302,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // Lakes, rivers and roads go over the hexagons but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
-    deck.setProps({ layers: [...under, ...hexes, ...mid, ...rest, ...over, ...pickedLayers(), ...markerLayers()] });
+    deck.setProps({ layers: [...under, ...hexes, ...mid, ...rest, ...over, ...pickedBuilt, ...markerBuilt] });
   };
 
   const handle: MapHandle = {
@@ -343,12 +346,15 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       if (onView) requestAnimationFrame(onView);
     },
     setMarker(lngLat) {
+      if (!lngLat && !marker) return;
       marker = lngLat;
+      markerBuilt = markerLayers();
       refresh();
     },
     setPicked(cell) {
       if (cell === picked) return;
       picked = cell;
+      pickedBuilt = pickedLayers();
       refresh();
     },
     project(lngLat) {

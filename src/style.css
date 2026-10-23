@@ -151,12 +151,14 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 /* Kept rendered (just invisible) when empty: live regions that appear and fill at once are often not announced. */
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
-/* Season's end note, over the middle of the map: fades in 240 ms, out 400 ms (instantly under reduced motion). */
-#end-note { position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%); z-index: 3; margin: 0; pointer-events: none;
-  width: max-content; max-width: calc(100% - 32px); padding: 8px 16px; text-align: center; font: 600 26px/1.15 var(--font-note);
-  background: var(--panel-solid); border-radius: var(--radius); box-shadow: var(--shadow); opacity: 0; transition: opacity 0.4s; }
+/* Season's end note: in the time bar, over the date beside the replay button (never over the map). Fades in 240 ms,
+   out 400 ms (instantly under reduced motion). Wide enough to run over the slider on a phone on its side. */
+.date { position: relative; }
+#end-note { position: absolute; left: -6px; top: 50%; transform: translateY(-50%); z-index: 1; margin: 0; pointer-events: none;
+  width: max-content; min-width: calc(100% + 6px); max-width: calc(100vw - 200px); padding: 2px 6px;
+  font: 600 20px/1.05 var(--font-note); background: var(--panel-solid); opacity: 0; transition: opacity 0.4s; }
 #end-note.on { opacity: 1; transition-duration: 0.24s; }
-#end-note small { display: block; font-size: 19px; color: var(--moon); }
+#end-note small { display: block; font-size: 16px; color: var(--moon); }
 @media (prefers-reduced-motion: reduce) { #end-note { transition: none; } }
 /* Over the map's bottom-right corner on a wide screen (placed against #bottom); top of the button stack on a phone. */
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }

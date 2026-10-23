@@ -70,19 +70,22 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis, endNote: () => 
   const ticks = $('t-ticks');
   const ribbonEl = $('t-ribbon');
   const dateBox = root.querySelector<HTMLElement>('.date')!;
-  // The note shown when playback reaches the season's last day (see sync).
+  // The note shown when playback reaches the season's last day (see sync). It sits in the bar, over the date beside
+  // the replay button, so it never covers the map.
   const note = document.createElement('p');
   note.id = 'end-note';
   note.role = 'status';
-  document.body.append(note);
+  root.querySelector('.date')!.append(note);
   let ended = false;
   let wasPlaying = false;
   let noteTimer = 0;
   // While playing, the slider takes the in-between value too, so the thumb (and the phone's date pill) glides
-  // instead of hopping a day at a time.
+  // instead of hopping a day at a time (not under reduced motion: frac stays 0 and the thumb hops). A screen reader
+  // still hears whole days.
   const glide = () => {
-    range.step = time.playing ? 'any' : '1';
+    range.step = time.gliding ? 'any' : '1';
     range.value = String(time.stepIndex + time.frac);
+    range.setAttribute('aria-valuenow', String(time.stepIndex));
     // Where the thumb is, 0-1: the phone's date pill rides above it.
     root.style.setProperty('--p', String((time.stepIndex + time.frac) / Math.max(1, time.steps)));
   };
@@ -150,7 +153,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis, endNote: () => 
         note.append(Object.assign(document.createElement('small'), { textContent: words[1] }));
         note.classList.add('on');
         clearTimeout(noteTimer);
-        noteTimer = window.setTimeout(() => note.classList.remove('on'), 3000);
+        noteTimer = window.setTimeout(() => note.classList.remove('on'), 5000);
       }
     } else if (!end) ended = false;
     if (!ended) note.classList.remove('on');

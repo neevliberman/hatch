@@ -5,7 +5,7 @@ import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps }
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
-import type { CaveatCard, Explainer, HatchLayer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import type { CaveatCard, Explainer, HatchLayer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import { restingSketch } from '../ui/sketch';
 import {
   APPROXIMATE,
@@ -20,6 +20,7 @@ import {
 } from './lunaData';
 import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, parentOf, type FineLevel } from './fineData';
+import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
 export const GLOW_DAYS = 10;
@@ -34,22 +35,6 @@ const HYSTERESIS = 0.3;
 /** Year used to put dates on the "typical year" axis. Any non-leap year works. */
 const TYPICAL_AXIS_YEAR = 2025;
 
-export const STAGES = ['not yet', 'starting', 'peak', 'winding down', 'over'] as const;
-export type Stage = (typeof STAGES)[number];
-/** What each stage is called on screen. The map forecasts the first wave only, so in August "over" alone would read
- * as "no moths" while the second wave flies. */
-/** How many hexagons are at each stage on day `doy`. */
-export function stageCounts(qs: readonly (readonly (number | null)[])[], doy: number) {
-  const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
-  for (const q of qs) n[stageAt(q, doy)]++;
-  return n;
-}
-/** After the season: every hexagon "over" or "not yet", and some "over" (so not early spring, before it starts). */
-export function isAsleep(qs: readonly (readonly (number | null)[])[], doy: number) {
-  const n = stageCounts(qs, doy);
-  return n.over > 0 && n.over + n['not yet'] === qs.length;
-}
-
 export const STAGE_LABEL: Record<Stage, string> = {
   'not yet': 'not yet',
   starting: 'starting',
@@ -57,16 +42,6 @@ export const STAGE_LABEL: Record<Stage, string> = {
   'winding down': 'winding down',
   over: 'first wave over',
 };
-
-/** Where a cell's forecast season stands on day `doy`. q = days the share of moths out reaches 5/25/50/75/95%. */
-export function stageAt(q: readonly (number | null)[] | undefined, doy: number): Stage {
-  const [q05, q25, , q75, q95] = q ?? [];
-  if (q05 == null || doy < q05) return 'not yet';
-  if (q25 == null || doy < q25) return 'starting';
-  if (q75 == null || doy < q75) return 'peak';
-  if (q95 == null || doy < q95) return 'winding down';
-  return 'over';
-}
 
 /** stageAt for a finer level's packed days (5 bytes per cell, day of year minus 60, 255 = never). */
 function stageAtBytes(days: Uint8Array, i: number, doy: number): Stage {
@@ -109,8 +84,6 @@ const MOON: RGBA = palette.moth;
 const SECOND: RGBA = palette.second;
 const GREY: RGBA = palette.rough;
 const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
-/** A see-through stage colour as it lands on the paper, so a legend swatch looks like the hexes it names. */
-export const onPaper = (c: RGBA) => css(c.map((v, i) => v + ((palette.land[i]! - v) * (255 - c[3])) / 255 | 0) as RGBA);
 
 const dotColor = (s: Sighting): RGBA => (s.flags & APPROXIMATE ? GREY : s.flags & SECOND_BROOD ? SECOND : MOON);
 
@@ -255,7 +228,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const unseen = cells.filter((c) => !c.seen);
   // An ink ring spreads from each moth on the day it is seen, while playing.
   const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], palette.dotRim);
-  let sleepNote: { title: string; line: string; sketch: string } | undefined;
+  let sleepNote: OffSeasonNote | undefined;
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
   // Today's sightings, which breathe while paused (map.ts). Cached per day and season.
   let fresh = { key: '', list: [] as Sighting[] };
@@ -383,9 +356,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
     newest: (t) => newest(dayOfYear(t)),
-    // ~400 cheap checks, so no cache needed even once a frame.
-    busy: (t) => forecast().some((q) => /^(st|pe)/.test(stageAt(q, dayOfYear(t)))),
-    endNote: ['That was the first wave.', 'Tap replay to watch it roll north again'],
+    busy: (t) => isBusy(forecast(), dayOfYear(t)),
+    endNote: ['That was the first wave.', 'Press replay to watch it again'],
 
     points(t) {
       // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
@@ -398,7 +370,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return lit.pts;
     },
 
-    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till spring', line: 'cocoons in the leaf litter', sketch: restingSketch('moth') }) : null),
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till spring', line: 'cocoons in the leaf litter', sketch: restingSketch('moth'), at: MIDWEST_MARGIN }) : null),
 
     summary(t) {
       const doy = dayOfYear(t);
@@ -427,7 +399,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       // While playing, the dots get the in-between day and the hexes blend into their next colour (see motion.ts).
       const anim = animating(playing);
       const fade = hexFade(anim);
-      const d = doy + frac;
+      const d = anim ? doy + frac : doy;
       const res = pickRes(resForZoom(zoom));
       if (res !== shownRes) {
         shownRes = res;
@@ -564,7 +536,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
-        ...rings(anim, doy, () => shown.filter((s) => (mode === TYPICAL ? s.pdoy : s.doy) === doy)),
+        ...rings(anim, doy, (from, to) => shown.filter((s) => {
+          const day = mode === TYPICAL ? s.pdoy : s.doy;
+          return day >= from && day <= to;
+        })),
       ];
     },
 

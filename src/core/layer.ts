@@ -94,6 +94,13 @@ export interface SeasonProfile {
   notes: { at: number; text: string }[];
 }
 
+export interface OffSeasonNote {
+  title: string;
+  line: string;
+  sketch: string;
+  at: { wide: [number, number]; phone: [number, number] };
+}
+
 export interface HatchLayer {
   id: string;
   title: string;
@@ -102,7 +109,7 @@ export interface HatchLayer {
   render(ctx: { t: number; zoom: number; theme: Theme; wash?: number; playing?: boolean; frac?: number }): Layer[];
   /** Is the season in full swing on day t (e.g. any hexagon starting or at peak)? Playback slows down for those days. */
   busy?(t: number): boolean;
-  /** The note shown when playback reaches the last day: a headline and a nudge to replay. */
+  /** The note shown beside the replay button when playback reaches the last day: a headline and a nudge to replay. */
   endNote?: [string, string];
   /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
@@ -118,10 +125,11 @@ export interface HatchLayer {
   profile?(): SeasonProfile;
   /** The sightings made on day t itself: while paused they breathe (map.ts). */
   newest?(t: number): { lng: number; lat: number }[];
-  /** A margin note for when nothing is out (after the season): a handwritten title, a muted line under it, and a
-   * small pen sketch (SVG markup in a 64x34 box). Null while anything is out. A layer without it gets no note.
+  /** A margin note for when nothing is out (after the season): a handwritten title, a muted line under it, a small
+   * pen sketch (SVG markup in a 64x34 box), and where it goes: a [lng, lat] on empty paper beside the map's data, one
+   * for a wide screen and one for a phone. Null while anything is out. A layer without it gets no note.
    * Return the same object each time: the note is only redrawn when it changes. */
-  offSeason?(t: number): { title: string; line: string; sketch: string } | null;
+  offSeason?(t: number): OffSeasonNote | null;
   /** Data sources to credit, rendered in the drawer. */
   /** Data sources, each a line of text; `href` links the line's source. */
   credits?(): { text: string; href?: string }[];

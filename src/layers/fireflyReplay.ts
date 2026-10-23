@@ -5,13 +5,14 @@ import { latLngToCell } from 'h3-js';
 import { palette } from '../theme';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear } from '../core/timeAxis';
-import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import type { CaveatCard, Explainer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import { restingSketch } from '../ui/sketch';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
-import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, onPaper, stageCounts, isAsleep, stripes, washer, type LunaLayer, type Stage } from './lunaReplay';
+import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
+import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -66,7 +67,7 @@ export function createFireflyLayer(
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
   let fresh = { key: '', list: [] as Sighting[] };
-  let sleepNote: { title: string; line: string; sketch: string } | undefined;
+  let sleepNote: OffSeasonNote | undefined;
 
   // ---- finer hexes (res 5 only for fireflies), from public/fine-firefly/, loaded when the reader zooms in
   type Cell = { id: string; i: number; seen: boolean };
@@ -176,8 +177,8 @@ export function createFireflyLayer(
     },
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
-    busy: (t) => forecast().some((q) => /^(st|pe)/.test(stageAt(q, dayOfYear(t)))),
-    endNote: ['That was the firefly season.', 'Tap replay to watch it roll north again'],
+    busy: (t) => isBusy(forecast(), dayOfYear(t)),
+    endNote: ['That was the firefly season.', 'Press replay to watch it again'],
     seasonCount: (m: Mode) => sightingsFor(m).length,
 
     newest(t) {
@@ -196,7 +197,7 @@ export function createFireflyLayer(
       return lit.pts;
     },
 
-    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till summer', line: 'larvae in the soil', sketch: restingSketch('firefly') }) : null),
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till summer', line: 'larvae in the soil', sketch: restingSketch('firefly'), at: MIDWEST_MARGIN }) : null),
 
     summary(t) {
       const doy = dayOfYear(t);
@@ -217,7 +218,7 @@ export function createFireflyLayer(
     render({ t, zoom, theme, wash, playing, frac = 0 }) {
       const doy = dayOfYear(t);
       const anim = animating(playing);
-      const d = doy + frac; // the in-between day while playing, like luna's dots
+      const d = anim ? doy + frac : doy; // the in-between day while playing, like luna's dots
       const res = resFor(zoom);
       if (res !== shownRes) {
         shownRes = res;
@@ -309,7 +310,7 @@ export function createFireflyLayer(
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
-        ...rings(anim, doy, () => shown.filter((s) => day(s) === doy)),
+        ...rings(anim, doy, (from, to) => shown.filter((s) => day(s) >= from && day(s) <= to)),
       ];
     },
 
