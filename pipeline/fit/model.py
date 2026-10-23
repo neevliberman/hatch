@@ -42,6 +42,7 @@ class Spec:
     effort: bool = True
     year_effect: bool = True
     observer_weights: bool = True
+    positive: bool = False     # P3.1: location mu0 >= 0 and skew alpha >= 0, so the median target is >= 0 DD
 
 
 SPECS = {
@@ -50,6 +51,8 @@ SPECS = {
     "p3_flat": Spec("p3_flat", mu="flat"),
     "p3_noeffort": Spec("p3_noeffort", effort=False),
     "p3_bell": Spec("p3_bell", skew=False),
+    # P3.1 (FROZEN_P3.md amendment): no latitude/daylength term, warmth targets kept at or above zero
+    "p31_flat": Spec("p31_flat", mu="flat", positive=True),
 }
 
 
@@ -101,6 +104,22 @@ def param_names(spec, n_years):
 _SCALE = {"mu0": 100.0, "beta": 10.0, "gamma": 1.0, "log_sigma": 1.0, "alpha": 1.0}
 _BOUNDS = {"mu0": (-500, 1500), "beta": (-150, 150), "gamma": (-6, 12), "log_sigma": (np.log(5), np.log(800)),
            "alpha": (-15, 15)}
+
+
+_POSITIVE = {"mu0": (0, 1500), "alpha": (0, 15)}
+
+
+def bounds_for(n, spec):
+    """Bounds (unscaled) for parameter n. P3.1 ('positive') keeps mu0 >= 0 and alpha >= 0.
+
+    Why a bound and not conditioning the curve on target > 0: a moth whose target is below 0 DD has
+    'flown' before 1 March and never appears in the window, and each place-year's curve is renormalised,
+    so conditioning only rescales by a per-place-year constant that cancels in the likelihood. That is
+    why P3's degenerate fits could sit at mu0 = -500. The bound is what keeps the fit off that basin.
+    """
+    if spec.positive and n in _POSITIVE:
+        return _POSITIVE[n]
+    return _BOUNDS[n]
 
 
 def _scale(n):
@@ -248,8 +267,9 @@ def _fit_from(P, spec, start, maxiter):
     s = _start(spec, P)
     if start:
         s.update({k: v for k, v in start.items() if k in s})
+    bounds = [(-20, 20) if n.startswith("u") else tuple(b / _scale(n) for b in bounds_for(n, spec)) for n in names]
     x0 = np.array([0.0 if n.startswith("u") else s[n] / _scale(n) for n in names])
-    bounds = [(-20, 20) if n.startswith("u") else tuple(b / _scale(n) for b in _BOUNDS[n]) for n in names]
+    x0 = np.clip(x0, [b[0] for b in bounds], [b[1] for b in bounds])
     res = optimize.minimize(nll, x0, args=(names, spec, P), method="L-BFGS-B", bounds=bounds,
                             options={"maxiter": maxiter, "maxfun": 50000})
     return Fit(spec, unpack(res.x, names), names, res.x, float(res.fun), len(P.rg), bool(res.success))
@@ -339,9 +359,15 @@ def cell_sighting_share(p, spec, inc_rows, lat, cut_idx, eprof=None):
 
 def median_dd(p, spec, lat):
     """Degree-days (base 10) at which half the moths have reached their target, at latitude `lat`
-    (for 'photo' this is in photothermal units)."""
+    (for 'photo' this is in photothermal units). For P3.1 ('positive') the curve is conditioned on
+    target > 0, so this is the median of that conditioned curve (always > 0)."""
     mu = p["mu0"] + (p["beta"] * (np.asarray(lat) - LAT0) if spec.mu == "lat" else 0.0)
-    return mu + np.exp(p["log_sigma"]) * sn_quantile(0.5, p["alpha"])
+    sig = np.exp(p["log_sigma"])
+    if not spec.positive:
+        return mu + sig * sn_quantile(0.5, p["alpha"])
+    f0 = sn_cdf_exact(np.asarray(-mu / sig, float), p["alpha"])
+    q = f0 + 0.5 * (1 - f0)
+    return mu + sig * np.vectorize(lambda v: sn_quantile(float(v), p["alpha"]))(q)
 
 
 def with_spec(spec, **kw):
