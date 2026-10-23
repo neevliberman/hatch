@@ -77,7 +77,10 @@ export interface Explainer {
   /** The season at a place (null = the layer's default spot), on the day `t`, called `name` when it has one (a
    * picked city, "you"). Null when there is nothing to show. */
   spot(lngLat: [number, number] | null, t: number, name?: string): SpotStory | null;
-  score?: { title: string; text: string; bars: { label: string; days: number; best?: boolean }[] };
+  /** How sure it is. The bold answer line is worked out from the bars (the forecast first, then what it is measured
+   * against), so it always says what this layer's own scores say. `points`: a few short lines, each with a
+   * handwritten lead-in ("checked", "real test"). */
+  score?: { title: string; points: [string, string][]; bars: { label: string; days: number; best?: boolean }[] };
   /** A short card near the top for a special mode (this year's live forecast): what it is, in plain words. */
   notice?: { title: string; bullets: string[] };
   finePrintLabel: string;
@@ -93,10 +96,41 @@ export interface SeasonProfile {
   notes: { at: number; text: string }[];
 }
 
+export interface OffSeasonNote {
+  title: string;
+  line: string;
+  sketch: string;
+  at: { wide: [number, number]; phone: [number, number] };
+}
+
+/** A species' own words for the shared page frame, so the header, menus and share sheet never name a species
+ * themselves. Each string is used exactly as written. */
+export interface SpeciesWords {
+  /** The header's tagline after "Hatch": "when luna moths fly". */
+  tagline: string;
+  /** The animals, counted: the season menu's "2024 (310 moths)" and the dots line "Dots: moths seen ...". */
+  plural: string;
+  /** Whose sightings the map shows, in its screen-reader label: "luna moth" sightings. */
+  sightingsOf: string;
+  /** What the season menu's counts count, in its tooltip: "first-wave moths" seen. */
+  countedAs: string;
+  /** The share sheet's title, "Hatch: when ___ come out": "luna moths". */
+  shareName: string;
+}
+
 export interface HatchLayer {
   id: string;
   title: string;
-  render(ctx: { t: number; zoom: number; theme: Theme }): Layer[];
+  /** The species' words for the page around the map; see SpeciesWords. */
+  words: SpeciesWords;
+  /** `wash`: ms since the map's first frame while the forecast washes in (south first, 900 ms in all), else undefined.
+   * `playing` (playback is gliding: not under reduced motion or on a slow device) and `frac` (how far into the next
+   * step, 0 at rest) let a layer draw in-between frames during playback. */
+  render(ctx: { t: number; zoom: number; theme: Theme; wash?: number; playing?: boolean; frac?: number }): Layer[];
+  /** Is the season in full swing on day t (e.g. any hexagon starting or at peak)? Playback slows down for those days. */
+  busy?(t: number): boolean;
+  /** The note shown beside the replay button when playback reaches the last day: a headline and a nudge to replay. */
+  endNote?: [string, string];
   /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
   legend(): LegendSpec;
@@ -109,12 +143,20 @@ export interface HatchLayer {
   points?(t: number): [number, number][];
   /** The season ribbon in the time slider's track (the active layer's own, so each species draws its season). */
   profile?(): SeasonProfile;
+  /** The sightings made on day t itself: while paused they breathe (map.ts). */
+  newest?(t: number): { lng: number; lat: number }[];
+  /** A margin note for when nothing is out (after the season): a handwritten title, a muted line under it, a small
+   * pen sketch (SVG markup in a 64x34 box), and where it goes: a [lng, lat] on empty paper beside the map's data, one
+   * for a wide screen and one for a phone. Null while anything is out. A layer without it gets no note.
+   * Return the same object each time: the note is only redrawn when it changes. */
+  offSeason?(t: number): OffSeasonNote | null;
   /** Data sources to credit, rendered in the drawer. */
   /** Data sources, each a line of text; `href` links the line's source. */
   credits?(): { text: string; href?: string }[];
 }
 
-/** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size (see lunaReplay.ts render). */
+/** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size, with -blend added while playback
+ * glides (see lunaReplay.ts render and motion.ts hexFade). */
 export const isForecast = (layerId: string | undefined) => /^(luna|firefly)-forecast/.test(layerId ?? '');
 /** The hexagon layers (forecast and its stripes): the map draws lakes, rivers and roads over these, under the dots. */
 export const isHexes = (layerId: string) => /^(luna|firefly)-(forecast|unseen)/.test(layerId);

@@ -14,15 +14,19 @@ export const palette = {
   hexEdge: [70, 52, 30, 26] as RGBA,
   hoverTint: [43, 36, 28, 40] as RGBA, // an ink wash, visible on the pale hexes too
   // Lightness climbs to the peak and falls after it (pale sage -> deep leaf -> ochre -> faded brown), and "not yet"
-  // is near-empty, so the stages read in order even for colour-blind eyes.
+  // and "over" are pale, so the ink goes where the moths are. The two pale ends stay apart by lightness as well as hue:
+  // "not yet" a near-paper grey-sage (L* 90 on the paper), "over" a warm taupe clearly darker (L* 78, 1.4:1 against
+  // "not yet"), both still well lighter than the live stages' colour.
   stages: {
-    'not yet': [214, 204, 176, 110] as RGBA,
+    'not yet': [200, 208, 184, 105] as RGBA,
     starting: [183, 207, 140, 225] as RGBA,
     peak: [74, 128, 72, 225] as RGBA,
     'winding down': [196, 140, 56, 220] as RGBA,
-    over: [168, 150, 132, 170] as RGBA,
+    over: [170, 142, 114, 135] as RGBA,
   },
-  stripes: [43, 36, 28, 220] as RGBA, // dense ink hatching: at least 3.3:1 against every stage, peak included
+  // Fine full-ink hatching: 4.0:1 against the flat peak green, about 3:1 rendered (the 1.5 px lines are antialiased),
+  // and 6:1 or more on every other stage.
+  stripes: [43, 36, 28, 255] as RGBA,
   // Sightings are drawn as a marker in three rings: pale fill, ink rim, paper halo. The ink rim gives at least 4:1
   // against every light hex and the paper halo 3.4:1 against the dark peak green, so a dot always clears the 3:1
   // non-text contrast bar (WCAG 1.4.11) whatever it sits on.

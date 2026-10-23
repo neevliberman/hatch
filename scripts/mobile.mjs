@@ -97,22 +97,25 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       } catch (e) {
         // Software GL in CI can draw a frame or two a second, and Playwright waits for two quick identical frames
         // before it taps. So check what a finger cares about instead: the target is visible and on top at its centre.
-        const onTop = await page.evaluate((s) => {
+        // Then a plain finger tap at its centre: no more waiting on frames.
+        const at = await page.evaluate((s) => {
           const el = document.querySelector(s);
           const r = el?.getBoundingClientRect();
-          if (!r || !r.width || !r.height || el.disabled || getComputedStyle(el).visibility === 'hidden') return false;
-          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-          return !!hit && (hit === el || el.contains(hit));
-        }, sel).catch(() => false);
-        if (onTop && (await page.locator(sel).tap({ force: true, timeout: 3000 }).then(() => true, () => false))) return true;
+          if (!r || !r.width || !r.height || el.disabled || getComputedStyle(el).visibility === 'hidden') return null;
+          const [x, y] = [r.x + r.width / 2, r.y + r.height / 2];
+          const hit = document.elementFromPoint(x, y);
+          return !!hit && (hit === el || el.contains(hit)) ? [x, y] : null;
+        }, sel).catch(() => null);
+        if (at && (await page.touchscreen.tap(...at).then(() => true, () => false))) return true;
         // The last line of Playwright's log says why (hidden, or which element sits on top).
         fail(`could not tap ${sel} (${String(e.message).trim().split('\n').pop().replace(/\x1b\[\d+m/g, '').trim()})`);
         return false;
       }
     };
 
-    // First visit: the map comes first (the About button just glows); the i button opens the drawer, and a tap
-    // outside it must close it.
+    // First visit: the map comes first (the About button just glows). The i button opens the drawer: a side panel, or
+    // on a phone held upright a sheet at its middle stop. Either way the map beside or above it stays in use, so a tap
+    // there keeps it open and fills its spot card. At the sheet's tall stop (from "How sure?") a tap outside closes it.
     await page.goto(file);
     await page.waitForTimeout(2500);
     await shot('1-first-visit');
@@ -123,14 +126,48 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
     // Let the slide-in finish before measuring, or a slow machine measures it mid-way and taps the drawer itself.
     await page.waitForFunction(() => document.querySelector('#drawer').getAnimations().length === 0, null, { timeout: 3000 }).catch(() => {});
-    // Tap empty map: left of a side drawer, or between the top panels and a bottom sheet.
+    await page.waitForTimeout(400);
+    // Tap the map: left of a side drawer, or between the top panels and a bottom sheet.
     const box = await page.locator('#drawer').boundingBox();
     const top = await page.evaluate(() => document.querySelector('#top').getBoundingClientRect().bottom);
-    const bottom = box.x > 40 ? (await page.locator('#bottom').boundingBox()).y : box.y;
-    await page.touchscreen.tap(box.x > 40 ? box.x / 2 : width / 2, (top + bottom) / 2);
+    const sheet = box.x <= 40;
+    if (sheet && box.height > height * 0.6) fail(`the About sheet opens ${Math.round((box.height / height) * 100)}% tall, hiding the map`);
+    const spot0 = await page.locator('[data-spot] .spot-title').first().textContent();
+    // On land, not a lake (the middle of the free map can be Lake Michigan), and clear of the panels: the first of a
+    // few inland spots (Wisconsin, Minnesota, Illinois) that sits in the free strip, else that strip's middle.
+    const free = { x1: sheet ? 0 : box.x, y0: top, y1: sheet ? box.y : (await page.locator('#bottom').boundingBox()).y };
+    const inland = await page.evaluate(({ x1, y0, y1 }) => [[-89.8, 44.6], [-94.3, 46.2], [-89.2, 40.1]]
+      .map((ll) => window.__hatch?.map.project(ll)).find((p) => p && p[0] > 8 && p[0] < (x1 || innerWidth) - 8 && p[1] > y0 + 8 && p[1] < y1 - 8),
+      free);
+    await page.touchscreen.tap(...(inland ?? [sheet ? width / 2 : box.x / 2, (free.y0 + free.y1) / 2]));
+    await page.waitForTimeout(600);
+    if (!(await page.locator('#drawer.open').count())) fail('a tap on the map beside the open drawer closed it');
+    else if (sheet) {
+      // At the middle stop the tapped hexagon's season shows in the sheet (deck holds a tap back for the double-tap window).
+      const filled = await page.waitForFunction((t) => document.querySelector('[data-spot] .spot-title')?.textContent !== t, spot0, { timeout: 6000 })
+        .then(() => true, () => false);
+      if (!filled) fail('a tap on the map at the middle stop did not fill the spot card');
+    }
+    await shot('1b-drawer-and-map');
+    await tap('#drawer-close');
     await page.waitForTimeout(400);
-    if (await page.locator('#drawer.open').count()) fail('tapping outside the drawer did not close it');
-    if (await page.locator('#probe').isVisible()) fail('the tap that closed the drawer also opened a card');
+    // On a ~2fps CI frame a tap can land before the button takes it: one more try, then it is a real failure.
+    if (await page.locator('#drawer.open').count()) await tap('#drawer-close'), await page.waitForTimeout(600);
+    if (await page.locator('#drawer.open').count()) fail('the drawer close button did not close it');
+    if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
+    if (sheet && (await tap('#why'))) {
+      // Slow CI frames: wait for the sheet to finish rising, or the tap aimed above it lands on it.
+      await page.waitForFunction(() => { const r = document.querySelector('#drawer')?.getBoundingClientRect();
+        return !!r && r.top < innerHeight * 0.15 && getComputedStyle(document.querySelector('#drawer')).transform === 'none'; }, null, { timeout: 4000 }).catch(() => {});
+      await page.waitForTimeout(300);
+      const tall = await page.locator('#drawer').boundingBox();
+      if (!(await page.locator('#drawer.open.full').count())) fail('"How sure?" did not open the sheet at its tall stop');
+      // Above the sheet at the far left: the header's middle is the season menu, which a tap would open instead.
+      await page.touchscreen.tap(12, Math.max(4, tall.y / 2));
+      await page.waitForTimeout(400);
+      if (await page.locator('#drawer.open').count()) fail('tapping outside the tall sheet did not close it');
+      if (await page.locator('#probe').isVisible()) fail('the tap that closed the drawer also opened a card');
+    }
 
     const a = await page.evaluate(audit);
     await shot('2-map');
@@ -231,7 +268,9 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         await shot('5-zoomed');
         (await page.evaluate(audit)).bad.forEach((m) => fail(`zoomed in, ${m}`));
         await tap('#recenter');
-        await page.waitForTimeout(400);
+        // The recenter glides back (a third of a second, longer on a slow machine).
+        await page.waitForFunction((z) => window.__hatch.map.zoom() <= z + 0.05, z0, { timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(200);
         const z1 = await zoom();
         // The refit can land a little further out than the first view (an open card leaves less room), never further in.
         if (await page.locator('#recenter').isVisible() || z1 > z0 + 0.05) fail(`recenter did not bring back the whole Midwest (zoom ${z0} -> ${z1})`);

@@ -35,13 +35,13 @@ function smooth(pts: P[], k = 6): P[] {
 const f1 = (v: number) => v.toFixed(1);
 
 /** One pen stroke as a filled outline, thin at both ends and fuller in the middle. With `twice`, the hand goes
- * back over it once, a little off and lighter. */
-export function pen(pts: P[], w = 1.3, seed = 1, twice = true): string {
+ * back over it once, a little off and lighter. `k`: samples per span (fewer for tiny drawings). */
+export function pen(pts: P[], w = 1.3, seed = 1, twice = true, k = 6): string {
   const r = rng(seed);
   let d = '';
   for (let pass = 0; pass < (twice ? 2 : 1); pass++) {
     const drift = pass ? 0.8 : 0.25;
-    const s = smooth(pts.map(([x, y]) => [x + (r() - 0.5) * drift, y + (r() - 0.5) * drift] as P));
+    const s = smooth(pts.map(([x, y]) => [x + (r() - 0.5) * drift, y + (r() - 0.5) * drift] as P), k);
     const ww = pass ? w * 0.5 : w;
     const press = 0.8 + 0.4 * r();
     const left: string[] = [];
@@ -168,6 +168,16 @@ function adult(kind: Explainer['creature'], cx: number, cy: number, k: number, s
       MOTH.spots.map((p, i) => pen(M(p), 0.7, seed + 10 + i, false)).join(''),
     body: MOTH.body.map((b, i) => pen(M(b), i < 2 ? w : 0.7, seed + 20 + i)).join(''),
   };
+}
+
+/** The off-season margin note's sketch (64x34): the moth's cocoon on the leaf litter, or the firefly's grub under the
+ * ground line. */
+export function restingSketch(kind: Explainer['creature']): string {
+  const moth = kind === 'moth';
+  const s = moth ? sleeper(kind, 26, 16, 1.1, 13) : sleeper(kind, 32, 22, 1, 40);
+  return `<path class="wash" d="${s.wash}"/><path d="${s.ink + (moth
+    ? pen([[3, 29], [30, 28], [61, 29.5]], 1.1, 3) + pen([[40, 27], [48, 22], [58, 26], [48, 28], [40, 27]], 0.9, 5)
+    : pen([[3, 11], [30, 10], [61, 11.5]], 1.1, 3))}"/>`;
 }
 
 const sunAt = (cx: number, cy: number, r: number, rays: number[][], seed: number) =>

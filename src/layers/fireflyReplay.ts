@@ -5,11 +5,14 @@ import { latLngToCell } from 'h3-js';
 import { palette } from '../theme';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear } from '../core/timeAxis';
-import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import type { CaveatCard, Explainer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import { restingSketch } from '../ui/sketch';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
+import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, parentOf, RETRY_MS, type FineLevel } from './fineData';
-import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, type LunaLayer, type Stage } from './lunaReplay';
+import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
+import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -55,12 +58,16 @@ export function createFireflyLayer(
   const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
+  const washed = washer(data.cells);
   const unseen = cells.filter((c) => !c.seen);
   const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : Number(mode));
   const forecast = () => data.forecast[mode] ?? data.forecast[TYPICAL]!;
   const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
+  const rings = ripples<Sighting>('firefly-ripples', (s) => [s.lng, s.lat], palette.dotRim);
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
+  let fresh = { key: '', list: [] as Sighting[] };
+  let sleepNote: OffSeasonNote | undefined;
 
   // ---- finer hexes (res 5 only for fireflies), from public/fine-firefly/, loaded when the reader zooms in
   type Cell = { id: string; i: number; seen: boolean };
@@ -188,6 +195,7 @@ export function createFireflyLayer(
   return {
     id: 'firefly-replay',
     title: 'Common eastern firefly',
+    words: { tagline: 'when fireflies glow', plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies' },
     mode: () => mode,
     setMode(m) {
       mode = m;
@@ -195,7 +203,15 @@ export function createFireflyLayer(
     },
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
+    busy: (t) => isBusy(forecast(), dayOfYear(t)),
+    endNote: ['That was the firefly season.', 'Press replay to watch it again'],
     seasonCount: (m: Mode) => sightingsFor(m).length,
+
+    newest(t) {
+      const doy = dayOfYear(t);
+      if (fresh.key !== `${doy}|${mode}`) fresh = { key: `${doy}|${mode}`, list: shown.filter((s) => day(s) === doy) };
+      return fresh.list;
+    },
 
     points(t) {
       // Cached per day and season, like luna's: the place names move out of the way of lit dots.
@@ -207,10 +223,11 @@ export function createFireflyLayer(
       return lit.pts;
     },
 
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till summer', line: 'larvae in the soil', sketch: restingSketch('firefly'), at: MIDWEST_MARGIN }) : null),
+
     summary(t) {
       const doy = dayOfYear(t);
-      const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
-      for (const q of forecast()) n[stageAt(q, doy)]++;
+      const n = stageCounts(forecast(), doy);
       const lit = shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).length;
       const parts = STAGES.filter((s) => n[s]).map((s) => `${s} in ${n[s]}`);
       return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}. Firefly forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
@@ -224,8 +241,10 @@ export function createFireflyLayer(
       return p;
     },
 
-    render({ t, zoom, theme }) {
+    render({ t, zoom, theme, wash, playing, frac = 0 }) {
       const doy = dayOfYear(t);
+      const anim = animating(playing);
+      const d = anim ? doy + frac : doy; // the in-between day while playing, like luna's dots
       const { res, days } = resFor(zoom);
       shownDays = days;
       if (res !== shownRes) {
@@ -236,8 +255,8 @@ export function createFireflyLayer(
       const qOf = (c: Cell) => (days ? fineQ(days, c.i) : forecast()[c.i]);
       const filter = {
         getFilterValue: day,
-        filterRange: [doy - GLOW_DAYS + 0.5, doy + 0.5] as [number, number],
-        filterSoftRange: [doy - 0.5, doy + 0.5] as [number, number],
+        filterRange: [d - GLOW_DAYS + 0.5, d + 0.5] as [number, number],
+        filterSoftRange: [d - 0.5, d + 0.5] as [number, number],
         filterTransformSize: true,
         filterTransformColor: true,
         extensions: filterExt,
@@ -245,11 +264,12 @@ export function createFireflyLayer(
       return [
         new H3HexagonLayer<Cell>({
           // One id per level: reusing an id across levels left the other level's hexes drawn (see lunaReplay.ts).
-          id: `firefly-forecast-r${res}`,
+          id: `firefly-forecast-r${res}${hexFade(anim).id}`,
           data: hexes,
           getHexagon: (c) => c.id,
-          getFillColor: (c) => STAGE_COLOR[stageAt(qOf(c), doy)],
-          getLineColor: theme.hexEdge,
+          // The first-frame wash (a ?species=firefly link), on the coarse hexagons only.
+          getFillColor: wash === undefined || days ? (c) => STAGE_COLOR[stageAt(qOf(c), doy)] : (c) => washed(c.i, STAGE_COLOR[stageAt(qOf(c), doy)], wash),
+          getLineColor: wash === undefined || days ? theme.hexEdge : (c) => washed(c.i, theme.hexEdge, wash),
           stroked: true,
           filled: true,
           extruded: false,
@@ -259,10 +279,12 @@ export function createFireflyLayer(
           pickable: true,
           autoHighlight: true,
           highlightColor: palette.hoverTint,
-          updateTriggers: { getFillColor: [doy, mode, res] },
+          updateTriggers: { getFillColor: [doy, mode, res, wash], getLineColor: [wash, res] },
+          transitions: hexFade(anim).transitions,
         }),
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
           id: `firefly-unseen-r${res}`,
+          opacity: wash === undefined ? 1 : Math.min(1, wash / 900),
           data: days ? fineLevel!.unseen : unseen,
           getHexagon: (c) => c.id,
           getFillColor: palette.stripes,
@@ -277,7 +299,6 @@ export function createFireflyLayer(
           fillPatternMask: true,
           getFillPattern: () => 'stripes',
           fillPatternSizeUnits: 'pixels',
-          getFillPatternScale: 0.75,
         }),
         new ScatterplotLayer<Sighting>({
           id: 'firefly-glow',
@@ -316,6 +337,7 @@ export function createFireflyLayer(
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
+        ...rings(anim, doy, (from, to) => shown.filter((s) => day(s) >= from && day(s) <= to)),
       ];
     },
 
@@ -407,7 +429,6 @@ export function createFireflyLayer(
     explainer(): Explainer {
       const sc = mode === TYPICAL ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
-      const days = (d: number) => `${Math.round(d)} day${Math.round(d) === 1 ? '' : 's'}`;
       return {
         name: 'Common eastern firefly',
         sci: data.species.sci,
@@ -423,15 +444,18 @@ export function createFireflyLayer(
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
         score: {
           title: 'How sure is it?',
-          text:
-            (sc.n
-              ? `For the strips of the map with enough sightings (Illinois to central Wisconsin and Michigan), the forecast’s dates for the first fireflies and the peak were off by about ${days(sc.heat)} on average, judged by people’s sightings. ` +
-                `Guessing each area’s usual date was off by about ${days(sc.calendar)}. ` +
-                `That was checked on ${mode === TYPICAL ? 'past years' : mode}, which the forecast hadn’t learned from. ` +
-                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
-              : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            (data.model ? `A simpler rule (the warmth at past sightings, no curve) did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}. ` : '') +
-            'This is a first try and has not been tested as carefully as the luna moth.',
+          points: [
+            [
+              'checked',
+              sc.n
+                ? `the dates of the first fireflies and the peak, against people’s sightings, on ${mode === TYPICAL ? 'years' : mode} it never learned from (Illinois to central Wisconsin and Michigan).`
+                : `${mode} had too few sightings to check, so this is all years together.`,
+            ],
+            ...(data.model
+              ? [['simpler rule', `the warmth at past sightings alone did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}.`] as [string, string]]
+              : []),
+            ['first try', 'not tested as carefully as the luna moth yet.'],
+          ],
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
@@ -445,7 +469,7 @@ export function createFireflyLayer(
       return {
         title: 'Forecast: when fireflies come out',
         items: [
-          ...STAGES.map((s) => ({ color: css(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
+          ...STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
           { color: css(GLOW), label: 'seen, last 10 days', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },

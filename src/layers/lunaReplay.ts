@@ -2,10 +2,11 @@ import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { mothInk, palette } from '../theme';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps } from '@deck.gl/extensions';
-import { latLngToCell } from 'h3-js';
+import { cellToLatLng, latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
-import type { CaveatCard, Explainer, HatchLayer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import type { CaveatCard, Explainer, HatchLayer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import { restingSketch } from '../ui/sketch';
 import {
   APPROXIMATE,
   bandOf,
@@ -19,7 +20,9 @@ import {
   type Mode,
   type Sighting,
 } from './lunaData';
+import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, parentOf, RETRY_MS, type FineLevel } from './fineData';
+import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
@@ -46,10 +49,6 @@ const holdoutPass = Number.isFinite(hoHeat) && Number.isFinite(hoCal) && hoHeat!
 /** Year used to put dates on the "typical year" axis. Any non-leap year works. */
 const TYPICAL_AXIS_YEAR = 2025;
 
-export const STAGES = ['not yet', 'starting', 'peak', 'winding down', 'over'] as const;
-export type Stage = (typeof STAGES)[number];
-/** What each stage is called on screen. The map forecasts the first wave only, so in August "over" alone would read
- * as "no moths" while the second wave flies. */
 export const STAGE_LABEL: Record<Stage, string> = {
   'not yet': 'not yet',
   starting: 'starting',
@@ -57,16 +56,6 @@ export const STAGE_LABEL: Record<Stage, string> = {
   'winding down': 'winding down',
   over: 'first wave over',
 };
-
-/** Where a cell's forecast season stands on day `doy`. q = days the share of moths out reaches 5/25/50/75/95%. */
-export function stageAt(q: readonly (number | null)[] | null | undefined, doy: number): Stage {
-  const [q05, q25, , q75, q95] = q ?? [];
-  if (q05 == null || doy < q05) return 'not yet';
-  if (q25 == null || doy < q25) return 'starting';
-  if (q75 == null || doy < q75) return 'peak';
-  if (q95 == null || doy < q95) return 'winding down';
-  return 'over';
-}
 
 /** stageAt for a finer level's packed days (5 bytes per cell, day of year minus 60, 255 = never). */
 function stageAtBytes(days: Uint8Array, i: number, doy: number): Stage {
@@ -82,24 +71,25 @@ const bytesToQ = (days: Uint8Array, i: number) =>
   [0, 1, 2, 3, 4].map((k) => (days[i * 5 + k] === 255 ? null : days[i * 5 + k]! + 60));
 
 type RGBA = [number, number, number, number];
-// Stage colours and why they read in order: see palette.stages in src/theme.ts.
+// The stage colours and why they are what they are: palette.stages in theme.ts.
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;
-// One object for every render, so deck.gl doesn't rebuild the pattern each playback frame.
-export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
+// One object for every render, so deck.gl doesn't rebuild the pattern each playback frame. The 12px tile is drawn
+// at 1:1: a shrunken tile blurs thin lines and loses their contrast.
+export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 12, height: 12 } };
 let stripeAtlas: HTMLCanvasElement | null = null;
 export const stripes = () => {
   if (stripeAtlas) return stripeAtlas;
-  const c = Object.assign(document.createElement('canvas'), { width: 16, height: 16 });
+  const c = Object.assign(document.createElement('canvas'), { width: 12, height: 12 });
   const g = c.getContext('2d')!;
   g.strokeStyle = '#fff';
-  g.lineWidth = 3;
+  g.lineWidth = 1.5; // thin lines: the doubt is there, but it doesn't outshout the forecast
   // Three strokes so the diagonal tiles without seams.
-  for (const o of [-16, 0, 16]) {
+  for (const o of [-12, 0, 12]) {
     g.beginPath();
-    g.moveTo(o, 16);
-    g.lineTo(o + 16, 0);
+    g.moveTo(o, 12);
+    g.lineTo(o + 12, 0);
     g.stroke();
   }
   return (stripeAtlas = c);
@@ -235,6 +225,21 @@ export function seasonProfile(
   return { bands, seen: perDay(() => true), notes };
 }
 
+/** The map's first-frame wash for the hexagons `ids`: colour `c` of hexagon `i`, `wash` ms after the first frame
+ * (map.ts), fading in over 600 ms, the northernmost starting 300 ms after the southernmost. */
+export function washer(ids: string[]): (i: number, c: RGBA, wash: number) => RGBA {
+  let north: number[] | null = null; // 0 at the south edge, 1 at the north; worked out when first needed
+  return (i, c, wash) => {
+    if (!north) {
+      const lat = ids.map((id) => cellToLatLng(id)[0]);
+      const lo = Math.min(...lat);
+      const hi = Math.max(...lat);
+      north = lat.map((y) => (y - lo) / (hi - lo || 1));
+    }
+    return [c[0], c[1], c[2], c[3] * Math.min(1, Math.max(0, (wash - north[i]! * 300) / 600))];
+  };
+}
+
 /** Mean absolute error of the heat forecast and the calendar over the shipped band-year scores. */
 export function scoreSummary(year?: number) {
   const rows = data.scores.filter((r) => year === undefined || r.year === year);
@@ -284,7 +289,18 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
 
   const unseen = cells.filter((c) => !c.seen);
+  // An ink ring spreads from each moth on the day it is seen, while playing.
+  const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], palette.dotRim);
+  let sleepNote: OffSeasonNote | undefined;
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
+  // Today's sightings, which breathe while paused (map.ts). Cached per day and season.
+  let fresh = { key: '', list: [] as Sighting[] };
+  const newest = (doy: number) => {
+    const key = `${doy}|${mode}`;
+    if (fresh.key !== key) fresh = { key, list: shown.filter((s) => (mode === TYPICAL ? s.pdoy : s.doy) === doy) };
+    return fresh.list;
+  };
+  const washed = washer(data.cells);
 
   // ---- finer levels: the level the zoom asks for, what has loaded, and what is on screen
   let wantRes = 4;
@@ -447,6 +463,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   return {
     id: 'luna-replay',
     title: 'Luna moth',
+    words: { tagline: 'when luna moths fly', plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths' },
     mode: () => mode,
     setMode(m) {
       mode = m;
@@ -455,6 +472,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     res: () => shownRes,
     fineCurrent: () => shownRes > 4 && shownDays !== null && shownDays === fineDaysLoaded.get(`${shownRes}/${mode}`),
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
+
+    newest: (t) => newest(dayOfYear(t)),
+    busy: (t) => isBusy(forecast(), dayOfYear(t)),
+    endNote: ['That was the first wave.', 'Press replay to watch it again'],
 
     points(t) {
       // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
@@ -467,10 +488,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return lit.pts;
     },
 
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till spring', line: 'cocoons in the leaf litter', sketch: restingSketch('moth'), at: MIDWEST_MARGIN }) : null),
+
     summary(t) {
       const doy = dayOfYear(t);
-      const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
-      for (const q of forecast()) n[stageAt(q, doy)]++;
+      const n = stageCounts(forecast(), doy);
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
       const lit = shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).length;
       const parts = STAGES.filter((s) => n[s]).map((s) => `${STAGE_LABEL[s]} in ${n[s]}`);
@@ -492,8 +514,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return p;
     },
 
-    render({ t, zoom, theme }) {
+    render({ t, zoom, theme, wash, playing, frac = 0 }) {
       const doy = dayOfYear(t);
+      // While playing, the dots get the in-between day and the hexes blend into their next colour (see motion.ts).
+      const anim = animating(playing);
+      const fade = hexFade(anim);
+      const d = anim ? doy + frac : doy;
       const { res, days } = pickRes(resForZoom(zoom));
       shownDays = days;
       if (res !== shownRes) {
@@ -504,8 +530,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const filter = {
         getFilterValue: (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy),
         // Whole-day values: a dot is lit from its own day through GLOW_DAYS - 1 days later.
-        filterRange: [doy - GLOW_DAYS + 0.5, doy + 0.5] as [number, number],
-        filterSoftRange: [doy - 0.5, doy + 0.5] as [number, number],
+        filterRange: [d - GLOW_DAYS + 0.5, d + 0.5] as [number, number],
+        filterSoftRange: [d - 0.5, d + 0.5] as [number, number],
         filterTransformSize: true,
         filterTransformColor: true,
         extensions: filterExt,
@@ -516,7 +542,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const hexLayers = fine && days
         ? [
             new H3HexagonLayer<FineCell>({
-              id: `luna-forecast-r${res}`,
+              id: `luna-forecast-r${res}${fade.id}`,
               data: fine.data,
               getHexagon: (c) => c.id,
               getFillColor: (c) => STAGE_COLOR[stageAtBytes(days, c.i, doy)],
@@ -533,6 +559,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               autoHighlight: true,
               highlightColor: palette.hoverTint,
               updateTriggers: { getFillColor: [doy, mode, res] },
+              transitions: fade.transitions,
             }),
             new H3HexagonLayer<FineCell, FillStyleExtensionProps<FineCell>>({
               id: `luna-unseen-r${res}`,
@@ -550,18 +577,17 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               fillPatternMask: true,
               getFillPattern: () => 'stripes',
               fillPatternSizeUnits: 'pixels',
-              getFillPatternScale: 0.75,
             }),
           ]
         : null;
       return [
         ...(hexLayers ?? [
         new H3HexagonLayer<(typeof cells)[number]>({
-          id: 'luna-forecast-r4',
+          id: `luna-forecast-r4${fade.id}`,
           data: cells,
           getHexagon: (c) => c.id,
-          getFillColor: (c) => cellColor(c.i, doy),
-          getLineColor: theme.hexEdge,
+          getFillColor: wash === undefined ? (c) => cellColor(c.i, doy) : (c) => washed(c.i, cellColor(c.i, doy), wash),
+          getLineColor: wash === undefined ? theme.hexEdge : (c) => washed(c.i, theme.hexEdge, wash),
           stroked: true,
           filled: true,
           extruded: false,
@@ -570,10 +596,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           pickable: true,
           autoHighlight: true,
           highlightColor: palette.hoverTint,
-          updateTriggers: { getFillColor: [doy, mode] },
+          updateTriggers: { getFillColor: [doy, mode, wash], getLineColor: [wash] },
+          transitions: fade.transitions,
         }),
         new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
           id: 'luna-unseen-r4',
+          opacity: wash === undefined ? 1 : Math.min(1, wash / 900),
           data: unseen,
           getHexagon: (c) => c.id,
           getFillColor: STRIPES,
@@ -588,7 +616,6 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           fillPatternMask: true,
           getFillPattern: () => 'stripes',
           fillPatternSizeUnits: 'pixels',
-          getFillPatternScale: 0.75,
         }),
         ]),
         new ScatterplotLayer<Sighting>({
@@ -630,6 +657,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
+        ...rings(anim, doy, (from, to) => shown.filter((s) => {
+          const day = mode === TYPICAL ? s.pdoy : s.doy;
+          return day >= from && day <= to;
+        })),
       ];
     },
 
@@ -751,7 +782,6 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     explainer(): Explainer {
       const sc = mode === TYPICAL || mode === LIVE ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
-      const days = (d: number) => `${Math.round(d)} day${Math.round(d) === 1 ? '' : 's'}`;
       return {
         name: 'Luna moth',
         sci: data.species.sci,
@@ -767,20 +797,22 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
         score: {
           title: 'How sure is it?',
-          text:
-            (sc.n
-              ? (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '') +
-                `In short: for each strip of the map, the forecast\u2019s dates for the first moths and the peak were off by about ${days(sc.heat)} on average, judged by when people\u2019s sightings showed them. ` +
-                `Guessing each area\u2019s usual date was off by about ${days(sc.calendar)} on average. ` +
-                `That was checked on ${mode === TYPICAL || mode === LIVE ? 'past years' : mode}, which the forecast hadn\u2019t learned from. ` +
-                (isLive() ? 'Those replays knew the real weather; this year\u2019s forecast has to guess the weeks ahead, so expect it to be off by more early in spring. ' : '') +
-                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
-              : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'Not proven yet. It does well on years it was not trained on. ' +
-            (holdoutPass
-              ? 'It also did well on states it never saw (Wisconsin and Minnesota), but we chose it after seeing that test. '
-              : 'But trained without Wisconsin and Minnesota, it did worse there than a guess from past years. ') +
-            'The real test is the 2026 season, once its weather data is out in mid-2027.',
+          points: [
+            [
+              'checked',
+              !sc.n
+                ? `${mode} had too few sightings to check, so this is all years together.`
+                : `the dates of the first moths and the peak, against people\u2019s sightings, on ${mode === TYPICAL || mode === LIVE ? 'years' : mode} it never learned from` +
+                  (mode !== TYPICAL && sc.n < 3 ? ` (only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map had enough).` : '.'),
+            ],
+            ...(isLive()
+              ? ([['this year', 'those checks knew the real weather; this forecast has to guess the weeks ahead, so expect it to be off by more early in spring.']] as [string, string][])
+              : []),
+            holdoutPass
+              ? ['also', 'it did well on states it never saw (Wisconsin and Minnesota), but it was chosen after seeing that test.']
+              : ['weak spot', 'trained without Wisconsin and Minnesota, it did worse there than a guess from past years.'],
+            ['real test', 'the 2026 season, once its weather data is out in mid-2027.'],
+          ],
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
@@ -796,7 +828,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         title: 'Forecast: when moths come out',
         items: [
           ...STAGES.map((s) => ({
-            color: css(STAGE_COLOR[s]),
+            color: onPaper(STAGE_COLOR[s]),
             label: STAGE_LABEL[s],
             shape: 'hex' as const,
           })),

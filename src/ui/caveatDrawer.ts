@@ -6,7 +6,8 @@ import { CROSS } from './icons';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export interface Drawer {
-  (open: boolean): void;
+  /** Open or close. On a phone held upright it opens as a sheet at its middle stop, or at the tall one with `full`. */
+  (open: boolean, full?: boolean): void;
   /** Point the explainer's spot card at a place (null = the layer's default) on day `t`. */
   setSpot(lngLat: [number, number] | null, t: number, name?: string): void;
 }
@@ -48,7 +49,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     const opened = new Set([...drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key));
     // One .sheet holds everything, title bar included, so its ruled paper scrolls with the text (see style.css).
     drawer.innerHTML = `<div class="sheet">
-      <div class="drawer-head"><span class="drawer-grip" aria-hidden="true"></span><h2>About this map</h2>
+      <div class="drawer-head"><button type="button" class="drawer-grip" aria-label="Show more of this panel"></button><h2>About this map</h2>
         <button class="icon-btn" id="drawer-close" aria-label="Close About this map">${CROSS}</button></div>
       ${
         layers.length
@@ -70,12 +71,16 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
       }
       ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}</div>`;
     drawer.querySelector('#drawer-close')!.addEventListener('click', () => toggle(false));
+    // The grip is also a button, for a mouse or a keyboard on a narrow window: it swaps the two stops.
+    drawer.querySelector('.drawer-grip')!.addEventListener('click', () => toggle(true, !full()));
     drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]').forEach((d) => (d.open = opened.has(d.dataset.key)));
     fillSpots();
   };
 
-  const toggle = (open: boolean) => {
+  const toggle = (open: boolean, full = false) => {
     const was = drawer.classList.contains('open');
+    if (open) drawer.classList.toggle('full', full);
+    drawer.querySelector('.drawer-grip')?.setAttribute('aria-label', full ? 'Show less of this panel' : 'Show more of this panel');
     drawer.classList.toggle('open', open);
     drawer.setAttribute('aria-hidden', String(!open));
     drawer.inert = !open; // closed drawer: nothing inside is focusable
@@ -86,13 +91,18 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   };
 
   btn.addEventListener('click', () => toggle(!drawer.classList.contains('open')));
-  // On a phone the drawer covers most of the screen, so a tap outside it closes it, like a native sheet. That tap
-  // stops there (no card pinned underneath). Desktop keeps the side panel open while you scrub.
-  const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
+  // On a phone held upright the drawer is a bottom sheet with two stops. At the middle one (44%) the map above stays
+  // in use: a tapped hexagon fills the spot card. At the tall one (92%) it is for reading, and a tap outside closes
+  // it, like a native sheet; that tap stops there (no card pinned underneath). Side panels (desktop, a phone on its
+  // side) stay open while you scrub and tap.
+  const narrow = window.matchMedia('(max-width: 700px)');
+  const sideways = window.matchMedia('(orientation: landscape) and (max-height: 500px)');
+  const sheet = () => narrow.matches && !sideways.matches;
+  const full = () => drawer.classList.contains('full');
   let swallow = false;
   document.addEventListener('pointerdown', (e) => {
     const t = e.target as Element;
-    if (!phone.matches || !drawer.classList.contains('open') || drawer.contains(t) || btn.contains(t) || t.closest?.('#why')) return;
+    if (!sheet() || !full() || !drawer.classList.contains('open') || drawer.contains(t) || btn.contains(t) || t.closest?.('#why')) return;
     toggle(false);
     swallow = true;
     setTimeout(() => (swallow = false), 600); // a tap that never becomes a click must not eat the next real one
@@ -109,16 +119,15 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     }, true);
   window.addEventListener('keydown', (e) => e.key === 'Escape' && toggle(false));
 
-  // On a phone in portrait the drawer is a bottom sheet: drag it down to close, like a native sheet. The title bar
-  // always drags; the text drags only once it is scrolled to the top (before that, a downward swipe scrolls it back up).
-  const narrow = window.matchMedia('(max-width: 700px)');
-  const sideways = window.matchMedia('(orientation: landscape) and (max-height: 500px)'); // there it is a side panel
+  // Drag the sheet between its stops. At the middle stop the whole sheet is the handle: up for the tall stop, down
+  // to close. At the tall stop the title bar always drags; the text drags only once it is scrolled to the top (before
+  // that, a downward swipe scrolls it back up). A quick flick counts even when it moved only a little.
   let drag: { y0: number; t: number; dy: number; v: number; head: boolean; on: boolean } | null = null;
   drawer.addEventListener('touchstart', (e) => {
     if (drag?.on) return; // a second finger mid-drag: keep following the first
     drag = null;
-    if (!narrow.matches || sideways.matches || e.touches.length !== 1) return;
-    const head = !!(e.target as Element).closest('.drawer-head');
+    if (!sheet() || e.touches.length !== 1) return;
+    const head = !full() || !!(e.target as Element).closest('.drawer-head');
     if (head || drawer.scrollTop <= 0) drag = { y0: e.touches[0]!.clientY, t: e.timeStamp, dy: 0, v: 0, head, on: false };
   }, { passive: true });
   drawer.addEventListener('touchmove', (e) => {
@@ -128,30 +137,39 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
       if (!drag.head && (dy < 0 || drawer.scrollTop > 0)) return void (drag = null); // reading on: let the text scroll
       // At the top a pull down has nothing to scroll, so claim it now: once the browser starts a pan it stops letting us cancel moves.
       if (!drag.head && e.cancelable) e.preventDefault();
-      if (dy < 8) return; // a tap with a wobble (say on the close button) stays a tap
+      if (Math.abs(dy) < 8) return; // a tap with a wobble (say on the close button) stays a tap
       drag.on = true;
       drawer.classList.add('dragging');
     }
     e.preventDefault(); // the sheet moves, not the page or the text
-    const next = Math.max(0, dy);
+    const next = full() ? Math.max(0, dy) : Math.max(dy, -window.innerHeight * 0.48);
     drag.v = (next - drag.dy) / Math.max(1, e.timeStamp - drag.t); // px per ms over the last move, so a late flick counts
     drag.t = e.timeStamp;
     drag.dy = next;
-    drawer.style.transform = `translateY(${drag.dy}px)`;
+    // Down slides the sheet away; up (from the middle stop) makes it taller.
+    drawer.style.transform = next > 0 ? `translateY(${next}px)` : '';
+    drawer.style.height = next < 0 ? `${window.innerHeight * 0.44 - next}px` : '';
   }, { passive: false });
   const endDrag = (e: TouchEvent) => {
     if (!drag?.on) return void (drag = null);
     const { dy, v } = drag;
     drag = null;
-    // Dropping the inline transform lets the transition carry the sheet from where the finger left it: shut, or back up.
+    // Dropping the inline styles lets the transition carry the sheet from where the finger left it to its stop.
     drawer.classList.remove('dragging');
-    drawer.style.transform = '';
-    const flick = v > 0.6;
-    if (e.type === 'touchend' && (dy > drawer.offsetHeight * 0.25 || (flick && dy > 40))) toggle(false);
+    drawer.style.transform = drawer.style.height = '';
+    if (e.type !== 'touchend') return;
+    const h = drawer.offsetHeight;
+    if (full()) {
+      if (dy > h * 0.6) toggle(false);
+      else if (dy > 60 || (v > 0.6 && dy > 20)) toggle(true);
+    } else if (dy < -60 || (v < -0.4 && dy < -20)) toggle(true, true);
+    else if (dy > h * 0.25 || (v > 0.6 && dy > 30)) toggle(false);
   };
   drawer.addEventListener('touchend', endDrag);
   drawer.addEventListener('touchcancel', endDrag);
   // A hairline under the sticky title bar once text scrolls beneath it.
+  // A wheel or trackpad reading on at the middle stop (where the text doesn't scroll) opens the tall stop.
+  drawer.addEventListener('wheel', (e) => sheet() && !full() && e.deltaY > 0 && toggle(true, true), { passive: true });
   drawer.addEventListener('scroll', () => drawer.classList.toggle('scrolled', drawer.scrollTop > 0), { passive: true });
   registry.subscribe(render);
   render();
@@ -159,10 +177,18 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   if (new URLSearchParams(location.search).has('caveats')) toggle(true);
   return Object.assign(toggle, {
     setSpot(lngLat: [number, number] | null, t: number, name?: string) {
+      const moved = String(lngLat) !== String(spot);
       spot = lngLat;
       spotT = t;
       spotName = name;
       fillSpots();
+      // A hexagon tapped above the middle-stop sheet: bring its spot card up into the part of the sheet showing.
+      const card = drawer.querySelector<HTMLElement>('.ex-spot');
+      if (moved && lngLat && card && sheet() && !full() && drawer.classList.contains('open')) {
+        const head = drawer.querySelector<HTMLElement>('.drawer-head')?.offsetHeight ?? 0;
+        const top = card.getBoundingClientRect().top - drawer.getBoundingClientRect().top + drawer.scrollTop - head - 8;
+        drawer.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      }
     },
   });
 }
