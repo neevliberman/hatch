@@ -397,7 +397,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 /* Place names over the map (map/labels.ts). Ink on a paper halo, so a name reads over any hexagon colour; water and
    forest names handwritten, like notes in the margin. Never takes a tap: the map underneath does. */
-.map-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.map-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .4s; }
+.map-labels.ready { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .map-labels { transition: none; } }
 .place { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; white-space: nowrap;
   color: var(--text); font: 400 12px/15px var(--font-body);
   /* A solid paper halo: eight 1.5px offsets fill the gaps a blur alone leaves on the dark peak green. */
@@ -408,6 +410,6 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .place.flip { flex-direction: row-reverse; }
 .place-city { font: 700 13px/16px var(--font-body); }
 .place-city::before { width: 5px; height: 5px; }
-.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #5a4d3c; }
+.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #776a55; }
 .place-water { font: 600 17px/18px var(--font-note); color: #2c5873; }
 .place-park { font: 600 16px/18px var(--font-note); color: #24542e; }
