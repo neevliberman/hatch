@@ -4,6 +4,7 @@
 // forecast is stored as its difference from the all-years one. A small decoder rebuilds the exact same object at load,
 // so the app sees identical data. The build checks the round trip and fails rather than ship anything that differs.
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 const diff = (a) => a.map((v, i) => (i === 0 ? v : v - a[i - 1]));
@@ -20,6 +21,7 @@ export function pack(data) {
   const { sightings, forecast, ...rest } = data;
   const col = (k) => sightings.map((r) => r[k]);
   const base = forecast.typical;
+  if (!Array.isArray(base)) throw new Error('pack-replay: forecast.typical is missing (it is the base the seasons are stored against)');
   return {
     rest,
     s: [diff(col(0)), diff(col(1)), col(2), diff(col(3).map(milli)), diff(col(4).map(milli)), col(5)],
@@ -48,12 +50,21 @@ export default function packReplay() {
   return {
     name: 'hatch-pack-replay',
     enforce: 'pre',
+    configResolved(config) {
+      file = resolve(config.root, 'src/data/luna-replay.json');
+    },
     async resolveId(source, importer, opts) {
       if (!source.endsWith('/luna-replay.json')) return null;
       const r = await this.resolve(source, importer, { ...opts, skipSelf: true });
-      if (!r?.id.endsWith('/src/data/luna-replay.json')) return null;
-      file = r.id;
-      return VIRTUAL;
+      return r?.id === file ? VIRTUAL : null;
+    },
+    // The JSON is not itself a module here, so an edit to it would not reach the dev server's page: reload by hand.
+    handleHotUpdate({ file: changed, server }) {
+      if (changed !== file) return;
+      const mod = server.moduleGraph.getModuleById(VIRTUAL);
+      if (mod) server.moduleGraph.invalidateModule(mod);
+      server.ws.send({ type: 'full-reload' });
+      return [];
     },
     load(id) {
       if (id !== VIRTUAL) return null;
