@@ -120,6 +120,13 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
 #recenter[hidden] { display: none; }
+/* Find a town: a round icon beside My area; its name box opens just above the time controls, at thumb height. */
+#actions #find { border-radius: 50%; width: 44px; min-width: 0; padding: 0; position: relative; }
+#find::before { content: ''; position: absolute; inset: -4px; } /* 44px or more to the finger at every size */
+#finder { position: absolute; left: var(--gr); bottom: calc(100% + 10px); z-index: 5; pointer-events: auto; }
+#finder[hidden] { display: none; }
+#finder input { width: min(240px, calc(100vw - 32px)); height: 40px; padding: 0 14px; font: inherit; font-size: 16px;
+  color: var(--text); background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 20px; box-shadow: var(--shadow); }
 /* With a mouse the hex card is a tooltip beside the pointer (placed from main.ts); it only takes clicks once pinned. */
 #probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: max-content; max-width: min(300px, calc(100vw - 16px));
   max-height: calc(100vh - 16px); overflow-y: auto; pointer-events: none;

@@ -11,6 +11,7 @@ import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { countdownParts } from './ui/countdown';
+import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 import { isForecast } from './core/layer';
@@ -339,6 +340,11 @@ function start() {
     if (!showPlace(lat, lng, name)) return say(`No forecast for ${name}`);
     // On a phone the panel hides the map, so close it to show the picked hexagon and its card.
     if (phone.matches) toggleDrawer(false);
+  });
+
+  // Find a town: the same path as the city menu above.
+  mountFinder($('find'), $('finder'), (lat, lng, name) => {
+    if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`);
   });
 
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
