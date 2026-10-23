@@ -13,7 +13,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 const out = process.argv[2] ?? 'screenshots/fine';
 mkdirSync(out, { recursive: true });
 const root = resolve(process.env.DIST_DIR ?? 'dist');
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 const server = createServer((req, res) => {
   const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
   let f = join(root, path);
@@ -61,6 +61,8 @@ const differ = async ([a, b]) => {
   return n / (x.length / 4);
 };
 
+const CHROME_OFF = '#top, .brand, #recenter, #actions { visibility: hidden !important; }';
+
 // [label, query, lng, lat, zoom, expected res]: lake shores, a city and a river valley, then back out.
 const cases = [
   // Dates sit where the season is turning there, so the local differences show as two colours.
@@ -79,7 +81,8 @@ for (const [name, width, height, mobile] of shots) {
   for (const [label, query, lng, lat, zoom, want] of cases) {
     const res = Math.min(want, finest);
     const tag = `${name} ${label}`;
-    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: mobile ? 2 : 1, hasTouch: mobile, isMobile: mobile });
+    // Reduced motion: no first-frame wash or glides, so the back-out comparison isn't racing an animation on a slow runner.
+    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: mobile ? 2 : 1, hasTouch: mobile, isMobile: mobile, reducedMotion: 'reduce' });
     const page = await ctx.newPage();
     page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && problems.push(`${tag}: external request ${r.url()}`));
     page.on('requestfailed', (r) => problems.push(`${tag}: request failed ${r.url()}`));
@@ -87,6 +90,7 @@ for (const [name, width, height, mobile] of shots) {
     page.on('console', (m) => m.type() === 'error' && problems.push(`${tag}: console error: ${m.text()}`));
     page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
     await page.goto(`${origin}/${query}`);
+    await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: the map never drew its first frame`));
     await page.waitForTimeout(1200);
     if (label === 'wheel-back-out') {
       // Wheel in to the finest level and back out, as a person does (each level comes and goes many frames apart).
@@ -107,15 +111,21 @@ for (const [name, width, height, mobile] of shots) {
     const got = await page.evaluate(() => window.__hatch.luna.res());
     if (!ok) problems.push(`${tag}: expected res ${res}, map shows res ${got}`);
     await page.waitForTimeout(800);
+    // The back-out comparison is about the map: the chrome that only shows once the view has moved (the recenter
+    // button, the brand pill's backing) is hidden from both shots.
+    const chrome = label === 'wheel-back-out' ? await page.addStyleTag({ content: CHROME_OFF }) : null;
     const png = await page.screenshot({ path: `${out}/${name}-${label}.png` });
+    if (chrome) await chrome.evaluate((el) => el.remove());
     const m = await page.evaluate(measure, png.toString('base64'));
     if (label === 'wheel-back-out') {
       // After zooming in and out, the map must look like a fresh load of the same view: no small hexagons left over.
       const fresh = await ctx.newPage();
       await fresh.goto(`${origin}/${query}`);
+      await fresh.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => {});
       await fresh.waitForTimeout(1200);
       await fresh.evaluate((c) => window.__hatch.map.focus(c.lngLat, c.zoom, window.__hatch.padding()), at);
       await fresh.waitForTimeout(1500);
+      await fresh.addStyleTag({ content: CHROME_OFF });
       const ref = await fresh.screenshot({ path: `${out}/${name}-${label}-fresh.png` });
       await fresh.close();
       const diff = await page.evaluate(differ, [png.toString('base64'), ref.toString('base64')]);
@@ -126,8 +136,10 @@ for (const [name, width, height, mobile] of shots) {
     // Zoomed in close, one hexagon can fill the middle of the screen, so only a single flat colour counts as blank there.
     if (got > 4 ? m.distinct < 2 : m.distinct < 4 || m.dominant > 0.97) problems.push(`${tag}: map looks blank: ${JSON.stringify(m)}`);
     // Tap the middle: the card must show, and say what a small hexagon is when one is on screen.
-    if (mobile) await page.touchscreen.tap(width * 0.5, height * 0.45);
-    else await page.mouse.click(width * 0.5, height * 0.45);
+    // Back-out taps where the wheel zoomed (around Chicago); the other cases tap the middle of their view.
+    const tapY = height * (label === 'wheel-back-out' ? 0.35 : 0.45);
+    if (mobile) await page.touchscreen.tap(width * 0.5, tapY);
+    else await page.mouse.click(width * 0.5, tapY);
     await page.waitForTimeout(500);
     if (await page.locator('#probe').isHidden()) problems.push(`${tag}: tapping the map showed no card`);
     else {
@@ -136,6 +148,24 @@ for (const [name, width, height, mobile] of shots) {
       if (got === 4 && /Small hexagon/.test(text)) problems.push(`${tag}: res-4 card calls itself small`);
     }
     await page.screenshot({ path: `${out}/${name}-${label}-card.png` });
+    if (label === 'chicago-z7') {
+      // Switching season while zoomed in keeps the small hexagons on screen (no flash back to the big ones).
+      const seen = await page.evaluate(async () => {
+        const sel = document.querySelector('#season');
+        const next = [...sel.options].map((o) => o.value).find((v) => /^\d{4}$/.test(v) && v !== sel.value); // a past year: live has no small hexagons
+        sel.value = next;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        const res = [];
+        const t0 = performance.now();
+        while (performance.now() - t0 < 1500) res.push(await new Promise((r) => requestAnimationFrame(() => r(window.__hatch.luna.res()))));
+        return res;
+      });
+      if (seen.some((r) => r === 4)) problems.push(`${tag}: switching season flashed back to the big hexagons (${seen.join(',')})`);
+      if (seen.at(-1) !== res) problems.push(`${tag}: after a season switch the map shows res ${seen.at(-1)}, expected ${res}`);
+      // ...and the new season's own colours arrive (not the last season's, kept on screen for the moment of the switch).
+      await page.waitForFunction(() => window.__hatch.luna.fineCurrent(), null, { timeout: 8000 })
+        .catch(() => problems.push(`${tag}: after a season switch the small hexagons never showed the new season`));
+    }
     await ctx.close();
   }
 }

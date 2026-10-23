@@ -31,8 +31,7 @@ jobs:
           - { suite: desktop, engine: firefox, build: 'build:single' }
           - { suite: desktop, engine: webkit, build: 'build:single' }
           # Zoomed in (scripts/fine.mjs, Chromium, dist/ over http): the finer hexagons load, draw, and give a card when
-          # tapped. Its own job since it takes ~4 minutes. Not yet a gate: main's fine.mjs needs the fixes in PR #39,
-          # which drops the continue-on-error below when it lands.
+          # tapped, and a season switch never flashes back to the big ones. Its own job since it takes ~4 minutes.
           - { suite: fine, engine: chromium, build: build }
     env:
       HOME: /root        # Firefox refuses to start as root with the runner's HOME
@@ -47,7 +46,6 @@ jobs:
       - run: npm ci
       - run: npm run ${{ matrix.build }}
       - run: xvfb-run -a npm run ${{ matrix.suite }}
-        continue-on-error: ${{ matrix.suite == 'fine' }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:

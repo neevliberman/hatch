@@ -7,7 +7,10 @@ import { cellToChildren, cellToParent, splitLongToH3Index } from 'h3-js';
  *
  * Only over http(s): the one-file preview build opened from disk has no files beside it, so it stays at res 4
  * (and never makes a request that would fail or count as external).
+ *
+ * A failed fetch is not remembered: the next call asks again (callers space their retries out, see RETRY_MS).
  */
+export const RETRY_MS = 15_000;
 export const FINE_PARENT_RES = 4;
 
 interface Manifest {
@@ -57,7 +60,11 @@ export function fineSource(dir: string) {
         return null;
       }
     });
-    return manifest;
+    const p = manifest;
+    void p.then((m) => {
+      if (!m && manifest === p) manifest = null;
+    });
+    return p;
   }
 
   function fineLevel(res: number): Promise<FineLevel | null> {
@@ -73,6 +80,10 @@ export function fineSource(dir: string) {
         }
       });
       levels.set(res, p);
+      const mine = p;
+      void p.then((l) => {
+        if (!l && levels.get(res) === mine) levels.delete(res);
+      });
     }
     return p;
   }
@@ -88,6 +99,10 @@ export function fineSource(dir: string) {
         return b ? new Uint8Array(b) : null;
       });
       modes.set(key, p);
+      const mine = p;
+      void p.then((d) => {
+        if (!d && modes.get(key) === mine) modes.delete(key);
+      });
     }
     return p;
   }
