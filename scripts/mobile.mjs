@@ -110,6 +110,8 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     await tap('#info-btn');
     await page.waitForTimeout(400);
     if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
+    // Let the slide-in finish before measuring, or a slow machine measures it mid-way and taps the drawer itself.
+    await page.waitForFunction(() => document.querySelector('#drawer').getAnimations().length === 0, null, { timeout: 3000 }).catch(() => {});
     // Tap empty map: left of a side drawer, or between the top panels and a bottom sheet.
     const box = await page.locator('#drawer').boundingBox();
     const top = await page.evaluate(() => document.querySelector('#top').getBoundingClientRect().bottom);

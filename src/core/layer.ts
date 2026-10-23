@@ -67,7 +67,7 @@ export interface Explainer {
   creature: 'moth' | 'firefly';
   accent: string;
   hook: string;
-  /** Three beats of the picture strip: warm days, the bank fills, the insects come out. */
+  /** Captions for the three sketched panels: how it spends winter, warm days add up, the insects come out. */
   steps: [{ title: string; text: string }, { title: string; text: string }, { title: string; text: string }];
   spotIntro: string;
   /** The season at a place (null = the layer's default spot), on the day `t`, called `name` when it has one (a
@@ -92,7 +92,8 @@ export interface HatchLayer {
    * they are unchanged: the names are only re-placed when it changes. */
   points?(t: number): [number, number][];
   /** Data sources to credit, rendered in the drawer. */
-  credits?(): string[];
+  /** Data sources, each a line of text; `href` links the line's source. */
+  credits?(): { text: string; href?: string }[];
 }
 
 /** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size (see lunaReplay.ts render). */

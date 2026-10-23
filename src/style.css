@@ -30,12 +30,11 @@
   --swatch-rim: rgba(70, 52, 30, 0.4);
   --stripe: rgba(43, 36, 28, 0.86);
   --shadow: 0 6px 18px rgba(60, 40, 20, 0.18);
-  --fig-bg: rgba(192, 122, 22, 0.05);
-  --glass: rgba(70, 52, 30, 0.55);
-  --moth-body: #fffaf0;
   --today: #2b241c;
   --radius: 10px;
   --sun: #c07a16;
+  --wash-tan: #b9955f;
+  --wash-leaf: #a9cf7a;
   --font-body: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Fraunces', Georgia, serif;
   --font-note: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
@@ -66,7 +65,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   background: var(--panel); color: var(--text); cursor: pointer; display: inline-grid; place-items: center;
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
 .icon-btn:hover { border-color: var(--line-strong); }
-.icon-btn:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.icon-btn:focus-visible, select:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
+  details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
 #info-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 20px; }
 
@@ -126,7 +126,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }
-.lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
 .lg-items li { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; flex: none; background: var(--c); }
 .sw.hex { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
@@ -138,6 +138,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .sw.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text); box-shadow: 0 0 0 2px var(--panel-solid); }
 .probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
 .cav.credits { font-size: 13px; color: var(--muted); }
+.cav.credits a { color: var(--moon); }
 .layer { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
   padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
 .layer .name { font-weight: 600; }
@@ -151,7 +152,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #floats { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 var(--gr) 10px var(--gl); }
 #legend, #probe { pointer-events: auto; }
 .legend-card { width: 260px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-.lg-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.lg-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
 .lg-ramp { height: 10px; border-radius: 5px; }
 .lg-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
 .lg-note { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 3px; }
@@ -184,7 +185,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ticks { position: relative; height: 22px; margin: 0 calc(var(--thumb) / 2); }
 .track .ticks { position: absolute; left: 0; right: 0; bottom: -20px; margin: 0 calc(var(--thumb) / 2); }
 .track { padding-bottom: 22px; }
-.tick { position: absolute; transform: translateX(0); font-size: 11px; color: var(--muted); }
+.tick { position: absolute; transform: translateX(0); font-size: 12px; line-height: 15px; color: var(--muted); }
 .tick i { position: absolute; left: 0; top: -5px; width: 1px; height: 5px; background: var(--muted); }
 .tick { padding-left: 3px; }
 .now { position: absolute; top: -34px; transform: translateX(-50%); }
@@ -224,7 +225,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .layer .name { flex: 1 1 0; min-width: 0; font-size: 13px; }
   #floats { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
   .legend-card { width: 100%; padding: 6px 10px; }
-  .lg-items { gap: 2px 10px; font-size: 11.5px; }
+  .lg-items { gap: 2px 10px; font-size: 12.5px; }
   .lg-title { display: none; } /* the swatch names say what they are; the drawer explains the colours */
   #probe { max-width: none; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
@@ -266,7 +267,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .legend-card { width: auto; max-width: min(640px, 70vw); padding: 5px 10px; }
   .lg-title { display: none; }
-  .lg-items { font-size: 11.5px; gap: 2px 10px; }
+  .lg-items { font-size: 12.5px; gap: 2px 10px; }
   #probe { max-width: 50vw; max-height: 40vh; overflow-y: auto; font-size: 12px; padding: 6px 10px; }
   #bar { display: flex; align-items: center; gap: 12px; padding-top: 6px; padding-bottom: 4px; }
   .bar-row { flex: none; gap: 8px; }
@@ -289,41 +290,30 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-name { margin: 4px 0 2px; font-size: 17px; color: var(--ac); }
 .ex-name i { font-weight: 400; font-size: 13px; color: var(--muted); }
 .ex-hook { margin: 0 0 8px; color: var(--text); }
-.ex-fig { margin: 0; padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--fig-bg); }
-.ex-art { display: block; width: 100%; height: auto; max-height: 96px; overflow: visible; }
-.ex-steps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+.ex-fig { margin: 0; }
+/* The picture strip is pen on paper: tapered ink strokes, a loose watercolour wash, a pencilled frame (src/ui/sketch.ts). */
+.ex-defs { position: absolute; width: 0; height: 0; }
+.ex-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
   font-size: 12.5px; line-height: 1.3; color: var(--muted); text-align: center; }
-.ex-steps b { display: block; color: var(--text); font-size: 12.5px; margin-bottom: 2px; }
-.ex-art .sun circle { fill: var(--sun); filter: drop-shadow(0 0 6px var(--sun)); }
-.ex-art .rays path { stroke: var(--sun); stroke-width: 2.5; stroke-linecap: round; }
-.ex-art .rays { animation: ex-spin 12s linear infinite; }
-.ex-art .coin { fill: var(--sun); opacity: 0; animation: ex-coin 2.7s ease-in infinite; }
-.ex-art .glass { fill: none; stroke: var(--glass); stroke-width: 2; }
-.ex-art .lid { stroke: var(--glass); stroke-width: 3; stroke-linecap: round; }
-.ex-art .mark { stroke: var(--ac); stroke-width: 1; stroke-dasharray: 3 3; }
-.ex-art .fill { fill: var(--sun); opacity: 0.85; transform-box: fill-box; transform-origin: bottom; animation: ex-fill 8s ease-in infinite; }
-.ex-art .arrow { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ex-art .bug { fill: var(--ac); animation: ex-out 8s ease-out infinite; }
-.ex-art .bug .eye { fill: var(--sun); }
-.ex-art .bug .body { fill: var(--moth-body); }
-.ex-art .bug .feelers { fill: none; stroke: var(--text); stroke-width: 1.2; }
-.ex-art .bug .glow { fill: var(--accent); filter: drop-shadow(0 0 5px var(--accent)); }
-.ex-art .flap { animation: ex-flap 0.5s ease-in-out infinite alternate; }
-@keyframes ex-spin { to { transform: rotate(360deg); } }
-/* Warm days drop from the sun into the jar. */
-@keyframes ex-coin { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(46px, 4px); } }
-/* The jar fills to the dashed "enough" line, then the moth comes out and flies; then the year starts over. */
-@keyframes ex-fill { 0% { transform: scaleY(0); } 55% { transform: scaleY(0.84); } 90% { transform: scaleY(0.84); } 100% { transform: scaleY(0); } }
-@keyframes ex-out { 0%, 52% { opacity: 0; transform: translate(-6px, 14px) scale(0.4); }
-  64% { opacity: 1; transform: translate(0, 0) scale(1); } 90% { opacity: 1; transform: translate(4px, -6px) scale(1); }
-  100% { opacity: 0; transform: translate(8px, -14px) scale(1); } }
-@keyframes ex-flap { from { transform: scaleX(1); } to { transform: scaleX(0.55); } }
-@media (prefers-reduced-motion: reduce) {
-  .ex-art .rays, .ex-art .coin, .ex-art .flap { animation: none; }
-  .ex-art .coin { opacity: 0.8; }
-  .ex-art .fill { animation: none; transform: scaleY(0.84); }
-  .ex-art .bug { animation: none; }
-}
+.ex-steps b { display: block; color: var(--text); font-size: 12.5px; margin: 2px 0; }
+.ex-pic { position: relative; }
+.ex-then { position: absolute; right: -13px; top: 50%; width: 14px; height: 16px; transform: translateY(-50%); overflow: visible; }
+.ex-then .pen { fill: var(--warn); }
+.ex-pane { display: block; width: 100%; height: auto; overflow: visible; }
+.ex-pane .pen { fill: var(--text); }
+.ex-pane .frame { fill: var(--line-strong); }
+.ex-pane .trail { fill: none; stroke: var(--muted); stroke-width: 0.9; stroke-linecap: round; stroke-dasharray: 0.4 3; }
+.ex-pane .wash { mix-blend-mode: multiply; }
+.ex-pane .wash.sun { fill: var(--sun); opacity: 0.4; }
+.ex-pane .wash.tan { fill: var(--wash-tan); opacity: 0.35; }
+.ex-pane .wash.leaf { fill: var(--wash-leaf); opacity: 0.55; }
+.ex-pane .wash.warn { fill: var(--warn); opacity: 0.35; }
+.ex-pane .note { font: 600 12px var(--font-note); fill: var(--text); }
+.ex-pane .note.small { font-size: 10.5px; fill: var(--muted); }
+.ex-pane .note.warn { font-size: 13px; fill: var(--warn); }
+.ex-pane .flap { animation: ex-flap 1.6s ease-in-out infinite alternate; }
+@keyframes ex-flap { 0%, 60% { transform: scaleX(1); } 100% { transform: scaleX(0.75); } }
+@media (prefers-reduced-motion: reduce) { .ex-pane .flap { animation: none; } }
 
 .ex-spot, .ex-score { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
 .ex-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
@@ -370,6 +360,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .brand small { font-family: var(--font-note); font-size: 18px; color: var(--moon); font-weight: 600; }
 #why { font-family: var(--font-note); font-size: 17px; text-decoration-style: wavy; text-underline-offset: 3px; }
 .now b { font-family: var(--font-note); font-size: 14px; line-height: 1; text-transform: none; font-weight: 600; }
+
+/* Smallest phones: keep the legend at three rows so the map keeps its height. */
+@media (max-width: 340px) {
+  .lg-items { font-size: 12px; gap: 2px 8px; }
+}
 
 /* Place names over the map (map/labels.ts). Ink on a paper halo, so a name reads over any hexagon colour; water and
    forest names handwritten, like notes in the margin. Never takes a tap: the map underneath does. */

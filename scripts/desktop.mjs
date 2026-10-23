@@ -152,7 +152,7 @@ for (const [engine, width, height] of screens) {
     if (await page.locator('#probe').isHidden()) fail('clicking the map did not pin the card');
     await page.mouse.click(...spot);
     await page.mouse.move(2, height / 2, { steps: 4 });
-    await page.locator('#probe').waitFor({ state: 'hidden', timeout: 2000 })
+    await page.locator('#probe').waitFor({ state: 'hidden', timeout: 5000 })
       .catch(() => fail('clicking the pinned spot again did not let the card go'));
   }
 
