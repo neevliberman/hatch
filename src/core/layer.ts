@@ -70,8 +70,9 @@ export interface Explainer {
   /** Three beats of the picture strip: warm days, the bank fills, the insects come out. */
   steps: [{ title: string; text: string }, { title: string; text: string }, { title: string; text: string }];
   spotIntro: string;
-  /** The season at a place (null = the layer's default spot), on the day `t`. Null when there is nothing to show. */
-  spot(lngLat: [number, number] | null, t: number): SpotStory | null;
+  /** The season at a place (null = the layer's default spot), on the day `t`, called `name` when it has one (a
+   * picked city, "you"). Null when there is nothing to show. */
+  spot(lngLat: [number, number] | null, t: number, name?: string): SpotStory | null;
   score?: { title: string; text: string; bars: { label: string; days: number; best?: boolean }[] };
   finePrintLabel: string;
 }

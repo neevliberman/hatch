@@ -7,7 +7,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export interface Drawer {
   (open: boolean): void;
   /** Point the explainer's spot card at a place (null = the layer's default) on day `t`. */
-  setSpot(lngLat: [number, number] | null, t: number): void;
+  setSpot(lngLat: [number, number] | null, t: number, name?: string): void;
 }
 
 /**
@@ -17,6 +17,7 @@ export interface Drawer {
 export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registry: LayerRegistry): Drawer {
   let spot: [number, number] | null = null;
   let spotT = 0;
+  let spotName: string | undefined;
   const lastSpot = new WeakMap<HTMLElement, string>();
   // Explainers built at the last render, so playback (which calls fillSpots every frame) doesn't rebuild them.
   let explainers = new Map<string, Explainer>();
@@ -24,7 +25,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     for (const [id, ex] of explainers) {
       const el = drawer.querySelector<HTMLElement>(`[data-spot="${CSS.escape(id)}"]`);
       if (!el) continue;
-      const html = spotHtml(ex.spot(spot, spotT));
+      const html = spotHtml(ex.spot(spot, spotT, spotName));
       if (html === lastSpot.get(el)) continue; // playback calls this every frame; skip unchanged days
       el.innerHTML = html;
       lastSpot.set(el, html);
@@ -147,9 +148,10 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   drawer.inert = true;
   if (new URLSearchParams(location.search).has('caveats')) toggle(true);
   return Object.assign(toggle, {
-    setSpot(lngLat: [number, number] | null, t: number) {
+    setSpot(lngLat: [number, number] | null, t: number, name?: string) {
       spot = lngLat;
       spotT = t;
+      spotName = name;
       fillSpots();
     },
   });

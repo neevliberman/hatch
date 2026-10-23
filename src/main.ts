@@ -3,7 +3,7 @@ import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec } from './layers/lunaReplay';
 import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
-import { createMap, type ProbeHit } from './map/map';
+import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
@@ -24,6 +24,14 @@ function start() {
   // ?date=06-10 (or 2025-06-10) puts the cursor on that calendar day; default 10 June, when the wave crosses the middle.
   const md = params.get('date')?.match(/(\d{2})-(\d{2})$/);
   const [month, day] = md ? [Number(md[1]) - 1, Number(md[2])] : [5, 10];
+  // ?at=41.88,-87.63,6.5 reopens a shared link at the same place and zoom. Anything not near the Midwest (a typo,
+  // an empty part) is ignored rather than handed to the map, which would throw and stay blank.
+  const atParts = params.get('at')?.split(',') ?? [];
+  const atNums = atParts.map((x) => (x.trim() === '' ? NaN : Number(x)));
+  const sharedAt =
+    atNums.length === 3 && atNums.every(Number.isFinite) && Math.abs(atNums[0]! - 43) < 12 && Math.abs(atNums[1]! + 89) < 16
+      ? (atNums as [number, number, number])
+      : null;
 
   // Finer hexagons load when the user zooms in; when they arrive (or the level changes) redraw and re-sync the card.
   let onLunaData = () => {};
@@ -61,22 +69,38 @@ function start() {
   const updateProbe = () => {
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
     if (hit && (!hit.picked || hit.picked.layerId === 'luna-forecast')) hit.cell = luna.cellAt(hit.lngLat) ?? hit.cell;
-    showProbe(probeEl, registry, hit, time.cursor);
+    showProbe(probeEl, registry, hit, time.cursor, pinned);
     // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
     map.setPicked(pinned && hit && (!hit.picked || hit.picked.layerId === 'luna-forecast') ? hit.cell : null);
     placeProbe();
     followSpot(time.cursor);
   };
+  const unpin = () => {
+    if (!pinned && !hit) return;
+    pinned = false;
+    hit = null;
+    map.setMarker(null);
+    updateProbe();
+  };
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
   const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
-  const padding = () => {
+  let legendH = 0;
+  const padding = (): Padding => {
     const top = $('top').getBoundingClientRect().bottom + 8;
     // On wide screens the legend and card sit in the bottom-left corner, beside the map rather than under it.
-    const bottom = (phone.matches ? $('bottom').offsetHeight : $('bottom').offsetHeight - $('floats').offsetHeight) + 8;
+    // On a phone the legend sits under the map, so leave room for it, but not for a docked card: that comes and
+    // goes with every tap, and would make the map jump each time. (The card replaces the legend while it is up.)
+    const legend = $('legend').offsetHeight;
+    if (legend) legendH = legend;
+    const floats = $('floats');
+    const bottom = $('bottom').offsetHeight - floats.offsetHeight + (phone.matches ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0) + 8;
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
-    return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k) };
+    // On a wide screen the open About panel sits beside the map: fit the Midwest into what is left.
+    const drawer = $('drawer');
+    const right = !phone.matches && drawer.classList.contains('open') ? drawer.offsetWidth : 0;
+    return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2) };
   };
   const map = createMap({
     container: $<HTMLDivElement>('map'),
@@ -84,7 +108,10 @@ function start() {
     time,
     padding,
     onMove: (moved) => ($('recenter').hidden = !moved),
-    onView: () => pinned && placeProbe(),
+    onView: () => {
+      if (pinned) placeProbe();
+      syncUrl(); // a shared link reopens the same place and zoom
+    },
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
@@ -139,7 +166,7 @@ function start() {
   mountLayerList($('layers'), registry);
   mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
-  followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t);
+  followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t, pinned ? hit?.label : undefined);
   // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,
   // so the tap visibly lands even when the drawer is already open.
   let flashTimer = 0;
@@ -172,6 +199,10 @@ function start() {
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
     if (picker.value === TYPICAL) q.delete('year');
     else q.set('year', picker.value);
+    // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
+    const c = map.center(padding());
+    if (map.moved() && c) q.set('at', `${c.lngLat[1].toFixed(3)},${c.lngLat[0].toFixed(3)},${c.zoom.toFixed(1)}`);
+    else q.delete('at');
     q.delete('noauto');
     q.delete('today');
     return `${location.pathname}?${q}`;
@@ -209,9 +240,10 @@ function start() {
     }
   });
 
-  // Pin the card (and the About panel's spot) on the hexagon at lat/lng. Lakeshore cities (Chicago, Milwaukee,
-  // Cleveland) can sit in a hex whose centre is in the lake, so fall back to the nearest land hex within two rings.
-  const showPlace = (lat: number, lng: number): 'exact' | 'nearby' | null => {
+  // Pin the card (and the About panel's spot) on the hexagon at lat/lng, named `label`, and bring the map to it.
+  // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so fall back to
+  // the nearest land hex within two rings.
+  const showPlace = (lat: number, lng: number, label: string): 'exact' | 'nearby' | null => {
     const ring = gridDisk(latLngToCell(lat, lng, GRID_RES), 2)
       .map((c) => {
         const [la, ln] = cellToLatLng(c);
@@ -221,9 +253,11 @@ function start() {
     const first = { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
     const here: ProbeHit | undefined = [first, ...ring].find((h) => luna.probe?.(h.lngLat, time.cursor));
     if (!here) return null;
-    hit = here;
+    hit = { ...here, label };
     pinned = true;
     map.setMarker(null);
+    // Close enough to see the town's neighbours, and never further out than the current view.
+    map.focus([lng, lat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding());
     updateProbe();
     return here === first ? 'exact' : 'nearby';
   };
@@ -234,7 +268,7 @@ function start() {
     const [lat, lng] = sel.value.split(',').map(Number) as [number, number];
     const name = sel.selectedOptions[0]?.text ?? '';
     sel.value = ''; // so picking the same city again (after the pin moved) still fires
-    if (!showPlace(lat, lng)) return say(`No forecast for ${name}`);
+    if (!showPlace(lat, lng, name)) return say(`No forecast for ${name}`);
     // On a phone the panel hides the map, so close it to show the picked hexagon and its card.
     if (phone.matches) toggleDrawer(false);
   });
@@ -253,16 +287,24 @@ function start() {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         done();
-        const at = showPlace(coords.latitude, coords.longitude);
+        const at = showPlace(coords.latitude, coords.longitude, 'you');
         if (!at) {
           map.setMarker(null);
           say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)');
           return;
         }
         map.setMarker([coords.longitude, coords.latitude]);
-        say(at === 'exact' ? 'You are the yellow dot' : 'You are the yellow dot (the card shows the nearest hexagon on land)');
+        // The marker is the accent brown; the pale yellow dots are moths.
+        say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest hexagon on land)');
       },
-      (err) => (done(), say(err.code === err.PERMISSION_DENIED ? 'Location access is off for this site' : 'Could not get your location')),
+      (err) => (
+        done(),
+        say(
+          err.code === err.PERMISSION_DENIED
+            ? 'Location is off for this site. Pick a city in About (i) instead.'
+            : 'Could not get your location. Pick a city in About (i) instead.',
+        )
+      ),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     );
   });
@@ -292,11 +334,53 @@ function start() {
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
+  if (sharedAt) map.focus([sharedAt[1], sharedAt[0]], sharedAt[2], padding());
   $('recenter').addEventListener('click', () => map.fit(padding()));
-  let resizeTimer = 0;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => (map.fit(padding()), placeProbe()), 150);
+  // Re-fit whenever the room for the map changes: the window, the panels (fonts arriving, a wrapped line, the
+  // About panel opening beside the map) or the map itself (a late stylesheet). A view the user has panned or
+  // zoomed is theirs, so it is left alone; the recenter button still fits it.
+  let fitTimer = 0;
+  // Not mid-drag either: a re-fit would yank the map out from under the finger.
+  let dragging = false;
+  $('map').addEventListener('pointerdown', () => (dragging = true));
+  // Capture phase: the phone drawer swallows the taps that close it, and this must still hear them end.
+  window.addEventListener('pointerup', () => (dragging = false), true);
+  window.addEventListener('pointercancel', () => (dragging = false), true);
+  const refit = () => {
+    clearTimeout(fitTimer);
+    fitTimer = window.setTimeout(() => {
+      if (dragging) return refit();
+      if (!map.moved()) map.fit(padding());
+      placeProbe();
+    }, 120);
+  };
+  const ro = new ResizeObserver(refit);
+  for (const id of ['map', 'top', 'bottom']) ro.observe($(id));
+  window.addEventListener('resize', refit);
+  document.fonts?.ready.then(refit);
+  // The desktop About panel slides in beside the map without resizing anything the observer watches.
+  new MutationObserver(refit).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
+
+  // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
+  // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.
+  probeEl.addEventListener('click', (e) => {
+    if (!(e.target as Element).closest('.probe-close')) return;
+    unpin();
+    $('t-range').focus({ preventScroll: true });
+  });
+  // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open')) return;
+    const hadFocus = probeEl.contains(document.activeElement);
+    unpin();
+    if (hadFocus) $('t-range').focus({ preventScroll: true });
+  }, true);
+  $('map').addEventListener('mouseleave', () => {
+    if (!pinned && hit) (hit = null), updateProbe();
+  });
+  // A sighting's card is about one day; once playback moves on, it would describe a dot that has gone out.
+  time.subscribe(() => {
+    if (time.playing && pinned && hit?.picked && hit.picked.layerId !== 'luna-forecast') unpin();
   });
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map };

@@ -117,7 +117,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 /* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
 #probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link { display: none; }
 #probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
-#probe.at-pointer.pinned::after { content: 'Pinned. Click the map to unpin.'; color: var(--accent); }
+#probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); }
+.probe-close { float: right; width: 32px; height: 32px; margin: -4px -8px 2px 6px; border: 0; border-radius: 8px; background: none;
+  color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.probe-close:hover { color: var(--text); background: var(--track-faint); }
+.probe-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 /* "why?" lands on the drawer section it explains; a short glow shows where. */
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
