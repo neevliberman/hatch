@@ -1,5 +1,8 @@
 # Desktop smoke test on every PR and push to main: Chromium, Firefox and WebKit at laptop to 1440p sizes, mouse and keyboard.
-# Firefox only gets WebGL with a display, so the run goes under xvfb. Screenshots are uploaded either way.
+# Each engine is its own job, run side by side in Playwright's official image (browsers and their system libraries
+# already inside, so no apt install: that install used to take 40 s on a good day and 35+ minutes on a bad one).
+# Firefox only gets WebGL with a display, so the run goes under xvfb. Screenshots are uploaded either way, then merged
+# into one "desktop-screenshots" artifact by the "desktop" job, which is also the one pass/fail check for the workflow.
 name: desktop-smoke
 on:
   pull_request:
@@ -8,30 +11,61 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A new push to a PR cancels that PR's older run; runs on main always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  desktop:
+  engine:
+    name: desktop (${{ matrix.engine }})
     runs-on: ubuntu-latest
-    # The apt mirror behind --with-deps sometimes crawls (10+ minutes); the tests themselves take about 3.
-    timeout-minutes: 45
+    # Keep the tag in step with the playwright version in package.json: the image's browsers are built for it.
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false   # one engine failing still lets the others report
+      matrix:
+        engine: [chromium, firefox, webkit]
+    env:
+      HOME: /root        # Firefox refuses to start as root with the runner's HOME
+      ENGINES: ${{ matrix.engine }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4   # the image's own Node; this only restores the npm cache
         with:
-          node-version: 22
           cache: npm
       - run: npm ci
-      # No timeout or retry around this: killing the installer leaves its apt-get running and holding the lock, so a
-      # retry only fails faster. A slow apt mirror is waited out under the job's limit instead.
-      - run: |
-          echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-lock-wait
-          npx playwright install --with-deps chromium firefox webkit
-      - run: npm run build:all   # dist/ too: the live-mode checks serve it over http
+      # dist/ too on Chromium: the live-mode and zoomed-in checks serve it over http.
+      - id: build
+        run: npm run ${{ matrix.engine == 'chromium' && 'build:all' || 'build:single' }}
       - run: xvfb-run -a npm run desktop
+      # Zoomed in: the finer hexagons (res 5 and 6) load over http, draw, and give a card when tapped. Not yet a gate:
+      # main's fine.mjs needs the fixes in PR #39, which drops continue-on-error when it lands.
+      - if: ${{ matrix.engine == 'chromium' && !cancelled() && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        run: xvfb-run -a npm run fine
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-screenshots
-          path: screenshots/desktop
+          name: desktop-screenshots-${{ matrix.engine }}
+          path: |
+            screenshots/desktop
+            screenshots/fine
           retention-days: 14
+  desktop:
+    needs: engine
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/upload-artifact/merge@v4
+        continue-on-error: true   # nothing to merge when every engine failed before taking a screenshot
+        with:
+          name: desktop-screenshots
+          pattern: desktop-screenshots-*
+          delete-merged: true
+          retention-days: 14
+      - name: All engines passed
+        run: test "${{ needs.engine.result }}" = success
