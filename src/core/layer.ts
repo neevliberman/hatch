@@ -92,6 +92,9 @@ export interface SeasonProfile {
   bands: { color: string; share: number[] }[];
   /** Animals seen per day, drawn as a line scaled to its own peak. */
   seen: number[];
+  /** Part of `seen` to wash in its own colour under the line (the same scale), such as a wave the forecast does not
+   * cover, in the colour of its dots on the map. */
+  seenOnly?: { color: string; seen: number[] }[];
   /** Handwritten notes on the line, at a day index. */
   notes: { at: number; text: string }[];
 }

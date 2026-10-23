@@ -30,15 +30,20 @@ function ribbon(p: SeasonProfile): string {
   if (n < 2) return '';
   const xs = p.seen.map((_, i) => ((i / (n - 1)) * 1000).toFixed(1));
   const edge = (h: number[]) => h.map((v, i) => `${xs[i]} ${(28 - v * 14).toFixed(2)}`);
+  // Each band runs from its top edge right down to the bottom, painted top band first, so each lower one covers the
+  // rest: no hairline seams of paper where two bands meet.
   const base = Array<number>(n).fill(0);
-  const areas = p.bands.map((b) => {
-    const lo = edge(base).reverse();
-    b.share.forEach((v, i) => (base[i]! += v));
-    return `<path class="band" fill="${b.color}" vector-effect="non-scaling-stroke" d="M${edge(base).join('L')}L${lo.join('L')}Z"/>`;
-  });
+  const areas = p.bands
+    .map((b) => {
+      b.share.forEach((v, i) => (base[i]! += v));
+      return `<path class="band" fill="${b.color}" d="M${edge(base).join('L')}L1000 28L0 28Z"/>`;
+    })
+    .reverse();
   const top = Math.max(...p.seen) || 1;
-  const line = p.seen.map((v, i) => `${xs[i]} ${(13.5 - (v / top) * 12).toFixed(2)}`).join('L');
-  return `<svg viewBox="0 0 1000 28" preserveAspectRatio="none">${areas.join('')}<path class="seen" d="M0 13.5L${line}L1000 13.5Z"/>` +
+  const curve = (seen: number[]) => seen.map((v, i) => `${xs[i]} ${(14 - (v / top) * 12.5).toFixed(2)}`).join('L');
+  const line = curve(p.seen);
+  const only = (p.seenOnly ?? []).map((o) => `<path class="seen-only" fill="${o.color}" d="M0 14L${curve(o.seen)}L1000 14Z"/>`);
+  return `<svg viewBox="0 0 1000 28" preserveAspectRatio="none">${areas.join('')}<path class="seen" d="M0 14L${line}L1000 14Z"/>${only.join('')}` +
     `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>` +
     `<rect class="frame" width="1000" height="28" vector-effect="non-scaling-stroke"/></svg>` +
     p.notes
