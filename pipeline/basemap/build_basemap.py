@@ -1,8 +1,9 @@
-"""Build public/basemap/{overview,detail}.json: the map's rivers, lakes, roads, forests and place names.
+"""Build public/basemap/{overview,detail,woods}.json: the map's rivers, lakes, roads, forests and place names.
 
 All public domain: Natural Earth 10m (lakes, rivers, roads, National Park Service areas), the US Forest Service's
 national forest boundaries, and the Census Bureau's 2024 place gazetteer (locations) with its 2023 city population
-estimates (which towns to name first). Run from the repo root: `pip install shapely pyshp`, then
+estimates (which towns to name first), and the USGS National Land Cover Database 2021 (where the woods are, woods.json).
+Run from the repo root: `pip install shapely pyshp numpy scipy matplotlib pillow`, then
 `python3 pipeline/basemap/build_basemap.py`. Downloads go to notebooks/data/basemap/ (git-ignored); reruns are offline.
 
 Every feature carries `z`, the zoom it shows from (the app's zoom: the whole Midwest is about 4.5 on a phone and 5.5 on
@@ -268,12 +269,71 @@ def states():
     return out
 
 
+NLCD_WMS = ('https://www.mrlc.gov/geoserver/mrlc_display/wms?service=WMS&version=1.1.1&request=GetMap'
+            '&layers=NLCD_2021_Land_Cover_L48&styles=&srs=EPSG:4326&format=image/png')
+# NLCD 2021 classes by their colour in the WMS palette: 41 deciduous forest, 43 mixed forest (luna moth country:
+# birch, walnut, hickory, sweetgum). Evergreen (42) and wooded wetland are left out.
+WOODS_RGB = [(104, 170, 99), (181, 201, 142)]
+
+
+def woods():
+    """Where deciduous and mixed woods dominate, as smooth polygons (USGS NLCD 2021, public domain).
+
+    NLCD is 30 m; the map server samples it every 0.005 degrees (~500 m), which is noisy pixel by pixel but an
+    unbiased sample. Blurring that over ~1.5 km gives the share of woods around each point, and the 40% contour
+    of the share is the outline: like squinting at an aerial photo until the woodlots merge into woods."""
+    import numpy as np
+    from PIL import Image
+    from scipy.ndimage import gaussian_filter
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from shapely.geometry import Polygon
+
+    w, s, e, n = BBOX.bounds
+    nx, ny, px = 5, 4, 0.005
+    d = CACHE / 'nlcd'
+    d.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for j in reversed(range(ny)):
+        row = []
+        for i in range(nx):
+            f = d / f't_{i}_{j}.png'
+            if not f.exists():
+                x0, x1 = w + (e - w) * i / nx, w + (e - w) * (i + 1) / nx
+                y0, y1 = s + (n - s) * j / ny, s + (n - s) * (j + 1) / ny
+                url = f'{NLCD_WMS}&bbox={x0},{y0},{x1},{y1}&width={round((x1 - x0) / px)}&height={round((y1 - y0) / px)}'
+                print('downloading NLCD tile', i, j)
+                f.write_bytes(urllib.request.urlopen(url, timeout=300).read())
+            row.append(np.asarray(Image.open(f).convert('RGB')))
+        rows.append(np.concatenate(row, axis=1))
+    a = np.concatenate(rows, axis=0)
+    mask = np.zeros(a.shape[:2])
+    for c in WOODS_RGB:
+        mask += np.all(a == np.array(c, dtype=np.uint8), axis=2)
+    share = gaussian_filter(mask, 3)
+    cs = plt.contourf(np.linspace(w, e, a.shape[1]), np.linspace(n, s, a.shape[0]), share, levels=[0.4, 2])
+    rings = [Polygon(r).buffer(0) for path in cs.get_paths() for r in path.to_polygons() if len(r) >= 4]
+    g = Polygon()
+    for r in rings:  # contour rings nest (woods, clearing, woodlot in the clearing): even-odd fill
+        g = g.symmetric_difference(r)
+    g = big_parts(g.intersection(land()), min_km2=10)
+    if g is None or g.is_empty:
+        return []
+    f = feature(g, 0.004, z=6.0)
+    return [f] if f else []
+
+
 def main():
     water, water_labels = lakes()
     green, green_labels = forests()
     layers = {'water': water, 'rivers': rivers(), 'roads': roads(), 'green': green}
     labels = states() + water_labels + green_labels + towns()
     OUT.mkdir(parents=True, exist_ok=True)
+    path = OUT / 'woods.json'
+    path.write_text(json.dumps({'version': 1, 'woods': {'type': 'FeatureCollection', 'features': woods()}},
+                               separators=(',', ':')))
+    print(path, f'{path.stat().st_size / 1024:.0f} KB')
     for part, near in (('overview', False), ('detail', True)):
         keep = lambda z: (z >= DETAIL_ZOOM) == near  # noqa: E731
         out = {'version': 1}
