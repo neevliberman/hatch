@@ -8,6 +8,7 @@ import { dayOfYear } from '../core/timeAxis';
 import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
+import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
 import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, washer, type LunaLayer, type Stage } from './lunaReplay';
 
@@ -60,6 +61,7 @@ export function createFireflyLayer(
   const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : Number(mode));
   const forecast = () => data.forecast[mode] ?? data.forecast[TYPICAL]!;
   const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
+  const rings = ripples<Sighting>('firefly-ripples', (s) => [s.lng, s.lat], palette.dotRim);
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
   let fresh = { key: '', list: [] as Sighting[] };
@@ -173,6 +175,7 @@ export function createFireflyLayer(
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
     busy: (t) => forecast().some((q) => /^(st|pe)/.test(stageAt(q, dayOfYear(t)))),
+    endNote: ['That was the firefly season.', 'Tap replay to watch it roll north again'],
     seasonCount: (m: Mode) => sightingsFor(m).length,
 
     newest(t) {
@@ -208,8 +211,9 @@ export function createFireflyLayer(
       return p;
     },
 
-    render({ t, zoom, theme, wash, frac = 0 }) {
+    render({ t, zoom, theme, wash, playing, frac = 0 }) {
       const doy = dayOfYear(t);
+      const anim = animating(playing);
       const d = doy + frac; // the in-between day while playing, like luna's dots
       const res = resFor(zoom);
       if (res !== shownRes) {
@@ -245,6 +249,7 @@ export function createFireflyLayer(
           autoHighlight: true,
           highlightColor: palette.hoverTint,
           updateTriggers: { getFillColor: [doy, mode, res, wash], getLineColor: [wash, res] },
+          transitions: hexFade(anim),
         }),
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
           id: `firefly-unseen-r${res}`,
@@ -302,6 +307,7 @@ export function createFireflyLayer(
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
+        ...rings(anim, doy, () => shown.filter((s) => day(s) === doy)),
       ];
     },
 

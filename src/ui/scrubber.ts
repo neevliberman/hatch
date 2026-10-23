@@ -45,9 +45,9 @@ function ribbon(p: SeasonProfile): string {
 }
 
 /** Bottom bar bound to a TimeAxis: play/pause, step, slider over the season ribbon, month ticks, "now" marker, keyboard.
- * `endNote` gives the first line of the note shown when playback reaches the last day. Returns a function that
- * redraws the ribbon (call it when the season or species changes). */
-export function mountScrubber(root: HTMLElement, time: TimeAxis, endNote = () => 'That was the season.'): (p: SeasonProfile | undefined) => void {
+ * `endNote` gives the note shown when playback reaches the last day (none: just the replay button). Returns a function
+ * that redraws the ribbon (call it when the season or species changes). */
+export function mountScrubber(root: HTMLElement, time: TimeAxis, endNote: () => [string, string] | undefined = () => undefined): (p: SeasonProfile | undefined) => void {
   root.innerHTML = `
     <div class="btns">
       <button id="t-prev" class="icon-btn" aria-label="Back one day (Left arrow)">${PREV}</button>
@@ -144,10 +144,14 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis, endNote = () =>
     const end = !time.playing && time.stepIndex === time.steps;
     if (wasPlaying && end) {
       ended = true;
-      note.innerHTML = `${endNote()}<small>Tap replay to watch it roll north again</small>`;
-      note.classList.add('on');
-      clearTimeout(noteTimer);
-      noteTimer = window.setTimeout(() => note.classList.remove('on'), 3000);
+      const words = endNote(); // the layer's own copy
+      if (words) {
+        note.textContent = words[0];
+        note.append(Object.assign(document.createElement('small'), { textContent: words[1] }));
+        note.classList.add('on');
+        clearTimeout(noteTimer);
+        noteTimer = window.setTimeout(() => note.classList.remove('on'), 3000);
+      }
     } else if (!end) ended = false;
     if (!ended) note.classList.remove('on');
     wasPlaying = time.playing;

@@ -17,6 +17,7 @@ import {
   type Mode,
   type Sighting,
 } from './lunaData';
+import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, parentOf, type FineLevel } from './fineData';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
@@ -69,8 +70,6 @@ const bytesToQ = (days: Uint8Array, i: number) =>
 
 type RGBA = [number, number, number, number];
 // Stage colours and why they read in order: see palette.stages in src/theme.ts.
-type Ring = { s: Sighting; at: number };
-const still = matchMedia('(prefers-reduced-motion: reduce)');
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;
@@ -213,8 +212,6 @@ export interface LunaLayer extends HatchLayer {
   res(): number;
   /** The hexagon the card describes at lngLat, at the resolution on screen (null outside the map). */
   cellAt(lngLat: [number, number]): string | null;
-  /** Is any hexagon "starting" or at "peak" on this day? Playback slows down for those days. */
-  busy?(t: number): boolean;
 }
 
 interface FineCell {
@@ -240,8 +237,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
 
   const unseen = cells.filter((c) => !c.seen);
-  let rings: Ring[] = [];
-  let ringDay = -1;
+  // An ink ring spreads from each moth on the day it is seen, while playing.
+  const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], palette.dotRim);
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
   // Today's sightings, which breathe while paused (map.ts). Cached per day and season.
   let fresh = { key: '', list: [] as Sighting[] };
@@ -371,6 +368,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     newest: (t) => newest(dayOfYear(t)),
     // ~400 cheap checks, so no cache needed even once a frame.
     busy: (t) => forecast().some((q) => /^(st|pe)/.test(stageAt(q, dayOfYear(t)))),
+    endNote: ['That was the first wave.', 'Tap replay to watch it roll north again'],
 
     points(t) {
       // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
@@ -408,20 +406,9 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
     render({ t, zoom, theme, wash, playing, frac = 0 }) {
       const doy = dayOfYear(t);
-      // While playing, the dots get the in-between day and the hexes bleed into their next colour (not under
-      // reduced motion, and never by hand, so the map always matches the slider). At rest this is all off.
-      const anim = !!playing && !still.matches;
-      // 1 ms, not 0, at rest: turning a colour transition off makes deck draw the hexes from a freed buffer (blank).
-      const fade = { getFillColor: anim ? 140 : 1 };
-      const now = performance.now();
-      if (!anim) rings = [];
-      else if (ringDay !== doy) {
-        const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
-        rings = [...rings, ...shown.filter((s) => day(s) === doy).map((s) => ({ s, at: now }))].slice(-40);
-      }
-      ringDay = anim ? doy : -1;
-      rings = rings.filter((r) => now - r.at < 600);
-      const age = (r: Ring) => 1 - (1 - (now - r.at) / 600) ** 3; // ease-out cubic, 0..1
+      // While playing, the dots get the in-between day and the hexes blend into their next colour (see motion.ts).
+      const anim = animating(playing);
+      const fade = hexFade(anim);
       const d = doy + frac;
       const res = pickRes(resForZoom(zoom));
       if (res !== shownRes) {
@@ -561,24 +548,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
-        // A ring spreads out from each moth on the day it is seen (4 to 18 px, fading out over 0.6 s), only while playing.
-        ...(rings.length
-          ? [
-              new ScatterplotLayer<Ring>({
-                id: 'luna-ripples',
-                data: rings,
-                getPosition: (r) => [r.s.lng, r.s.lat],
-                filled: false,
-                stroked: true,
-                radiusUnits: 'pixels',
-                lineWidthUnits: 'pixels',
-                getLineWidth: 2,
-                // A new array every frame, so these are re-read each frame (40 rings at most).
-                getRadius: (r) => 4 + 14 * age(r),
-                getLineColor: (r) => [43, 36, 28, 204 - 204 * age(r)], // ink
-              }),
-            ]
-          : []),
+        ...rings(anim, doy, () => shown.filter((s) => (mode === TYPICAL ? s.pdoy : s.doy) === doy)),
       ];
     },
 
