@@ -28,29 +28,73 @@ export function mountLayerList(root: HTMLElement, registry: LayerRegistry): void
   root.hidden = registry.all().length < 2; // one layer: a lone checkbox could only blank the map
 }
 
-export function mountLegend(root: HTMLElement, registry: LayerRegistry): void {
-  const render = () => {
-    root.innerHTML = registry
-      .activeLayers()
-      .map((l) => {
-        const lg = l.legend();
-        const stops = lg.stops ?? [];
-        const ramp = stops.length
-          ? `<div class="lg-ramp" style="background:linear-gradient(90deg,${stops.map((s) => s.color).join(',')})"></div>
-          <div class="lg-labels"><span>${esc(stops[0]!.label)}</span><span>${esc(stops[stops.length - 1]!.label)}</span></div>`
-          : '';
-        const items = lg.items?.length
-          ? `<ul class="lg-items">${lg.items
-              .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
-              .join('')}</ul>`
-          : '';
-        return `<div class="legend-card"><div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
-          ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
-      })
-      .join('');
+const FOLD_KEY = 'hatch-legend-folded';
+
+/**
+ * Colour key. On narrow screens (under 1000px, where it sits over the map) it can fold to a one-line "Key" chip:
+ * it starts open, folds itself after the first tap on the map or press of Play, and remembers that for next time.
+ * Wide screens always show it; the folded class does nothing there.
+ */
+export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoFold(): void } {
+  let folded = false;
+  let touched = false; // the reader opened or closed it themselves: stop folding it for them
+  try {
+    folded = localStorage.getItem(FOLD_KEY) === '1';
+  } catch {
+    /* storage blocked: start open */
+  }
+  const setFolded = (f: boolean, focus = false) => {
+    folded = f;
+    root.classList.toggle('folded', f);
+    try {
+      localStorage.setItem(FOLD_KEY, f ? '1' : '0');
+    } catch {
+      /* not remembered, still works */
+    }
+    if (focus) root.querySelector<HTMLElement>(f ? '.lg-chip' : '.lg-fold')?.focus();
   };
+  const render = () => {
+    const layers = registry.activeLayers().map((l) => l.legend());
+    const swatches = layers
+      .flatMap((lg) => lg.items ?? [])
+      .slice(0, 4)
+      .map((it) => `<i class="sw ${it.shape}" style="--c:${it.color}"></i>`)
+      .join('');
+    root.innerHTML =
+      layers
+        .map((lg, i) => {
+          const stops = lg.stops ?? [];
+          const ramp = stops.length
+            ? `<div class="lg-ramp" style="background:linear-gradient(90deg,${stops.map((s) => s.color).join(',')})"></div>
+          <div class="lg-labels"><span>${esc(stops[0]!.label)}</span><span>${esc(stops[stops.length - 1]!.label)}</span></div>`
+            : '';
+          const items = lg.items?.length
+            ? `<ul class="lg-items">${lg.items
+                .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
+                .join('')}</ul>`
+            : '';
+          const fold = i === 0 ? '<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">&times;</button>' : '';
+          return `<div class="legend-card">${fold}<div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
+          ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
+        })
+        .join('') +
+      (layers.length ? `<button type="button" id="key-chip" class="lg-chip" aria-expanded="false">${swatches}<span>Key</span></button>` : '');
+  };
+  root.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.lg-fold, .lg-chip');
+    if (!btn) return;
+    touched = true;
+    setFolded(btn.classList.contains('lg-fold'), true);
+  });
   registry.subscribe(render);
   render();
+  root.classList.toggle('folded', folded);
+  return {
+    autoFold() {
+      if (!touched && !folded) setFolded(true);
+      touched = true; // once per visit
+    },
+  };
 }
 
 /** Hover/tap probe card: each active layer's answer to "what's here?". A pinned card gets a close button. */
