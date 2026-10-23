@@ -345,7 +345,7 @@ function start() {
   // Find a town: the same path as the city menu above.
   mountFinder($('find'), $('finder'), (lat, lng, name) => {
     if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`);
-  });
+  }, say);
 
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
@@ -449,7 +449,7 @@ function start() {
   });
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open')) return;
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !$('finder').hidden) return;
     const hadFocus = probeEl.contains(document.activeElement);
     unpin();
     if (hadFocus) $('t-range').focus({ preventScroll: true });
