@@ -469,39 +469,44 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const q = at.q;
       const [q05, q25, q50, q75] = q;
       const stage = stageAt(q, doy);
-      const lines = [`Forecast for ${fmtDoy(year, doy)}: ${STAGE_LABEL[stage]}.`];
-      if (q05 != null && q50 != null && q25 != null && q75 != null)
-        lines.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      // One answer up front; the detail waits behind "More" (pinned cards only) so the card stays small over the map.
+      const label = STAGE_LABEL[stage];
+      const title = `${label[0]!.toUpperCase()}${label.slice(1)} on ${fmtDoy(year, doy)}`;
+      const lines: string[] = [];
+      const more: string[] = [];
+      // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
+      // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
+      const pk = data.interval?.peak;
+      if (pk && q50 != null && mode !== TYPICAL) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      if (!at.seen) lines.push('No lunas ever seen near here to check this against.');
+      if (q05 != null && q25 != null && q75 != null)
+        more.push(`First moths about ${fmtDoy(year, q05)}${mode === TYPICAL ? '' : `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}`}.`);
       const band = bandOf(lngLat[1]);
-      const sc =
-        mode === TYPICAL
-          ? null
-          : data.scores.find((r) => r.band === band.label && r.year === year);
-      if (sc)
-        lines.push(
-          `Peak this year in this strip of the map (${band.label}°N): seen ${fmtDoy(year, sc.obs_peak)}, forecast ${fmtDoy(year, sc.heat_peak)}, usual date ${fmtDoy(year, sc.cal_peak)}.`,
+      const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
+      if (sc) {
+        const off = sc.heat_peak - sc.obs_peak;
+        more.push(
+          `Check, this strip of the map (${band.label}°N): moths peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+            (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
+            `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
+      }
       // Sightings are counted on the res-4 hexagon: a small one would almost always have none.
       const here = sightingsFor(mode).filter((s) => s.cell === at.parent);
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
       const firstDays = here.filter((s) => !(s.flags & SECOND_BROOD)).map(day).sort((a, b) => a - b);
       const median = firstDays.length % 2 ? firstDays[(firstDays.length - 1) / 2]! : (firstDays[firstDays.length / 2 - 1]! + firstDays[firstDays.length / 2]!) / 2;
       const where = fine ? 'the wider area (one zoomed-out hexagon)' : 'this hexagon';
-      lines.push(
+      more.push(
         here.length
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}` +
-              (firstDays.length ? `. Middle date of the first wave: ${fmtDoy(year, median)}.` : '.')
+              // A middle date of two or three sightings says little, so it waits for five.
+              (firstDays.length >= 5 ? `. Middle date of the first wave: ${fmtDoy(year, median)}.` : '.')
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
-      // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
-      // Last, so the short hover card (first lines only) and phone layouts keep their size; the pinned card shows it.
-      const pk = data.interval?.peak;
-      if (pk && q50 != null && mode !== TYPICAL)
-        lines.push(`Peak here likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      if (!at.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown striped.');
-      if (fine) lines.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
-      return { title: `Luna moth, ${modeLabel(mode)}`, lines };
+      if (fine) more.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
+      return { title, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
     caveats(): CaveatCard {

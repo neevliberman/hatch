@@ -16,7 +16,11 @@ export interface CaveatCard {
 
 export interface ProbeCard {
   title: string;
+  /** Colour chip drawn before the title (the hexagon's stage). */
+  swatch?: string;
   lines: string[];
+  /** Detail behind a "More" fold (a hover card leaves it out). */
+  more?: string[];
   /** Optional outbound link (e.g. the iNaturalist photo). Linked, never rehosted. */
   link?: { href: string; label: string };
 }
