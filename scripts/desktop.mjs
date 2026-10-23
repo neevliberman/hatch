@@ -32,7 +32,7 @@ const screens = [
 const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
-const TAB_ORDER = ['season', 'info-btn', 'why', 'locate', 'share', 't-prev', 't-play', 't-next', 't-range'];
+const TAB_ORDER = ['species', 'season', 'info-btn', 'why', 'locate', 'share', 't-prev', 't-play', 't-next', 't-range'];
 const problems = [];
 const browsers = {};
 for (const e of new Set(screens.map((s) => s[0]))) {

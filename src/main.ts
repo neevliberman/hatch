@@ -1,8 +1,10 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
-import { createLunaLayer, modeLabel, replayTimeSpec } from './layers/lunaReplay';
+import { createLunaLayer, modeLabel, replayTimeSpec, type LunaLayer } from './layers/lunaReplay';
+import { createFireflyLayer, loadFirefly } from './layers/fireflyReplay';
 import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
+import { replayData } from './layers/replayData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
@@ -39,6 +41,10 @@ function start() {
   const luna = createLunaLayer(initialMode, () => onLunaData());
   const registry = new LayerRegistry();
   registry.register(luna, replayTimeSpec(initialMode, month, day));
+  // The species on screen. Only one is active at a time; the firefly loads the first time it is picked.
+  let cur: LunaLayer = luna;
+  let firefly: LunaLayer | null = null;
+  let seasonCount = firstBroodCount;
 
   const time = new TimeAxis(registry.activeTime()!);
   let spec: TimeSpec | null = registry.activeTime();
@@ -69,7 +75,7 @@ function start() {
   let followSpot = (_t: number) => {};
   const updateProbe = () => {
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
-    if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = luna.cellAt(hit.lngLat) ?? hit.cell;
+    if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = cur.cellAt(hit.lngLat) ?? hit.cell;
     showProbe(probeEl, registry, hit, time.cursor, pinned);
     // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
     map.setPicked(pinned && hit && (!hit.picked || isForecast(hit.picked.layerId)) ? hit.cell : null);
@@ -132,7 +138,7 @@ function start() {
   const refresh = () => {
     map.refresh();
     updateProbe();
-    srSummary.textContent = luna.summary(time.cursor);
+    srSummary.textContent = cur.summary(time.cursor);
   };
   time.subscribe(refresh);
   onLunaData = refresh;
@@ -147,22 +153,69 @@ function start() {
 
   // Season picker: switching keeps the cursor on the same calendar day.
   const picker = $<HTMLSelectElement>('season');
-  picker.innerHTML = [TYPICAL, ...[...years].reverse()]
-    // The count is first-wave moths seen; "All years" goes without it so the closed menu fits a small phone.
-    .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : `${m} (${firstBroodCount(m).toLocaleString()} moths)`}</option>`)
-    .join('');
-  picker.value = initialMode;
-  picker.title = `Season to replay (first-wave moths seen, in parentheses; ${firstBroodCount(TYPICAL).toLocaleString()} in all years)`;
+  const fillPicker = () => {
+    const what = cur === luna ? 'moths' : 'fireflies';
+    const keep = picker.value || initialMode;
+    picker.innerHTML = [TYPICAL, ...[...years].reverse()]
+      // The count is first-wave moths (or fireflies) seen; "All years" goes without it so the closed menu fits a small phone.
+      .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : `${m} (${seasonCount(m).toLocaleString()} ${what})`}</option>`)
+      .join('');
+    picker.value = keep;
+    picker.title = `Season to replay (${cur === luna ? 'first-wave moths' : 'fireflies'} seen, in parentheses; ${seasonCount(TYPICAL).toLocaleString()} in all years)`;
+  };
+  fillPicker();
   picker.addEventListener('change', () => {
     const now = new Date(time.cursor);
-    luna.setMode(picker.value);
+    cur.setMode(picker.value);
     hit = null;
     pinned = false;
     map.setMarker(null);
     $('season-name').textContent = modeLabel(picker.value);
-    registry.setTime(luna.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
+    registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
   });
   $('season-name').textContent = modeLabel(initialMode);
+
+  // Species switcher. Switching keeps the season and the calendar day, and drops any pinned card.
+  const speciesSel = $<HTMLSelectElement>('species');
+  const setSpecies = async (want: 'luna' | 'firefly') => {
+    if (want === 'firefly' && !firefly) {
+      speciesSel.disabled = true;
+      const file = await loadFirefly();
+      speciesSel.disabled = false;
+      if (!file) {
+        speciesSel.value = 'luna';
+        return say('Couldn\u2019t load the fireflies. Try again later.');
+      }
+      firefly = createFireflyLayer(file, picker.value);
+      registry.register(firefly, replayTimeSpec(picker.value, 5, 10), false);
+      const ff = replayData(file);
+      fireflyCount = ff.firstBroodCount;
+    }
+    const next = want === 'firefly' ? firefly! : luna;
+    speciesSel.value = want;
+    if (next === cur) return;
+    const now = new Date(time.cursor);
+    hit = null;
+    pinned = false;
+    map.setMarker(null);
+    next.setMode(picker.value);
+    cur = next;
+    seasonCount = cur === luna ? firstBroodCount : fireflyCount;
+    fillPicker();
+    $('tagline').textContent = cur === luna ? 'when luna moths fly' : 'when fireflies glow';
+    $('dots-what').textContent = cur === luna ? 'moths' : 'fireflies';
+    // The off-season countdown is worked out for luna moths; fireflies come out weeks later.
+    $('countdown').hidden = cur !== luna;
+    $('map').setAttribute('aria-label', `Map of the Midwest: ${cur === luna ? 'luna moth' : 'firefly'} sightings over hexagons colored by the forecast`);
+    registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
+    // Old one off first, so the two never draw together for a frame.
+    registry.setActive((cur === luna ? firefly : luna)!.id, false);
+    registry.setActive(cur.id, true);
+    syncUrl();
+  };
+  let fireflyCount = firstBroodCount;
+  speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value === 'firefly' ? 'firefly' : 'luna'));
+  if (params.get('species') === 'firefly') void setSpecies('firefly');
 
   mountScrubber($('bar'), time);
   mountLayerList($('layers'), registry);
@@ -199,6 +252,8 @@ function start() {
     const q = new URLSearchParams(location.search);
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
+    if (cur === luna) q.delete('species');
+    else q.set('species', 'firefly');
     if (picker.value === TYPICAL) q.delete('year');
     else q.set('year', picker.value);
     // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
@@ -232,7 +287,7 @@ function start() {
   $('share').addEventListener('click', async () => {
     const url = new URL(viewUrl(), location.href).href;
     try {
-      if (navigator.share) await navigator.share({ title: 'Hatch: when luna moths fly', url });
+      if (navigator.share) await navigator.share({ title: `Hatch: when ${cur === luna ? 'luna moths' : 'fireflies'} come out`, url });
       else {
         await navigator.clipboard.writeText(url);
         say('Link copied');
@@ -253,7 +308,7 @@ function start() {
       })
       .sort((a, b) => a.d - b.d);
     const first = { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
-    const here: ProbeHit | undefined = [first, ...ring].find((h) => luna.probe?.(h.lngLat, time.cursor));
+    const here: ProbeHit | undefined = [first, ...ring].find((h) => cur.probe?.(h.lngLat, time.cursor));
     if (!here) return null;
     hit = { ...here, label };
     pinned = true;
@@ -385,7 +440,7 @@ function start() {
     if (time.playing && pinned && hit?.picked && !isForecast(hit.picked.layerId)) unpin();
   });
   refresh();
-  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding };
+  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };
 }
 
 start();
