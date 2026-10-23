@@ -276,6 +276,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
+  @media (max-width: 359px) { .brand { font-size: 0; } } /* smallest phones: the dot alone, so both menus stay readable */
   .bar-row { flex-wrap: wrap; gap: 8px 10px; }
   .date { font-size: 17px; order: 2; flex-basis: 100%; display: none; }
   .date { display: block; order: 0; flex: 1; font-size: 18px; }

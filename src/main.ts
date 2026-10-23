@@ -223,6 +223,13 @@ function start() {
   let fireflyCount = firstBroodCount;
   // The one-file preview has no firefly file next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
+  // On narrow phones both header menus can't show full names, so each species is listed by its first word ("Luna", "Monarch").
+  const narrow = matchMedia('(max-width: 430px)');
+  const shortNames = () => {
+    for (const o of speciesSel.options) o.text = narrow.matches ? (o.dataset.full ??= o.text).split(' ')[0]! : (o.dataset.full ?? o.text);
+  };
+  shortNames();
+  narrow.addEventListener('change', shortNames);
   speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value === 'firefly' ? 'firefly' : 'luna'));
   // Until a ?species=firefly link has loaded, the address bar keeps asking for the firefly.
   if (params.get('species') === 'firefly' && __BASEMAP__) {
