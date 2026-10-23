@@ -1,6 +1,7 @@
 import type { HatchLayer, ProbeCard } from '../core/layer';
 import type { ProbeHit } from '../map/map';
 import type { LayerRegistry } from '../core/registry';
+import { CROSS } from './icons';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -76,7 +77,7 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
                 .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
                 .join('')}</ul>`
             : '';
-          const fold = i === 0 ? '<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">&times;</button>' : '';
+          const fold = i === 0 ? `<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">${CROSS}</button>` : '';
           return `<div class="legend-card">${fold}<div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
           ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
         })
@@ -114,14 +115,26 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
     root.hidden = true;
     return;
   }
+  // While the days play the card is rebuilt each tick: keep each "More" open, and keyboard focus, for the same hexagon.
+  const key = `${hit!.cell}|${pinned}`;
+  const same = root.dataset.key === key;
+  root.dataset.key = key;
+  const opened = same ? [...root.querySelectorAll('details')].map((d) => d.open) : [];
+  const focusables = () => [...root.querySelectorAll<HTMLElement>('button, summary, a')];
+  const focused = same && root.contains(document.activeElement) ? focusables().indexOf(document.activeElement as HTMLElement) : -1;
+  let fold = 0;
   root.innerHTML = (pinned ? '<button type="button" class="probe-close" aria-label="Close this card">&times;</button>' : '') +
     (hit?.label ? `<div class="probe-cell">Near ${esc(hit.label)}</div>` : '') +
     cards
     .map(
       (card) =>
-        `<div class="probe-card"><div class="probe-title">${esc(card.title)}</div>${card.lines
+        `<div class="probe-card"><div class="probe-title">${card.swatch ? `<i class="sw hex" aria-hidden="true" style="--c:${esc(card.swatch)}"></i>` : ''}${esc(card.title)}</div>${card.lines
           .map((x) => `<div>${esc(x)}</div>`)
           .join('')}${
+          card.more?.length
+            ? `<details class="probe-more"${opened[fold++] ? ' open' : ''}><summary>More<span class="sr"> about ${esc(card.title)}</span></summary>${card.more.map((x) => `<p>${esc(x)}</p>`).join('')}</details>`
+            : ''
+        }${
           card.link
             ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)}<span aria-hidden="true"> &#8599;</span><span class="sr"> (opens in a new tab)</span></a>`
             : ''
@@ -129,4 +142,5 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
     )
     .join('');
   root.hidden = false;
+  if (focused >= 0) focusables()[focused]?.focus();
 }

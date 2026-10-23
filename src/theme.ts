@@ -45,6 +45,7 @@ export const palette = {
   riverCase: [248, 242, 227, 170] as RGBA,
   road: [248, 242, 227, 190] as RGBA, // paper lines, like roads left blank on a printed map
   forest: [24, 64, 34, 210] as RGBA,
+  trees: [24, 64, 34, 120] as RGBA, // the tree marks on woods (USGS land cover)
   transparent: [0, 0, 0, 0] as RGBA,
 };
 

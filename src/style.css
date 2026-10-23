@@ -10,13 +10,13 @@
 :root {
   /* Field Notebook: cream paper, ink, a watercolour forecast, handwritten notes in the margins.
      Text colours clear 4.5:1 on the paper, on the panels over every hex, and on the drawer's ruled lines
-     (accent 5.2+, warn 4.9+, moon 5.1+, muted 4.6+, text 12+). */
+     (accent 5.2+, warn 4.9+, moon 5.1+, muted 5.1+, text 12+), and still 4.5+ on the darkest fleck of the paper grain. */
   --bg: #cfdcd8;
   --panel: rgba(250, 245, 232, 0.94);
   --panel-solid: #f8f2e3;
   --line: rgba(70, 52, 30, 0.2);
   --text: #2b241c;
-  --muted: #6e6352;
+  --muted: #675c4b;
   --accent: #8c570c;
   --moon: #2f6a45;
   --warn: #a63f19;
@@ -33,7 +33,15 @@
   --stripe: rgba(43, 36, 28, 0.86);
   --shadow: 0 6px 18px rgba(60, 40, 20, 0.18);
   --today: #2b241c;
-  --radius: 10px;
+  /* Buttons and menus: a 4px corner and a firmer pencil edge. */
+  --radius: 4px;
+  --edge: rgba(43, 36, 28, 0.35);
+  /* The two map cards and the Key chip are museum specimen labels: an ink rule, then a hairline 3px inside it. */
+  --label-rule: rgba(43, 36, 28, 0.6);
+  --label: inset 0 0 0 3px var(--panel-solid), inset 0 0 0 4px rgba(43, 36, 28, 0.25), 1px 2px 0 rgba(60, 40, 20, 0.12);
+  /* Paper grain: warm brown flecks in one 128px tile (a 2 KB PNG), repeated under the panels' text. Not over the map:
+     a full-screen layer over the WebGL canvas costs a blend every frame on old phones. */
+  --grain: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACABAMAAAAxEHz4AAAAMFBMVEUAAABhQh9hQh9hQh9QOBwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQvOGVAAAABXRSTlMACA0SFoMneI8AAAhASURBVHjafZnbuds4DIR/gC5g5JMC4LMNMPlSgLL9F7UPvIGSsn5IfCyJBIHBYACBIb2pYBTARPsU6F8FqKgS/RICDIgDTCEo8A3CmJ+5EvPBCvCn/3HSVlG+o90mpWUQIlQAPoi2XQgwAx83fmkzUHEkawHsDLC2Yt+72TiP+hpmt92wmEZgZdnkbdNxVz939M0qH7ojDLJLpldsuFtgGMew1NK5TeDRDRw7g2r/0o/2Xi5ooSKAoKzFKurmC/Aa5uui0v91hsK6racpgJPod4oeHSFwW/amjyw4WhiIDx0cY//2KEAEeY2JkXktdu/lAPfv1eYJ6kTuOJXAtIPLJn51C046XTJLXyBwTDV+gnDAZNyd2M/MwmWsjWMmhTWI1AmukQZlGBbZp9GeCsPGb++OkXGT2mICw3kjnK8EHB6PXYHfu1v7PfOnsrvIgQHX9KBn/3ZnVI92a3S7tmWsgrUTj9Tr5jpEd86pbubRVzUMBd53VDdPXGAiHA6C4HKDjT0+ySJfVzqygnAg3MAJFm0AFWu/fSJFcCWwbFi7+X56IXKuLwx1MvDsTv4A/iMtF7oet68TIryDwhsefHDOlqZlJsFtDQqxdreGe/bHNb9WfY9c3s631paNR7/HEfuzgZcZ7eFBc1CcPSiFmthZjMM1H2VSeJFSf0VU73FDVT5BsBW3O0uPP5+YY/12JheetFrUypVihHQE+bUl4vDWN8Cvbsyfhm6AqK24TVPeLefMO7rhwIyC4y1C7wfDtR0iFimCHQQNajZ5GdO5ktmwAv/ATwYOAmvwmSd3u9JfryOTPT+TaZT5cRSmKw2LA/XK+/YVpGHtBlx92tKuSStURIT4ANQygHHhuAmgV/rVZyUe16s2qF1rnSdYfS6kaPeyWPakk9LJjp8JWbLdn1cCdveMzoLxArVqWe7lci08y+sx5J4NyWCX+48lBmJc+gJ589RQIDHlYsOCBZRVIh4/ZlvN6ADRZBeDOlHUsUnYd/JCXLi1xfK8w1JHefLHrk413BaXCAjC3Bu2fIevYU3GijJka9mBYWCOqpqQM2fgJHK4m9x5YORemGRDi1Zd1VAM4bNUs32GdUHdNOWFlBcDnl0/+BaSgEARSx3m7Kj3oppTop3n2FVVJqLBcbaEDtSV8zLKiN3pS6hWfOxdmxZXP74vff9CCrQSPAmZ4qlcuFIBJ8ZCM5LwRW5Z9tYkRdsoXTskipEoOHCW/ksNbpwS1gWv6abY4GvUb6upLgwi02g8PFdftxR3AbxfQzAuaRophiOOx9T3I8dttGFBeU9F6LknepetwGL84o/19BUUKtgkM1+WBe8HnsJaCv8B+LFTYen51rbyrcUbMTQH3mqc9kuNTipHL2FhT/TRUeqpTn5ALf4tON4F7qZ3vauqPQcnpNwmn7SmzrZ+UFeqf6X6EilpvG9iNSVfq5NdQqUd7CbwTBGv4X2PC8w6xMIvLkGG1bhkflZMcu76XiM5XK20UHhxvMpGbaMLLN1B9Z9o2tWSfrFrYzgsOEmNPHTR5b03aialFepw19kOEbLZgoF+OBaODdAPC8yHXgXg5w00Z68JI0mLDaHU4G3UpRQtNXRr862P/FLrLZkdXe4gl6SbFa4AHHF2gjK7ilkZtnOObNMJNxsuAkbd392xLwmLXdikmtQFnUpcmh+bMklZI0XiNOuA6QVn8URPeKsLhp6EaoA1n9t5HqzO+kYt29CiLfBhjWC6+VlnRsLYQPVqQPeSed+ssYh9rD2m1D+de1jadMx56s2U2S4l2V0O6Lm1Wwlq5/1SbhfOscdXyjq7dnitC5ZfxzednRpClcr+cpOn3iGggJUeFgeOpH43qjjg1RuAaGR5Jzn2eVkqEO53l9z8FOl/27Bts1mI6HmwoztWa3xgvLWEwOjhnKEsFHuiZTE6hee52hNLcArCKd7mh9fpxqwDx3z25s3FG3PyZGY5fwfadqE47Xin2mQcTbSE7Rx9+t2xUhNf05nlkdsTRx28+gDAOB4mdm+JWY/zWOBv/YcF9jS0Mu15eGgSiAKhVuft1l0Dv69EPUbCkTj0GIfN91Urvprlug+qNplAHWea95b9HA3gZrO6DPFrKJo7CyDXRcNW4iGRZmX52WLlcwI8BXy81oi8iSY14qybPFoOL+MfrREIXmzB229K4hOXbmixkHKcvVycW2fNnIPkwUEKZAcSTmkm2XX+/rmMam5zomIZ22G87rXUFolIeRK3IzmmwE9OFjoB43dvarynZh+c6t5DT+fEmpqE/jKi30OuCp46HL90eUriNgzBORq3FLHvJVwzu/qFLG2uVdNLkfkiaOlb6wrZBnzCRhCaJjXN9itmG0YgKm4x5m9tfXuyKDaNsLWito/7HHgFeOvU7CtN6T93HhOBV0uxtsHFdcY9tBUe7WP4c77/sPLAZXVOMyViFWL7mxYhvKxpmE0K2eifpqWO2FEvQVCrYk1gxmzBpHO8HJpdT1aFnzGUoE9BKk/dgsCKbROWlS8aNdFwir3eQ9hex1vCtmLu+Q+7hElZtur/Zlbt4seeNJauX0sxwH+ldvyiSFUDbxPfYxUv85ENr7yo+5aztSSgzpneZFHfAXO8xvU2Ty1P40zZLVXXcHQynhUoswkRfJ+LM8xHV2F4f/to4rTRJWdG3TdKGjKuFvoqgLdXKslF/7aFnQ9zXL33POCfXU/76LbHSMRtU1QdqEfH4DlTUX0Opyut3Sa/ytpXQgTndHe00hNpJX9E1bN2fXy1FVze2ewvJze39eG/bo2fzwJng2fKVhitNWW6qNZr9wjELyC6ZrQxWmlcXf4Dwnt4NWQFllwAAAAASUVORK5CYII=");
   --sun: #c07a16;
   --wash-tan: #b9955f;
   --wash-leaf: #a9cf7a;
@@ -44,6 +52,7 @@
   /* Narrower on mid-size windows so an open About drawer leaves most of the map visible. */
   --drawer-w: min(400px, max(300px, 36vw), 100%);
   --thumb: 22px;
+  --hit: 36px; /* the slider's tap row */
   /* Side gutters that also clear a landscape iPhone's notch (viewport-fit=cover lets the page run under it). */
   --gl: max(var(--gutter), env(safe-area-inset-left));
   --gr: max(var(--gutter), env(safe-area-inset-right));
@@ -72,14 +81,20 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--a
 button, select { font: inherit; color: inherit; touch-action: manipulation; }
 /* Pinching the panels would zoom the whole page and strand it; the map has its own pinch zoom. The drawer still pinches. */
 #top, #bottom { touch-action: pan-x pan-y; }
-.icon-btn { min-width: 44px; height: 44px; border-radius: var(--radius); border: 1px solid var(--line);
+.icon-btn { min-width: 44px; height: 44px; border-radius: var(--radius); border: 1px solid var(--edge);
   background: var(--panel); color: var(--text); cursor: pointer; display: inline-grid; place-items: center;
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
 .icon-btn:hover { border-color: var(--line-strong); }
+/* A press shows at once, before the map catches up. */
+.icon-btn:active { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+@media (prefers-reduced-motion: no-preference) {
+  .icon-btn { transition: transform 90ms ease-out, background-color 120ms; }
+  .icon-btn:active { transform: scale(0.94); }
+}
 .icon-btn:focus-visible, select:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
   details summary:focus-visible, .lg-fold:focus-visible, .lg-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
-#info-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 20px; }
+#info-btn { font-family: var(--font-display); font-weight: 700; font-size: 20px; }
 
 #top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
   align-items: center; gap: 8px; padding: max(10px, env(safe-area-inset-top)) var(--gr) 0 var(--gl); pointer-events: none; }
@@ -88,8 +103,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 6px 2px; flex: none; font-family: var(--font-display);
   text-shadow: 0 0 6px var(--panel-solid), 0 0 14px var(--panel-solid), 0 0 2px var(--panel-solid); }
 .brand small { font-weight: 400; color: var(--muted); font-size: 12px; }
-.brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sun);
-  align-self: center; }
+/* Once the map moves, hexes slide under the title: a paper backing keeps it readable. */
+.brand.over-map { background: var(--panel); border-radius: var(--radius); padding: 6px 10px; margin-left: -8px; }
+.brand .mark { width: 24px; height: 24px; align-self: center; margin: -4px 0; flex: none; }
 
 #layers { pointer-events: none; min-width: 0; padding: 0 var(--gr) 8px var(--gl); }
 #layers[hidden] { display: none; }
@@ -97,10 +113,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .species + .season { margin-left: 6px; }
 .species[hidden], #countdown[hidden] { display: none !important; }
 .species select { flex: none; }
-.season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line);
+.season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--edge);
   padding: 0 10px; color: var(--text); }
 /* The caveat, countdown and two buttons live in a strip on top of the time bar, off the map. */
-#strip { pointer-events: auto; display: flex; align-items: center; gap: 10px; background: var(--panel-solid);
+#strip { pointer-events: auto; display: flex; align-items: center; gap: 10px; background: var(--grain) var(--panel-solid);
   border-top: 1px solid var(--line); padding: 8px var(--gr) 0 var(--gl); }
 #strip + #bar { border-top: 0; padding-top: 6px; }
 #note { min-width: 0; flex: 1; font-size: 12.5px; line-height: 1.35; }
@@ -109,6 +125,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .unconfirmed { font-style: normal; font-weight: 600; color: var(--warn); }
 #why { margin-left: 4px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
   font-size: inherit; min-height: 24px; }
+#why:active { opacity: 0.6; }
 #countdown { color: var(--muted); }
 #countdown:empty, #countdown.off { display: none; }
 #actions { pointer-events: auto; position: relative; flex: none; display: flex; gap: 6px; }
@@ -123,19 +140,25 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
 #recenter[hidden] { display: none; }
+/* Find a town: its name box opens just above the time controls, at thumb height (lifted over a phone keyboard from finder.ts). */
+#finder { position: absolute; left: var(--gr); bottom: calc(100% + 10px); z-index: 5; pointer-events: auto; }
+#finder[hidden] { display: none; }
+#finder input { width: min(260px, calc(100vw - 32px)); height: 44px; padding: 0 14px; font: inherit; font-size: 16px;
+  color: var(--text); background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 20px; box-shadow: var(--shadow); }
 /* With a mouse the hex card is a tooltip beside the pointer (placed from main.ts); it only takes clicks once pinned. */
 #probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: max-content; max-width: min(300px, calc(100vw - 16px));
   max-height: calc(100vh - 16px); overflow-y: auto; pointer-events: none;
-  box-shadow: var(--shadow); }
+  box-shadow: var(--label), var(--shadow); }
 #probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
 /* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
-#probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link { display: none; }
+#probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link,
+  #probe.at-pointer:not(.pinned) .probe-more { display: none; }
 #probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
 #probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); }
 .probe-close { float: right; width: 32px; height: 32px; margin: -4px -8px 2px 6px; border: 0; border-radius: 8px; background: none;
   color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .probe-close:hover { color: var(--text); background: var(--track-faint); }
-.probe-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.probe-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* "why?" lands on the drawer section it explains; a short glow shows where. */
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
@@ -165,8 +188,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding-bottom: env(safe-area-inset-bottom); }
 #floats { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 var(--gr) 10px var(--gl); }
 #legend, #probe { pointer-events: auto; }
-.legend-card { width: 260px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-.lg-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.legend-card, #probe, #legend.folded .lg-chip { background: var(--grain) var(--panel-solid); border: 1px solid var(--label-rule); border-radius: 3px;
+  box-shadow: var(--label); }
+.legend-card { width: 260px; padding: 8px 12px; }
+.lg-title { font-size: 13px; font-weight: 700; margin-bottom: 5px; padding-bottom: 3px; border-bottom: 1px solid var(--line); }
 .lg-ramp { height: 10px; border-radius: 5px; }
 .lg-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
 .lg-note { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 3px; }
@@ -177,29 +202,36 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   /* A small round badge on the card's top-left corner (the right one is under the recenter button), so it costs the
      key no width (a row on the smallest phones). */
   .lg-fold { display: grid; place-items: center; position: absolute; top: -12px; left: -6px; width: 28px; height: 28px; padding: 0;
-    border: 1px solid var(--line); background: var(--panel-solid); color: var(--muted); font-size: 18px; line-height: 1;
+    border: 1px solid var(--label-rule); background: var(--panel-solid); color: var(--muted); line-height: 1;
     cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+  .lg-fold svg { width: 16px; height: 16px; }
   .lg-fold::before { content: ''; position: absolute; inset: -8px; } /* 44px to the finger, 28px to the eye */
   #legend.folded .legend-card { display: none; }
   #legend.folded .lg-chip { display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 12px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; font: inherit; font-size: 13px; font-weight: 700;
+    font: inherit; font-size: 13px; font-weight: 700;
     color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .lg-chip span { margin-left: 3px; }
   #legend.folded .lg-chip { position: relative; }
   .lg-chip::before { content: ''; position: absolute; inset: -4px; } /* 44px tall to the finger */
 }
-#probe { max-width: 300px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; }
+#probe { max-width: 300px; padding: 8px 12px; font-size: 13px; }
 #probe[hidden] { display: none; }
 .probe-cell { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
 .probe-title { font-weight: 700; color: var(--moon); }
+.probe-title .sw { margin-right: 6px; vertical-align: -2px; width: 16px; height: 14px; }
+.probe-more { margin-top: 4px; }
+.probe-more summary { cursor: pointer; color: var(--moon); font-weight: 600; min-height: 32px; padding-top: 6px; box-sizing: border-box; display: list-item; }
+.probe-more p { margin: 4px 0 0; }
 .probe-card + .probe-card { margin-top: 8px; }
 
-#bar { pointer-events: auto; background: var(--panel-solid); border-top: 1px solid var(--line);
-  padding: 10px var(--gr) 12px var(--gl); }
+/* min-height: the bar is filled by script; holding its height stops the panels above from jumping when it arrives. */
+#bar { pointer-events: auto; background: var(--grain) var(--panel-solid); border-top: 1px solid var(--line);
+  padding: 10px var(--gr) 12px var(--gl); min-height: 119px; }
 .bar-row { display: flex; align-items: center; gap: 14px; }
 .btns { display: flex; gap: 6px; }
 .play { min-width: 56px; }
-.date { flex: 1; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.date { flex: 1; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.date em { font: 600 17px var(--font-note); color: var(--muted); }
 .date small { margin-left: 10px; font-size: 12px; font-weight: 600; color: var(--warn); }
 .date small.fc { color: var(--muted); }
 /* Live mode: when the weather data runs to; amber when the nightly update looks late. */
@@ -207,10 +239,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   font-size: 11.5px; font-weight: 600; color: var(--moon); border: 1px solid currentColor; }
 .asof[hidden] { display: none; }
 .asof.stale { color: var(--warn); background: var(--warn-bg); }
-.year select { height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); padding: 0 10px; }
+.year select { height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--edge); padding: 0 10px; }
 
 .track { position: relative; margin-top: 4px; padding: 0 calc(var(--thumb) / 2); }
-.track input[type=range] { width: 100%; height: 36px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none;
+.track input[type=range] { width: 100%; height: var(--hit); margin: 0; background: transparent; appearance: none; -webkit-appearance: none;
   touch-action: pan-y; cursor: pointer; display: block; }
 /* --fc is where live data turns into forecast (100% otherwise): the track after it is paler. Stops that fall before an
    earlier one snap to it, so one gradient covers the cursor on either side of --fc. */
@@ -222,29 +254,31 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   background: linear-gradient(90deg, var(--track) var(--fc), var(--track-fc) var(--fc)); }
 .track input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
 .track input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--thumb); height: var(--thumb);
-  margin-top: -8px; border-radius: 50%; background: var(--thumb-fill); border: 3px solid var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+  margin-top: calc((6px - var(--thumb)) / 2); border-radius: 50%; background: var(--thumb-fill); border: 3px solid var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
 .track input[type=range]::-moz-range-thumb { width: calc(var(--thumb) - 6px); height: calc(var(--thumb) - 6px);
   border-radius: 50%; background: var(--thumb-fill); border: 3px solid var(--accent); }
 .ticks { position: relative; height: 22px; margin: 0 calc(var(--thumb) / 2); }
-.track .ticks { position: absolute; left: 0; right: 0; bottom: -20px; margin: 0 calc(var(--thumb) / 2); }
-.track { padding-bottom: 22px; }
+.track .ticks { position: absolute; left: 0; right: 0; bottom: 0; margin: 0 calc(var(--thumb) / 2); }
+.track { padding-bottom: 17px; }
+.track .ticks { height: 17px; }
 .tick { position: absolute; transform: translateX(0); font-size: 12px; line-height: 15px; color: var(--muted); }
-.tick i { position: absolute; left: 0; top: -5px; width: 1px; height: 5px; background: var(--muted); }
+/* Each tick hangs from the bottom of the track line. */
+.tick i { position: absolute; left: 0; top: calc(4px - var(--hit) / 2); width: 1px; height: 5px; background: var(--muted); }
 .tick { padding-left: 3px; }
-.now { position: absolute; top: -34px; transform: translateX(-50%); }
+.now { position: absolute; top: calc(4px - var(--hit) / 2); transform: translateX(-50%); }
 .now b { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; background: var(--accent); color: var(--on-accent);
   padding: 1px 5px; border-radius: 4px; }
-.now::after { content: ''; position: absolute; left: 50%; top: 14px; width: 2px; height: 14px; background: var(--accent); transform: translateX(-50%); }
-/* The live "today" flag (last day of observed weather): smaller, quieter than the clock's own. */
-.now.asof-flag { top: -30px; white-space: nowrap; }
+.now::after { content: ''; position: absolute; left: 50%; top: 14px; width: 2px; height: 4px; background: var(--accent); transform: translateX(-50%); }
+/* The live "as of" flag (last day of observed weather): the same place as the clock's own, quieter. */
+.now.asof-flag { white-space: nowrap; }
 .now.asof-flag b { background: none; color: var(--accent); padding: 0; }
-.now.asof-flag::after { top: 13px; height: 12px; }
 
 #drawer { position: absolute; top: 0; right: 0; bottom: 0; width: var(--drawer-w); padding: 0 var(--gutter) 24px;
   background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; z-index: 5;
   overscroll-behavior: none; scroll-padding-top: 64px; /* keyboard focus lands below the sticky title bar */
-  transform: translateX(104%); transition: transform 0.22s ease; box-shadow: var(--shadow); }
-#drawer.open { transform: none; }
+  transform: translateX(104%); transition: transform 0.2s cubic-bezier(0.4, 0, 1, 1); box-shadow: var(--shadow); }
+/* Opens fast and lands softly; closes with a quick drop. */
+#drawer.open { transform: none; transition-duration: 0.28s; transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
 /* The title and close button stay put while the drawer scrolls under them. */
 .drawer-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center;
   margin: 0 calc(-1 * var(--gutter)); padding: 12px var(--gutter) 8px; background: var(--panel-solid); border-bottom: 1px solid transparent; }
@@ -252,7 +286,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .drawer-grip { display: none; }
 .drawer-head h2 { margin: 0; font-size: 18px; }
 .cav { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; }
-.cav.synthetic { border-color: var(--warn); background: var(--warn-bg); }
+.cav.synthetic { border-color: var(--warn); background: linear-gradient(var(--warn-bg), var(--warn-bg)), var(--panel-solid); }
 .cav h3 { margin: 8px 0 6px; font-size: 15px; }
 .cav ul { margin: 0; padding-left: 18px; } .cav li { margin: 6px 0; }
 
@@ -271,16 +305,18 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .layer { align-items: flex-start; flex-wrap: wrap; row-gap: 4px; }
   .layer .name { flex: 1 1 0; min-width: 0; font-size: 13px; }
   #floats { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
-  .legend-card { width: 100%; padding: 6px 10px; }
+  .legend-card { width: 100%; padding: 7px 10px; } /* 7px: room for the label's inner hairline */
   .lg-items { gap: 2px 10px; font-size: 12.5px; }
   .lg-title { display: none; } /* the swatch names say what they are; the drawer explains the colours */
   #probe { max-width: none; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
+  @media (max-width: 359px) { .brand { font-size: 0; } } /* smallest phones: the moth mark alone, so both menus stay readable */
   .bar-row { flex-wrap: wrap; gap: 8px 10px; }
   .date { font-size: 17px; order: 2; flex-basis: 100%; display: none; }
-  .date { display: block; order: 0; flex: 1; }
+  .date { display: block; order: 0; flex: 1; font-size: 18px; }
+  .date em { font-size: 16px; }
   /* Live mode: the paler track (and the slider's spoken date) already say a day is forecast; keep the date on one line. */
   .date small.fc { display: none; }
   .btns .icon-btn { min-width: 44px; }
@@ -295,6 +331,13 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 @media (max-width: 340px) {
   .brand { font-size: 16px; padding: 6px 8px; gap: 6px; }
+}
+
+/* Fingers: a thumb you can find and a full-height tap row. */
+@media (pointer: coarse) {
+  :root { --thumb: 28px; --hit: 44px; }
+  .track { margin-top: 0; }
+  #bar { min-height: 123px; }
 }
 
 /* Phones on their side: about 280-430px tall, often wider than 700px. Squeeze every panel into single rows. */
@@ -318,18 +361,20 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .lg-title { display: none; }
   .lg-items { font-size: 12.5px; gap: 2px 10px; }
   #probe { max-width: 50vw; max-height: 40vh; overflow-y: auto; font-size: 12px; padding: 6px 10px; }
-  #bar { display: flex; align-items: center; gap: 12px; padding-top: 6px; padding-bottom: 4px; }
+  #bar { display: flex; align-items: center; gap: 12px; padding-top: 6px; padding-bottom: 4px; min-height: 0; }
   .bar-row { flex: none; gap: 8px; }
   .btns .icon-btn { min-width: 40px; }
-  .date { font-size: 15px; white-space: nowrap; }
+  .date { font-size: 16px; white-space: nowrap; }
+  .date em { font-size: 15px; }
   .track { flex: 1; margin-top: 0; padding-bottom: 0; }
-  .track input[type=range] { height: 30px; }
+  :root { --hit: 30px; }
   .track .ticks { position: relative; bottom: auto; height: 16px; margin-top: -2px; }
   .now { top: -12px; } /* the "now" flag would poke up into the legend row; keep just its line */
   .now b { visibility: hidden; }
   #drawer { top: 0; height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
     padding-right: var(--gr); transform: translateX(104%); }
   .drawer-head { padding-top: 12px; touch-action: auto; margin-right: calc(-1 * var(--gr)); padding-right: var(--gr); }
+  .sheet { margin-right: calc(-1 * var(--gr)); padding-right: var(--gr); }
   .drawer-grip { display: none; }
   #drawer.open { transform: none; }
 }
@@ -366,10 +411,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 .ex-notice { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--ac); border-radius: var(--radius); font-size: 13px; }
 .ex-notice ul { margin: 4px 0 0; padding-left: 18px; } .ex-notice li { margin: 4px 0; }
-.ex-spot, .ex-score { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
+.ex-spot, .ex-score { padding: 10px 12px; }
 .ex-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
 .ex-place { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12.5px; color: var(--muted); }
-.ex-place select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
+.ex-place select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); padding: 4px 6px; }
 .spot-title, .ex-h { font-weight: 700; font-size: 14px; }
 .spot-say { margin: 2px 0 8px; }
 .spot-strip { position: relative; height: 14px; border-radius: 7px; overflow: hidden; background: var(--track-faint); }
@@ -379,16 +424,16 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .spot-strip .today { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--today); box-shadow: 0 0 0 1px var(--bg); }
 .spot-axis { position: relative; height: 17px; font-size: 12px; color: var(--muted); }
 .spot-axis span { position: absolute; top: 2px; padding-left: 2px; border-left: 1px solid var(--line); line-height: 1; }
-.bar-l { display: grid; grid-template-columns: 104px 1fr auto; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; }
+.bar-l { display: grid; grid-template-columns: 104px 1fr auto; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; line-height: 1.4; }
 .bar-l i { height: 10px; border-radius: 5px; background: var(--muted); }
 .bar-l i.best { background: var(--ac); }
 .bar-l b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ex-score p { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
-.ex-fine, details.credits { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 12px; }
+.ex-fine, details.credits { margin-top: 10px; padding: 0 12px; }
 .ex-fine summary, details.credits summary { cursor: pointer; padding: 10px 0; font-weight: 600; min-height: 24px; }
 .ex-fine ul, details.credits ul { margin: 0 0 10px; padding-left: 18px; font-size: 13px; }
 .ex-fine li, details.credits li { margin: 5px 0; }
-.spot-key { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.spot-key { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 4px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .spot-key i { display: inline-block; width: 2px; height: 11px; margin-right: 5px; vertical-align: -1px; border-radius: 1px; }
 .spot-key .k-tick { background: var(--text); box-shadow: 0 0 0 1px var(--panel-solid); }
 .spot-key .k-today { width: 3px; background: var(--today); }
@@ -402,15 +447,33 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 @keyframes hint { 50% { box-shadow: 0 0 0 7px var(--accent-glow); } }
 @media (prefers-reduced-motion: reduce) {
   .hint { animation: none; box-shadow: 0 0 0 2px var(--accent-glow); }
-  #drawer { transition: none; }
+  #drawer, #drawer.open { transition: none; }
 }
 
-/* Field Notebook touches: ruled lines in the About sheet, handwriting for the small asides. */
-#drawer { background-image: repeating-linear-gradient(transparent 0 27px, rgba(60, 90, 140, 0.09) 27px 28px); background-position: 0 6px; }
+/* Field Notebook touches: ruled lines in the About sheet, handwriting for the small asides.
+   The sheet's own text (the intro under the species name) sits on 24px lines over 24px rules, with a faint red margin
+   rule down the left. The rules are drawn on .sheet, which fills the drawer edge to edge and scrolls with the text. Not
+   background-attachment: local on the drawer: that stops Chromium scrolling it on the GPU, so every frame of the
+   sketches' animation repainted the whole sheet and slow phones dropped to a frame or two a second. */
+#drawer { line-height: 24px; }
+.sheet { box-sizing: border-box; min-height: 100%; margin: 0 calc(-1 * var(--gutter)) -24px; padding: 0 var(--gutter) 24px;
+  background: linear-gradient(90deg, transparent calc(var(--gutter) - 6px), rgba(166, 63, 25, 0.28) 0 calc(var(--gutter) - 5px), transparent 0),
+    repeating-linear-gradient(transparent 0 23px, rgba(60, 90, 140, 0.11) 23px 24px) 0 4px, var(--panel-solid); }
+/* The cards in it are plain index cards pasted onto the page: solid paper, so the rules stop at their edge and the
+   card text keeps its own, tighter lines. Square corners and a paper shadow. Each main card is held down by a strip of
+   washi tape over its top edge; the fold-open ones (fine print, credits) are not. */
+.ex-spot, .ex-score, .ex-fine, .cav { position: relative; background: var(--panel-solid); border: 1px solid var(--line);
+  border-radius: 2px; box-shadow: 1px 2px 0 rgba(60, 40, 20, 0.1), 0 6px 14px -8px rgba(60, 40, 20, 0.25); line-height: 1.45; }
+.ex-spot, .ex-score, .cav:not(.credits) { margin-top: 22px; padding-top: 14px; }
+.ex-spot::before, .ex-score::before, .cav:not(.credits)::before { content: ''; position: absolute; top: -12px; right: 28px;
+  width: 58px; height: 16px; background: rgba(214, 196, 150, 0.55); transform: rotate(3deg); pointer-events: none; }
+.ex-score::before { right: auto; left: 34px; transform: rotate(-2deg); }
 .drawer-head h2 { font-family: var(--font-display); font-size: 22px; }
 .brand small { font-family: var(--font-note); font-size: 18px; color: var(--moon); font-weight: 600; }
 #why { font-family: var(--font-note); font-size: 17px; text-decoration-style: wavy; text-underline-offset: 3px; }
 .now b { font-family: var(--font-note); font-size: 14px; line-height: 1; text-transform: none; font-weight: 600; }
+/* Three voices: Fraunces names things, Atkinson reads, Caveat is the hand in the margin. */
+.lg-title, .probe-title, .ex-name, .spot-title, .ex-h, .ex-steps b { font-family: var(--font-display); }
 
 /* Narrow phones: the live "as of" badge sits under the date, inside the buttons' height, so the time bar doesn't grow. */
 @media (max-width: 380px) {
@@ -424,7 +487,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 /* Place names over the map (map/labels.ts). Ink on a paper halo, so a name reads over any hexagon colour; water and
    forest names handwritten, like notes in the margin. Never takes a tap: the map underneath does. */
-.map-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.map-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .4s; }
+.map-labels.ready { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .map-labels { transition: none; } }
 .place { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; white-space: nowrap;
   color: var(--text); font: 400 12px/15px var(--font-body);
   /* A solid paper halo: eight 1.5px offsets fill the gaps a blur alone leaves on the dark peak green. */
@@ -435,6 +500,6 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .place.flip { flex-direction: row-reverse; }
 .place-city { font: 700 13px/16px var(--font-body); }
 .place-city::before { width: 5px; height: 5px; }
-.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #5a4d3c; }
+.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #776a55; }
 .place-water { font: 600 17px/18px var(--font-note); color: #2c5873; }
 .place-park { font: 600 16px/18px var(--font-note); color: #24542e; }

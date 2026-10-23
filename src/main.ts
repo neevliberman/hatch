@@ -3,6 +3,7 @@ import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { createFireflyLayer, loadFirefly } from './layers/fireflyReplay';
+import type { ReplayFile } from './layers/lunaData';
 import { data, firstBroodCount, LIVE, TYPICAL, type Mode } from './layers/lunaData';
 import { inSeason, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
@@ -11,6 +12,7 @@ import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { countdownParts } from './ui/countdown';
+import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 import { isForecast } from './core/layer';
@@ -123,7 +125,10 @@ function start() {
     time,
     padding,
     covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter')],
-    onMove: (moved) => ($('recenter').hidden = !moved),
+    onMove: (moved) => {
+      $('recenter').hidden = !moved;
+      document.querySelector('.brand')!.classList.toggle('over-map', moved);
+    },
     onView: () => {
       if (pinned) placeProbe();
       syncUrl(); // a shared link reopens the same place and zoom
@@ -131,8 +136,10 @@ function start() {
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
-        // A hex pinned from My area or the city menu has no picked object, so the cell alone decides.
-        const same = pinned && h !== null && hit !== null && h.cell === hit.cell && (!hit.picked || h.picked?.object === hit.picked.object);
+        // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
+        // landed on a neighbour (a point near a hex edge). A hex pinned from My area or the city menu has no picked
+        // object, so the cell alone decides.
+        const same = pinned && h !== null && hit !== null && (hit.picked ? h.picked?.object === hit.picked.object : h.cell === hit.cell);
         pinned = h !== null && !same;
         hit = pinned ? h : null;
         map.setMarker(null); // any tap replaces the "My area" pin
@@ -207,8 +214,9 @@ function start() {
         speciesSel.value = 'luna';
         return say('Couldn\u2019t load the fireflies. Try again later.');
       }
+      fireflyFile = file;
       const ffMode = picker.value === LIVE ? TYPICAL : picker.value;
-      const ff = createFireflyLayer(file, ffMode);
+      const ff = createFireflyLayer(file, ffMode, () => onLunaData());
       firefly = ff;
       registry.register(ff, replayTimeSpec(ffMode, 5, 10), false);
       fireflyCount = ff.seasonCount;
@@ -231,8 +239,7 @@ function start() {
     fillPicker();
     $('tagline').textContent = cur === luna ? 'when luna moths fly' : 'when fireflies glow';
     $('dots-what').textContent = cur === luna ? 'moths' : 'fireflies';
-    // The off-season countdown is worked out for luna moths; fireflies come out weeks later.
-    $('countdown').hidden = cur !== luna;
+    showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur === luna ? 'luna moth' : 'firefly'} sightings over hexagons colored by the forecast`);
     registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
@@ -242,8 +249,16 @@ function start() {
     syncUrl();
   };
   let fireflyCount = firstBroodCount;
+  let fireflyFile: ReplayFile | null = null;
   // The one-file preview has no firefly file next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
+  // On narrow phones both header menus can't show full names, so each species is listed by its first word ("Luna", "Monarch").
+  const narrow = matchMedia('(max-width: 430px)');
+  const shortNames = () => {
+    for (const o of speciesSel.options) o.text = narrow.matches ? (o.dataset.full ??= o.text).split(' ')[0]! : (o.dataset.full ?? o.text);
+  };
+  shortNames();
+  narrow.addEventListener('change', shortNames);
   speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value === 'firefly' ? 'firefly' : 'luna'));
   // Until a ?species=firefly link has loaded, the address bar keeps asking for the firefly.
   if (params.get('species') === 'firefly' && __BASEMAP__) {
@@ -366,6 +381,11 @@ function start() {
     if (phone.matches) toggleDrawer(false);
   });
 
+  // Find a town: the same path as the city menu above.
+  mountFinder($('find'), $('finder'), (lat, lng, name) => {
+    if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`);
+  }, say);
+
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
     if (!navigator.geolocation) return say('Location is not available in this browser');
@@ -402,11 +422,15 @@ function start() {
     );
   });
 
-  const [short, more] = countdownParts(clock);
-  const moreEl = document.createElement('span');
-  moreEl.className = 'more';
-  moreEl.textContent = more;
-  $('countdown').replaceChildren(short, moreEl);
+  // Each species has its own season: the firefly's starts weeks after the luna moth's. (?today= fakes the clock.)
+  function showCountdown() {
+    const [short, more] = cur === luna ? countdownParts(clock) : countdownParts(clock, 'firefly', fireflyFile!);
+    const moreEl = document.createElement('span');
+    moreEl.className = 'more';
+    moreEl.textContent = more;
+    $('countdown').replaceChildren(short, moreEl);
+  }
+  showCountdown();
 
   // First visit: the map comes first. The About button and Play glow briefly to show where the story and the
   // replay are; the panel itself opens only when asked (or with ?caveats).
@@ -461,7 +485,7 @@ function start() {
   });
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open')) return;
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !$('finder').hidden) return;
     const hadFocus = probeEl.contains(document.activeElement);
     unpin();
     if (hadFocus) $('t-range').focus({ preventScroll: true });
@@ -498,3 +522,8 @@ function start() {
 }
 
 start();
+
+// Offline + install to home screen: only the deployed build has a dist/sw.js, and only https (not file://, artifacts).
+if (__HATCH_SW__ && 'serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}

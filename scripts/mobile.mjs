@@ -94,8 +94,19 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       try {
         await page.locator(sel).tap({ timeout: 3000 });
         return true;
-      } catch {
-        fail(`could not tap ${sel}`);
+      } catch (e) {
+        // Software GL in CI can draw a frame or two a second, and Playwright waits for two quick identical frames
+        // before it taps. So check what a finger cares about instead: the target is visible and on top at its centre.
+        const onTop = await page.evaluate((s) => {
+          const el = document.querySelector(s);
+          const r = el?.getBoundingClientRect();
+          if (!r || !r.width || !r.height || el.disabled || getComputedStyle(el).visibility === 'hidden') return false;
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return !!hit && (hit === el || el.contains(hit));
+        }, sel).catch(() => false);
+        if (onTop && (await page.locator(sel).tap({ force: true, timeout: 3000 }).then(() => true, () => false))) return true;
+        // The last line of Playwright's log says why (hidden, or which element sits on top).
+        fail(`could not tap ${sel} (${String(e.message).trim().split('\n').pop().replace(/\x1b\[\d+m/g, '').trim()})`);
         return false;
       }
     };
@@ -153,6 +164,28 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     else if (await tap('#key-chip')) {
       if (!(await page.locator('#key-fold').isVisible())) fail('the Key chip did not open the colour key');
       else await tap('#key-fold');
+    }
+
+    // Find a town: the search button opens the name box; typing a town and picking it pins its card.
+    if (await tap('#find')) {
+      if (await page.locator('#find-q').isHidden()) fail('Find a town did not open its name box');
+      else {
+        await page.keyboard.press('Escape');
+        if (await page.locator('#finder').isVisible()) fail('Esc did not close the name box');
+        if ((await page.evaluate(() => document.activeElement?.id)) !== 'find') fail('Esc did not return focus to Find a town');
+        await tap('#find');
+        // Typing must not jump away mid-name; picking a suggestion (a replacement of the whole text) does.
+        await page.locator('#find-q').fill('Springfield');
+        await page.waitForTimeout(500);
+        if (await page.locator('#finder').isHidden()) fail('typing a name jumped away before it was picked');
+        await page.locator('#find-q').evaluate((el) => el.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', bubbles: true })));
+        await page.waitForTimeout(1000);
+        if (await page.locator('#finder').isVisible()) fail('picking a town did not close the name box');
+        if (!/Springfield/.test((await page.locator('#probe').textContent()) ?? '')) fail('Find a town showed no card for Springfield');
+        await shot('3b-find-town');
+        if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
+        if (await page.locator('#recenter').isVisible()) await tap('#recenter');
+      }
     }
 
     if (await tap('#locate')) {

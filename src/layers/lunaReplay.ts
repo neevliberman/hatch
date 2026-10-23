@@ -71,10 +71,7 @@ const bytesToQ = (days: Uint8Array, i: number) =>
   [0, 1, 2, 3, 4].map((k) => (days[i * 5 + k] === 255 ? null : days[i * 5 + k]! + 60));
 
 type RGBA = [number, number, number, number];
-// Forecast hexes live in blue (season coming) -> bright teal (peak) -> dusky violet (season gone), so the
-// north/south ends of the wave never share a colour. The moths themselves are the only moonlight green on the map.
-// Lightness climbs to the peak and falls after it (starting is brighter than winding down, over is darkest), and
-// "not yet" is near-empty, so the stages read in order even for colour-blind eyes.
+// Stage colours and why they read in order: see palette.stages in src/theme.ts.
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;
@@ -331,20 +328,25 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const i = cellIndex.get(cell);
     const f = (d: number) => fmtDoy(y, d);
     const asOf = f(dayOfYear(L.asOf));
-    const lines = [`${f(doy)}: ${STAGE_LABEL[stageAt(q, doy)]}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}.`];
+    const stage = stageAt(q, doy);
+    // Same shape as a replay card: the stage first, one answer line, the detail behind "More".
+    const title = `Luna moth: ${STAGE_LABEL[stage]} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`;
+    const lines: string[] = [];
+    const more: string[] = [];
     const lo = i === undefined ? null : L.lo[i]?.[2];
     const hi = i === undefined ? null : L.hi[i]?.[2];
     if (lo != null && hi != null) lines.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Peak likely about ${f(q[2])}.`);
+    if (!seen) lines.push('No lunas ever seen near here to check this against.');
     const out = i === undefined ? null : L.outNow[i];
     // Zeros are the empty state (early spring, or nothing banked yet): say nothing rather than "0% out".
-    if (out != null && out > 0) lines.push(`${Math.round(out)}% of the first wave out by ${asOf}.`);
+    if (out != null && out > 0) more.push(`${Math.round(out)}% of the first wave out by ${asOf}.`);
     const dd = i === undefined ? null : L.dd[i];
-    if (dd != null && dd > 0 && L.asOf >= Date.UTC(y, 2, 1)) lines.push(`${Math.round(dd).toLocaleString()} degree-days banked since Mar 1.`);
+    if (dd != null && dd > 0 && L.asOf >= Date.UTC(y, 2, 1)) more.push(`${Math.round(dd).toLocaleString()} degree-days banked since Mar 1.`);
     const n = shown.filter((s) => s.cell === cell).length;
-    if (n) lines.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
-    if (!seen) lines.push('No lunas ever seen near here: nothing to check against. Shown striped.');
-    return { title: `Luna moth, ${modeLabel(LIVE)}`, lines };
+    if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
+    more.push(`${modeLabel(LIVE)}: real weather to ${asOf}, then forecast.`);
+    return { title, swatch: css(STAGE_COLOR[stage]), lines, more };
   };
 
   return {
@@ -546,39 +548,45 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const q = at.q;
       const [q05, q25, q50, q75] = q;
       const stage = stageAt(q, doy);
-      const lines = [`Forecast for ${fmtDoy(year, doy)}: ${STAGE_LABEL[stage]}.`];
-      if (q05 != null && q50 != null && q25 != null && q75 != null)
-        lines.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      // One answer up front; the detail waits behind "More" (pinned cards only) so the card stays small over the map.
+      const label = STAGE_LABEL[stage];
+      const title = `Luna moth: ${label} on ${fmtDoy(year, doy)}`; // the species, as both layers can be on at once
+      const lines: string[] = [];
+      const more: string[] = [];
+      // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
+      // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
+      const pk = data.interval?.peak;
+      const likely = !!(pk && q50 != null && mode !== TYPICAL);
+      if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      if (!at.seen) lines.push('No lunas ever seen near here to check this against.');
+      if (q05 != null && q25 != null && q75 != null)
+        more.push(`First moths about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
       const band = bandOf(lngLat[1]);
-      const sc =
-        mode === TYPICAL
-          ? null
-          : data.scores.find((r) => r.band === band.label && r.year === year);
-      if (sc)
-        lines.push(
-          `Peak this year in this strip of the map (${band.label}°N): seen ${fmtDoy(year, sc.obs_peak)}, forecast ${fmtDoy(year, sc.heat_peak)}, usual date ${fmtDoy(year, sc.cal_peak)}.`,
+      const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
+      if (sc) {
+        const off = sc.heat_peak - sc.obs_peak;
+        more.push(
+          `How the forecast did in this strip of the map (${band.label}°N): moths peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+            (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
+            `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
+      }
       // Sightings are counted on the res-4 hexagon: a small one would almost always have none.
       const here = sightingsFor(mode).filter((s) => s.cell === at.parent);
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
       const firstDays = here.filter((s) => !(s.flags & SECOND_BROOD)).map(day).sort((a, b) => a - b);
       const median = firstDays.length % 2 ? firstDays[(firstDays.length - 1) / 2]! : (firstDays[firstDays.length / 2 - 1]! + firstDays[firstDays.length / 2]!) / 2;
       const where = fine ? 'the wider area (one zoomed-out hexagon)' : 'this hexagon';
-      lines.push(
+      more.push(
         here.length
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}` +
-              (firstDays.length ? `. Middle date of the first wave: ${fmtDoy(year, median)}.` : '.')
+              // A middle date of two or three sightings says little, so it waits for five.
+              (firstDays.length >= 5 ? `. Middle date of the first wave: ${fmtDoy(year, median)}.` : '.')
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
-      // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
-      // Last, so the short hover card (first lines only) and phone layouts keep their size; the pinned card shows it.
-      const pk = data.interval?.peak;
-      if (pk && q50 != null && mode !== TYPICAL)
-        lines.push(`Peak here likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      if (!at.seen) lines.push('No lunas ever seen near here, so there is nothing to check this forecast against. Shown striped.');
-      if (fine) lines.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
-      return { title: `Luna moth, ${modeLabel(mode)}`, lines };
+      if (fine) more.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
+      return { title, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
     caveats(): CaveatCard {
@@ -692,6 +700,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         { text: 'State outlines, town names and populations: US Census Bureau (outlines via us-atlas). Public domain.', href: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html' },
         { text: 'Lakes, rivers, highways and national parks: Natural Earth. Public domain.', href: 'https://www.naturalearthdata.com/' },
         { text: 'National forests: US Forest Service. Public domain.', href: 'https://data.fs.usda.gov/geodata/edw/datasets.php' },
+        { text: 'Woods: USGS National Land Cover Database 2021. Public domain.', href: 'https://www.mrlc.gov/' },
       ];
     },
   };

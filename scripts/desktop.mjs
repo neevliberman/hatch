@@ -36,7 +36,7 @@ const screens = [
 const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
-const TAB_ORDER = ['season', 'info-btn', 'why', 'locate', 'share', 't-prev', 't-play', 't-next', 't-range'];
+const TAB_ORDER = ['season', 'info-btn', 'why', 'locate', 'find', 'share', 't-prev', 't-play', 't-next', 't-range'];
 const problems = [];
 const browsers = {};
 for (const e of new Set(screens.map((s) => s[0]))) {
@@ -399,16 +399,15 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.waitForTimeout(600);
         if (await page.locator('#probe').isVisible()) {
           card = await page.locator('#probe').textContent();
-          if (/Luna moth, \d{4} (live|rerun)/.test(card)) break;
+          if (/Peak likely/.test(card)) break; // the live hex card's one answer line
           if (phone) await page.touchscreen.tap(...p); // a dot's card: let it go and try the next spot
           else await page.mouse.click(...p);
           await page.waitForTimeout(400);
           card = null;
         }
       }
-      if (!card) fail('no live hex card near the middle of the map');
+      if (!card) fail('no live hex card with "Peak likely" near the middle of the map');
       else {
-        if (!/Peak likely/.test(card)) fail(`hex card has no "Peak likely": ${card}`);
         if (!/out by/.test(card) || !/degree-days/.test(card)) fail(`hex card lacks "out by" or "degree-days": ${card}`);
         await shotL('2-card');
       }

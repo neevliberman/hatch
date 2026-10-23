@@ -19,6 +19,7 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 - **Hover or tap a hexagon** for its forecast: when the first moths show up and the busiest days.
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
 - **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
+- **Install it:** on a phone, *Share → Add to Home Screen* (iPhone) or *Install app* (Android) puts a hand-drawn moth on your home screen. After one visit it opens with no signal too.
 - **"How sure?"** is always on screen and opens the honest version: how far off the forecast is, and what it can't do yet.
 
 | Desktop | Phone |
@@ -87,7 +88,7 @@ flowchart LR
   N["National Weather Service"] --> A["Nightly forecast archive<br/>(GitHub Actions)"]
 ```
 
-- **Front end:** TypeScript, [deck.gl](https://deck.gl/) on WebGL, [H3](https://h3geo.org/) hexagons, Vite. No framework and no map tile server: state outlines are bundled, and lakes, rivers, highways, forests and town names come from two small self-hosted files, so the app makes no outside requests. Scrubbing the timeline changes one number on the graphics card (a shader setting) instead of re-sending 3,000 dots, so it stays smooth on phones.
+- **Front end:** TypeScript, [deck.gl](https://deck.gl/) on WebGL, [H3](https://h3geo.org/) hexagons, Vite. No framework and no map tile server: state outlines are bundled, and lakes, rivers, highways, forests, woods (as little tree marks) and town names come from three small self-hosted files, so the app makes no outside requests. Scrubbing the timeline changes one number on the graphics card (a shader setting) instead of re-sending 3,000 dots, so it stays smooth on phones.
 - **Model and data:** Python (NumPy, SciPy, pandas). The fitter is tested by planting known values in a fake Midwest and checking it finds them again.
 - **Testing:** every pull request runs Playwright smoke tests (quick checks that the app loads and works) on phone sizes (iPhone and Android, portrait and landscape) and desktop sizes in Chromium, Firefox and WebKit. They fail on any page error, a blank map, a covered or off-screen button, or a broken keyboard path. `npm run check` also enforces a size limit: the whole app, in one file, stays under 500 KB compressed.
 - **Accessibility:** text meets WCAG 2.1 AA contrast, map marks meet 3:1, everything works by keyboard, and the map has a screen-reader summary.
@@ -103,6 +104,8 @@ npm run dev          # http://localhost:5173
 npm run build        # type-check + dist/
 npm run build:single # one self-contained dist-single/index.html (opens with no network)
 npm run check        # both builds, bundle budget and all smoke tests
+npm run icons        # app icons + favicon PNGs from public/icons/moth.svg and public/favicon.svg
+npm run og           # the link-preview card, public/og.png (a real map screenshot)
 ```
 
 The Python side: `pip install -r notebooks/requirements.txt`, then see [pipeline/fit/README.md](pipeline/fit/README.md) and [pipeline/replay/README.md](pipeline/replay/README.md). [RUNBOOK.md](RUNBOOK.md) covers the screenshot tests and deploys.
@@ -113,7 +116,7 @@ The Python side: `pip install -r notebooks/requirements.txt`, then see [pipeline
 src/              the web app (core/ clock and hex grid, layers/ the luna layer, map/, ui/)
 pipeline/fit/     the model, its tests and the scored result
 pipeline/replay/  builds the forecast files the app reads
-pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests) from public-domain data
+pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
 pipeline/live/    nightly live forecast -> live/latest.json (PRISM + Open-Meteo + Daymet, frozen P3 fits)
 .github/workflows/live-forecast.yml  the nightly live job, 2 Mar-7 Oct
 notebooks/        the first prototype model (Jupyter notebook)
@@ -128,7 +131,10 @@ docs/             engineering notes and README media
 - **State outlines, town names and populations:** US Census Bureau (outlines via [us-atlas](https://github.com/topojson/us-atlas)). Public domain.
 - **Lakes, rivers, highways and national parks:** [Natural Earth](https://www.naturalearthdata.com/). Public domain.
 - **National forests:** [US Forest Service](https://data.fs.usda.gov/geodata/edw/datasets.php). Public domain.
+- **Woods (deciduous and mixed forest):** [USGS National Land Cover Database 2021](https://www.mrlc.gov/). Public domain.
 - **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
+
+**License:** the code is [MIT](LICENSE). The data keeps its own terms above. The sighting files (`src/data/luna-replay.json`, `public/firefly-replay.json`) mix CC0, CC BY and CC BY-NC records, so attribution and non-commercial terms apply to them. The fonts stay under the SIL Open Font License.
 
 ## Who made it
 
