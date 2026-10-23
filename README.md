@@ -126,6 +126,8 @@ docs/             engineering notes and README media
 - **National forests:** [US Forest Service](https://data.fs.usda.gov/geodata/edw/datasets.php). Public domain.
 - **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
 
+**License:** the code is [MIT](LICENSE). The data keeps its own terms above. The sighting files (`src/data/luna-replay.json`, `public/firefly-replay.json`) mix CC0, CC BY and CC BY-NC records, so attribution and non-commercial terms apply to them. The fonts stay under the SIL Open Font License.
+
 ## Who made it
 
 Neev Liberman, a mobile front-end engineer with a wet-lab genetics background. Hatch started as a way to put evolutionary biology, real data and an interactive map in one place.
