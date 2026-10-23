@@ -12,7 +12,7 @@ jobs:
   desktop:
     runs-on: ubuntu-latest
     # The apt mirror behind --with-deps sometimes crawls (10+ minutes); the tests themselves take about 3.
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,16 +22,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # The Ubuntu apt mirror sometimes stalls and the step would sit until the job's 30-minute limit: give each try 8
-      # minutes, and after a failed try (a mirror mid-sync fails fast) wait, refresh the package lists and try again.
+      # No timeout or retry around this: killing the installer leaves its apt-get running and holding the lock, so a
+      # retry only fails faster. A slow apt mirror is waited out under the job's limit instead.
       - run: |
-          # The runner image can still be running its own apt-get at start: wait for its lock instead of failing at once.
           echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-lock-wait
-          for i in 1 2 3; do
-            timeout 480 npx playwright install --with-deps chromium firefox webkit && exit 0
-            sleep 30; sudo apt-get update -q || true
-          done
-          exit 1
+          npx playwright install --with-deps chromium firefox webkit
       - run: npm run build:all   # dist/ too: the live-mode checks serve it over http
       - run: xvfb-run -a npm run desktop
       - if: always()
