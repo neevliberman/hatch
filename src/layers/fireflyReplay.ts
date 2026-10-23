@@ -13,6 +13,7 @@ import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
 import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
+import mark from '../marks/firefly.svg';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -170,7 +171,7 @@ export function createFireflyLayer(
   return {
     id: 'firefly-replay',
     title: 'Common eastern firefly',
-    words: { tagline: 'when fireflies glow', plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies' },
+    words: { tagline: 'when fireflies glow', plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies', mark },
     mode: () => mode,
     setMode(m) {
       mode = m;

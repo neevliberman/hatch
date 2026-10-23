@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- The luna moth for the header (24 px): heavy ink so it survives small sizes. -->
+  <defs>
+    <g id="h">
+      <path d="M262 186 C300 150 370 106 426 92 C448 88 452 112 444 140 C434 180 420 210 398 236 C352 252 302 242 264 222 Z" fill="#a9d47a" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
+      <path d="M264 226 C322 232 384 248 378 300 C372 342 334 360 320 400 C312 436 318 466 312 494 C298 470 296 424 290 380 C282 334 272 302 264 280 Z" fill="#a9d47a" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
+      <path d="M258 182 C300 146 370 102 428 88" fill="none" stroke="#7a3b4a" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="350" cy="292" r="26" fill="#e8b84a" stroke="#2b241c" stroke-width="12"/>
+    </g>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="#f8f2e3"/>
+  <g transform="translate(256 262) scale(.8) translate(-256 -291)">
+  <use href="#h"/>
+  <use href="#h" transform="translate(512 0) scale(-1 1)"/>
+  <ellipse cx="256" cy="230" rx="24" ry="74" fill="#2b241c"/>
+  </g>
+</svg>
