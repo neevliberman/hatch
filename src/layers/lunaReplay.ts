@@ -73,9 +73,9 @@ const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;
 // One object for every render, so deck.gl doesn't rebuild the pattern each playback frame.
-const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
+export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
 let stripeAtlas: HTMLCanvasElement | null = null;
-const stripes = () => {
+export const stripes = () => {
   if (stripeAtlas) return stripeAtlas;
   const c = Object.assign(document.createElement('canvas'), { width: 16, height: 16 });
   const g = c.getContext('2d')!;
