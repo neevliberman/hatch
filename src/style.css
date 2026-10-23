@@ -98,7 +98,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #why { margin-left: 4px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
   font-size: inherit; min-height: 24px; }
 #countdown { color: var(--muted); }
-#countdown:empty { display: none; }
+#countdown:empty, #countdown.off { display: none; }
 #actions { pointer-events: auto; position: relative; flex: none; display: flex; gap: 6px; }
 #actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; font-size: 12.5px; }
 #actions .icon-btn:disabled { opacity: 0.6; cursor: progress; }
@@ -206,9 +206,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 1px 5px; border-radius: 4px; }
 .now::after { content: ''; position: absolute; left: 50%; top: 14px; width: 2px; height: 14px; background: var(--accent); transform: translateX(-50%); }
 /* The live "today" flag (last day of observed weather): smaller, quieter than the clock's own. */
-.now.today { top: -30px; }
-.now.today b { background: none; color: var(--accent); padding: 0; }
-.now.today::after { top: 13px; height: 12px; }
+.now.asof-flag { top: -30px; white-space: nowrap; }
+.now.asof-flag b { background: none; color: var(--accent); padding: 0; }
+.now.asof-flag::after { top: 13px; height: 12px; }
 
 #drawer { position: absolute; top: 0; right: 0; bottom: 0; width: var(--drawer-w); padding: 0 var(--gutter) 24px;
   background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; z-index: 5;
@@ -251,6 +251,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .bar-row { flex-wrap: wrap; gap: 8px 10px; }
   .date { font-size: 17px; order: 2; flex-basis: 100%; display: none; }
   .date { display: block; order: 0; flex: 1; }
+  /* Live mode: the paler track (and the slider's spoken date) already say a day is forecast; keep the date on one line. */
+  .date small.fc { display: none; }
   .btns .icon-btn { min-width: 44px; }
   #drawer { top: auto; width: 100%; height: 70%; border-left: 0; border-top: 1px solid var(--line); transform: translateY(104%); border-radius: 16px 16px 0 0; }
   #drawer.open { transform: none; }
@@ -380,6 +382,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #why { font-family: var(--font-note); font-size: 17px; text-decoration-style: wavy; text-underline-offset: 3px; }
 .now b { font-family: var(--font-note); font-size: 14px; line-height: 1; text-transform: none; font-weight: 600; }
 
+/* Narrow phones: the live "as of" badge sits under the date, inside the buttons' height, so the time bar doesn't grow. */
+@media (max-width: 380px) {
+  .date { line-height: 1.1; }
+  .date .asof:not([hidden]) { display: block; width: max-content; margin: 3px 0 0; }
+}
 /* Smallest phones: keep the legend at three rows so the map keeps its height. */
 @media (max-width: 340px) {
   .lg-items { font-size: 12px; gap: 2px 8px; }

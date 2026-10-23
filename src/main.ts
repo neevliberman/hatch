@@ -3,7 +3,7 @@ import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive } from './layers/lunaReplay';
 import { data, firstBroodCount, LIVE, TYPICAL, type Mode } from './layers/lunaData';
-import { inSeason, loadLive } from './layers/liveData';
+import { inSeason, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
@@ -157,6 +157,9 @@ function start() {
   picker.value = initialMode;
   picker.title = `Season to replay (first-wave moths seen, in parentheses; ${firstBroodCount(TYPICAL).toLocaleString()} in all years)`;
   // Live mode opens on its last day of observed weather (or the day a link asks for); the others keep the calendar day.
+  let liveFile: Live | null = null;
+  // A ?season=live link opens on the default view until the file arrives: keep "season=live" in the address bar meanwhile.
+  let livePending = asked === LIVE;
   const switchMode = (m: Mode, at?: [number, number]) => {
     const now = new Date(time.cursor);
     luna.setMode(m);
@@ -166,6 +169,9 @@ function start() {
     $('season-name').textContent = modeLabel(m);
     at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
     registry.setTime(luna.id, replayTimeSpec(m, at?.[0], at?.[1], clock));
+    updateProbe(); // a card pinned in the old season describes that season: it went with the switch
+    // This season, live: "next real season ... days from now" would contradict the map.
+    $('countdown').classList.toggle('off', m === LIVE && !!liveFile && inSeason(liveFile, clock));
   };
   picker.addEventListener('change', () => switchMode(picker.value));
   $('season-name').textContent = modeLabel(initialMode);
@@ -206,7 +212,8 @@ function start() {
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
     q.delete('season');
-    if (picker.value === TYPICAL) q.delete('year');
+    if (livePending) (q.delete('year'), q.set('season', LIVE));
+    else if (picker.value === TYPICAL) q.delete('year');
     else if (picker.value === LIVE) (q.delete('year'), q.set('season', LIVE));
     else q.set('year', picker.value);
     // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
@@ -398,9 +405,11 @@ function start() {
   // when the link names no season or day, so shared links still open what they showed.
   const cursor0 = time.cursor;
   void loadLive().then((live) => {
+    livePending = false;
     // A placeholder file (written before the pipeline's first real run) only shows when a link asks for it.
-    if (!live || (live.stub && asked !== LIVE)) return;
+    if (!live || (live.stub && asked !== LIVE)) return syncUrl();
     setLive(live);
+    liveFile = live;
     picker.prepend(new Option(modeLabel(LIVE), LIVE));
     if (picker.value !== initialMode || time.cursor !== cursor0) return; // the user got there first: leave their choice
     const explicit = params.has('season') || params.has('year') || params.has('date');

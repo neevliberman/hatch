@@ -58,11 +58,11 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const parts = makeTicks(time.start, time.end).map(
       (k) => `<span class="tick" style="left:${(((k.at - time.start) / span) * 100).toFixed(2)}%"><i></i>${k.label}</span>`,
     );
-    // Live data: a "today" flag on the last day of observed weather, and a lighter track after it (the forecast part).
-    // It stands in for the clock's own "now" flag, which would sit a day later and say the same thing.
+    // Live data: an "as of" flag on the last day of observed weather, and a paler track after it (the forecast part).
+    // Data from before the track starts makes all of it forecast; data past its end, none.
     const a = time.asOf;
     const af = a && a.at >= time.start && a.at <= time.end ? (a.at - time.start) / span : null;
-    range.style.setProperty('--fc', af === null ? '100%' : `${(af * 100).toFixed(2)}%`);
+    range.style.setProperty('--fc', !a || a.at > time.end ? '100%' : af === null ? '0%' : `${(af * 100).toFixed(2)}%`);
     asOfEl.hidden = !a;
     asOfEl.classList.toggle('stale', !!a?.stale);
     if (a) {
@@ -71,9 +71,10 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
         ? `Weather observed up to ${md(a.at)}. Tonight's update looks late, so this may be out of date. Later days are forecast.`
         : `Weather observed up to ${md(a.at)}. Later days are forecast.`;
     }
-    const nf = a ? null : time.nowFraction;
+    // The clock's own "now" flag still shows, unless it would sit on top of the as-of flag (the usual night: as of yesterday).
+    const nf = a && Math.abs(time.now - a.at) <= 2 * 86_400_000 ? null : time.nowFraction;
     if (af !== null) {
-      parts.push(`<span class="now today" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>today</b></span>`);
+      parts.push(`<span class="now asof-flag" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>as of</b></span>`);
     }
     if (nf !== null) {
       parts.push(`<span class="now" style="left:${(nf * 100).toFixed(2)}%" title="Today"><b>now</b></span>`);

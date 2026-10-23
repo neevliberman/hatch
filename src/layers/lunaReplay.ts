@@ -129,8 +129,9 @@ export function replayTimeSpec(mode: Mode, month?: number, day?: number, now = D
   if (mode === LIVE && live) {
     const y = live.season;
     return {
-      // An early-spring file (as of March) still gets its today flag on the track.
-      start: Math.max(Date.UTC(y, 2, 1), Math.min(Date.UTC(y, 3, 1), live.asOf)),
+      // Same 1 Apr - 30 Sep as the replays: before April no hexagon has started, so a March start would open on an empty
+      // map. A file from before 1 Apr makes the whole track forecast (src/ui/scrubber.ts).
+      start: Date.UTC(y, 3, 1),
       end: Date.UTC(y, 8, 30),
       stepMs: TimeAxis.DAY,
       initial: month === undefined ? live.asOf : Date.UTC(y, month, day ?? 1),
@@ -160,10 +161,10 @@ function liveNotice(L: Live): { title: string; bullets: string[] } {
     title: `${L.season} ${L.backfill ? 'rerun' : 'live'}: how this forecast is made`,
     bullets: [
       ...(L.stub ? ['Sample data for testing the page, not a real forecast.'] : []),
-      ...(L.backfill ? [`Rebuilt after the season, on ${f(L.generated)}, the way the nightly forecast would have run. It is not being updated.`] : []),
+      ...(L.backfill ? [`Rebuilt after the season${Number.isFinite(L.generated) ? `, on ${f(L.generated)},` : ''} the way the nightly forecast would have run. It is not being updated.`] : []),
       `Real weather up to ${f(L.asOf)}${src(L.sources.observed)}, then the 7-day forecast${src(L.sources.forecast)}, then each past year\u2019s weather run forward from there${src(L.sources.after)}. Each past year gives one way the rest of the season could go.`,
       'The colours use the middle of those runs. "Peak likely" on a hexagon\u2019s card is their spread: wide early in spring, narrower as real weather comes in.',
-      `Days after ${f(L.asOf)} are forecast; the time bar is paler there.${L.backfill ? '' : ` The map updates every night, ${L.generated ? `last on ${f(L.generated)}` : 'when new weather arrives'}.`}`,
+      `Days after ${f(L.asOf)} are forecast; the time bar is paler there.${L.backfill ? '' : ` The map updates every night, ${Number.isFinite(L.generated) ? `last on ${f(L.generated)}` : 'when new weather arrives'}.`}`,
       `The model (${L.model.id}) is frozen for the season: this year\u2019s sightings are shown to check it, never used to tune it.`,
     ],
   };
@@ -334,11 +335,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     if (lo != null && hi != null) lines.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Peak likely about ${f(q[2])}.`);
     const out = i === undefined ? null : L.outNow[i];
-    if (out != null) lines.push(`${Math.round(out)}% of the first wave out by ${asOf}.`);
+    // Zeros are the empty state (early spring, or nothing banked yet): say nothing rather than "0% out".
+    if (out != null && out > 0) lines.push(`${Math.round(out)}% of the first wave out by ${asOf}.`);
     const dd = i === undefined ? null : L.dd[i];
-    if (dd != null) lines.push(`${Math.round(dd).toLocaleString()} degree-days banked since Mar 1.`);
+    if (dd != null && dd > 0 && L.asOf >= Date.UTC(y, 2, 1)) lines.push(`${Math.round(dd).toLocaleString()} degree-days banked since Mar 1.`);
     const n = shown.filter((s) => s.cell === cell).length;
-    lines.push(n ? `${n} sighting${n > 1 ? 's' : ''} here this season.` : 'No sightings here yet this season.');
+    if (n) lines.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
     if (!seen) lines.push('No lunas ever seen near here: nothing to check against. Shown striped.');
     return { title: `Luna moth, ${modeLabel(LIVE)}`, lines };
   };
@@ -572,7 +574,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           ? 'This year\u2019s map is a real forecast: it has to guess the weather ahead, so it is less sure than a replayed year, which knows every day\u2019s temperature.'
           : 'This is a look back. It uses the temperatures that actually happened. A forecast made during spring would have to guess the weather ahead, so it would be less accurate.',
         isLive()
-          ? `The dots are this season\u2019s photos of adult luna moths posted to iNaturalist so far (${shown.length.toLocaleString()} drawn). Each stays lit for ${GLOW_DAYS} days, about how long an adult lives.`
+          ? `The dots are this season\u2019s photos of adult luna moths posted to iNaturalist (${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}). Each stays lit for ${GLOW_DAYS} days, about how long an adult lives.`
           : `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of adult luna moths that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days, about how long an adult lives.`,
         'Amber dots are late moths counted as the second wave. Some may be late first wave moths from a cold year.',
         'Gray dots mean the photo\u2019s location was blurred or rough, so the dot may sit off its true spot.',

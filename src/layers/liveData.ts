@@ -65,8 +65,13 @@ export const inSeason = (live: Pick<Live, 'season'>, now: number) =>
   now >= Date.UTC(live.season, 2, 1) && now < Date.UTC(live.season, 8, 30) + DAY;
 
 /** The nightly run looks late: older than stale_after_hours, during the season. */
+/** The nightly run looks late (older than stale_after_hours), or runs but its observed weather stopped advancing
+ * (as_of more than 3 days back), during the season. A file rebuilt after the fact is never stale. */
 export const isStale = (live: Live, now: number) =>
-  !live.backfill && inSeason(live, now) && Number.isFinite(live.generated) && now - live.generated > live.staleAfterHours * 3_600_000;
+  !live.backfill &&
+  inSeason(live, now) &&
+  ((Number.isFinite(live.generated) && now - live.generated > live.staleAfterHours * 3_600_000) ||
+    Math.floor((now - live.asOf) / DAY) > 3);
 
 /** Turn the file into per-replay-cell arrays. Null when anything needed is missing or the wrong shape. */
 export function parseLive(f: LiveFile): Live | null {

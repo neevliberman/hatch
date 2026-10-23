@@ -302,6 +302,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const real = { ...stub, stub: false, backfill: false, as_of: `${stub.season}-06-10`, generated: `${stub.season}-06-11T06:00:00Z` };
   const late = { ...real, generated: `${stub.season}-06-08T06:00:00Z` };
   const placeholder = { ...real, stub: true };
+  // The first real night of a season can carry data only to 28 Feb: the whole track is forecast, the map still opens on April.
+  const early = { ...real, as_of: `${stub.season}-02-28`, generated: `${stub.season}-03-02T06:00:00Z` };
   const rerun = { ...late, backfill: true }; // rebuilt after the fact: old, but never "stale"
   const inSeason = `${stub.season}-06-11T12:00:00Z`;
   const browser = await pw.chromium.launch({
@@ -315,6 +317,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     ['shared link keeps its year', `?year=2021&noauto&today=${inSeason}`, real, 1440, 900, false],
     ['late file', `?noauto&today=${inSeason}`, late, 1440, 900, false],
     ['phone', `?noauto&today=${inSeason}`, real, 390, 844, true],
+    ['small phone', `?season=live&noauto&today=${inSeason}&date=06-20`, real, 320, 640, true],
+    ['early file', `?noauto&today=${stub.season}-03-02T12:00:00Z`, early, 1280, 720, false],
     ['rerun', `?noauto&today=${inSeason}`, rerun, 1280, 720, false],
     ['stub hidden', `?noauto&today=${inSeason}`, placeholder, 1280, 720, false],
     ['stub on request', '?season=live&noauto', placeholder, 1280, 720, false],
@@ -342,7 +346,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const wantOption = !['stub hidden', 'no file'].includes(label);
       if (wantOption !== hasLive) fail(hasLive ? 'offers live mode' : `no live option at the top of the season menu (${opts.slice(0, 2).join(' | ')})`);
       if (hasLive && !new RegExp(`^${stub.season} (live|rerun)`).test(opts[0][1])) fail(`live option reads "${opts[0][1]}"`);
-      const wantLive = ['in-season default', 'late file', 'phone', 'rerun', 'stub on request', 'file as built'].includes(label);
+      const wantLive = ['in-season default', 'late file', 'phone', 'small phone', 'early file', 'rerun', 'stub on request', 'file as built'].includes(label);
       if (wantLive !== (value === 'live')) fail(`season menu opened on ${value}`);
       if (label === 'shared link keeps its year' && value !== '2021') fail(`a ?year=2021 link opened on ${value}`);
       if (label === 'off-season pick' && hasLive) {
@@ -356,9 +360,23 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       }
       // Live: starts on the last observed day, flags it, says how fresh the data is.
       const asOfDate = new Date(Date.parse((served ?? stub).as_of)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      if (label === 'early file') {
+        if ((await page.locator('#t-range').evaluate((r) => r.style.getPropertyValue('--fc'))) !== '0%') fail('a file from before April does not make the whole track forecast');
+        if (await page.locator('#t-ticks .now.asof-flag').count()) fail('an "as of" flag off the start of the track');
+        if (!/^Apr 1,/.test(await page.locator('#t-date').textContent())) fail(`an early file opened on ${await page.locator('#t-date').textContent()}`);
+        await shotL('1-map');
+        await ctx.close();
+        console.log(`${tag}: checked`);
+        continue;
+      }
+      if (label === 'small phone') {
+        // The date and the badge (stacked here) stay within the buttons' height, so the time bar is no taller than on wider phones.
+        const [d, b] = await Promise.all(['.date', '.btns'].map((sel) => page.locator(sel).boundingBox()));
+        if (d.height > b.height + 1) fail(`the date and "as of" badge are ${Math.round(d.height)}px tall, taller than the ${Math.round(b.height)}px buttons`);
+      }
       if (!/date=/.test(query) && (await page.locator('#t-date').textContent()) !== asOfDate)
         fail(`scrubber opened on ${await page.locator('#t-date').textContent()}, not the as-of day ${asOfDate}`);
-      if (!(await page.locator('#t-ticks .now.today').count())) fail('no "today" flag on the scrubber');
+      if (!(await page.locator('#t-ticks .now.asof-flag').count())) fail('no "as of" flag on the scrubber');
       const badge = page.locator('#t-asof');
       if (!(await badge.isVisible())) fail('no "as of" badge');
       const stale = (await badge.getAttribute('class')).includes('stale');
