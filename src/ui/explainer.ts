@@ -57,7 +57,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
     <h3 class="ex-name">${esc(ex.name)} <i>${esc(ex.sci)}</i></h3>
     <p class="ex-hook">${esc(ex.hook)}</p>
     <figure class="ex-fig">${sketchStrip(id, ex, ex.steps.map((x) => `<b>${esc(x.title)}</b>${esc(x.text)}`))}</figure>
-    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> Close this panel first.</span></p>
+    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> Close this panel, then tap the map.</span></p>
       <label class="ex-place">Or pick a city <select data-place><option value="">Choose…</option>${CITIES.map(
         (c) => `<option value="${c.lat},${c.lng}">${esc(c.name)}</option>`,
       ).join('')}</select></label>

@@ -65,7 +65,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   background: var(--panel); color: var(--text); cursor: pointer; display: inline-grid; place-items: center;
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
 .icon-btn:hover { border-color: var(--line-strong); }
-.icon-btn:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.icon-btn:focus-visible, select:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
+  details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
 #info-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 20px; }
 
@@ -125,7 +126,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }
-.lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
 .lg-items li { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; flex: none; background: var(--c); }
 .sw.hex { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
@@ -137,6 +138,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .sw.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text); box-shadow: 0 0 0 2px var(--panel-solid); }
 .probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
 .cav.credits { font-size: 13px; color: var(--muted); }
+.cav.credits a { color: var(--moon); }
 .layer { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
   padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
 .layer .name { font-weight: 600; }
@@ -150,7 +152,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #floats { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 var(--gr) 10px var(--gl); }
 #legend, #probe { pointer-events: auto; }
 .legend-card { width: 260px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-.lg-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.lg-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
 .lg-ramp { height: 10px; border-radius: 5px; }
 .lg-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
 .lg-note { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 3px; }
@@ -183,7 +185,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ticks { position: relative; height: 22px; margin: 0 calc(var(--thumb) / 2); }
 .track .ticks { position: absolute; left: 0; right: 0; bottom: -20px; margin: 0 calc(var(--thumb) / 2); }
 .track { padding-bottom: 22px; }
-.tick { position: absolute; transform: translateX(0); font-size: 11px; color: var(--muted); }
+.tick { position: absolute; transform: translateX(0); font-size: 12px; line-height: 15px; color: var(--muted); }
 .tick i { position: absolute; left: 0; top: -5px; width: 1px; height: 5px; background: var(--muted); }
 .tick { padding-left: 3px; }
 .now { position: absolute; top: -34px; transform: translateX(-50%); }
@@ -223,7 +225,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .layer .name { flex: 1 1 0; min-width: 0; font-size: 13px; }
   #floats { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
   .legend-card { width: 100%; padding: 6px 10px; }
-  .lg-items { gap: 2px 10px; font-size: 11.5px; }
+  .lg-items { gap: 2px 10px; font-size: 12.5px; }
   .lg-title { display: none; } /* the swatch names say what they are; the drawer explains the colours */
   #probe { max-width: none; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
@@ -265,7 +267,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .legend-card { width: auto; max-width: min(640px, 70vw); padding: 5px 10px; }
   .lg-title { display: none; }
-  .lg-items { font-size: 11.5px; gap: 2px 10px; }
+  .lg-items { font-size: 12.5px; gap: 2px 10px; }
   #probe { max-width: 50vw; max-height: 40vh; overflow-y: auto; font-size: 12px; padding: 6px 10px; }
   #bar { display: flex; align-items: center; gap: 12px; padding-top: 6px; padding-bottom: 4px; }
   .bar-row { flex: none; gap: 8px; }
