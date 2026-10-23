@@ -54,6 +54,15 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #map { position: absolute; inset: 0; touch-action: none; background: var(--bg); }
 #no-webgl { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); margin: 0;
   padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
+/* On a slow phone the map's code takes a few seconds to arrive; until its canvas lands, say so instead of blank paper.
+   Pure CSS (the canvas ends :empty), and dropped when the no-WebGL message is showing instead. */
+#map:empty:not(:has(~ #no-webgl))::after { content: 'Unfolding the map…'; position: absolute; top: 40%; left: 0; right: 0;
+  text-align: center; font: 600 22px var(--font-note); color: var(--text); }
+/* A gentle pulse, never below ~5:1 against the water; none at all for people who asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  #map:empty:not(:has(~ #no-webgl))::after { animation: hatch-loading 1.6s ease-in-out infinite alternate; }
+}
+@keyframes hatch-loading { from { opacity: 0.7; } to { opacity: 1; } }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .muted { color: var(--muted); }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
@@ -66,7 +75,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
 .icon-btn:hover { border-color: var(--line-strong); }
 .icon-btn:focus-visible, select:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
-  details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details summary:focus-visible, .lg-fold:focus-visible, .lg-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
 #info-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 20px; }
 
@@ -82,6 +91,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #layers { pointer-events: none; min-width: 0; padding: 0 var(--gr) 8px var(--gl); }
 #layers[hidden] { display: none; }
 .season { margin-left: auto; min-width: 0; display: flex; }
+.species + .season { margin-left: 6px; }
+.species[hidden], #countdown[hidden] { display: none !important; }
+.species select { flex: none; }
 .season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line);
   padding: 0 10px; color: var(--text); }
 /* The caveat, countdown and two buttons live in a strip on top of the time bar, off the map. */
@@ -155,6 +167,24 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .lg-ramp { height: 10px; border-radius: 5px; }
 .lg-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
 .lg-note { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 3px; }
+.lg-fold, .lg-chip { display: none; }
+/* Under 1000px the key sits over the map: it can fold to a one-line chip (it folds itself after the first tap or Play). */
+@media (max-width: 999px) {
+  #legend .legend-card { position: relative; }
+  /* A small round badge on the card's top-left corner (the right one is under the recenter button), so it costs the
+     key no width (a row on the smallest phones). */
+  .lg-fold { display: grid; place-items: center; position: absolute; top: -12px; left: -6px; width: 28px; height: 28px; padding: 0;
+    border: 1px solid var(--line); background: var(--panel-solid); color: var(--muted); font-size: 18px; line-height: 1;
+    cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+  .lg-fold::before { content: ''; position: absolute; inset: -8px; } /* 44px to the finger, 28px to the eye */
+  #legend.folded .legend-card { display: none; }
+  #legend.folded .lg-chip { display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; font: inherit; font-size: 13px; font-weight: 700;
+    color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .lg-chip span { margin-left: 3px; }
+  #legend.folded .lg-chip { position: relative; }
+  .lg-chip::before { content: ''; position: absolute; inset: -4px; } /* 44px tall to the finger */
+}
 #probe { max-width: 300px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; }
 #probe[hidden] { display: none; }
 .probe-cell { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
@@ -301,18 +331,18 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-pane { display: block; width: 100%; height: auto; overflow: visible; }
 .ex-pane .pen { fill: var(--text); }
 .ex-pane .frame { fill: var(--line-strong); }
-.ex-pane .trail { fill: none; stroke: var(--muted); stroke-width: 0.9; stroke-linecap: round; stroke-dasharray: 0.4 3; }
 .ex-pane .wash { mix-blend-mode: multiply; }
 .ex-pane .wash.sun { fill: var(--sun); opacity: 0.4; }
 .ex-pane .wash.tan { fill: var(--wash-tan); opacity: 0.35; }
 .ex-pane .wash.leaf { fill: var(--wash-leaf); opacity: 0.55; }
-.ex-pane .wash.warn { fill: var(--warn); opacity: 0.35; }
 .ex-pane .note { font: 600 12px var(--font-note); fill: var(--text); }
 .ex-pane .note.small { font-size: 10.5px; fill: var(--muted); }
-.ex-pane .note.warn { font-size: 13px; fill: var(--warn); }
 .ex-pane .flap { animation: ex-flap 1.6s ease-in-out infinite alternate; }
+/* The cocoon stirs as the sun warms it. */
+.ex-pane .rock { animation: ex-rock 1.8s ease-in-out infinite alternate; }
+@keyframes ex-rock { 0%, 40% { transform: rotate(-3deg); } 100% { transform: rotate(4deg); } }
 @keyframes ex-flap { 0%, 60% { transform: scaleX(1); } 100% { transform: scaleX(0.75); } }
-@media (prefers-reduced-motion: reduce) { .ex-pane .flap { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ex-pane .flap, .ex-pane .rock { animation: none; } }
 
 .ex-spot, .ex-score { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
 .ex-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
@@ -364,3 +394,20 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 @media (max-width: 340px) {
   .lg-items { font-size: 12px; gap: 2px 8px; }
 }
+
+/* Place names over the map (map/labels.ts). Ink on a paper halo, so a name reads over any hexagon colour; water and
+   forest names handwritten, like notes in the margin. Never takes a tap: the map underneath does. */
+.map-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.place { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; white-space: nowrap;
+  color: var(--text); font: 400 12px/15px var(--font-body);
+  /* A solid paper halo: eight 1.5px offsets fill the gaps a blur alone leaves on the dark peak green. */
+  text-shadow: 1.5px 0 #f8f2e3, -1.5px 0 #f8f2e3, 0 1.5px #f8f2e3, 0 -1.5px #f8f2e3, 1px 1px #f8f2e3, -1px -1px #f8f2e3,
+    1px -1px #f8f2e3, -1px 1px #f8f2e3, 0 0 4px #f8f2e3; }
+.place-town::before, .place-city::before { content: ''; flex: none; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--text); box-shadow: 0 0 0 1.5px #f8f2e3; }
+.place.flip { flex-direction: row-reverse; }
+.place-city { font: 700 13px/16px var(--font-body); }
+.place-city::before { width: 5px; height: 5px; }
+.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #5a4d3c; }
+.place-water { font: 600 17px/18px var(--font-note); color: #2c5873; }
+.place-park { font: 600 16px/18px var(--font-note); color: #24542e; }

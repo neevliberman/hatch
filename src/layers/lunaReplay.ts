@@ -76,9 +76,9 @@ const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;
 // One object for every render, so deck.gl doesn't rebuild the pattern each playback frame.
-const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
+export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
 let stripeAtlas: HTMLCanvasElement | null = null;
-const stripes = () => {
+export const stripes = () => {
   if (stripeAtlas) return stripeAtlas;
   const c = Object.assign(document.createElement('canvas'), { width: 16, height: 16 });
   const g = c.getContext('2d')!;
@@ -224,6 +224,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     return { cell, q: forecast()[i] ?? [], seen: cells[i]!.seen, parent: cell };
   };
 
+  let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
+
   // The default spot until a hex is tapped: Chicago's western suburbs (the city's own hex centre is in the lake).
   const HOME: [number, number] = [-88.0, 41.9];
   const spotStory = (lngLat: [number, number] | null, t: number, name?: string): SpotStory | null => {
@@ -282,6 +284,17 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
+    points(t) {
+      // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
+      const key = `${dayOfYear(t)}|${mode}`;
+      if (lit.key !== key) {
+        const doy = dayOfYear(t);
+        const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
+        lit = { key, pts: shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).map((s) => [s.lng, s.lat]) };
+      }
+      return lit.pts;
+    },
+
     summary(t) {
       const doy = dayOfYear(t);
       const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
@@ -312,10 +325,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       };
       const fine = res > 4 ? shown5or6.get(res)! : null;
       const days = fine ? fineDaysLoaded.get(`${res}/${mode}`)! : null;
+      // Each level gets its own layer ids. Reusing one id across levels let deck.gl keep the bigger level's
+      // triangles after a zoom out: the old small hexagons stayed drawn in the gaps along the shores.
       const hexLayers = fine && days
         ? [
             new H3HexagonLayer<FineCell>({
-              id: 'luna-forecast',
+              id: `luna-forecast-r${res}`,
               data: fine.data,
               getHexagon: (c) => c.id,
               getFillColor: (c) => STAGE_COLOR[stageAtBytes(days, c.i, doy)],
@@ -333,7 +348,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               updateTriggers: { getFillColor: [doy, mode, res] },
             }),
             new H3HexagonLayer<FineCell, FillStyleExtensionProps<FineCell>>({
-              id: 'luna-unseen',
+              id: `luna-unseen-r${res}`,
               data: fine.unseen,
               getHexagon: (c) => c.id,
               getFillColor: STRIPES,
@@ -355,7 +370,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return [
         ...(hexLayers ?? [
         new H3HexagonLayer<(typeof cells)[number]>({
-          id: 'luna-forecast',
+          id: 'luna-forecast-r4',
           data: cells,
           getHexagon: (c) => c.id,
           getFillColor: (c) => cellColor(c.i, doy),
@@ -371,7 +386,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           updateTriggers: { getFillColor: [doy, mode] },
         }),
         new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
-          id: 'luna-unseen',
+          id: 'luna-unseen-r4',
           data: unseen,
           getHexagon: (c) => c.id,
           getFillColor: STRIPES,
@@ -536,8 +551,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how well it matches.',
         steps: [
           { title: 'Winter', text: 'All winter the moth sleeps as a cocoon in fallen leaves.' },
-          { title: 'Warm days add up', text: 'From March 1, every day warmer than 50\u00a0°F (10\u00a0°C) adds marks. Hotter days add more.' },
-          { title: 'Out they come', text: 'In past years, moths came out at about this many marks. So a warm spring means early moths.' },
+          { title: 'Warmth wakes it', text: 'From March 1, every day warmer than 50\u00a0°F (10\u00a0°C) adds a little warmth. Hotter days add more.' },
+          { title: 'Warm spring, early moths', text: 'Once it has had enough warmth, out it comes. A warm spring gets there sooner.' },
         ],
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
@@ -582,7 +597,9 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return [
         { text: 'Sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.', href: `https://www.inaturalist.org/taxa/${data.species.inat_taxon}` },
         { text: 'Temperatures: Daymet v4 daily 1 km, Thornton et al., ORNL DAAC.', href: 'https://daymet.ornl.gov/' },
-        { text: 'State outlines: US Census Bureau, via us-atlas.', href: 'https://github.com/topojson/us-atlas' },
+        { text: 'State outlines, town names and populations: US Census Bureau (outlines via us-atlas). Public domain.', href: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html' },
+        { text: 'Lakes, rivers, highways and national parks: Natural Earth. Public domain.', href: 'https://www.naturalearthdata.com/' },
+        { text: 'National forests: US Forest Service. Public domain.', href: 'https://data.fs.usda.gov/geodata/edw/datasets.php' },
       ];
     },
   };

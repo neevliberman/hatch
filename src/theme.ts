@@ -28,6 +28,8 @@ export const palette = {
   // non-text contrast bar (WCAG 1.4.11) whatever it sits on.
   moth: [226, 246, 150, 255] as RGBA,
   second: [200, 80, 20, 255] as RGBA,
+  // Firefly sightings: a warm glow yellow, so they never read as luna moths when the species switches.
+  firefly: [250, 204, 40, 255] as RGBA,
   // Three clear lightness steps, so the dot types differ without relying on hue: pale moth, orange second wave
   // (3.4:1 against both others), small solid-ink rough location.
   rough: INK,
@@ -36,6 +38,14 @@ export const palette = {
   dotShadow: [43, 36, 28, 40] as RGBA,
   marker: [140, 87, 12, 255] as RGBA,
   pick: INK,
+  // Map detail (map/basemap.ts): lakes in the water wash, rivers in blue ink on a paper casing, highways as paper
+  // lines, forest outlines in leaf-green ink.
+  water: [207, 220, 216, 255] as RGBA, // = bg
+  riverInk: [52, 96, 128, 235] as RGBA,
+  riverCase: [248, 242, 227, 170] as RGBA,
+  road: [248, 242, 227, 190] as RGBA, // paper lines, like roads left blank on a printed map
+  forest: [24, 64, 34, 210] as RGBA,
+  transparent: [0, 0, 0, 0] as RGBA,
 };
 
 /** Text colour for the species name and its marks in the About panel (the moth's own fill is too pale on paper). */

@@ -4,9 +4,11 @@ import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import type { Layer, PickingInfo } from '@deck.gl/core';
 import { latLngToCell } from 'h3-js';
 import { GRID_RES, MIDWEST_BOUNDS } from '../core/grid';
+import { isForecast, isHexes } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import type { TimeAxis } from '../core/timeAxis';
-import { basemapLayers, theme } from './basemap';
+import { basemapLabels, basemapLayers, loadBasemap, theme } from './basemap';
+import { createLabels } from './labels';
 import { palette } from '../theme';
 
 export interface ProbeHit {
@@ -61,9 +63,11 @@ interface Opts {
   onMove?: (moved: boolean) => void;
   /** Called after any pan or zoom has been drawn. */
   onView?: () => void;
+  /** Panels that float over the map, which place names keep clear of. */
+  covers?: () => Element[];
 }
 
-export function createMap({ container, registry, time, onProbe, padding, onMove, onView }: Opts): MapHandle {
+export function createMap({ container, registry, time, onProbe, padding, onMove, onView, covers }: Opts): MapHandle {
   // deck.gl 9 needs WebGL2. Without it (GPU blocklisted, hardware acceleration off) say so, instead of an empty map.
   const gl = document.createElement('canvas').getContext('webgl2');
   gl?.getExtension('WEBGL_lose_context')?.loseContext(); // only a test: give the context back
@@ -123,7 +127,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // A forecast hexagon is its own cell (res 4, 5 or 6 by zoom); anything else is placed on the res-4 grid.
     const id = (info.object as { id?: unknown }).id;
     return {
-      cell: info.layer?.id === 'luna-forecast' && typeof id === 'string' ? id : latLngToCell(lat, lng, GRID_RES),
+      cell: isForecast(info.layer?.id) && typeof id === 'string' ? id : latLngToCell(lat, lng, GRID_RES),
       lngLat: [lng, lat],
       picked: info.layer ? { layerId: info.layer.id, object: info.object } : undefined,
       px: [info.x, info.y],
@@ -160,13 +164,25 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       }
     },
     onHover: (info: PickingInfo) => {
-      overSighting = !!info.object && info.layer?.id !== 'luna-forecast';
+      overSighting = !!info.object && !isForecast(info.layer?.id);
       onProbe(hit(info), false);
     },
     // The canvas gets a Tab stop for deck's keyboard controls, which are off: drop it, so Tab goes straight to the controls.
     onLoad: (): void => deck.getCanvas()?.setAttribute('tabindex', '-1'),
     onClick: (info: PickingInfo) => onProbe(hit(info), true),
+    // Place names follow the drawn view (they skip the work when neither the view nor the dots changed).
+    onAfterRender: () =>
+      labels?.update(deck.isInitialized ? (deck.getViewports()[0] as WebMercatorViewport) : undefined, padding(),
+        registry.activeLayers().map((l) => l.points?.(time.cursor) ?? []), covers?.() ?? []),
   });
+
+  // The one-file build has no basemap files beside it (see basemap.ts), so it leaves the names code out entirely.
+  const labels = __BASEMAP__ ? createLabels(container) : null;
+  if (labels)
+    loadBasemap(initial.zoom, () => {
+      labels.setLabels(basemapLabels());
+      refresh();
+    });
 
   let marker: [number, number] | null = null;
   const markerLayers = (): Layer[] =>
@@ -207,9 +223,12 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       : [];
 
   const refresh = () => {
-    const { under, over } = basemapLayers();
+    const { under, mid, over } = basemapLayers(zoom);
     const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme }));
-    deck.setProps({ layers: [...under, ...dataLayers, ...over, ...pickedLayers(), ...markerLayers()] });
+    // Lakes, rivers and roads go over the hexagons but under the sighting dots.
+    const hexes = dataLayers.filter((l) => isHexes(l.id));
+    const rest = dataLayers.filter((l) => !isHexes(l.id));
+    deck.setProps({ layers: [...under, ...hexes, ...mid, ...rest, ...over, ...pickedLayers(), ...markerLayers()] });
   };
 
   const handle: MapHandle = {
