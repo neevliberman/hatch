@@ -606,6 +606,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         { text: 'State outlines, town names and populations: US Census Bureau (outlines via us-atlas). Public domain.', href: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html' },
         { text: 'Lakes, rivers, highways and national parks: Natural Earth. Public domain.', href: 'https://www.naturalearthdata.com/' },
         { text: 'National forests: US Forest Service. Public domain.', href: 'https://data.fs.usda.gov/geodata/edw/datasets.php' },
+        { text: 'Woods: USGS National Land Cover Database 2021. Public domain.', href: 'https://www.mrlc.gov/' },
       ];
     },
   };
