@@ -414,7 +414,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           lineWidthUnits: 'pixels',
           getLineWidth: 1.5,
           radiusUnits: 'pixels',
-          getRadius: 4,
+          getRadius: (s) => (s.flags & APPROXIMATE ? 3 : 4),
           pickable: false,
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
@@ -432,7 +432,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             ? 'Seen after late June or early July here, so counted as the second wave. The map does not forecast this wave.'
             : 'First wave of the year (the one the map forecasts).',
         ];
-        if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is hollow.');
+        if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is small and dark.');
         return {
           title: `Luna moth seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
           lines,

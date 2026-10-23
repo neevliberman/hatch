@@ -28,8 +28,9 @@ export const palette = {
   // non-text contrast bar (WCAG 1.4.11) whatever it sits on.
   moth: [226, 246, 150, 255] as RGBA,
   second: [200, 80, 20, 255] as RGBA,
-  // Rough locations are hollow (a paper fill inside the ink rim), so they differ from the others by shape, not only colour.
-  rough: [248, 242, 227, 255] as RGBA,
+  // Three clear lightness steps, so the dot types differ without relying on hue: pale moth, orange second wave
+  // (3.4:1 against both others), small solid-ink rough location.
+  rough: INK,
   dotRim: INK,
   dotHalo: [248, 242, 227, 255] as RGBA,
   dotShadow: [43, 36, 28, 40] as RGBA,
