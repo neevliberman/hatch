@@ -28,6 +28,8 @@ export const palette = {
   // non-text contrast bar (WCAG 1.4.11) whatever it sits on.
   moth: [226, 246, 150, 255] as RGBA,
   second: [200, 80, 20, 255] as RGBA,
+  // Firefly sightings: a warm glow yellow, so they never read as luna moths when the species switches.
+  firefly: [250, 204, 40, 255] as RGBA,
   // Three clear lightness steps, so the dot types differ without relying on hue: pale moth, orange second wave
   // (3.4:1 against both others), small solid-ink rough location.
   rough: INK,
