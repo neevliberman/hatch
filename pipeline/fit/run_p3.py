@@ -3,7 +3,10 @@
 
     python3 pipeline/fit/run_p3.py [--boot-refits 60] [--workers 4]
 
-Stages: (1) choose latitude vs daylength on IL/IN/OH leave-one-year-out log-likelihood;
+    python3 pipeline/fit/run_p3.py --model p31_flat --compare p3_photo p3_flat --out results/p3_1
+        (P3.1, FROZEN_P3.md amendment: a fixed model, no selection step; cached under p3_cache/p31_flat/)
+
+Stages: (1) choose latitude vs daylength on IL/IN/OH leave-one-year-out log-likelihood (skipped with --model);
 (2) leave-one-year-out across all states; (3) spatial holdout IL/IN/OH -> WI/MN;
 (4) bootstrap refits for parameter intervals; (5) scores, noise floor, bootstrap CIs, figures.
 """
@@ -62,6 +65,8 @@ def _cached(name, fn):
     import pickle
     CACHE.mkdir(parents=True, exist_ok=True)
     f = CACHE / f"{name}.pkl"
+    if "/" in name:
+        f.parent.mkdir(parents=True, exist_ok=True)
     if f.exists():
         print(f"[cache] {name}", flush=True)
         return pickle.loads(f.read_bytes())
@@ -102,35 +107,49 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--boot-refits", type=int, default=60)
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--model", help="fixed model (skip the lat-vs-photo selection), e.g. p31_flat")
+    ap.add_argument("--compare", nargs="*", default=None, help="with --model: other specs refit on the same folds")
+    ap.add_argument("--out", help="results folder (default results/), relative to pipeline/fit/")
     a = ap.parse_args()
+    global RESULTS, FIGS
+    if a.out:
+        RESULTS = HERE / a.out
+        FIGS = RESULTS / "figures"
     t0 = time.time()
-    RESULTS.mkdir(exist_ok=True)
-    FIGS.mkdir(exist_ok=True)
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    FIGS.mkdir(parents=True, exist_ok=True)
     _init()   # load once in the parent; forked workers share it
     years = [int(y) for y in CTX.years]
     pool = mp.get_context("fork").Pool(a.workers)
 
-    # ---- 1. choose lat vs photo (IL/IN/OH only, held-out log-likelihood)
-    sel = _cached("select", lambda: pool.map(_select, years))
-    ll = {n: sum(s["loglik"][n][0] for s in sel) for n in ("p3_lat", "p3_photo", "p3_flat")}
-    nrec = sum(s["loglik"]["p3_lat"][1] for s in sel)
-    chosen = max(("p3_lat", "p3_photo"), key=ll.get)
-    print(f"[select] held-out loglik/record lat {ll['p3_lat']/nrec:.4f} photo {ll["p3_photo"]/nrec:.4f} flat {ll["p3_flat"]/nrec:.4f} -> {chosen}",
-          flush=True)
-    names = [chosen] + [n for n in M.SPECS if n != chosen]
+    # ---- 1. choose lat vs photo (IL/IN/OH only, held-out log-likelihood); a fixed --model skips it
+    pre = ""
+    if a.model:
+        chosen, ll, nrec = a.model, None, None
+        pre = f"{chosen}/"
+        names = [chosen] + [n for n in (a.compare or []) if n != chosen]
+        print(f"[fixed] {chosen}, comparing {names[1:]}", flush=True)
+    else:
+        sel = _cached("select", lambda: pool.map(_select, years))
+        ll = {n: sum(s["loglik"][n][0] for s in sel) for n in ("p3_lat", "p3_photo", "p3_flat")}
+        nrec = sum(s["loglik"]["p3_lat"][1] for s in sel)
+        chosen = max(("p3_lat", "p3_photo"), key=ll.get)
+        print(f"[select] held-out loglik/record lat {ll['p3_lat']/nrec:.4f} photo {ll["p3_photo"]/nrec:.4f} flat {ll["p3_flat"]/nrec:.4f} -> {chosen}",
+              flush=True)
+        names = [chosen] + [n for n in M.SPECS if n != chosen and not M.SPECS[n].positive]
 
     # ---- 2. LOYO, all states; 3. spatial holdout
     def _fits():
         hold_async = pool.apply_async(_holdout, (names,))
         loyo = pool.map(_loyo, [(y, names) for y in years])
         return loyo, hold_async.get()
-    loyo, hold = _cached("folds", _fits)
+    loyo, hold = _cached(pre + "folds", _fits)
     print(f"[fits] done {time.time()-t0:.0f}s", flush=True)
 
     # ---- 4. bootstrap refits (parameter intervals)
-    full = _cached("full_fit", lambda: _full_fit(chosen))
+    full = _cached(pre + "full_fit", lambda: _full_fit(chosen))
     start = {k: v for k, v in full["params"].items() if k != "u"}
-    boots = _cached(f"boots{a.boot_refits}", lambda: pool.map(
+    boots = _cached(f"{pre}boots{a.boot_refits}", lambda: pool.map(
         _boot, [(k, s, chosen, start) for k in ("years", "observers") for s in range(a.boot_refits)]))
     pool.close()
 
@@ -142,7 +161,8 @@ def main():
     tab = EV.mae_table(d, models)
     nf, floor = EV.noise_floor(d, recs)
     ci = EV.bootstrap(d, recs, models, ref=chosen)
-    bias = EV.bias_by_band(d, [chosen, "p1"])
+    bias_models = [chosen, "p1"] + ([n for n in names[1:]] if a.model else [])
+    bias = EV.bias_by_band(d, bias_models)
 
     hmodels = names + ["p1", "cal", "cal_lat"]
     hd = EV.errors(hold["rows"], hmodels)
@@ -161,16 +181,18 @@ def main():
                 for r in t.itertuples()}
 
     headline = {
-        "chosen": chosen, "selection_loglik_per_record": {k: v / nrec for k, v in ll.items()},
+        "chosen": chosen,
+        "selection_loglik_per_record": ({k: v / nrec for k, v in ll.items()} if ll else "none: fixed model (P3.1 amendment)"),
         "selection_records": nrec,
         "loyo": {"band_years": int(len(d)), "mae": rec_tab(tab), "ci": ci, "noise_floor": floor},
         "holdout": {"band_years": int(len(hd)), "mae": rec_tab(htab), "ci": hci, "noise_floor": hfloor,
                     "cuts_train": hold["cuts_train"]},
         "bias_by_band": {m: {b: {"onset": round(float(bias[m].loc[b, "onset"]), 2),
                                  "peak": round(float(bias[m].loc[b, "peak"]), 2)} for b in bias.index}
-                         for m in (chosen, "p1")},
+                         for m in bias_models},
         "loyo_residual_q10_q90": resid,
         "param_intervals": pci,
+        "boot_refits_at_mu0_lower_bound": int((bt["mu0"] <= M.bounds_for("mu0", M.SPECS[chosen])[0] + 1e-6).sum()),
         "holdout_params": hold["fits"],
         "all_data_fit": full,
         "seconds": round(time.time() - t0),

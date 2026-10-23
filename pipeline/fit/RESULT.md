@@ -1,3 +1,45 @@
+# P3.1 result: no daylength term, warmth targets at or above zero (2026-10-22)
+
+**Outcome (2026-10-23): not adopted. The map stays on P3.** P3.1 tied P3 on past years and passed the WI/MN holdout as a second look. But on the 2026 season, the one test neither model had seen, it did clearly worse. As of 30 Sep, its sighting-weighted strip miss was 4.4-6.9 days against P3's 2.1-3.1 (the range is over three ways of summarising; see [DRYRUN_2026.md](../live/DRYRUN_2026.md)). It ran early in the south and late in the north. That is the lean the daylength term removes. It is one season and a rough check. Still, it is the only fresh evidence, so the pre-registered pick stays on the map. This overrides the amendment's own rule (on a tie, P3.1 goes on the map) using a check that was not written down in advance, and whose three summaries were chosen after seeing the results. Everything below is kept as the record.
+
+**Verdict at the time (2026-10-22).**
+- **Ties P3 on leave-one-year-out.** P3.1 is 3.77 days off on average, P3 (daylength) 3.85. The difference is noise (P3 minus P3.1: +0.05, 95% CI −0.23 to +0.33).
+- **Still beats the calendar clearly** (7.31 d; better by 2.9, CI 0.9 to 5.0) and **ties P1** (4.05 d; CI −0.5 to +1.0).
+- **Spatial holdout (learn IL/IN/OH, guess WI/MN): passes, but as a second look.** 5.1 days, against P1 6.3 (clearly better, CI 0.3 to 2.1), the latitude-slid calendar 10.7, and WI/MN's own calendar 6.9 (better, but the CI −0.9 to +4.7 includes zero). P3.1 was chosen *after* P3 failed this test and p3_flat scored 5.1 on it, so this is not a confirmation. Only 2026 can confirm it.
+- **Targets stay above zero.** Location and skew are now bounded at ≥ 0 ([FROZEN_P3.md](FROZEN_P3.md), amendment). In every fold the bound is inactive (location 62-70 DD). But 9 of 120 bootstrap refits still went to a wide curve, now pinned at 0 instead of −500, with a median target of 400-470 DD. A full multi-start refit of those 9 found nothing better. So some resamples really do prefer that shape. They are kept in the ranges below.
+
+| Leave-one-year-out (31 band-years) | Onset | Peak | Average |
+|---|---|---|---|
+| Calendar for that band | 7.9 d | 6.7 d | 7.31 d |
+| P1 model | 3.9 d | 4.2 d | 4.05 d |
+| P3 (daylength, the first pick) | 4.0 d | 3.7 d | 3.85 d |
+| **P3.1** | **3.7 d** | **3.9 d** | **3.77 d** |
+
+| Spatial holdout (8 WI/MN band-years) | Onset | Peak | Average |
+|---|---|---|---|
+| WI/MN's own calendar | 6.9 d | 7.0 d | 6.92 d |
+| IL/IN/OH calendar slid north | 12.0 d | 9.4 d | 10.71 d |
+| P1 model | 5.3 d | 7.2 d | 6.26 d |
+| P3 (daylength) | 4.6 d | 10.2 d | 7.38 d |
+| **P3.1 (second look)** | **6.0 d** | **4.2 d** | **5.08 d** |
+
+**Bias by band** (mean forecast − real peak, days; below 0 = too early):
+
+| Band | 37-39 °N | 39-41 | 41-43 | 43-45 | 45-49 °N |
+|---|---|---|---|---|---|
+| P1 / P2 map | −6.1 | −3.4 | −0.6 | +1.7 | +3.9 |
+| P3 (daylength) | +0.5 | +1.8 | +2.2 | +3.0 | +1.2 |
+| P3.1 | −1.1 | +1.4 | +2.4 | +3.7 | +2.9 |
+
+The south/north bias shrank compared with P1 at both ends (the frozen rule). P3.1 leans late in the north more than P3 did (+2.9 vs +1.2 d at 45-49 °N). Its onset there runs 3.8 days early. Noise floor: 3.0 d (holdout 2.3 d).
+
+- **Median warmth target:** 206 DD (95%: 197-449 resampling years, 197-446 resampling observers, with the 9 wide fits; 197-217 without them). The lower edge of the curve sits near 53 DD.
+- **p3_flat vs P3.1.** Same model except the bounds. P3.1 scored 3.77, p3_flat 3.81: the bound never binds in a fold, but clipping the starting point into the bounds moved some folds to a slightly different optimum (difference CI −0.06 to +0.06).
+- **The map moved little.** Hex dates changed by 0.7 days on average (5-95%: −1 to +2 days, at most 6). The typical-year peak moved about 1 day earlier in the far south and 1 day later in the far north. The 80% window is now peak −6 to +5 days, onset −5 to +6.
+- Numbers: `results/p3_1/headline.json`. Figures: [bias](results/p3_1/figures/bias_by_band.png), [predicted vs real](results/p3_1/figures/predicted_vs_real.png). P3's run of record (run 2, the map's model) is in `results/` and `figures/`, run 1 in `results/run1_as_preregistered/`.
+
+---
+
 # P3 result: the fit (2026-10-22)
 
 **Verdict.**
@@ -38,7 +80,8 @@ Rules were written down before scoring: [FROZEN_P3.md](FROZEN_P3.md). How the mo
 | Band | 37-39 °N | 39-41 | 41-43 | 43-45 | 45-49 °N |
 |---|---|---|---|---|---|
 | P1 / P2 map | −6.1 | −3.4 | −0.6 | +1.7 | +3.9 |
-| P3 | +0.5 | +1.8 | +2.2 | +3.0 | +1.2 |
+| P3 (run 2) | +0.5 | +1.8 | +2.2 | +3.0 | +1.2 |
+| P3.1 (not adopted) | −1.1 | +1.4 | +2.4 | +3.7 | +2.9 |
 
 ![bias](figures/bias_by_band.png)
 ![predicted vs real](figures/predicted_vs_real.png)
@@ -53,7 +96,7 @@ Rules were written down before scoring: [FROZEN_P3.md](FROZEN_P3.md). How the mo
   In the hot south a week of flying banks far more warmth than in the north. That is the likely reason southern sightings "show" more saved-up warmth. The model without any latitude term shrinks the bias too (−1.1 d south, +2.8 d north), so the moths don't seem to need different targets.
 - **Daylength / latitude.** The daylength version won the pre-registered choice on IL/IN/OH by a hair, in likelihood terms. It doesn't forecast dates any better than leaving the term out. Fitted on IL/IN/OH alone, its daylength effect flips sign (γ = −1.9, against +0.66 in the all-states fit). Carried north into Minnesota, that pushed the peak about 10 days late. That is why the holdout failed. Like a ruler calibrated on three states, it bends when you carry it north.
 - **Two runs, both reported.** Run 1 (as pre-registered) found a poor local optimum in some fits. Fixing the optimiser changed the result to the one shown here (the change log has details). Run 1 scored 4.27 d leave-one-year-out and 9.8 d in the holdout. The fix came after seeing run 1, so treat run 2's holdout as a second look, not a first.
-- **The map** now uses P3's leave-one-year-out forecast. Each year comes from a fit that never saw it. Each hex shows when its expected *sightings* happen, the quantity that was scored. Without the effort shape and the cut-off, the hidden "moths flying" curve runs up to two weeks earlier in the south, and nothing in the data can check it. It also carries an 80% band from past errors: peak −6 to +4 days, onset −5 to +6.
+- **The map** used P3's leave-one-year-out forecast (P3.1's since the amendment above). Each year comes from a fit that never saw it. Each hex shows when its expected *sightings* happen, the quantity that was scored. Without the effort shape and the cut-off, the hidden "moths flying" curve runs up to two weeks earlier in the south, and nothing in the data can check it. It also carries an 80% band from past errors: peak −6 to +4 days, onset −5 to +6.
 
 ## What's still unproven
 - **A season the model has never seen.** 2026 is the real test, once Daymet 2026 is out (around mid-2027).
@@ -69,6 +112,6 @@ Rules were written down before scoring: [FROZEN_P3.md](FROZEN_P3.md). How the mo
 ## Parameter intervals (bootstrap refits, 60 over years and 60 over observers)
 - Median warmth target: about 220 degree-days (95%: 200-238 resampling years, 185-252 resampling observers).
 - Daylength exponent γ: 0.55 (−0.42 to 0.93 over years; −0.94 to 1.37 over observers). It is consistent with zero.
-- 11 of 120 refits went to a degenerate fit and are left out of those ranges. They are kept in `results/bootstrap_refits.csv`. (Note that `headline.json` `param_intervals` still includes them, so its ranges differ from these.) Review found what they are: the curve's location parameter stuck at its −500 bound with a median target near −225 degree-days. Nothing in the likelihood keeps targets above zero, because the curve is renormalised per place-year. All 11 have γ < 0, so leaving them out is not neutral. Fix for P4: bound targets at ≥ 0 (or condition the curve on target > 0) and refit.
+- 11 of 120 refits went to a degenerate fit and are left out of those ranges. They are kept in `results/bootstrap_refits.csv`. (Note that its `headline.json` `param_intervals` still includes them, so its ranges differ from these.) Review found what they are: the curve's location parameter stuck at its −500 bound with a median target near −225 degree-days. Nothing in the likelihood keeps targets above zero, because the curve is renormalised per place-year. All 11 have γ < 0, so leaving them out is not neutral. P3.1 (above) bounds them, but was not adopted.
 - `headline.json` `mae_ci` (resampling observers) does not contain the point estimates, because resampling also adds noise to the targets. Don't quote it. Use the CIs in the tables above.
 - Two places where held-out data touches the method, both small: (1) the daylength-vs-latitude choice used IL/IN/OH likelihoods from all 11 years, so the LOYO score of the chosen model isn't strictly nested (3.86 vs 3.85 d either way). (2) In the holdout, the WI/MN brood cut-offs, hex weights and effort shape come from WI/MN's other years (for P1 too). "Never sees a WI/MN record" holds for fitting only.

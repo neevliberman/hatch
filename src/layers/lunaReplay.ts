@@ -32,6 +32,10 @@ export const GLOW_DAYS = 10;
  */
 export const FINE_ZOOM: Record<number, number> = { 5: 6.4, 6: 7.9 };
 const HYSTERESIS = 0.3;
+/** Spatial holdout (learn IL/IN/OH, test WI/MN): only claimed when the shipped model's own numbers show a pass. */
+const hoHeat = data.model?.holdout_mae?.heat;
+const hoCal = data.model?.holdout_mae?.cal;
+const holdoutPass = Number.isFinite(hoHeat) && Number.isFinite(hoCal) && hoHeat! < hoCal!;
 /** Year used to put dates on the "typical year" axis. Any non-leap year works. */
 const TYPICAL_AXIS_YEAR = 2025;
 
@@ -685,7 +689,15 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         isLive()
           ? `This year, a hexagon\u2019s "peak likely" window is the middle 8 in 10 of the weather runs. It leaves out the model\u2019s own misses (about ${Math.round(data.model?.loyo_mae.heat ?? 4)} days on past years), so the real peak can fall outside it.`
           : `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
-        `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${data.model?.holdout_mae.heat.toFixed(1) ?? '7.4'} days off on average, against ${data.model?.holdout_mae.cal.toFixed(1) ?? '6.9'} for their own usual dates, over just 8 strip-years). So it is not ready for places it has never seen.`,
+        ...(holdoutPass
+          ? [
+              `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota about ${Math.round(hoHeat!)} days off. Their own usual dates were about ${Math.round(hoCal!)} days off. That gap is small enough that it could be chance. We also chose this version after seeing that test, so it is a second look, not proof. The version we picked first failed it.`,
+            ]
+          : Number.isFinite(hoHeat) && Number.isFinite(hoCal)
+            ? [
+                `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${hoHeat!.toFixed(1)} days off on average, against ${hoCal!.toFixed(1)} for their own usual dates, over just 8 strip-years). So it is not ready for places it has never seen.`,
+              ]
+            : []),
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
         'This version is about as accurate as the last one, with much less south/north lean. Both beat each area\u2019s usual date.',
       ];
@@ -729,7 +741,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
                 (isLive() ? 'Those replays knew the real weather; this year\u2019s forecast has to guess the weeks ahead, so expect it to be off by more early in spring. ' : '') +
                 (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'Not proven yet. It does well on years it was not trained on. But trained without Wisconsin and Minnesota, it did worse there than a guess from past years. The real test is the 2026 season, once its weather data is out in mid-2027.',
+            'Not proven yet. It does well on years it was not trained on. ' +
+            (holdoutPass
+              ? 'It also did well on states it never saw (Wisconsin and Minnesota), but we chose it after seeing that test. '
+              : 'But trained without Wisconsin and Minnesota, it did worse there than a guess from past years. ') +
+            'The real test is the 2026 season, once its weather data is out in mid-2027.',
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
