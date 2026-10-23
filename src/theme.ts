@@ -10,8 +10,9 @@ export const palette = {
   land: [248, 242, 227, 255] as RGBA, // the seven forecast states
   landOuter: [236, 228, 210, 255] as RGBA,
   neighbourLine: [90, 70, 45, 60] as RGBA,
-  stateLine: [80, 60, 38, 170] as RGBA,
+  stateLine: INK, // full ink so the borders still clear 3:1 over the dark peak green
   hexEdge: [70, 52, 30, 26] as RGBA,
+  hoverTint: [43, 36, 28, 40] as RGBA, // an ink wash, visible on the pale hexes too
   // Lightness climbs to the peak and falls after it (pale sage -> deep leaf -> ochre -> faded brown), and "not yet"
   // is near-empty, so the stages read in order even for colour-blind eyes.
   stages: {
@@ -21,17 +22,18 @@ export const palette = {
     'winding down': [196, 140, 56, 220] as RGBA,
     over: [168, 150, 132, 170] as RGBA,
   },
-  stripes: [60, 45, 25, 110] as RGBA,
+  stripes: [43, 36, 28, 220] as RGBA, // dense ink hatching: at least 3.3:1 against every stage, peak included
   // Sightings are drawn as a marker in three rings: pale fill, ink rim, paper halo. The ink rim gives at least 4:1
-  // against every light hex and the paper halo 3.5:1 against the dark peak green, so a dot always clears the 3:1
+  // against every light hex and the paper halo 3.4:1 against the dark peak green, so a dot always clears the 3:1
   // non-text contrast bar (WCAG 1.4.11) whatever it sits on.
   moth: [226, 246, 150, 255] as RGBA,
-  second: [232, 126, 52, 255] as RGBA,
-  rough: [150, 142, 128, 255] as RGBA,
+  second: [200, 80, 20, 255] as RGBA,
+  // Rough locations are hollow (a paper fill inside the ink rim), so they differ from the others by shape, not only colour.
+  rough: [248, 242, 227, 255] as RGBA,
   dotRim: INK,
-  dotHalo: [248, 242, 227, 235] as RGBA,
+  dotHalo: [248, 242, 227, 255] as RGBA,
   dotShadow: [43, 36, 28, 40] as RGBA,
-  marker: [156, 98, 16, 255] as RGBA,
+  marker: [140, 87, 12, 255] as RGBA,
   pick: INK,
 };
 

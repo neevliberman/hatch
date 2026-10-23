@@ -320,7 +320,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               lineWidthMinPixels: 0.4,
               pickable: true,
               autoHighlight: true,
-              highlightColor: [255, 255, 255, 50],
+              highlightColor: palette.hoverTint,
               updateTriggers: { getFillColor: [doy, mode, res] },
             }),
             new H3HexagonLayer<FineCell, FillStyleExtensionProps<FineCell>>({
@@ -358,7 +358,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           lineWidthMinPixels: 0.6,
           pickable: true,
           autoHighlight: true,
-          highlightColor: [255, 255, 255, 50],
+          highlightColor: palette.hoverTint,
           updateTriggers: { getFillColor: [doy, mode] },
         }),
         new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
@@ -432,7 +432,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             ? 'Seen after late June or early July here, so counted as the second wave. The map does not forecast this wave.'
             : 'First wave of the year (the one the map forecasts).',
         ];
-        if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is gray.');
+        if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is hollow.');
         return {
           title: `Luna moth seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
           lines,

@@ -9,7 +9,7 @@ const P = palette;
 export const theme: Theme = {
   bg: P.bg,
   hexEdge: P.hexEdge,
-  text: '#e6ebf5',
+  text: '#2b241c',
 };
 
 /**

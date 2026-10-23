@@ -9,25 +9,26 @@
   src: url('./fonts/caveat-latin-600-normal.woff2') format('woff2'); }
 :root {
   /* Field Notebook: cream paper, ink, a watercolour forecast, handwritten notes in the margins.
-     Text colours clear 4.5:1 on the paper (accent 4.5, warn 4.9, moon 5.8, muted 5.3, text 13.7). */
+     Text colours clear 4.5:1 on the paper, on the panels over every hex, and on the drawer's ruled lines
+     (accent 5.2+, warn 4.9+, moon 5.1+, muted 4.6+, text 12+). */
   --bg: #cfdcd8;
   --panel: rgba(250, 245, 232, 0.94);
   --panel-solid: #f8f2e3;
   --line: rgba(70, 52, 30, 0.2);
   --text: #2b241c;
   --muted: #6e6352;
-  --accent: #9c6210;
+  --accent: #8c570c;
   --moon: #2f6a45;
-  --warn: #b4461e;
-  --warn-bg: rgba(180, 70, 30, 0.1);
+  --warn: #a63f19;
+  --warn-bg: rgba(166, 63, 25, 0.1);
   --line-strong: rgba(70, 52, 30, 0.45);
   --on-accent: #fffaf0;
-  --accent-glow: rgba(156, 98, 16, 0.35);
-  --track: rgba(70, 52, 30, 0.22);
+  --accent-glow: rgba(140, 87, 12, 0.35);
+  --track: rgba(70, 52, 30, 0.55);
   --track-faint: rgba(70, 52, 30, 0.08);
   --thumb-fill: #fffaf0;
   --swatch-rim: rgba(70, 52, 30, 0.4);
-  --stripe: rgba(60, 45, 25, 0.5);
+  --stripe: rgba(43, 36, 28, 0.86);
   --shadow: 0 6px 18px rgba(60, 40, 20, 0.18);
   --fig-bg: rgba(192, 122, 22, 0.05);
   --glass: rgba(70, 52, 30, 0.55);
@@ -287,9 +288,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-art .fill { fill: var(--sun); opacity: 0.85; transform-box: fill-box; transform-origin: bottom; animation: ex-fill 8s ease-in infinite; }
 .ex-art .arrow { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ex-art .bug { fill: var(--ac); animation: ex-out 8s ease-out infinite; }
-.ex-art .bug .eye { fill: #e8c46a; }
+.ex-art .bug .eye { fill: var(--sun); }
 .ex-art .bug .body { fill: var(--moth-body); }
-.ex-art .bug .feelers { fill: none; stroke: #e8c46a; stroke-width: 1.2; }
+.ex-art .bug .feelers { fill: none; stroke: var(--text); stroke-width: 1.2; }
 .ex-art .bug .glow { fill: var(--accent); filter: drop-shadow(0 0 5px var(--accent)); }
 .ex-art .flap { animation: ex-flap 0.5s ease-in-out infinite alternate; }
 @keyframes ex-spin { to { transform: rotate(360deg); } }
@@ -316,8 +317,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .spot-say { margin: 2px 0 8px; }
 .spot-strip { position: relative; height: 14px; border-radius: 7px; overflow: hidden; background: var(--track-faint); }
 .spot-strip .seg { position: absolute; top: 0; bottom: 0; }
-.spot-strip .tick-s { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ac);
-  box-shadow: 0 0 4px var(--ac); }
+.spot-strip .tick-s { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text);
+  box-shadow: 0 0 0 1px var(--panel-solid); }
 .spot-strip .today { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--today); box-shadow: 0 0 0 1px var(--bg); }
 .spot-axis { position: relative; height: 17px; font-size: 12px; color: var(--muted); }
 .spot-axis span { position: absolute; top: 2px; padding-left: 2px; border-left: 1px solid var(--line); line-height: 1; }
@@ -332,7 +333,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-fine li, details.credits li { margin: 5px 0; }
 .spot-key { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .spot-key i { display: inline-block; width: 2px; height: 11px; margin-right: 5px; vertical-align: -1px; border-radius: 1px; }
-.spot-key .k-tick { background: var(--ac); box-shadow: 0 0 4px var(--ac); }
+.spot-key .k-tick { background: var(--text); box-shadow: 0 0 0 1px var(--panel-solid); }
 .spot-key .k-today { width: 3px; background: var(--today); }
 .spot-key .k-seg { width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; box-shadow: inset 0 0 0 1px var(--swatch-rim); }
 .ex-sub { font-size: 12.5px; color: var(--muted); }
@@ -352,4 +353,4 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .drawer-head h2 { font-family: var(--font-display); font-size: 22px; }
 .brand small { font-family: var(--font-note); font-size: 18px; color: var(--moon); font-weight: 600; }
 #why { font-family: var(--font-note); font-size: 17px; text-decoration-style: wavy; text-underline-offset: 3px; }
-.now b { font-family: var(--font-note); font-size: 14px; text-transform: none; font-weight: 600; }
+.now b { font-family: var(--font-note); font-size: 14px; line-height: 1; text-transform: none; font-weight: 600; }
