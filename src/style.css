@@ -54,6 +54,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #map { position: absolute; inset: 0; touch-action: none; background: var(--bg); }
 #no-webgl { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); margin: 0;
   padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
+/* On a slow phone the map's code takes a few seconds to arrive; until its canvas lands, say so instead of blank paper.
+   Pure CSS (the canvas ends :empty), and dropped when the no-WebGL message is showing instead. */
+#map:empty:not(:has(~ #no-webgl))::after { content: 'Unfolding the map…'; position: absolute; top: 40%; left: 0; right: 0;
+  text-align: center; font: 600 22px var(--font-note); color: var(--muted); animation: hatch-loading 1.6s ease-in-out infinite alternate; }
+@keyframes hatch-loading { from { opacity: 0.45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #map:empty::after { animation: none; } }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .muted { color: var(--muted); }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
