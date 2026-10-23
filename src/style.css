@@ -37,9 +37,9 @@
   /* The two map cards and the Key chip are museum specimen labels: an ink rule, then a hairline 3px inside it. */
   --label-rule: rgba(43, 36, 28, 0.6);
   --label: inset 0 0 0 3px var(--panel-solid), inset 0 0 0 4px rgba(43, 36, 28, 0.25), 1px 2px 0 rgba(60, 40, 20, 0.12);
-  /* Paper grain: warm speckle from one small noise tile, rasterised once and repeated (no live filter on screen).
-     Sits under text only, as a background or a layer under the place names. */
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .38 0 0 0 0 .26 0 0 0 0 .12 .36 0 0 0 -.2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)'/%3E%3C/svg%3E");
+  /* Paper grain: warm brown flecks in one 128px tile (a 2 KB PNG), repeated under the panels' text. Not over the map:
+     a full-screen layer over the WebGL canvas costs a blend every frame on old phones. */
+  --grain: url("data:image/png;base64,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");
   --sun: #c07a16;
   --wash-tan: #b9955f;
   --wash-leaf: #a9cf7a;
@@ -61,8 +61,6 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font: 14px/1.4 var(--font-body); overscroll-behavior: none; }
 #app { position: fixed; inset: 0; overflow: hidden; }
 #map { position: absolute; inset: 0; touch-action: none; background: var(--bg); }
-/* Grain over the map's watercolour but under the place names (z-index 2), so it never sits on text. */
-#map::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: var(--grain); }
 #no-webgl { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); margin: 0;
   padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
 /* On a slow phone the map's code takes a few seconds to arrive; until its canvas lands, say so instead of blank paper.
@@ -158,7 +156,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .probe-close { float: right; width: 32px; height: 32px; margin: -4px -8px 2px 6px; border: 0; border-radius: 8px; background: none;
   color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .probe-close:hover { color: var(--text); background: var(--track-faint); }
-.probe-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.probe-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* "why?" lands on the drawer section it explains; a short glow shows where. */
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
@@ -272,7 +270,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .drawer-grip { display: none; }
 .drawer-head h2 { margin: 0; font-size: 18px; }
 .cav { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; }
-.cav.synthetic { border-color: var(--warn); background: var(--warn-bg); }
+.cav.synthetic { border-color: var(--warn); background: linear-gradient(var(--warn-bg), var(--warn-bg)), var(--panel-solid); }
 .cav h3 { margin: 8px 0 6px; font-size: 15px; }
 .cav ul { margin: 0; padding-left: 18px; } .cav li { margin: 6px 0; }
 
@@ -432,19 +430,20 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 }
 
 /* Field Notebook touches: ruled lines in the About sheet, handwriting for the small asides.
-   The sheet's text sits on 24px lines and the rules run at 24px, with a faint red margin rule down the left. The
-   rules scroll with the text (local). */
+   The sheet's own text (the intro under the species name) sits on 24px lines over 24px rules, with a faint red margin
+   rule down the left. The rules scroll with the text (local). */
 #drawer { line-height: 24px;
   background: linear-gradient(90deg, transparent calc(var(--gutter) - 6px), rgba(166, 63, 25, 0.28) 0 calc(var(--gutter) - 5px), transparent 0),
     repeating-linear-gradient(transparent 0 23px, rgba(60, 90, 140, 0.11) 23px 24px) 0 4px, var(--panel-solid);
   background-attachment: local; }
-/* The cards in it are index cards pasted onto the page: solid paper (the rules stop at their edge), square corners,
-   a paper shadow. The two main ones are held down by a strip of washi tape. */
-.ex-spot, .ex-score, .ex-fine, details.credits { position: relative; background: var(--panel-solid); border: 1px solid var(--line);
-  border-radius: 2px; box-shadow: 1px 2px 0 rgba(60, 40, 20, 0.1), 0 6px 14px -8px rgba(60, 40, 20, 0.25); }
-.ex-spot, .ex-score { margin-top: 18px; }
-.ex-spot::before, .ex-score::before { content: ''; position: absolute; top: -9px; right: 28px; width: 58px; height: 16px;
-  background: rgba(214, 196, 150, 0.55); transform: rotate(3deg); pointer-events: none; }
+/* The cards in it are plain index cards pasted onto the page: solid paper, so the rules stop at their edge and the
+   card text keeps its own, tighter lines. Square corners and a paper shadow. Each main card is held down by a strip of
+   washi tape over its top edge; the fold-open ones (fine print, credits) are not. */
+.ex-spot, .ex-score, .ex-fine, .cav { position: relative; background: var(--panel-solid); border: 1px solid var(--line);
+  border-radius: 2px; box-shadow: 1px 2px 0 rgba(60, 40, 20, 0.1), 0 6px 14px -8px rgba(60, 40, 20, 0.25); line-height: 1.45; }
+.ex-spot, .ex-score, .cav:not(.credits) { margin-top: 22px; padding-top: 14px; }
+.ex-spot::before, .ex-score::before, .cav:not(.credits)::before { content: ''; position: absolute; top: -12px; right: 28px;
+  width: 58px; height: 16px; background: rgba(214, 196, 150, 0.55); transform: rotate(3deg); pointer-events: none; }
 .ex-score::before { right: auto; left: 34px; transform: rotate(-2deg); }
 .drawer-head h2 { font-family: var(--font-display); font-size: 22px; }
 .brand small { font-family: var(--font-note); font-size: 18px; color: var(--moon); font-weight: 600; }
@@ -460,7 +459,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 /* Place names over the map (map/labels.ts). Ink on a paper halo, so a name reads over any hexagon colour; water and
    forest names handwritten, like notes in the margin. Never takes a tap: the map underneath does. */
-.map-labels { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .4s; }
+.map-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .4s; }
 .map-labels.ready { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .map-labels { transition: none; } }
 .place { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; white-space: nowrap;

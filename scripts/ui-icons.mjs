@@ -1,5 +1,5 @@
 // Draws the UI icons with the About sketches' pen (src/ui/sketch.ts), so one hand draws the whole app.
-// Run once, paste the printed paths into index.html and src/ui/scrubber.ts: nothing is drawn at runtime.
+// Run once, paste the printed paths into index.html and src/ui/icons.ts: nothing is drawn at runtime.
 //   node scripts/ui-icons.mjs
 // Each icon is on a 24-unit grid. The pen's outlines are thinned (Ramer-Douglas-Peucker) and written as short
 // relative moves to keep the bytes down.
@@ -53,7 +53,7 @@ const arc = (cx, cy, r, from, to, n = 12) =>
 const DOT = `M${loop(12, 12, 2, 1.8, 0.4, 1, 0).slice(0, -1).map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L')}Z`;
 
 // A filled wedge with a slightly uneven edge, for Play.
-const wedge = 'M8.5 18.6L18.6 11.8L8.2 5.3Z';
+const wedge = 'M6.4 20.6L20.6 12L6 3.4Z';
 
 const icons = {
   // My area: a crosshair whose circle overshoots, a dot gone round twice, four ticks.
@@ -74,9 +74,11 @@ const icons = {
   next: pen([[9, 4.8], [12.6, 8.4], [16, 11.9], [12.5, 15.6], [8.8, 19.2]], 2.4, 32),
   // Play: a filled wedge with its three sides drawn over it as separate strokes (a closed stroke folds over itself at
   // the corners and leaves pinholes).
-  play: wedge + pen([[8.1, 4.8], [13.4, 8.2], [19, 11.9]], 1.6, 71, false) + pen([[19, 11.7], [13.6, 15.3], [8.3, 19]], 1.6, 72, false) +
-    pen([[8.5, 19.2], [8.2, 12], [8.3, 4.7]], 1.6, 73, false),
-  pause: pen([[8.8, 5], [9, 12], [8.9, 19]], 4.2, 41) + pen([[15.1, 5.1], [15, 12], [15.2, 19]], 4.2, 42),
+  play: wedge + pen([[5.9, 2.8], [13.3, 7.3], [21, 12.1]], 2, 71, false) + pen([[21, 11.8], [13.5, 16.4], [6.2, 21.1]], 2, 72, false) +
+    pen([[6.5, 21.3], [6, 12], [6.1, 2.7]], 2, 73, false),
+  // Pause: two filled bars, inked down their long sides so the edges wobble like the rest.
+  pause: 'M6.2 20.8L9.6 20.6L9.4 3.4L6.4 3.6ZM14.5 20.6L17.9 20.8L17.7 3.5L14.4 3.3Z' +
+    [[6.3, 9.5], [14.5, 17.8]].map(([a, b], i) => pen([[a, 3.2], [a - 0.2, 12], [a + 0.1, 21]], 1.6, 41 + i, false) + pen([[b, 3.1], [b + 0.2, 12], [b - 0.1, 20.9]], 1.6, 43 + i, false)).join(''),
   // Replay: a loop drawn round the clock (anticlockwise) and an arrowhead where it ends.
   replay: (() => {
     const pts = arc(12, 12.6, 7.4, -40, 245, 14).map(([x, y]) => [24 - x, y]);

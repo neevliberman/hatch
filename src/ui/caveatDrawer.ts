@@ -1,7 +1,7 @@
 import type { Explainer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import { explainerHtml, spotHtml } from './explainer';
-import { CROSS } from './scrubber';
+import { CROSS } from './icons';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
