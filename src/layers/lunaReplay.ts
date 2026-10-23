@@ -2,7 +2,7 @@ import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { mothInk, palette } from '../theme';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps } from '@deck.gl/extensions';
-import { latLngToCell } from 'h3-js';
+import { cellToLatLng, latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Explainer, HatchLayer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
@@ -175,6 +175,21 @@ export function seasonProfile(
   return { bands, seen: perDay(() => true), notes };
 }
 
+/** The map's first-frame wash for the hexagons `ids`: colour `c` of hexagon `i`, `wash` ms after the first frame
+ * (map.ts), fading in over 600 ms, the northernmost starting 300 ms after the southernmost. */
+export function washer(ids: string[]): (i: number, c: RGBA, wash: number) => RGBA {
+  let north: number[] | null = null; // 0 at the south edge, 1 at the north; worked out when first needed
+  return (i, c, wash) => {
+    if (!north) {
+      const lat = ids.map((id) => cellToLatLng(id)[0]);
+      const lo = Math.min(...lat);
+      const hi = Math.max(...lat);
+      north = lat.map((y) => (y - lo) / (hi - lo || 1));
+    }
+    return [c[0], c[1], c[2], c[3] * Math.min(1, Math.max(0, (wash - north[i]! * 300) / 600))];
+  };
+}
+
 /** Mean absolute error of the heat forecast and the calendar over the shipped band-year scores. */
 export function scoreSummary(year?: number) {
   const rows = data.scores.filter((r) => year === undefined || r.year === year);
@@ -222,6 +237,14 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
   const unseen = cells.filter((c) => !c.seen);
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
+  // Today's sightings, which breathe while paused (map.ts). Cached per day and season.
+  let fresh = { key: '', list: [] as Sighting[] };
+  const newest = (doy: number) => {
+    const key = `${doy}|${mode}`;
+    if (fresh.key !== key) fresh = { key, list: shown.filter((s) => (mode === TYPICAL ? s.pdoy : s.doy) === doy) };
+    return fresh.list;
+  };
+  const washed = washer(data.cells);
 
   // ---- finer levels: the level the zoom asks for, what has loaded, and what is on screen
   let wantRes = 4;
@@ -339,6 +362,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
+    newest: (t) => newest(dayOfYear(t)),
+
     points(t) {
       // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
       const key = `${dayOfYear(t)}|${mode}`;
@@ -373,7 +398,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return p;
     },
 
-    render({ t, zoom, theme }) {
+    render({ t, zoom, theme, wash }) {
       const doy = dayOfYear(t);
       const res = pickRes(resForZoom(zoom));
       if (res !== shownRes) {
@@ -440,8 +465,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           id: 'luna-forecast-r4',
           data: cells,
           getHexagon: (c) => c.id,
-          getFillColor: (c) => cellColor(c.i, doy),
-          getLineColor: theme.hexEdge,
+          getFillColor: wash === undefined ? (c) => cellColor(c.i, doy) : (c) => washed(c.i, cellColor(c.i, doy), wash),
+          getLineColor: wash === undefined ? theme.hexEdge : (c) => washed(c.i, theme.hexEdge, wash),
           stroked: true,
           filled: true,
           extruded: false,
@@ -450,10 +475,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           pickable: true,
           autoHighlight: true,
           highlightColor: palette.hoverTint,
-          updateTriggers: { getFillColor: [doy, mode] },
+          updateTriggers: { getFillColor: [doy, mode, wash], getLineColor: [wash] },
         }),
         new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
           id: 'luna-unseen-r4',
+          opacity: wash === undefined ? 1 : Math.min(1, wash / 900),
           data: unseen,
           getHexagon: (c) => c.id,
           getFillColor: STRIPES,
@@ -615,7 +641,6 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     explainer(): Explainer {
       const sc = mode === TYPICAL ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
-      const days = (d: number) => `${Math.round(d)} day${Math.round(d) === 1 ? '' : 's'}`;
       return {
         name: 'Luna moth',
         sci: data.species.sci,
@@ -631,15 +656,17 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
         score: {
           title: 'How sure is it?',
-          text:
-            (sc.n
-              ? (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '') +
-                `In short: for each strip of the map, the forecast\u2019s dates for the first moths and the peak were off by about ${days(sc.heat)} on average, judged by when people\u2019s sightings showed them. ` +
-                `Guessing each area\u2019s usual date was off by about ${days(sc.calendar)} on average. ` +
-                `That was checked on ${mode === TYPICAL ? 'past years' : mode}, which the forecast hadn\u2019t learned from. ` +
-                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
-              : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'Not proven yet. It does well on years it was not trained on. But trained without Wisconsin and Minnesota, it did worse there than a guess from past years. The real test is the 2026 season, once its weather data is out in mid-2027.',
+          points: [
+            [
+              'checked',
+              !sc.n
+                ? `${mode} had too few sightings to check, so this is all years together.`
+                : `the dates of the first moths and the peak, against people\u2019s sightings, on ${mode === TYPICAL ? 'years' : mode} it never learned from` +
+                  (mode !== TYPICAL && sc.n < 3 ? ` (only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map had enough).` : '.'),
+            ],
+            ['weak spot', 'trained without Wisconsin and Minnesota, it did worse there than a guess from past years.'],
+            ['real test', 'the 2026 season, once its weather data is out in mid-2027.'],
+          ],
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },

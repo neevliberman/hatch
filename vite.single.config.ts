@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import packReplay from './scripts/pack-replay.mjs';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+import { loader } from './vite.config';
 import { readFileSync } from 'node:fs';
 
 // The one-file build has to work as a lone file (emailed, on an artifact host), so nothing may point at public/:
@@ -25,7 +26,7 @@ const TERSER = { compress: { passes: 2 }, format: { comments: false } };
 // Handy for previewing as a hosted page or emailing; the real deploy uses the normal build.
 export default defineConfig({
   base: './',
-  plugins: [packReplay(), viteSingleFile(), selfContained()],
+  plugins: [packReplay(), loader(), viteSingleFile(), selfContained()],
   build: { outDir: 'dist-single', target: 'es2022', assetsInlineLimit: 100_000_000, minify: 'terser', terserOptions: TERSER },
   // Map detail loads from files beside the page, which the one-file build has none of: leave that code out.
   define: { __BASEMAP__: false, __HATCH_SW__: 'false' },

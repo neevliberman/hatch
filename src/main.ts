@@ -98,21 +98,30 @@ function start() {
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
   const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
+  // A phone on its side: the caveat folds into the key chip, and the About panel opens at the side.
+  const slim = window.matchMedia('(orientation: landscape) and (max-height: 500px)');
   let legendH = 0;
   const padding = (): Padding => {
     const top = $('top').getBoundingClientRect().bottom + 8;
     // On wide screens the legend and card sit in the bottom-left corner, beside the map rather than under it.
     // On a phone the legend sits under the map, so leave room for it, but not for a docked card: that comes and
     // goes with every tap, and would make the map jump each time. (The card replaces the legend while it is up.)
+    // Folded to its small chip, it takes no room: the Midwest gets the height.
     const legend = $('legend').offsetHeight;
     if (legend) legendH = legend;
     const floats = $('floats');
-    const bottom = $('bottom').offsetHeight - floats.offsetHeight + (phone.matches ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0) + 8;
-    const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
-    // On a wide screen the open About panel sits beside the map: fit the Midwest into what is left.
+    const solid = $('bottom').offsetHeight - floats.offsetHeight;
+    const keyH = phone.matches && !$('legend').classList.contains('folded') ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0;
     const drawer = $('drawer');
-    // On a phone the My area / Share stack floats on the right edge: keep the Midwest clear of it.
-    const right = phone.matches ? $('actions').offsetWidth + 8 : drawer.classList.contains('open') ? drawer.offsetWidth : 0;
+    const open = drawer.classList.contains('open');
+    // A phone's About sheet at its middle stop leaves the map above it in use: fit the Midwest above the sheet.
+    // (Its target height, not its offsetHeight, which lags behind while it changes stop.)
+    const sheet = open && phone.matches && !slim.matches && !drawer.classList.contains('full') ? window.innerHeight * 0.44 : 0;
+    const bottom = Math.max(solid + keyH, sheet) + 8;
+    const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
+    // On a wide screen (or a phone on its side) the open About panel sits beside the map: fit the Midwest into what is
+    // left. Otherwise, on a phone, the My area / Share stack floats on the right edge: keep the Midwest clear of it.
+    const right = open && (!phone.matches || slim.matches) ? drawer.offsetWidth : phone.matches ? $('actions').offsetWidth + 8 : 0;
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2) };
   };
   const map = createMap({
@@ -124,6 +133,12 @@ function start() {
     onMove: (moved) => {
       $('recenter').hidden = !moved;
       document.querySelector('.brand')!.classList.toggle('over-map', moved);
+    },
+    // The loading caterpillar bows out as the first frame lands.
+    onFirstDraw: () => {
+      const l = document.getElementById('loader');
+      l?.classList.add('done');
+      setTimeout(() => l?.remove(), 250);
     },
     onView: () => {
       if (pinned) placeProbe();
@@ -261,7 +276,7 @@ function start() {
   // so the tap visibly lands even when the drawer is already open.
   let flashTimer = 0;
   $('why').addEventListener('click', () => {
-    toggleDrawer(true);
+    toggleDrawer(true, true); // the reading stop, on a phone
     const drawer = $('drawer');
     const target = drawer.querySelector<HTMLElement>('[data-why]');
     const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
@@ -349,7 +364,7 @@ function start() {
     pinned = true;
     map.setMarker(null);
     // Close enough to see the town's neighbours, and never further out than the current view.
-    map.focus([lng, lat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding());
+    map.focus([lng, lat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding(), true);
     updateProbe();
     return here === first ? 'exact' : 'nearby';
   };
@@ -360,9 +375,9 @@ function start() {
     const [lat, lng] = sel.value.split(',').map(Number) as [number, number];
     const name = sel.selectedOptions[0]?.text ?? '';
     sel.value = ''; // so picking the same city again (after the pin moved) still fires
+    // On a phone, drop the sheet to its middle stop first, so the place lands in the map above it.
+    if (phone.matches && !slim.matches) toggleDrawer(true);
     if (!showPlace(lat, lng, name)) return say(`No forecast for ${name}`);
-    // On a phone the panel hides the map, so close it to show the picked hexagon and its card.
-    if (phone.matches) toggleDrawer(false);
   });
 
   // Find a town: the same path as the city menu above.
@@ -450,7 +465,7 @@ function start() {
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
   if (sharedAt) map.focus([sharedAt[1], sharedAt[0]], sharedAt[2], padding());
-  $('recenter').addEventListener('click', () => map.fit(padding()));
+  $('recenter').addEventListener('click', () => map.fit(padding(), true));
   // Re-fit whenever the room for the map changes: the window, the panels (fonts arriving, a wrapped line, the
   // About panel opening beside the map) or the map itself (a late stylesheet). A view the user has panned or
   // zoomed is theirs, so it is left alone; the recenter button still fits it.
@@ -461,20 +476,35 @@ function start() {
   // Capture phase: the phone drawer swallows the taps that close it, and this must still hear them end.
   window.addEventListener('pointerup', () => (dragging = false), true);
   window.addEventListener('pointercancel', () => (dragging = false), true);
-  const refit = () => {
+  // A change the reader made (the key folding, the About panel opening) glides; a window resize just fits.
+  let glide = false;
+  const refit = (smooth = false, wait = 120) => {
     clearTimeout(fitTimer);
+    glide ||= smooth;
     fitTimer = window.setTimeout(() => {
       if (dragging) return refit();
-      if (!map.moved()) map.fit(padding());
+      if (!map.moved()) map.fit(padding(), glide);
+      glide = false;
       placeProbe();
-    }, 120);
+    }, wait);
   };
-  const ro = new ResizeObserver(refit);
+  const ro = new ResizeObserver(() => refit());
   for (const id of ['map', 'top', 'bottom']) ro.observe($(id));
-  window.addEventListener('resize', refit);
-  document.fonts?.ready.then(refit);
-  // The desktop About panel slides in beside the map without resizing anything the observer watches.
-  new MutationObserver(refit).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
+  // The key folding to its chip (or opening) frees or takes room. Not while a card is up, though: a card hides the
+  // key, and the tap that pinned it also folds it, and the map must not slide out from under that card.
+  let keySeen = false; // the observer's first call is just it starting up
+  new ResizeObserver(() => (keySeen ? hit || refit(true) : (keySeen = true))).observe($('legend'));
+  window.addEventListener('resize', () => refit());
+  document.fonts?.ready.then(() => refit());
+  // The About panel slides in beside the map (or the phone sheet changes stop) without resizing anything the observer
+  // watches. Glide with it, starting as it starts. (Mid-drag, the class flips only on letting go.)
+  // Only a change of stop counts: not the classes that come and go while it is dragged or scrolled.
+  let drawerState = 'falsefalse';
+  new MutationObserver(() => {
+    const d = $('drawer').classList;
+    const now = `${d.contains('open')}${d.contains('full')}`;
+    if (now !== drawerState) (drawerState = now), refit(true, 0);
+  }).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
 
   // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
   // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.

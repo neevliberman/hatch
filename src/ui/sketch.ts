@@ -35,13 +35,13 @@ function smooth(pts: P[], k = 6): P[] {
 const f1 = (v: number) => v.toFixed(1);
 
 /** One pen stroke as a filled outline, thin at both ends and fuller in the middle. With `twice`, the hand goes
- * back over it once, a little off and lighter. */
-export function pen(pts: P[], w = 1.3, seed = 1, twice = true): string {
+ * back over it once, a little off and lighter. `k`: samples per span (fewer for tiny drawings). */
+export function pen(pts: P[], w = 1.3, seed = 1, twice = true, k = 6): string {
   const r = rng(seed);
   let d = '';
   for (let pass = 0; pass < (twice ? 2 : 1); pass++) {
     const drift = pass ? 0.8 : 0.25;
-    const s = smooth(pts.map(([x, y]) => [x + (r() - 0.5) * drift, y + (r() - 0.5) * drift] as P));
+    const s = smooth(pts.map(([x, y]) => [x + (r() - 0.5) * drift, y + (r() - 0.5) * drift] as P), k);
     const ww = pass ? w * 0.5 : w;
     const press = 0.8 + 0.4 * r();
     const left: string[] = [];

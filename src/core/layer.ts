@@ -77,7 +77,10 @@ export interface Explainer {
   /** The season at a place (null = the layer's default spot), on the day `t`, called `name` when it has one (a
    * picked city, "you"). Null when there is nothing to show. */
   spot(lngLat: [number, number] | null, t: number, name?: string): SpotStory | null;
-  score?: { title: string; text: string; bars: { label: string; days: number; best?: boolean }[] };
+  /** How sure it is. The bold answer line is worked out from the bars (the forecast first, then what it is measured
+   * against), so it always says what this layer's own scores say. `points`: a few short lines, each with a
+   * handwritten lead-in ("checked", "real test"). */
+  score?: { title: string; points: [string, string][]; bars: { label: string; days: number; best?: boolean }[] };
   finePrintLabel: string;
 }
 
@@ -94,7 +97,8 @@ export interface SeasonProfile {
 export interface HatchLayer {
   id: string;
   title: string;
-  render(ctx: { t: number; zoom: number; theme: Theme }): Layer[];
+  /** `wash`: ms since the map's first frame while the forecast washes in (south first, 900 ms in all), else undefined. */
+  render(ctx: { t: number; zoom: number; theme: Theme; wash?: number }): Layer[];
   /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
   legend(): LegendSpec;
@@ -107,6 +111,8 @@ export interface HatchLayer {
   points?(t: number): [number, number][];
   /** The season ribbon in the time slider's track (the active layer's own, so each species draws its season). */
   profile?(): SeasonProfile;
+  /** The sightings made on day t itself: while paused they breathe (map.ts). */
+  newest?(t: number): { lng: number; lat: number }[];
   /** Data sources to credit, rendered in the drawer. */
   /** Data sources, each a line of text; `href` links the line's source. */
   credits?(): { text: string; href?: string }[];

@@ -111,8 +111,9 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       }
     };
 
-    // First visit: the map comes first (the About button just glows); the i button opens the drawer, and a tap
-    // outside it must close it.
+    // First visit: the map comes first (the About button just glows). The i button opens the drawer: a side panel, or
+    // on a phone held upright a sheet at its middle stop. Either way the map beside or above it stays in use, so a tap
+    // there keeps it open and fills its spot card. At the sheet's tall stop (from "How sure?") a tap outside closes it.
     await page.goto(file);
     await page.waitForTimeout(2500);
     await shot('1-first-visit');
@@ -123,14 +124,35 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
     // Let the slide-in finish before measuring, or a slow machine measures it mid-way and taps the drawer itself.
     await page.waitForFunction(() => document.querySelector('#drawer').getAnimations().length === 0, null, { timeout: 3000 }).catch(() => {});
-    // Tap empty map: left of a side drawer, or between the top panels and a bottom sheet.
+    await page.waitForTimeout(400);
+    // Tap the map: left of a side drawer, or between the top panels and a bottom sheet.
     const box = await page.locator('#drawer').boundingBox();
     const top = await page.evaluate(() => document.querySelector('#top').getBoundingClientRect().bottom);
-    const bottom = box.x > 40 ? (await page.locator('#bottom').boundingBox()).y : box.y;
-    await page.touchscreen.tap(box.x > 40 ? box.x / 2 : width / 2, (top + bottom) / 2);
+    const sheet = box.x <= 40;
+    if (sheet && box.height > height * 0.6) fail(`the About sheet opens ${Math.round((box.height / height) * 100)}% tall, hiding the map`);
+    const spot0 = await page.locator('[data-spot] .spot-title').first().textContent();
+    await page.touchscreen.tap(sheet ? width / 2 : box.x / 2, (top + (sheet ? box.y : (await page.locator('#bottom').boundingBox()).y)) / 2);
+    await page.waitForTimeout(600);
+    if (!(await page.locator('#drawer.open').count())) fail('a tap on the map beside the open drawer closed it');
+    else if (sheet) {
+      // At the middle stop the tapped hexagon's season shows in the sheet (deck holds a tap back for the double-tap window).
+      const filled = await page.waitForFunction((t) => document.querySelector('[data-spot] .spot-title')?.textContent !== t, spot0, { timeout: 3000 })
+        .then(() => true, () => false);
+      if (!filled) fail('a tap on the map at the middle stop did not fill the spot card');
+    }
+    await shot('1b-drawer-and-map');
+    await tap('#drawer-close');
     await page.waitForTimeout(400);
-    if (await page.locator('#drawer.open').count()) fail('tapping outside the drawer did not close it');
-    if (await page.locator('#probe').isVisible()) fail('the tap that closed the drawer also opened a card');
+    if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
+    if (sheet && (await tap('#why'))) {
+      await page.waitForTimeout(700);
+      const tall = await page.locator('#drawer').boundingBox();
+      if (!(await page.locator('#drawer.open.full').count())) fail('"How sure?" did not open the sheet at its tall stop');
+      await page.touchscreen.tap(width / 2, Math.max(4, tall.y / 2));
+      await page.waitForTimeout(400);
+      if (await page.locator('#drawer.open').count()) fail('tapping outside the tall sheet did not close it');
+      if (await page.locator('#probe').isVisible()) fail('the tap that closed the drawer also opened a card');
+    }
 
     const a = await page.evaluate(audit);
     await shot('2-map');
@@ -231,7 +253,9 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         await shot('5-zoomed');
         (await page.evaluate(audit)).bad.forEach((m) => fail(`zoomed in, ${m}`));
         await tap('#recenter');
-        await page.waitForTimeout(400);
+        // The recenter glides back (a third of a second, longer on a slow machine).
+        await page.waitForFunction((z) => window.__hatch.map.zoom() <= z + 0.05, z0, { timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(200);
         const z1 = await zoom();
         // The refit can land a little further out than the first view (an open card leaves less room), never further in.
         if (await page.locator('#recenter').isVisible() || z1 > z0 + 0.05) fail(`recenter did not bring back the whole Midwest (zoom ${z0} -> ${z1})`);

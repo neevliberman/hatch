@@ -9,7 +9,7 @@ import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SeasonProfile, SpotS
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
 import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
-import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, type LunaLayer, type Stage } from './lunaReplay';
+import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, washer, type LunaLayer, type Stage } from './lunaReplay';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -55,12 +55,14 @@ export function createFireflyLayer(
   const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
+  const washed = washer(data.cells);
   const unseen = cells.filter((c) => !c.seen);
   const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : Number(mode));
   const forecast = () => data.forecast[mode] ?? data.forecast[TYPICAL]!;
   const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
+  let fresh = { key: '', list: [] as Sighting[] };
 
   // ---- finer hexes (res 5 only for fireflies), from public/fine-firefly/, loaded when the reader zooms in
   type Cell = { id: string; i: number; seen: boolean };
@@ -172,6 +174,12 @@ export function createFireflyLayer(
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
     seasonCount: (m: Mode) => sightingsFor(m).length,
 
+    newest(t) {
+      const doy = dayOfYear(t);
+      if (fresh.key !== `${doy}|${mode}`) fresh = { key: `${doy}|${mode}`, list: shown.filter((s) => day(s) === doy) };
+      return fresh.list;
+    },
+
     points(t) {
       // Cached per day and season, like luna's: the place names move out of the way of lit dots.
       const key = `${dayOfYear(t)}|${mode}`;
@@ -199,7 +207,7 @@ export function createFireflyLayer(
       return p;
     },
 
-    render({ t, zoom, theme }) {
+    render({ t, zoom, theme, wash }) {
       const doy = dayOfYear(t);
       const res = resFor(zoom);
       if (res !== shownRes) {
@@ -223,8 +231,9 @@ export function createFireflyLayer(
           id: `firefly-forecast-r${res}`,
           data: hexes,
           getHexagon: (c) => c.id,
-          getFillColor: (c) => STAGE_COLOR[stageAt(qOf(c), doy)],
-          getLineColor: theme.hexEdge,
+          // The first-frame wash (a ?species=firefly link), on the coarse hexagons only.
+          getFillColor: wash === undefined || days ? (c) => STAGE_COLOR[stageAt(qOf(c), doy)] : (c) => washed(c.i, STAGE_COLOR[stageAt(qOf(c), doy)], wash),
+          getLineColor: wash === undefined || days ? theme.hexEdge : (c) => washed(c.i, theme.hexEdge, wash),
           stroked: true,
           filled: true,
           extruded: false,
@@ -233,10 +242,11 @@ export function createFireflyLayer(
           pickable: true,
           autoHighlight: true,
           highlightColor: palette.hoverTint,
-          updateTriggers: { getFillColor: [doy, mode, res] },
+          updateTriggers: { getFillColor: [doy, mode, res, wash], getLineColor: [wash, res] },
         }),
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
           id: `firefly-unseen-r${res}`,
+          opacity: wash === undefined ? 1 : Math.min(1, wash / 900),
           data: days ? fineLevel!.unseen : unseen,
           getHexagon: (c) => c.id,
           getFillColor: palette.stripes,
@@ -381,7 +391,6 @@ export function createFireflyLayer(
     explainer(): Explainer {
       const sc = mode === TYPICAL ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
-      const days = (d: number) => `${Math.round(d)} day${Math.round(d) === 1 ? '' : 's'}`;
       return {
         name: 'Common eastern firefly',
         sci: data.species.sci,
@@ -397,15 +406,18 @@ export function createFireflyLayer(
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
         score: {
           title: 'How sure is it?',
-          text:
-            (sc.n
-              ? `For the strips of the map with enough sightings (Illinois to central Wisconsin and Michigan), the forecast’s dates for the first fireflies and the peak were off by about ${days(sc.heat)} on average, judged by people’s sightings. ` +
-                `Guessing each area’s usual date was off by about ${days(sc.calendar)}. ` +
-                `That was checked on ${mode === TYPICAL ? 'past years' : mode}, which the forecast hadn’t learned from. ` +
-                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
-              : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            (data.model ? `A simpler rule (the warmth at past sightings, no curve) did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}. ` : '') +
-            'This is a first try and has not been tested as carefully as the luna moth.',
+          points: [
+            [
+              'checked',
+              sc.n
+                ? `the dates of the first fireflies and the peak, against people’s sightings, on ${mode === TYPICAL ? 'years' : mode} it never learned from (Illinois to central Wisconsin and Michigan).`
+                : `${mode} had too few sightings to check, so this is all years together.`,
+            ],
+            ...(data.model
+              ? [['simpler rule', `the warmth at past sightings alone did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}.`] as [string, string]]
+              : []),
+            ['first try', 'not tested as carefully as the luna moth yet.'],
+          ],
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
