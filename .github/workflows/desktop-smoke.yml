@@ -25,7 +25,7 @@ jobs:
       # The Ubuntu apt mirror sometimes stalls and the step would sit until the job's 30-minute limit: give each try 8
       # minutes and try twice.
       - run: timeout 480 npx playwright install --with-deps chromium firefox webkit || timeout 480 npx playwright install --with-deps chromium firefox webkit
-      - run: npm run build:single
+      - run: npm run build:all   # dist/ too: the live-mode checks serve it over http
       - run: xvfb-run -a npm run desktop
       - if: always()
         uses: actions/upload-artifact@v4

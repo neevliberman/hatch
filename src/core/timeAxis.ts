@@ -15,6 +15,8 @@ export interface TimeSpec {
   initial?: number;
   /** Custom date label, e.g. "Jun 10 · typical year" when the year itself means nothing. */
   label?: (ms: number) => string;
+  /** Live data: the last day of observed weather (later days are forecast), and whether the nightly file looks late. */
+  asOf?: { at: number; stale: boolean };
 }
 
 /**
@@ -32,6 +34,7 @@ export class TimeAxis {
   stepMs = DAY;
   cursor = 0;
   label: (ms: number) => string = (ms) => formatTime(ms, this.stepMs);
+  asOf: TimeSpec['asOf'] = undefined;
   /** Real "now" (injectable for tests). Shown as a marker when it falls inside the range. */
   readonly now: number;
   playing = false;
@@ -69,6 +72,7 @@ export class TimeAxis {
     this.end = spec.end;
     this.stepMs = spec.stepMs;
     this.label = spec.label ?? ((ms) => formatTime(ms, this.stepMs));
+    this.asOf = spec.asOf;
     this.cursor = this.snap(spec.initial ?? spec.start);
     this.emit();
   }

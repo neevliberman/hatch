@@ -10,6 +10,8 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 
 *Hexagons are the forecast, dots are real moths people photographed. Spring warmth sweeps north from Illinois and Ohio to Minnesota, and the moths follow.*
 
+**Live season (new).** From 2 March 2027 a nightly GitHub Action (`.github/workflows/live-forecast.yml`) rebuilds this season's forecast from real weather so far + a 7-day forecast + past years' weather run forward, and the map's **live** season shows it with a mark on the last day of real weather, this year's sightings and an "as of" badge that turns amber if the data goes stale. Until then the live season shows a 2026 dry run (`pipeline/live/DRYRUN_2026.md`). How it works: `pipeline/live/README.md`.
+
 ## What you can do with it
 
 - **Press play** and watch a season: the forecast wave (hexagons) and the real sightings (dots) move north together.
@@ -115,6 +117,8 @@ src/              the web app (core/ clock and hex grid, layers/ the luna layer,
 pipeline/fit/     the model, its tests and the scored result
 pipeline/replay/  builds the forecast files the app reads
 pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
+pipeline/live/    nightly live forecast -> live/latest.json (PRISM + Open-Meteo + Daymet, frozen P3 fits)
+.github/workflows/live-forecast.yml  the nightly live job, 2 Mar-7 Oct
 notebooks/        the first prototype model (Jupyter notebook)
 scripts/          smoke tests, bundle budget, data build helpers
 docs/             engineering notes and README media

@@ -73,6 +73,12 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
   return `<section class="ex" style="--ac:${esc(ex.accent)}">
     <h3 class="ex-name">${esc(ex.name)} <i>${esc(ex.sci)}</i></h3>
     <p class="ex-hook">${esc(ex.hook)}</p>
+    ${
+      ex.notice
+        ? `<div class="ex-notice" data-why><div class="ex-h">${esc(ex.notice.title)}</div>
+        <ul>${ex.notice.bullets.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+        : ''
+    }
     <figure class="ex-fig">${sketchStrip(id, ex, ex.steps.map((x) => `<b>${esc(x.title)}</b>${esc(x.text)}`))}</figure>
     <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}</p>
       <label class="ex-place">Or pick a city <select data-place><option value="">Choose…</option>${CITIES.map(

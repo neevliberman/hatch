@@ -41,6 +41,18 @@ self.addEventListener('fetch', (e) => {
     );
     return;
   }
+  if (url.pathname.endsWith('/live/latest.json')) {
+    // This season's live forecast changes every night: network first, the last copy only when offline.
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (keepable(res)) e.waitUntil(store(url.pathname, res.clone()));
+          return res;
+        })
+        .catch(() => caches.match(url.pathname).then((hit) => hit ?? Response.error())),
+    );
+    return;
+  }
   // Everything else (hashed bundles, fonts, icons, the finer hexagons fetched on zoom): cache first, and keep what
   // the network returns. The cache is per deploy, so nothing outlives the build it came from.
   e.respondWith(

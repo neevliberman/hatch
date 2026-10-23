@@ -5,7 +5,7 @@ import { palette } from '../theme';
 
 export const STAGES = ['not yet', 'starting', 'peak', 'winding down', 'over'] as const;
 export type Stage = (typeof STAGES)[number];
-type Q = readonly (number | null)[];
+type Q = readonly (number | null)[] | null;
 type RGBA = [number, number, number, number];
 
 /** Where a cell's forecast season stands on day `doy`. */

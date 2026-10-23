@@ -1,5 +1,5 @@
 import raw from '../data/luna-replay.json';
-import { replayData } from './replayData';
+import { replayData, SECOND_BROOD, type Mode, type Sighting } from './replayData';
 
 /** Shape of src/data/luna-replay.json (built by pipeline/replay/build_replay.py). */
 export interface ReplayFile {
@@ -50,8 +50,21 @@ export interface ReplayFile {
 export const data = raw as unknown as ReplayFile;
 export const luna = replayData(data);
 
-export { APPROXIMATE, SECOND_BROOD, TYPICAL, type Mode, type Sighting } from './replayData';
-export const { sightings, sightingsFor, bandOf, firstBroodCount } = luna;
+export { APPROXIMATE, SECOND_BROOD, TYPICAL, toSighting, type Mode, type Sighting } from './replayData';
+export const { sightings, bandOf } = luna;
+
+/** Live sightings only: not yet confirmed by other iNaturalist users (needs ID). Drawn a little fainter. */
+export const UNCONFIRMED = 4;
+/** This season, forecast every night from the weather so far (public/live/latest.json). Luna only. */
+export const LIVE: Mode = 'live';
+
+/** This season so far, from public/live/latest.json (src/layers/liveData.ts); empty until that file arrives. */
+let liveSightings: Sighting[] = [];
+export const setLiveSightings = (s: Sighting[]) => void (liveSightings = s);
+
+/** Sightings shown in a mode: one year, all years pooled by day of year, or this season's (live). */
+export const sightingsFor = (mode: Mode): Sighting[] => (mode === LIVE ? liveSightings : luna.sightingsFor(mode));
+export const firstBroodCount = (mode: Mode) => sightingsFor(mode).filter((s) => !(s.flags & SECOND_BROOD)).length;
 
 /** Day of year -> UTC ms in `year` (1 = 1 Jan). */
 export const doyToMs = (year: number, doy: number) => Date.UTC(year, 0, doy);

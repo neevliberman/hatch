@@ -81,6 +81,8 @@ export interface Explainer {
    * against), so it always says what this layer's own scores say. `points`: a few short lines, each with a
    * handwritten lead-in ("checked", "real test"). */
   score?: { title: string; points: [string, string][]; bars: { label: string; days: number; best?: boolean }[] };
+  /** A short card near the top for a special mode (this year's live forecast): what it is, in plain words. */
+  notice?: { title: string; bullets: string[] };
   finePrintLabel: string;
 }
 

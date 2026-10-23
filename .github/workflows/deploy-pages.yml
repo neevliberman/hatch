@@ -23,6 +23,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # The nightly live forecast lives on the `live-data` branch (written by live-forecast.yml); it replaces the
+      # copy bundled from main so a redeploy never rolls the live map back. No branch yet = keep main's copy.
+      - name: Add newest live forecast
+        run: |
+          set -euo pipefail
+          # exit 2 = no such branch (fall back); any other failure stops the deploy rather than rolling back
+          set +e; git ls-remote --exit-code --heads origin live-data >/dev/null; RC=$?; set -e
+          if [ "$RC" = 0 ]; then
+            git fetch -q --depth 1 origin live-data
+            mkdir -p dist/live
+            git show FETCH_HEAD:live/latest.json > dist/live/latest.json
+            echo "live forecast from live-data branch"
+          elif [ "$RC" = 2 ]; then
+            echo "no live-data branch; using main's public/live"
+          else
+            echo "could not check the live-data branch (exit $RC)"; exit 1
+          fi
       - name: Push dist to gh-pages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

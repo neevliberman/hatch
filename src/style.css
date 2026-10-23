@@ -265,6 +265,12 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .date { flex: none; min-width: 190px; white-space: nowrap; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
 .date em { font: 600 17px var(--font-note); color: var(--muted); }
 .date small { margin-left: 10px; font-size: 12px; font-weight: 600; color: var(--warn); }
+.date small.fc { color: var(--muted); }
+/* Live mode: when the weather data runs to; amber when the nightly update looks late. */
+.asof { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px; vertical-align: 2px; white-space: nowrap;
+  font-size: 11.5px; font-weight: 600; color: var(--moon); border: 1px solid currentColor; }
+.asof[hidden] { display: none; }
+.asof.stale { color: var(--warn); background: var(--warn-bg); }
 .year select { height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--edge); padding: 0 10px; }
 
 /* The slider runs over the season ribbon (scrubber.ts): the share of the map at each stage, in the map's own colours,
@@ -290,6 +296,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .track input[type=range]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--panel-solid), 0 0 0 4px var(--accent); }
 .track input[type=range]::-webkit-slider-runnable-track { height: 100%; background: none; }
 .track input[type=range]::-moz-range-track { background: none; }
+/* Live mode: the days after "as of" are forecast, so that part of the ribbon is washed paler (scrubber.ts sets --fc). */
+.fc-wash { position: absolute; top: 4px; height: var(--rib); right: calc(var(--thumb) / 2); pointer-events: none;
+  left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--fc, 1)); background: var(--panel-solid); opacity: 0.5; }
+.fc-wash[hidden] { display: none; }
 .track input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--thumb); height: var(--thumb);
   margin-top: calc((var(--rh) - var(--thumb)) / 2); border-radius: 50%; background: var(--thumb-fill); border: 3px solid var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
 .track input[type=range]::-moz-range-thumb { width: calc(var(--thumb) - 6px); height: calc(var(--thumb) - 6px);
@@ -301,6 +311,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .now b { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; background: var(--accent); color: var(--on-accent);
   padding: 1px 5px; border-radius: 4px; }
 .now::after { content: ''; position: absolute; left: 50%; top: 14px; width: 2px; height: calc(var(--rib) - 14px); background: var(--accent); transform: translateX(-50%); }
+/* The live "as of" flag (last day of observed weather): the same place as the clock's own, quieter. */
+.now.asof-flag { white-space: nowrap; }
+.now.asof-flag b { visibility: hidden; } /* the badge by the date says "as of <day>"; the ribbon keeps just the line */
 
 #drawer { position: absolute; top: 0; right: 0; bottom: 0; width: var(--drawer-w); padding: 0 var(--gutter) 24px;
   background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; z-index: 5;
@@ -388,6 +401,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
     padding: 1px 9px 2px; border-radius: 999px; background: var(--text); color: var(--on-accent); }
   .date small, .date em { margin-left: 6px; color: inherit; font-size: 13px; }
   .date em { margin-left: 0; font-size: 15px; }
+  /* Live mode in the pill: the washed ribbon already says "forecast"; the as-of badge rides along, small. */
+  .date small.fc { display: none; }
+  .date .asof { margin-left: 6px; padding: 0 5px; font-size: 11px; vertical-align: 1px; color: inherit; }
+  .date .asof.stale { color: var(--on-accent); background: var(--warn); border-color: var(--warn); }
 }
 
 @media (max-width: 340px) {
@@ -468,6 +485,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 @keyframes ex-flap { 0%, 60% { transform: scaleX(1); } 100% { transform: scaleX(0.75); } }
 @media (prefers-reduced-motion: reduce) { .ex-pane .flap, .ex-pane .rock { animation: none; } }
 
+.ex-notice { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--ac); border-radius: var(--radius); font-size: 13px; }
+.ex-notice ul { margin: 4px 0 0; padding-left: 18px; } .ex-notice li { margin: 4px 0; }
 .ex-spot, .ex-score { padding: 10px 12px; }
 .ex-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
 .ex-place { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12.5px; color: var(--muted); }
