@@ -73,8 +73,11 @@ export function createFireflyLayer(
     hasFine = !!m?.levels['5'];
     if (hasFine) onData(); // a zoomed-in view drawn before the manifest arrived can sharpen now
   });
+  const loading = new Set<Mode>();
   const loadFine = () => {
     const m = mode;
+    if (loading.has(m)) return; // one request per season, not one per frame while it is on its way
+    loading.add(m);
     void Promise.all([fine.fineLevel(5), fine.fineDays(5, m)]).then(([level, days]) => {
       if (!level || !days || days.length !== level.cells.length * 5) return; // missing or stale: stay at res 4
       if (!fineLevel) {
@@ -208,7 +211,8 @@ export function createFireflyLayer(
       };
       return [
         new H3HexagonLayer<Cell>({
-          id: 'firefly-forecast',
+          // One id per level: reusing an id across levels left the other level's hexes drawn (see lunaReplay.ts).
+          id: `firefly-forecast-r${res}`,
           data: hexes,
           getHexagon: (c) => c.id,
           getFillColor: (c) => STAGE_COLOR[stageAt(qOf(c), doy)],
@@ -224,7 +228,7 @@ export function createFireflyLayer(
           updateTriggers: { getFillColor: [doy, mode, res] },
         }),
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
-          id: 'firefly-unseen',
+          id: `firefly-unseen-r${res}`,
           data: days ? fineLevel!.unseen : unseen,
           getHexagon: (c) => c.id,
           getFillColor: palette.stripes,
@@ -336,7 +340,7 @@ export function createFireflyLayer(
         'Gray dots mean the photo’s location was blurred or rough, so the dot may sit off its true spot.',
         'Striped hexagons have no sightings of this firefly nearby, ever. There is nothing to check the forecast against there.',
         ...(hasFine
-          ? ['Zoom in and the hexagons get smaller, about 17 km across. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale, so a small hexagon\u2019s date is no surer than a big one\u2019s. Its card counts the sightings in the big hexagon around it.']
+          ? ['Zoom in and the hexagons get smaller, about 17 km wide. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale. So a small hexagon\u2019s date is no surer than a big one\u2019s. Its card counts the sightings in the big hexagon around it.']
           : ['There are no small hexagons for fireflies here. Zooming in keeps the big ones.']),
         `For a single year, a hexagon’s card gives a "peak here likely" window. In the 23 strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast. One spot can miss by more.`,
         ...(m?.holdout_mae

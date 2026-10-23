@@ -26,6 +26,6 @@ export function countdownParts(now: number, species: 'luna' | 'firefly' = 'luna'
   const next = now < at(y, onset) ? at(y, onset) : at(y + 1, onset);
   const days = Math.ceil((next - now) / DAY);
   // The slider shows a past season, so name the real next one by date, not just "in N days".
-  const where = species === 'luna' ? 'southern Illinois, Indiana and Ohio' : 'the south of the map';
+  const where = species === 'luna' ? 'southern Illinois, Indiana and Ohio' : 'the central Midwest';
   return [`Next real season: about ${fmt(next)}, ${new Date(next).getUTCFullYear()}`, `, starting in ${where}, ${days} days from now.`];
 }
