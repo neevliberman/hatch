@@ -151,14 +151,14 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 /* Kept rendered (just invisible) when empty: live regions that appear and fill at once are often not announced. */
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
-/* Season's end note: in the time bar, over the date beside the replay button (never over the map). Fades in 240 ms,
-   out 400 ms (instantly under reduced motion). Wide enough to run over the slider on a phone on its side. */
-.date { position: relative; }
-#end-note { position: absolute; left: -6px; top: 50%; transform: translateY(-50%); z-index: 1; margin: 0; pointer-events: none;
-  width: max-content; min-width: calc(100% + 6px); max-width: calc(100vw - 200px); padding: 2px 6px;
-  font: 600 20px/1.05 var(--font-note); background: var(--panel-solid); opacity: 0; transition: opacity 0.4s; }
+/* Season's end note: on empty paper beside the map, with the off-season note (placed from main.ts), never over the
+   hexes, the dock or the slider's ribbon. Fades in 240 ms, out 400 ms (instantly under reduced motion). */
+#end-note { position: absolute; left: 0; top: 0; z-index: 2; margin: 0; pointer-events: none; width: max-content;
+  max-width: min(280px, calc(100vw - 32px)); padding: 4px 12px; text-align: center; font: 600 21px/1.1 var(--font-note);
+  background: var(--panel-solid); border-radius: var(--radius); box-shadow: var(--shadow); opacity: 0; transition: opacity 0.4s; }
 #end-note.on { opacity: 1; transition-duration: 0.24s; }
-#end-note small { display: block; font-size: 16px; color: var(--moon); }
+#end-note:empty { visibility: hidden; }
+#end-note small { display: block; font-size: 17px; color: var(--moon); }
 @media (prefers-reduced-motion: reduce) { #end-note { transition: none; } }
 /* Over the map's bottom-right corner on a wide screen (placed against #bottom); top of the button stack on a phone. */
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
@@ -279,6 +279,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ribbon .frame { fill: none; stroke: var(--muted); stroke-width: 1; }
 .ribbon .seen { fill: var(--ink-wash); }
 .ribbon .seen-line { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linejoin: round; }
+.wave[hidden] { display: none; }
 .wave { position: absolute; top: -10px; margin-left: 4px; font: 600 15px/1 var(--font-note); white-space: nowrap;
   padding: 0 3px; border-radius: 3px; background: var(--panel-solid); } /* paper behind the note breaks the frame line */
 .track input[type=range] { position: relative; width: 100%; height: var(--rh); margin: 0; background: none; appearance: none; -webkit-appearance: none;

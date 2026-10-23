@@ -15,6 +15,7 @@ import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 import { isForecast } from './core/layer';
+import { MIDWEST_MARGIN } from './layers/stages';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
@@ -175,35 +176,79 @@ function start() {
   note.id = 'asleep';
   note.setAttribute('aria-hidden', 'true'); // the screen-reader summary already says every hexagon is over
   let shownNote: unknown = null;
-  $('app').append(note);
-  const hideNote = () => note.classList.remove('on');
+  // When playback reaches the last day, the layer's end note (HatchLayer.endNote) goes on the same empty paper: just
+  // under the margin note on a phone, just over it on a wide screen. Never over the map's hexes, the dock or the
+  // slider's ribbon: with no room for it, only Replay and the status message say it.
+  const endEl = document.createElement('p');
+  endEl.id = 'end-note';
+  endEl.setAttribute('role', 'status');
+  let endWords: [string, string] | null = null;
+  let endClear = 0;
+  $('app').append(note, endEl);
+  // Panels a note must stay clear of: the header, the dock (with the time slider and its ribbon), the key, the card,
+  // the phone's button stack, the recenter button, the town finder and an open About panel.
+  const blockers = () =>
+    [...document.querySelectorAll('#top, #dock, #legend .legend-card, #legend .lg-chip, #probe:not([hidden]), #actions, #recenter:not([hidden]), #finder:not([hidden]), #drawer.open')]
+      .map((e) => e.getBoundingClientRect())
+      .filter((r) => r.width && r.height);
+  const fits = (x: number, y: number, w: number, h: number, block: DOMRect[]) =>
+    x >= 4 && y >= 4 && x + w <= window.innerWidth - 4 && y + h <= window.innerHeight - 4 &&
+    block.every((r) => x + w <= r.left || x >= r.right || y + h <= r.top || y >= r.bottom);
+  const place = (el: HTMLElement, spot: [number, number] | null, tilt: number) => {
+    el.classList.toggle('on', !!spot);
+    if (spot) el.style.transform = `translate(${Math.round(spot[0])}px, ${Math.round(spot[1])}px) rotate(${tilt}deg)`;
+    return spot;
+  };
   placeNote = () => {
-    // Runs on every pan and zoom frame: the cheap tests first, and no layout read unless the note will show.
-    if (map.moved()) return hideNote();
+    // Runs on every pan and zoom frame: the cheap tests first, and no layout read unless a note will show.
+    if (map.moved() || (!endWords && !note.classList.contains('on') && !registry.activeLayers().some((l) => l.offSeason?.(time.cursor)))) {
+      place(note, null, 0);
+      place(endEl, null, 0);
+      return;
+    }
     // The active layers' own note, only when every one of them has one to show (the layers cache this per day).
     const notes = registry.activeLayers().map((l) => l.offSeason?.(time.cursor));
     const n = notes.length && notes.every(Boolean) ? notes[0]! : null;
-    if (!n) return hideNote();
-    if (n !== shownNote) {
+    if (n && n !== shownNote) {
       shownNote = n;
       note.innerHTML = `<svg viewBox="0 0 64 34">${n.sketch}</svg><b>${n.title}</b><span>${n.line}</span>`;
     }
-    const at = map.project(phone.matches ? n.at.phone : n.at.wide);
-    if (!at) return hideNote();
-    const { width: w, height: h } = note.getBoundingClientRect();
-    // Phone: centred on its spot. Wide screen: starting at its spot, and left out when an open About panel leaves
-    // no room there.
-    if (!phone.matches && at[0] + w >= window.innerWidth - (padding().right ?? 0) - 8) return hideNote();
-    const y = phone.matches ? at[1] : at[1] - h / 2;
-    // Above the legend (or the card) on a phone; above the controls, and a card docked over them, on a wide screen
-    // (the wide legend sits in the far corner). When that would lift it off its empty paper onto the land (a short
-    // phone), it stays hidden instead.
-    const under = phone.matches ? $('floats') : probeEl.hidden || probeEl.classList.contains('at-pointer') ? $('strip') : probeEl;
-    const floor = under.getBoundingClientRect().top - h - 8;
-    if (y > floor) return hideNote();
-    const x = Math.max(8, Math.min(phone.matches ? at[0] - w / 2 : at[0], window.innerWidth - w - 8));
-    note.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) rotate(-3deg)`;
-    note.classList.add('on');
+    const anchor = n?.at ?? notes.find(Boolean)?.at ?? MIDWEST_MARGIN;
+    const atPhone = phone.matches ? map.project(anchor.phone) : null;
+    const atWide = map.project(anchor.wide);
+    const block = blockers();
+    // Phone: centred on its spot under the data. Wide screen: starting at its spot east of the data, on blank paper,
+    // which is also where a phone on its side (no room under the data) puts the end note.
+    const spotFor = (w: number, h: number): [number, number] | null => {
+      const tries: [number, number][] = [];
+      if (atPhone) tries.push([atPhone[0] - w / 2, atPhone[1]]);
+      if (atWide) tries.push([atWide[0], atWide[1] - h / 2]);
+      return tries.find(([x, y]) => fits(x, y, w, h, block)) ?? null;
+    };
+    let box: [number, number, number, number] | null = null;
+    if (n) {
+      const { width: w, height: h } = note.getBoundingClientRect();
+      const s = place(note, w && h ? spotFor(w, h) : null, -3); // none on a phone on its side (style.css)
+      if (s) box = [s[0], s[1], w, h];
+    } else place(note, null, 0);
+    if (!endWords) return void place(endEl, null, 0);
+    const { width: w, height: h } = endEl.getBoundingClientRect();
+    let spot: [number, number] | null = null;
+    if (box) {
+      const [x0, y0, w0, h0] = box;
+      const x = x0 + (w0 - w) / 2;
+      const tries: [number, number][] = phone.matches ? [[x, y0 + h0 + 6], [x, y0 - h - 8]] : [[x, y0 - h - 8], [x, y0 + h0 + 6]];
+      spot = tries.find(([tx, ty]) => fits(tx, ty, w, h, block)) ?? null;
+    } else spot = spotFor(w, h);
+    place(endEl, spot, -2);
+  };
+  const showEnd = (words: [string, string] | null) => {
+    clearTimeout(endClear);
+    endWords = words;
+    if (words) endEl.replaceChildren(words[0], Object.assign(document.createElement('small'), { textContent: words[1] }));
+    // Emptied once faded, so the same words are announced again at the next ending.
+    else endClear = window.setTimeout(() => endEl.replaceChildren(), 450);
+    placeNote();
   };
   const refresh = () => {
     map.refresh();
@@ -303,7 +348,7 @@ function start() {
     void setSpecies('firefly').finally(() => (speciesPending = false));
   }
 
-  const setRibbon = mountScrubber($('bar'), time, () => registry.activeLayers().find((l) => l.endNote)?.endNote);
+  const setRibbon = mountScrubber($('bar'), time, () => registry.activeLayers().find((l) => l.endNote)?.endNote, showEnd);
   // The slider's track pictures the active species' season; a season or species change redraws it.
   // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
   let ribbonFrame = 0;
