@@ -17,6 +17,7 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 - **Hover or tap a hexagon** for its forecast: when the first moths show up and the busiest days.
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
 - **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
+- **Install it:** on a phone, *Share → Add to Home Screen* (iPhone) or *Install app* (Android) puts a hand-drawn moth on your home screen. After one visit it opens with no signal too.
 - **"How sure?"** is always on screen and opens the honest version: how far off the forecast is, and what it can't do yet.
 
 | Desktop | Phone |
@@ -101,6 +102,8 @@ npm run dev          # http://localhost:5173
 npm run build        # type-check + dist/
 npm run build:single # one self-contained dist-single/index.html (opens with no network)
 npm run check        # both builds, bundle budget and all smoke tests
+npm run icons        # app icons + favicon PNGs from public/icons/moth.svg and public/favicon.svg
+npm run og           # the link-preview card, public/og.png (a real map screenshot)
 ```
 
 The Python side: `pip install -r notebooks/requirements.txt`, then see [pipeline/fit/README.md](pipeline/fit/README.md) and [pipeline/replay/README.md](pipeline/replay/README.md). [RUNBOOK.md](RUNBOOK.md) covers the screenshot tests and deploys.

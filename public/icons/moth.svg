@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <filter id="pen" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3"/>
+    </filter>
+    <g id="half">
+      <!-- forewing -->
+      <path d="M262 186 C300 150 370 106 426 92 C448 88 452 112 444 140 C434 180 420 210 398 236 C352 252 302 242 264 222 Z" fill="#b9dd8c"/>
+      <!-- hindwing with long tail -->
+      <path d="M264 226 C322 232 384 248 378 300 C372 342 334 360 320 400 C312 436 318 466 312 494 C298 470 296 424 290 380 C282 334 272 302 264 280 Z" fill="#b9dd8c"/>
+      <!-- watercolour pooling toward the body -->
+      <path d="M264 196 C300 178 340 170 372 176 C350 210 310 224 266 216 Z" fill="#9cc874" opacity=".7"/>
+      <path d="M266 236 C306 242 342 256 344 290 C328 318 300 316 276 290 Z" fill="#9cc874" opacity=".7"/>
+      <!-- ink outlines -->
+      <g fill="none" stroke="#2b241c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M262 186 C300 150 370 106 426 92 C448 88 452 112 444 140 C434 180 420 210 398 236 C352 252 302 242 264 222"/>
+        <path d="M264 226 C322 232 384 248 378 300 C372 342 334 360 320 400 C312 436 318 466 312 494 C298 470 296 424 290 380 C282 334 272 302 264 280"/>
+      </g>
+      <!-- maroon leading edge -->
+      <path d="M258 182 C300 146 370 102 428 88" fill="none" stroke="#7a3b4a" stroke-width="12" stroke-linecap="round"/>
+      <!-- veins -->
+      <g fill="none" stroke="#2b241c" stroke-width="3" stroke-linecap="round" opacity=".55">
+        <path d="M270 200 C320 186 370 176 412 150"/>
+        <path d="M272 210 C320 214 360 224 396 232"/>
+        <path d="M272 240 C310 256 340 290 330 330"/>
+      </g>
+      <!-- eyespots -->
+      <ellipse cx="368" cy="186" rx="13" ry="15" fill="#e8c35a" stroke="#2b241c" stroke-width="5"/>
+      <ellipse cx="368" cy="186" rx="4" ry="6" fill="#7a3b4a"/>
+      <ellipse cx="336" cy="296" rx="16" ry="19" fill="#e8c35a" stroke="#2b241c" stroke-width="5"/>
+      <ellipse cx="336" cy="296" rx="5" ry="8" fill="#7a3b4a"/>
+      <!-- feathery antenna -->
+      <g fill="none" stroke="#2b241c" stroke-linecap="round">
+        <path d="M262 152 C272 126 286 104 306 86" stroke-width="5"/>
+        <path d="M270 132 l14 -2 M278 118 l12 -3 M288 104 l11 -4 M268 140 l-8 -8 M276 124 l-8 -9 M286 110 l-7 -9 M296 96 l-6 -9" stroke-width="3"/>
+      </g>
+    </g>
+  </defs>
+  <g filter="url(#pen)">
+    <use href="#half"/>
+    <use href="#half" transform="translate(512 0) scale(-1 1)"/>
+    <!-- maroon collar across the thorax -->
+    <path d="M232 184 C246 174 266 174 280 184" fill="none" stroke="#7a3b4a" stroke-width="12" stroke-linecap="round"/>
+    <!-- body -->
+    <ellipse cx="256" cy="236" rx="17" ry="64" fill="#f3f0dc" stroke="#2b241c" stroke-width="7"/>
+    <path d="M244 230 h24 M243 250 h26 M246 270 h20" stroke="#2b241c" stroke-width="3" opacity=".5"/>
+    <circle cx="256" cy="162" r="14" fill="#f3f0dc" stroke="#2b241c" stroke-width="7"/>
+  </g>
+</svg>

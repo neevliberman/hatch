@@ -460,3 +460,8 @@ function start() {
 }
 
 start();
+
+// Offline + install to home screen: only the deployed build has a dist/sw.js, and only https (not file://, artifacts).
+if (__HATCH_SW__ && 'serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}
