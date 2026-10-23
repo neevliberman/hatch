@@ -96,7 +96,21 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         return true;
       } catch (e) {
         // The last line of Playwright's log says why (hidden, moving, or which element sits on top).
-        fail(`could not tap ${sel} (${String(e.message).trim().split('\n').pop().replace(/\x1b\[\d+m/g, '').trim()})`);
+        // Where it sat over a few frames, and what is still animating, says what keeps it from settling.
+        const seen = await page.evaluate((s) => new Promise((done) => {
+          const boxes = [];
+          const t0 = performance.now();
+          const step = () => {
+            const el = document.querySelector(s);
+            const r = el?.getBoundingClientRect();
+            boxes.push(r ? [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10).join(',') : 'gone');
+            if (boxes.length < 6) requestAnimationFrame(step);
+            else done(`${[...new Set(boxes)].join(' / ')} in ${Math.round(performance.now() - t0)}ms; animating: ` +
+              document.getAnimations().map((a) => a.effect?.target?.id || a.effect?.target?.className || '?').join(' ').slice(0, 120));
+          };
+          requestAnimationFrame(step);
+        }), sel).catch((x) => String(x).slice(0, 80));
+        fail(`could not tap ${sel} (${String(e.message).trim().split('\n').pop().replace(/\x1b\[\d+m/g, '').trim()}; ${seen})`);
         return false;
       }
     };
