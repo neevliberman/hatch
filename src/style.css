@@ -360,3 +360,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .brand small { font-family: var(--font-note); font-size: 18px; color: var(--moon); font-weight: 600; }
 #why { font-family: var(--font-note); font-size: 17px; text-decoration-style: wavy; text-underline-offset: 3px; }
 .now b { font-family: var(--font-note); font-size: 14px; line-height: 1; text-transform: none; font-weight: 600; }
+
+/* Smallest phones: keep the legend at three rows so the map keeps its height. */
+@media (max-width: 340px) {
+  .lg-items { font-size: 12px; gap: 2px 8px; }
+}

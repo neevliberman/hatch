@@ -508,7 +508,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
         `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
-        `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${data.model?.holdout_mae.heat.toFixed(1) ?? '7.4'} days off on average, against ${data.model?.holdout_mae.cal.toFixed(1) ?? '6.9'}). So it is not ready for places it has never seen.`,
+        `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${data.model?.holdout_mae.heat.toFixed(1) ?? '7.4'} days off on average, against ${data.model?.holdout_mae.cal.toFixed(1) ?? '6.9'} for their own usual dates, over just 8 strip-years). So it is not ready for places it has never seen.`,
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
         'This version is about as accurate as the last one, with much less south/north lean. Both beat each area\u2019s usual date.',
       ];
@@ -545,11 +545,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           title: 'How sure is it?',
           text:
             (sc.n
-              ? `In short: the forecast is usually within about ${days(sc.heat)} of when moths really came out and peaked. ` +
-                `Guessing each area\u2019s usual date is off by about ${days(sc.calendar)}. ` +
+              ? (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '') +
+                `In short: for each strip of the map, the forecast\u2019s dates for the first moths and the peak were off by about ${days(sc.heat)} on average, judged by when people\u2019s sightings showed them. ` +
+                `Guessing each area\u2019s usual date was off by about ${days(sc.calendar)} on average. ` +
                 `That was checked on ${mode === TYPICAL ? 'past years' : mode}, which the forecast hadn\u2019t learned from. ` +
-                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ') +
-                (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '')
+                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
             'Not proven yet. It does well on years it was not trained on. But trained without Wisconsin and Minnesota, it did worse there than a guess from past years. The real test is the 2026 season, once its weather data is out in mid-2027.',
           bars: [
@@ -580,7 +580,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
     credits() {
       return [
-        { text: 'Sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.', href: 'https://www.inaturalist.org/taxa/47981-Actias-luna' },
+        { text: 'Sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.', href: `https://www.inaturalist.org/taxa/${data.species.inat_taxon}` },
         { text: 'Temperatures: Daymet v4 daily 1 km, Thornton et al., ORNL DAAC.', href: 'https://daymet.ornl.gov/' },
         { text: 'State outlines: US Census Bureau, via us-atlas.', href: 'https://github.com/topojson/us-atlas' },
       ];
