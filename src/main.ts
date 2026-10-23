@@ -280,15 +280,15 @@ function start() {
   // A ?season=live link opens on the default view until the file arrives: keep "season=live" in the address bar meanwhile.
   let livePending = asked === LIVE;
   const fillPicker = () => {
-    const what = cur === luna ? 'moths' : 'fireflies';
+    const what = cur.words.plural;
     const keep = picker.value || initialMode;
     const live = liveFile && cur === luna ? [LIVE] : [];
     picker.innerHTML = [...live, TYPICAL, ...[...years].reverse()]
-      // The count is first-wave moths (or fireflies) seen; "All years" goes without it so the closed menu fits a small phone.
+      // The count is the species' own (cur.words.countedAs, e.g. first-wave moths); "All years" goes without it so the closed menu fits a small phone.
       .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${seasonCount(m).toLocaleString()} ${what})`}</option>`)
       .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
-    picker.title = `Season to replay (${cur === luna ? 'first-wave moths' : 'fireflies'} seen, in parentheses; ${seasonCount(TYPICAL).toLocaleString()} in all years)`;
+    picker.title = `Season to replay (${cur.words.countedAs} seen, in parentheses; ${seasonCount(TYPICAL).toLocaleString()} in all years)`;
   };
   fillPicker();
   // This season, live: "next real season ... days from now" would contradict the map.
@@ -343,11 +343,11 @@ function start() {
     cur = next;
     seasonCount = cur === luna ? firstBroodCount : fireflyCount;
     fillPicker();
-    $('tagline').textContent = cur === luna ? 'when luna moths fly' : 'when fireflies glow';
-    $('dots-what').textContent = cur === luna ? 'moths' : 'fireflies';
+    $('tagline').textContent = cur.words.tagline;
+    $('dots-what').textContent = cur.words.plural;
     showCountdown();
     syncCountdown();
-    $('map').setAttribute('aria-label', `Map of the Midwest: ${cur === luna ? 'luna moth' : 'firefly'} sightings over hexagons colored by the forecast`);
+    $('map').setAttribute('aria-label', `Map of the Midwest: ${cur.words.sightingsOf} sightings over hexagons colored by the forecast`);
     registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
     // Old one off first, so the two never draw together for a frame.
     registry.setActive((cur === luna ? firefly : luna)!.id, false);
@@ -454,7 +454,7 @@ function start() {
   $('share').addEventListener('click', async () => {
     const url = new URL(viewUrl(), location.href).href;
     try {
-      if (navigator.share) await navigator.share({ title: `Hatch: when ${cur === luna ? 'luna moths' : 'fireflies'} come out`, url });
+      if (navigator.share) await navigator.share({ title: `Hatch: when ${cur.words.shareName} come out`, url });
       else {
         await navigator.clipboard.writeText(url);
         say('Link copied');

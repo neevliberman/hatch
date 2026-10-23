@@ -1,7 +1,7 @@
 {
-  "name": "Hatch: when luna moths fly",
+  "name": "Hatch: when insects come out",
   "short_name": "Hatch",
-  "description": "When do luna moths fly near you? A heat forecast for the Midwest, checked against real sightings.",
+  "description": "When will insects like luna moths and fireflies come out near you? A forecast for the Midwest, checked against real sightings.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

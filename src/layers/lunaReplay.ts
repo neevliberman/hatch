@@ -430,6 +430,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   return {
     id: 'luna-replay',
     title: 'Luna moth',
+    words: { tagline: 'when luna moths fly', plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths' },
     mode: () => mode,
     setMode(m) {
       mode = m;
