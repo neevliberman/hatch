@@ -130,8 +130,10 @@ function start() {
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
-        // A hex pinned from My area or the city menu has no picked object, so the cell alone decides.
-        const same = pinned && h !== null && hit !== null && h.cell === hit.cell && (!hit.picked || h.picked?.object === hit.picked.object);
+        // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
+        // landed on a neighbour (a point near a hex edge). A hex pinned from My area or the city menu has no picked
+        // object, so the cell alone decides.
+        const same = pinned && h !== null && hit !== null && (hit.picked ? h.picked?.object === hit.picked.object : h.cell === hit.cell);
         pinned = h !== null && !same;
         hit = pinned ? h : null;
         map.setMarker(null); // any tap replaces the "My area" pin
