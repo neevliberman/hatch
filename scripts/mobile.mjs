@@ -149,6 +149,9 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       await page.waitForTimeout(1000);
       if (await page.locator('#probe').isHidden()) fail('"My area" showed no card');
       await shot('4-my-area');
+      // My area zooms in on you; go back to the whole Midwest for the pinch test below.
+      if (await page.locator('#recenter').isHidden()) fail('"My area" did not zoom in on you');
+      else await tap('#recenter');
     }
 
     await page.evaluate(() => {

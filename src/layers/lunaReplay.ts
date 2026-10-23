@@ -217,7 +217,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
   // The default spot until a hex is tapped: Chicago's western suburbs (the city's own hex centre is in the lake).
   const HOME: [number, number] = [-88.0, 41.9];
-  const spotStory = (lngLat: [number, number] | null, t: number): SpotStory | null => {
+  const spotStory = (lngLat: [number, number] | null, t: number, name?: string): SpotStory | null => {
     const at = lngLat ?? HOME;
     const hit = lookup(at);
     if (!hit) return null;
@@ -227,7 +227,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const f = (d: number) => fmtDoy(year, d);
     const doy = dayOfYear(t);
     const stage = stageAt(hit.q, doy);
-    const place = lngLat ? 'this spot' : 'Chicago';
+    const place = lngLat ? (name ?? 'this spot') : 'Chicago';
     const busy = `busiest ${f(q25)} to ${f(q75)}`;
     const sentence = {
       'not yet': `On ${f(doy)}, the forecast says it is too early near ${place}. First moths about ${f(q05)}, ${busy}.`,
@@ -239,7 +239,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const end = q95 ?? 273;
     const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
     return {
-      title: lngLat ? 'The spot you picked' : 'Example: the Chicago area',
+      title: lngLat ? (name ? `Near ${name}` : 'The spot you picked') : 'Example: the Chicago area',
       sentence,
       // The slider's range, 1 Apr - 30 Sep, with a label on the first of each month (real days of year, so leap years line up).
       span: [dayOfYear(Date.UTC(year, 3, 1)), dayOfYear(Date.UTC(year, 8, 30))],
@@ -531,7 +531,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           { title: 'Moths come out', text: 'So a warm spring means early moths, and a cold spring means late ones.' },
         ],
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
-        spot: (lngLat, t) => spotStory(lngLat, t),
+        spot: (lngLat, t, name) => spotStory(lngLat, t, name),
         score: {
           title: 'How sure is it?',
           text:

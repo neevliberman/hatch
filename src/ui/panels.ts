@@ -53,8 +53,8 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): void {
   render();
 }
 
-/** Hover/tap probe card: each active layer's answer to "what's here?". */
-export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: ProbeHit | null, t: number): void {
+/** Hover/tap probe card: each active layer's answer to "what's here?". A pinned card gets a close button. */
+export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: ProbeHit | null, t: number, pinned = false): void {
   const cards = hit
     ? registry
         .activeLayers()
@@ -66,7 +66,9 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
     root.hidden = true;
     return;
   }
-  root.innerHTML = cards
+  root.innerHTML = (pinned ? '<button type="button" class="probe-close" aria-label="Close this card">&times;</button>' : '') +
+    (hit?.label ? `<div class="probe-cell">Near ${esc(hit.label)}</div>` : '') +
+    cards
     .map(
       (card) =>
         `<div class="probe-card"><div class="probe-title">${esc(card.title)}</div>${card.lines
