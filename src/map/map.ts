@@ -7,6 +7,7 @@ import { GRID_RES, MIDWEST_BOUNDS } from '../core/grid';
 import type { LayerRegistry } from '../core/registry';
 import type { TimeAxis } from '../core/timeAxis';
 import { basemapLayers, theme } from './basemap';
+import { palette } from '../theme';
 
 export interface ProbeHit {
   cell: string;
@@ -150,8 +151,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
             radiusUnits: 'pixels',
             stroked: true,
             filled: true,
-            getFillColor: [245, 215, 110, 255],
-            getLineColor: [11, 15, 23, 255],
+            getFillColor: palette.marker,
+            getLineColor: palette.dotRim,
             getLineWidth: 3,
             lineWidthUnits: 'pixels',
           }),
@@ -169,7 +170,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
             filled: false,
             stroked: true,
             extruded: false,
-            getLineColor: [245, 215, 110, 255],
+            getLineColor: palette.pick,
             lineWidthUnits: 'pixels',
             getLineWidth: 3,
           }),
