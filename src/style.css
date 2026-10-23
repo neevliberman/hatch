@@ -33,6 +33,8 @@
   --today: #2b241c;
   --radius: 10px;
   --sun: #c07a16;
+  --wash-tan: #b9955f;
+  --wash-leaf: #a9cf7a;
   --font-body: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Fraunces', Georgia, serif;
   --font-note: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
@@ -289,8 +291,12 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-fig { margin: 0; }
 /* The picture strip is pen on paper: ink lines, a watercolour wash under them, hatching for shade (src/ui/explainer.ts). */
 .ex-defs { position: absolute; width: 0; height: 0; }
-.ex-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+.ex-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
   font-size: 12.5px; line-height: 1.3; color: var(--muted); text-align: center; }
+/* A pen arrow between panels, so they read as one story: this, then this. */
+.ex-steps li { position: relative; }
+.ex-steps li:not(:last-child)::after { content: '\2192'; position: absolute; right: -12px; top: calc(42% - 34px); width: 12px;
+  font: 600 18px var(--font-note); color: var(--warn); text-align: center; }
 .ex-steps b { display: block; color: var(--text); font-size: 12.5px; margin: 2px 0; }
 .ex-pane { display: block; width: 100%; height: auto; overflow: visible; }
 .ex-pane path, .ex-pane circle { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
@@ -304,8 +310,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-pane .trail { stroke: var(--muted); stroke-width: 0.9; stroke-dasharray: 0.5 3; }
 .ex-pane .wash { stroke: none; opacity: 0.6; mix-blend-mode: multiply; }
 .ex-pane .wash.sun { fill: var(--sun); opacity: 0.45; }
-.ex-pane .wash.tan { fill: #b9955f; opacity: 0.35; }
-.ex-pane .wash.leaf { fill: #a9cf7a; }
+.ex-pane .wash.tan { fill: var(--wash-tan); opacity: 0.35; }
+.ex-pane .wash.leaf { fill: var(--wash-leaf); }
 .ex-pane .note { font: 600 12px var(--font-note); fill: var(--warn); }
 .ex-pane .drop { fill: var(--sun); stroke: none; opacity: 0; animation: ex-drop 2.4s ease-in infinite; }
 .ex-pane .flap { animation: ex-flap 0.45s ease-in-out infinite alternate; }

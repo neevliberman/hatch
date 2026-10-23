@@ -66,29 +66,30 @@ const FRAME = 'M3 5C30 3 66 6 97 4 96 30 98 56 96 80 66 82 32 79 4 81 5 56 2 30 
 
 function panes(fid: string, ex: Explainer, moving: boolean): string[] {
   const c = CREATURES[ex.creature];
-  // Warm days stack up in the jar, hotter days taller, until the pile reaches the "enough" line.
-  const days = [5, 7, 4, 8, 6, 9];
+  // Warm days stack up in the jar, hotter days taller, until the top block pokes over the "enough" line; it fills in
+  // about four seconds, then stays full for most of the loop.
+  const days = [5, 7, 4, 8, 6, 10];
   let top = 74;
   const blocks = days
     .map((h, i) => {
       top -= h;
-      const at = (0.08 + i * 0.1).toFixed(2);
+      const at = (0.03 + i * 0.07).toFixed(2);
       const show = moving
-        ? `<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;${at};${(+at + 0.02).toFixed(2)};0.92;1" dur="10s" repeatCount="indefinite"/>`
+        ? `<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;${at};${(+at + 0.02).toFixed(2)};0.95;1" dur="10s" repeatCount="indefinite"/>`
         : '';
       return `<g>${show}<rect class="wash sun" x="62" y="${top}" width="22" height="${h}"/>${scribble(73, top + h / 2, 10, h / 2 - 0.6, 2.2, 11 + i, true)}
         ${ink(`M62 ${top}c7 .6 15-.6 22 0`, 'thin')}</g>`;
     })
     .join('');
   const drops = [0, 1, 2].map((i) => `<circle class="drop" r="1.6" cx="30" cy="22" style="animation-delay:${i * 0.8}s"/>`).join('');
-  const sun = `<circle class="wash sun" cx="18" cy="16" r="7"/>${ink('M11 16c0-5 3-7 7-7s7 3 7 7-3 7-7 7-7-3-7-7Z')}
+  const sun = `<circle class="wash sun" cx="16" cy="14" r="7"/>${ink('M9 14c0-5 3-7 7-7s7 3 7 7-3 7-7 7-7-3-7-7Z')}
     ${ink(Array.from({ length: 8 }, (_, i) => {
       const a = (i * Math.PI) / 4;
-      const p = (r: number) => `${(18 + r * Math.cos(a)).toFixed(1)} ${(16 + r * Math.sin(a)).toFixed(1)}`;
+      const p = (r: number) => `${(16 + r * Math.cos(a)).toFixed(1)} ${(14 + r * Math.sin(a)).toFixed(1)}`;
       return `M${p(10)}L${p(14)}`;
     }).join(''), 'thin')}`;
-  const jar = `${blocks}${ink('M61 20c1 18-1 36 0 54 8 1 16-1 24 0-1-18 1-36 0-54')}${ink('M52 35c13 .5 28-.5 42 0', 'dash')}
-    <text class="note" x="58" y="44" text-anchor="end">enough</text>`;
+  const jar = `${blocks}${ink('M61 20c1 18-1 36 0 54 8 1 16-1 24 0-1-18 1-36 0-54')}${ink('M54 36c13 .5 26-.5 38 0', 'dash')}
+    <text class="note" x="57" y="33" text-anchor="end">enough</text>`;
   const trail = '<path class="trail" d="M28 56c6-14-10-18 2-28s22 2 30-4"/>';
   const bug = `<g transform="translate(70 30) scale(.85)"><g class="flap">${c.wing}<g transform="scale(-1,1)">${c.wing}</g></g>${c.body}</g>`;
   return [
