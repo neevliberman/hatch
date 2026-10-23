@@ -23,8 +23,13 @@ jobs:
           cache: npm
       - run: npm ci
       # The Ubuntu apt mirror sometimes stalls and the step would sit until the job's 30-minute limit: give each try 8
-      # minutes and try twice.
-      - run: timeout 480 npx playwright install --with-deps chromium firefox webkit || timeout 480 npx playwright install --with-deps chromium firefox webkit
+      # minutes, and after a failed try (a mirror mid-sync fails fast) wait, refresh the package lists and try again.
+      - run: |
+          for i in 1 2 3; do
+            timeout 480 npx playwright install --with-deps chromium firefox webkit && exit 0
+            sleep 30; sudo apt-get update -q || true
+          done
+          exit 1
       - run: npm run build:all   # dist/ too: the live-mode checks serve it over http
       - run: xvfb-run -a npm run desktop
       - if: always()

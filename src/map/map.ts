@@ -237,7 +237,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   container.addEventListener('pointerup', (e) => {
     const d = touchDown;
     touchDown = null;
-    if (!d || e.pointerType !== 'touch' || e.timeStamp - d.t > 500 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+    // 1 s, not the usual 0.5: a busy phone can stamp the lift late, and a press that long still didn't move.
+    if (!d || e.pointerType !== 'touch' || e.timeStamp - d.t > 1000 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
     const r = container.getBoundingClientRect();
     const info = deck.pickObject({ x: e.clientX - r.left, y: e.clientY - r.top });
     onProbe(info ? hit(info) : null, true);
