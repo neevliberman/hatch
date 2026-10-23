@@ -75,7 +75,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
 .icon-btn:hover { border-color: var(--line-strong); }
 .icon-btn:focus-visible, select:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
-  details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details summary:focus-visible, .lg-fold:focus-visible, .lg-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
 #info-btn { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 20px; }
 
@@ -168,6 +168,24 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .lg-ramp { height: 10px; border-radius: 5px; }
 .lg-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
 .lg-note { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 3px; }
+.lg-fold, .lg-chip { display: none; }
+/* Under 1000px the key sits over the map: it can fold to a one-line chip (it folds itself after the first tap or Play). */
+@media (max-width: 999px) {
+  #legend .legend-card { position: relative; }
+  /* A small round badge on the card's top-left corner (the right one is under the recenter button), so it costs the
+     key no width (a row on the smallest phones). */
+  .lg-fold { display: grid; place-items: center; position: absolute; top: -12px; left: -6px; width: 28px; height: 28px; padding: 0;
+    border: 1px solid var(--line); background: var(--panel-solid); color: var(--muted); font-size: 18px; line-height: 1;
+    cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+  .lg-fold::before { content: ''; position: absolute; inset: -8px; } /* 44px to the finger, 28px to the eye */
+  #legend.folded .legend-card { display: none; }
+  #legend.folded .lg-chip { display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; font: inherit; font-size: 13px; font-weight: 700;
+    color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .lg-chip span { margin-left: 3px; }
+  #legend.folded .lg-chip { position: relative; }
+  .lg-chip::before { content: ''; position: absolute; inset: -4px; } /* 44px tall to the finger */
+}
 #probe { max-width: 300px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; }
 #probe[hidden] { display: none; }
 .probe-cell { color: var(--muted); font-size: 12px; margin-bottom: 4px; }

@@ -90,6 +90,9 @@ function start() {
     updateProbe();
   };
 
+  const colourKey = mountLegend($('legend'), registry);
+  time.subscribe(() => time.playing && colourKey.autoFold());
+
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
   const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
@@ -128,6 +131,7 @@ function start() {
         pinned = h !== null && !same;
         hit = pinned ? h : null;
         map.setMarker(null); // any tap replaces the "My area" pin
+        colourKey.autoFold(); // the reader has found the map: fold the key to a chip on small screens
       } else if (!pinned) hit = h;
       updateProbe();
     },
@@ -225,7 +229,6 @@ function start() {
 
   mountScrubber($('bar'), time);
   mountLayerList($('layers'), registry);
-  mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t, pinned ? hit?.label : undefined);
   // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,

@@ -212,7 +212,10 @@ for (const [engine, width, height] of screens) {
   await page.goto(file + '?noauto');
   await page.waitForTimeout(1500);
   const order = [];
-  for (let i = 0; i < TAB_ORDER.length + 3 && order.length < TAB_ORDER.length; i++) {
+  // Under 1000px the colour key can fold, so its fold button (or, folded, its "Key" chip) comes right after About.
+  const key = (await page.locator('#key-fold').isVisible()) ? 'key-fold' : (await page.locator('#key-chip').isVisible()) ? 'key-chip' : null;
+  const want = key ? [...TAB_ORDER.slice(0, 2), key, ...TAB_ORDER.slice(2)] : TAB_ORDER;
+  for (let i = 0; i < want.length + 3 && order.length < want.length; i++) {
     await page.keyboard.press('Tab');
     const f = await page.evaluate(() => {
       const el = document.activeElement;
@@ -221,14 +224,14 @@ for (const [engine, width, height] of screens) {
       return { id: el.id || el.tagName.toLowerCase(), ring: (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none' };
     });
     if (!f) continue;
-    if (!TAB_ORDER.includes(f.id)) {
+    if (!want.includes(f.id)) {
       fail(`Tab stops on ${f.id}, which is not a control`);
       continue;
     }
     order.push(f.id);
     if (!f.ring) fail(`${f.id} shows no focus ring`);
   }
-  if (order.join() !== TAB_ORDER.join()) fail(`Tab order is ${order.join(' > ')} (want ${TAB_ORDER.join(' > ')})`);
+  if (order.join() !== want.join()) fail(`Tab order is ${order.join(' > ')} (want ${want.join(' > ')})`);
   // On the focused slider, plain arrows step one day and the slider says the date, not a number.
   const dr = await page.locator('#t-date').textContent();
   await page.keyboard.press('ArrowRight');
