@@ -1,5 +1,8 @@
 # Phone smoke test on every PR and push to main: iPhone (WebKit) and Android (Chromium) sizes, portrait and landscape.
-# Screenshots are uploaded as an artifact either way, so a failure can be looked at, not just read.
+# Then the first-frames check (scripts/firstframes.mjs), which uses the same two engines.
+# Each engine is its own job, run side by side in Playwright's official image (browsers and their system libraries
+# already inside, so no apt install). Screenshots are uploaded either way, so a failure can be looked at, not just read,
+# then merged into one "mobile-screenshots" artifact by the "mobile" job, the one pass/fail check for the workflow.
 name: mobile-smoke
 on:
   pull_request:
@@ -8,30 +11,59 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A new push to a PR cancels that PR's older run; every other run (main, manual) gets its own group and always finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  mobile:
+  engine:
+    name: mobile (${{ matrix.engine }})
     runs-on: ubuntu-latest
-    # The apt mirror behind --with-deps sometimes crawls (10+ minutes); the tests themselves take a few.
-    timeout-minutes: 45
+    # Keep the tag in step with the playwright version in package.json: the image's browsers are built for it.
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false   # one engine failing still lets the other report
+      matrix:
+        engine: [chromium, webkit]
+    env:
+      HOME: /root
+      ENGINES: ${{ matrix.engine }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4   # the image's own Node; this only restores the npm cache
         with:
-          node-version: 22
           cache: npm
       - run: npm ci
-      # No timeout or retry around this: killing the installer leaves its apt-get running and holding the lock, so a
-      # retry only fails faster. A slow apt mirror is waited out under the job's limit instead.
-      - run: |
-          echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-lock-wait
-          npx playwright install --with-deps chromium webkit
-      - run: npm run build:single
+      - id: build
+        run: npm run build:single
       - run: npm run mobile
+      # The first seconds of load, which the step above skips: fails on a stretched or misplaced first map frame, and
+      # films each screen for the visual review in CONTRIBUTING.md. Runs once scripts/firstframes.mjs exists (PR #41).
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' && hashFiles('scripts/firstframes.mjs') != '' }}
+        run: npm run firstframes
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-screenshots
-          path: screenshots/mobile
+          name: mobile-screenshots-${{ matrix.engine }}
+          path: |
+            screenshots/mobile
+            screenshots/firstframes
           retention-days: 14
+  mobile:
+    needs: engine
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/upload-artifact/merge@v4
+        continue-on-error: true   # nothing to merge when every engine failed before taking a screenshot
+        with:
+          name: mobile-screenshots
+          pattern: mobile-screenshots-*
+          overwrite: true   # per-engine artifacts are kept, so re-running one engine merges all of them again
+          retention-days: 14
+      - name: All engines passed
+        run: test "${{ needs.engine.result }}" = success
