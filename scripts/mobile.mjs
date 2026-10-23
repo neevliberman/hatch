@@ -142,13 +142,16 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     if (!(await page.locator('#drawer.open').count())) fail('a tap on the map beside the open drawer closed it');
     else if (sheet) {
       // At the middle stop the tapped hexagon's season shows in the sheet (deck holds a tap back for the double-tap window).
-      const filled = await page.waitForFunction((t) => document.querySelector('[data-spot] .spot-title')?.textContent !== t, spot0, { timeout: 3000 })
+      const filled = await page.waitForFunction((t) => document.querySelector('[data-spot] .spot-title')?.textContent !== t, spot0, { timeout: 6000 })
         .then(() => true, () => false);
       if (!filled) fail('a tap on the map at the middle stop did not fill the spot card');
     }
     await shot('1b-drawer-and-map');
     await tap('#drawer-close');
     await page.waitForTimeout(400);
+    // On a ~2fps CI frame a tap can land before the button takes it: one more try, then it is a real failure.
+    if (await page.locator('#drawer.open').count()) await tap('#drawer-close'), await page.waitForTimeout(600);
+    if (await page.locator('#drawer.open').count()) fail('the drawer close button did not close it');
     if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
     if (sheet && (await tap('#why'))) {
       // Slow CI frames: wait for the sheet to finish rising, or the tap aimed above it lands on it.
