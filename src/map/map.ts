@@ -302,14 +302,40 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   for (const type of ['pointerdown', 'wheel']) container.addEventListener(type, () => (grabbed = true), { capture: true, passive: true });
   container.addEventListener('pointerdown', () => down++, { capture: true });
   for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => (down = Math.max(0, down - 1)), { capture: true });
-  // A phone can take the graphics context back to save memory, which leaves only plain water. Say so, with a way back
-  // (the link in the address bar keeps the place, zoom and day).
-  container.addEventListener('webglcontextlost', () => {
-    if (document.getElementById('map-lost')) return;
-    container.insertAdjacentHTML('afterend', `<p id="map-lost" role="alert">The browser paused the map to save memory.
-      <button type="button">Redraw</button></p>`);
-    document.querySelector('#map-lost button')!.addEventListener('click', () => location.reload());
-  }, true);
+  // A phone can take the graphics context back to save memory, which leaves only plain water. Ask for it back
+  // (preventDefault is what lets the browser offer a restore), then redraw by reloading: the link in the address bar
+  // keeps the place, zoom and day (main.ts writes it on pagehide). Automatic reloads are capped at one a minute and
+  // three a visit, so a phone short on memory can't loop; past that, or while the tab is hidden, a Redraw button waits.
+  let lost = false;
+  const stamp = (): [number, number] => {
+    try { const [n, t] = (sessionStorage.getItem('hatch-redraw') ?? '0:0').split(':').map(Number); return [n || 0, t || 0]; }
+    catch { return [3, 0]; } // no storage, no count: don't reload on our own
+  };
+  const mayReload = () => { const [n, t] = stamp(); return n < 3 && Date.now() - t > 60_000; };
+  const recover = () => {
+    if (!lost || document.visibilityState !== 'visible' || !mayReload()) return;
+    try { sessionStorage.setItem('hatch-redraw', `${stamp()[0] + 1}:${Date.now()}`); } catch { return; }
+    location.reload();
+  };
+  const onLost = () => {
+    if (lost) return;
+    lost = true;
+    const auto = document.visibilityState === 'visible' && mayReload();
+    container.insertAdjacentHTML('afterend', auto ? '<p id="map-lost" role="alert">Redrawing the map…</p>'
+      : '<p id="map-lost" role="alert">The browser paused the map to save memory. <button type="button">Redraw</button></p>');
+    const button = document.querySelector<HTMLButtonElement>('#map-lost button');
+    button?.addEventListener('click', () => location.reload());
+    button?.focus();
+    // Lost while in view usually means no restore is coming: give the browser a moment, then try once.
+    if (auto) setTimeout(recover, 1500);
+  };
+  container.addEventListener('webglcontextlost', (e) => { e.preventDefault(); onLost(); }, true);
+  container.addEventListener('webglcontextrestored', recover, true);
+  document.addEventListener('visibilitychange', recover);
+  // Back from the back/forward cache with a dead context, no lost event fires.
+  addEventListener('pageshow', (e) => {
+    if (e.persisted && container.querySelector('canvas')?.getContext('webgl2')?.isContextLost()) { onLost(); recover(); }
+  });
   const rings = document.createElement('div');
   rings.className = 'breath';
   rings.setAttribute('aria-hidden', 'true');
