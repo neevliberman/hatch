@@ -81,7 +81,14 @@ function panes(fid: string, ex: Explainer, moving: boolean): string[] {
         ${ink(`M62 ${top}c7 .6 15-.6 22 0`, 'thin')}</g>`;
     })
     .join('');
-  const drops = [0, 1, 2].map((i) => `<circle class="drop" r="1.6" cx="30" cy="22" style="animation-delay:${i * 0.8}s"/>`).join('');
+  // Warmth drips from the sun into the jar; held still along the way for reduced motion.
+  const drops = [0, 1, 2]
+    .map((i) =>
+      moving
+        ? `<circle class="drop" r="1.6" cx="30" cy="22" style="animation-delay:${i * 0.8}s"/>`
+        : `<circle class="drop still" r="1.6" cx="${32 + i * 13}" cy="${[19, 15, 18][i]}"/>`,
+    )
+    .join('');
   const sun = `<circle class="wash sun" cx="16" cy="14" r="7"/>${ink('M9 14c0-5 3-7 7-7s7 3 7 7-3 7-7 7-7-3-7-7Z')}
     ${ink(Array.from({ length: 8 }, (_, i) => {
       const a = (i * Math.PI) / 4;
@@ -109,7 +116,7 @@ function strip(id: string, ex: Explainer): string {
   return `<svg class="ex-defs" aria-hidden="true" focusable="false"><filter id="${fid}" x="-5%" y="-5%" width="110%" height="110%">
       <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="1"/>
       <feDisplacementMap in="SourceGraphic" scale="2.2" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
-    <ol class="ex-steps">${ex.steps.map((s, i) => `<li>${art[i]}<b>${esc(s.title)}</b>${esc(s.text)}</li>`).join('')}</ol>`;
+    <ol class="ex-steps">${ex.steps.map((s, i) => `<li><div class="ex-pic">${art[i]}${i < 2 ? '<span class="ex-then" aria-hidden="true">\u2192</span>' : ''}</div><b>${esc(s.title)}</b>${esc(s.text)}</li>`).join('')}</ol>`;
 }
 
 /** Swaps the sketch filters' noise seed about seven times a second while the About panel is open, so the pen lines
