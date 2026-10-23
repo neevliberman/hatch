@@ -8,13 +8,15 @@ const still = matchMedia('(prefers-reduced-motion: reduce)');
 /** Draw in-between frames? Only while playing, never under reduced motion, so a hand-scrubbed map matches the slider. */
 export const animating = (playing?: boolean) => !!playing && !still.matches;
 
-/** Forecast hexes blend into their next colour over 140 ms while playing. 1 ms, not 0, at rest: turning a colour
- * transition off makes deck draw the hexes from a freed buffer (blank). A zero-duration transition, which would skip
- * the blend, blanks them the same way (tried in deck 9.4), so a hand-scrubbed day still runs one 1 ms blend: a
- * single small GPU pass over the hexes' colours, too cheap to see. */
-const PLAYING = { getFillColor: 140 };
-const RESTING = { getFillColor: 1 };
-export const hexFade = (anim: boolean) => (anim ? PLAYING : RESTING);
+/**
+ * Forecast hexes blend into their next colour over 140 ms while playback glides. The blending layer gets its own id
+ * suffix (`id`), so at rest, on a hand-scrubbed day, or in a slow device's day-step playback, a plain layer with no
+ * transition at all draws the hexes: no GPU blend pass and no extra frame per day. Switching one layer's transition
+ * off instead (0, null, or a zero duration) made deck draw it from a freed buffer, and the hexes went blank.
+ */
+const BLEND = { id: '-blend', transitions: { getFillColor: 140 } };
+const PLAIN = { id: '', transitions: undefined };
+export const hexFade = (anim: boolean) => (anim ? BLEND : PLAIN);
 
 type Ring<T> = { s: T; at: number };
 

@@ -105,7 +105,8 @@ export interface HatchLayer {
   id: string;
   title: string;
   /** `wash`: ms since the map's first frame while the forecast washes in (south first, 900 ms in all), else undefined.
-   * `playing` and `frac` (how far into the next step, 0 at rest) let a layer draw in-between frames during playback. */
+   * `playing` (playback is gliding: not under reduced motion or on a slow device) and `frac` (how far into the next
+   * step, 0 at rest) let a layer draw in-between frames during playback. */
   render(ctx: { t: number; zoom: number; theme: Theme; wash?: number; playing?: boolean; frac?: number }): Layer[];
   /** Is the season in full swing on day t (e.g. any hexagon starting or at peak)? Playback slows down for those days. */
   busy?(t: number): boolean;
@@ -135,7 +136,8 @@ export interface HatchLayer {
   credits?(): { text: string; href?: string }[];
 }
 
-/** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size (see lunaReplay.ts render). */
+/** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size, with -blend added while playback
+ * glides (see lunaReplay.ts render and motion.ts hexFade). */
 export const isForecast = (layerId: string | undefined) => /^(luna|firefly)-forecast/.test(layerId ?? '');
 /** The hexagon layers (forecast and its stripes): the map draws lakes, rivers and roads over these, under the dots. */
 export const isHexes = (layerId: string) => /^(luna|firefly)-(forecast|unseen)/.test(layerId);

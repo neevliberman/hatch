@@ -48,6 +48,13 @@ export class TimeAxis {
   private raf = 0;
   private last = 0;
   private acc = 0;
+  /** Set when frames run slow during a playback (a slow phone, a software-rendered browser): the rest of that
+   * playback steps a day at a time, with no in-between frames, like reduced motion. Cleared by the next play(). */
+  private slow = false;
+  /** Set once the first frames of a playback come fast enough: only then does it glide. */
+  private fast = false;
+  private frameMs: number[] = [];
+  private lastFrame = 0;
   /** Reduced motion: playback still steps a day at a time, but nothing glides between days. */
   private readonly still = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
@@ -71,9 +78,10 @@ export class TimeAxis {
     return Math.floor((this.end - this.start) / this.stepMs);
   }
 
-  /** Is playback drawing in-between frames (playing, and reduced motion is off)? */
+  /** Is playback drawing in-between frames (playing, reduced motion off, and frames proven fast)? Layers
+   * blend, glide and ripple only while this is true. */
   get gliding(): boolean {
-    return this.playing && !this.still?.matches;
+    return this.playing && this.fast && !this.slow && !this.still?.matches;
   }
 
   get stepIndex(): number {
@@ -111,22 +119,29 @@ export class TimeAxis {
     if (this.playing) return;
     if (this.cursor >= this.start + this.steps * this.stepMs) this.cursor = this.start;
     this.playing = true;
-    this.last = performance.now();
+    this.last = this.lastFrame = performance.now();
     this.acc = 0;
+    this.slow = this.fast = false;
+    this.frameMs = [];
     const tick = (t: number) => {
       if (!this.playing) return;
-      const dt = Math.min(0.1, (t - this.last) / 1000); // a slow or hidden frame must not skip days
+      const raw = t - this.last;
+      const dt = Math.min(0.1, raw / 1000); // a slow or hidden frame must not skip days
       this.last = t;
+      this.watch(raw);
       this.ease(dt);
       this.acc += dt * this.speed;
       const whole = Math.floor(this.acc);
-      const smooth = !this.still?.matches;
+      const smooth = this.gliding;
       if (whole >= 1) {
         this.acc -= whole;
         this.frac = smooth ? this.acc : 0; // before the step, so its listeners already see the new day's fraction
+        this.lastFrame = t;
         this.step(whole); // the day's own listeners redraw this frame, so the frame listeners sit it out
         if (this.stepIndex >= this.steps) return this.pause(); // stop on the last day instead of looping
-      } else if (smooth) {
+      } else if (smooth && t - this.lastFrame >= 30) {
+        // In-between frames at most about 30 a second: smooth enough, and half the drawing on a 60 Hz screen.
+        this.lastFrame = t;
         this.frac = this.acc;
         this.frames.forEach((fn) => fn());
       }
@@ -149,6 +164,27 @@ export class TimeAxis {
     else this.play();
   }
 
+  /** Frame-time watch. A playback starts in plain day steps and only glides once its first 3 frames (after the
+   * first, which carries the click) come fast, so a slow device never builds the blending layers at all. Whenever 2
+   * frames take over 80 ms, or the last 3 to 8 average over 50 ms, the rest of this playback stays in day steps. */
+  private watch(ms: number): void {
+    if (this.slow || this.still?.matches) return;
+    const f = this.frameMs;
+    f.push(ms);
+    if (f.length < 2) return;
+    const seen = f.slice(1);
+    const recent = seen.slice(-8);
+    const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+    if ((recent.length >= 3 && avg > 50) || seen.filter((x) => x > 80).length >= 2) {
+      this.slow = true;
+      this.frac = 0;
+      if (this.fast) this.emit(); // redraw the day without its in-between state (no blend, no ripples)
+    } else if (!this.fast && seen.length >= 3) {
+      this.fast = true;
+      this.emit(); // start gliding: the hexes switch to their blending layer
+    }
+  }
+
   /** Move speed toward pace() at up to 20 steps/s per second: 8 to 18 takes half a second, so it never jerks. */
   private ease(dt: number): void {
     if (!this.pace) return;
@@ -157,7 +193,8 @@ export class TimeAxis {
   }
 
   /** Called on the in-between animation frames while playing (frac changes but the step does not; a frame that
-   * changes the step goes to subscribe() listeners instead, so no frame draws twice). Never under reduced motion. */
+   * changes the step goes to subscribe() listeners instead, so no frame draws twice). At most about 30 a second,
+   * and never under reduced motion or once frames run slow. */
   onFrame(fn: Listener): void {
     this.frames.add(fn);
   }

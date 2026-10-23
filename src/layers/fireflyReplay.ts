@@ -238,7 +238,7 @@ export function createFireflyLayer(
       return [
         new H3HexagonLayer<Cell>({
           // One id per level: reusing an id across levels left the other level's hexes drawn (see lunaReplay.ts).
-          id: `firefly-forecast-r${res}`,
+          id: `firefly-forecast-r${res}${hexFade(anim).id}`,
           data: hexes,
           getHexagon: (c) => c.id,
           // The first-frame wash (a ?species=firefly link), on the coarse hexagons only.
@@ -253,7 +253,7 @@ export function createFireflyLayer(
           autoHighlight: true,
           highlightColor: palette.hoverTint,
           updateTriggers: { getFillColor: [doy, mode, res, wash], getLineColor: [wash, res] },
-          transitions: hexFade(anim),
+          transitions: hexFade(anim).transitions,
         }),
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
           id: `firefly-unseen-r${res}`,

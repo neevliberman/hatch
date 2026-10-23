@@ -422,7 +422,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const hexLayers = fine && days
         ? [
             new H3HexagonLayer<FineCell>({
-              id: `luna-forecast-r${res}`,
+              id: `luna-forecast-r${res}${fade.id}`,
               data: fine.data,
               getHexagon: (c) => c.id,
               getFillColor: (c) => STAGE_COLOR[stageAtBytes(days, c.i, doy)],
@@ -438,7 +438,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               autoHighlight: true,
               highlightColor: palette.hoverTint,
               updateTriggers: { getFillColor: [doy, mode, res] },
-              transitions: fade,
+              transitions: fade.transitions,
             }),
             new H3HexagonLayer<FineCell, FillStyleExtensionProps<FineCell>>({
               id: `luna-unseen-r${res}`,
@@ -462,7 +462,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return [
         ...(hexLayers ?? [
         new H3HexagonLayer<(typeof cells)[number]>({
-          id: 'luna-forecast-r4',
+          id: `luna-forecast-r4${fade.id}`,
           data: cells,
           getHexagon: (c) => c.id,
           getFillColor: wash === undefined ? (c) => cellColor(c.i, doy) : (c) => washed(c.i, cellColor(c.i, doy), wash),
@@ -476,7 +476,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           autoHighlight: true,
           highlightColor: palette.hoverTint,
           updateTriggers: { getFillColor: [doy, mode, wash], getLineColor: [wash] },
-          transitions: fade,
+          transitions: fade.transitions,
         }),
         new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
           id: 'luna-unseen-r4',

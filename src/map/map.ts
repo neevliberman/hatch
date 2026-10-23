@@ -298,7 +298,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
 
   const refresh = () => {
     const { under, mid, over } = basemapLayers(zoom);
-    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.playing, frac: time.frac }));
+    // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
+    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }));
     // Lakes, rivers and roads go over the hexagons but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
