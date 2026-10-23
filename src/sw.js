@@ -1,12 +1,19 @@
 // Offline support, so Hatch opens from a phone's home screen with no signal (and loads faster on a second visit).
 // Not bundled: vite.config.ts copies this to dist/sw.js at build time, filling in VERSION (a hash of every built
-// file) and PRECACHE (the app shell). A new deploy changes VERSION, which installs a fresh cache and drops the old one.
+// file and of this template) and PRECACHE (the app shell). A new deploy changes VERSION, which installs a fresh
+// cache. The new worker waits until every old tab has closed (no skipWaiting), so a page left open across a deploy
+// keeps the cache its bundles came from; then the old cache is dropped.
 const VERSION = '__VERSION__';
 const PRECACHE = __PRECACHE__;
 const CACHE = `hatch-${VERSION}`;
 
+// Only whole, same-origin answers are worth keeping (a 206 partial response can't be cached at all).
+const keepable = (res) => res.status === 200 && res.type === 'basic';
+const store = (key, res) => caches.open(CACHE).then((c) => c.put(key, res)).catch(() => {});
+
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache, which may still hold the previous deploy's page for ~10 minutes.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', (e) => {
@@ -27,7 +34,7 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) caches.open(CACHE).then((c) => c.put('./', res.clone()));
+          if (keepable(res)) e.waitUntil(store('./', res.clone()));
           return res;
         })
         .catch(() => caches.match('./').then((hit) => hit ?? Response.error())),
@@ -41,10 +48,7 @@ self.addEventListener('fetch', (e) => {
       (hit) =>
         hit ??
         fetch(req).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
+          if (keepable(res)) e.waitUntil(store(req, res.clone()));
           return res;
         }),
     ),
