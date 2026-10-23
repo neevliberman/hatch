@@ -90,8 +90,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   const fitState = (p: Padding) => {
     const { width, height } = size();
     fitFor = `${container.clientWidth}x${container.clientHeight}`;
+    // Panels can be taller than the map while the page is still laying out (or on a very short screen): shrink the
+    // padding so at least 40 px are left to fit into, or fitBounds throws.
+    const v = Math.min(1, Math.max(0, height - 40) / Math.max(1, p.top + p.bottom));
+    const right = 12 + (p.right ?? 0);
+    const h = Math.min(1, Math.max(0, width - 40) / (12 + right));
     let vp = new WebMercatorViewport({ width, height }).fitBounds(MIDWEST_BOUNDS, {
-      padding: { top: p.top, bottom: p.bottom, left: 12, right: 12 + (p.right ?? 0) },
+      padding: { top: p.top * v, bottom: p.bottom * v, left: 12 * h, right: right * h },
     });
     // On a tall phone the width limits the fit, which would centre the Midwest and leave a gap above it. Pin its
     // north edge under the header instead: the spare room goes to the bottom, where the hex card docks.
