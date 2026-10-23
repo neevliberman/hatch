@@ -255,9 +255,10 @@ for (const [engine, width, height] of screens) {
   if ((await page.locator('#t-date').textContent()) === d0) fail('Right arrow did not step the date');
   const d1 = await page.locator('#t-date').textContent();
   await page.keyboard.press('Space');
-  await page.waitForTimeout(1200);
+  // Software GL in CI can draw a frame or two a second: give playback a few seconds to move the date.
+  const played = await page.waitForFunction((d) => document.querySelector('#t-date')?.textContent !== d, d1, { timeout: 4000 }).then(() => true, () => false);
   await page.keyboard.press('Space');
-  if ((await page.locator('#t-date').textContent()) === d1) fail('Space did not play');
+  if (!played) fail('Space did not play');
 
   // Resize the window: the map refits to what a fresh load at the new size would show.
   await page.setViewportSize({ width: Math.round(width * 0.75), height: Math.round(height * 0.85) });
