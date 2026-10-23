@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-# A new push to a PR cancels that PR's older run; runs on main always finish.
+# A new push to a PR cancels that PR's older run; every other run (main, manual) gets its own group and always finishes.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   engine:
@@ -54,7 +54,7 @@ jobs:
           retention-days: 14
   mobile:
     needs: engine
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -63,7 +63,7 @@ jobs:
         with:
           name: mobile-screenshots
           pattern: mobile-screenshots-*
-          delete-merged: true
+          overwrite: true   # per-engine artifacts are kept, so re-running one engine merges all of them again
           retention-days: 14
       - name: All engines passed
         run: test "${{ needs.engine.result }}" = success
