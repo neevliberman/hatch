@@ -18,15 +18,18 @@ Analogy: finishing a sentence someone has started.
    of its expected first-brood *sightings* have happened (same quantity as the replay, using the typical moth
    recording effort per state in `effort_profile.json`).
 5. **Summarise.** `median` = the members' median day. `lo` / `hi` = 10th / 90th percentile of member day plus
-   each past real-minus-forecast peak error from the replay's scored band-years. So even a date real weather has
+   each past real-minus-forecast error from the replay's scored band-years (onset errors for the 5% and 25% days,
+   peak errors from the 50% day on). So even a date real weather has
    already fixed keeps the model's honest error (about a week wide), and a far-off date also carries the weather
    spread.
 6. **Sightings so far.** This season's openly licensed iNaturalist luna records (research grade plus needs-ID,
    flag bit 2 = not yet confirmed).
 
 ## Loud when broken
-- Any failed step (feed down, more than 2% of hexes missing weather, temperatures out of range) stops the run before
-  writing; the site keeps the last good file.
+- Any failed step (weather feed down, newest day missing for more than 2% of hexes, fewer than 5 forecast days,
+  temperatures out of range) stops the run before writing; the site keeps the last good file. If only iNat is
+  down, the forecast still publishes with the previous file's dots (`checks.sightings_fresh: false`).
+- Gaps inside the observed record are interpolated; a missing newest day is never invented.
 - A failed run opens a "Live forecast failed" GitHub issue (or comments on the open one).
 - The app's "as of" badge turns amber once the file is older than `stale_after_hours` (36) in season.
 - The workflow re-enables itself every run (GitHub switches off scheduled workflows after 60 quiet days).

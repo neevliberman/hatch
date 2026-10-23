@@ -45,6 +45,7 @@ BASE, UPPER, START_DOY = 10.0, 30.0, 60
 QUANTILES = [0.05, 0.25, 0.5, 0.75, 0.95]
 MAX_DOY = 300
 FORECAST_DAYS = 7
+MIN_FORECAST_DAYS = 5           # fewer complete Open-Meteo days than this -> fail loudly
 SEASON = ((3, 2), (10, 7))      # --auto runs between these (month, day) dates; outside, the last file stands
 MAX_BAD_CELLS = 0.02            # more cells than this with no observed weather -> fail loudly
 TAXON = 47916
@@ -73,25 +74,31 @@ def band_index(lat):
 
 
 def fill_gaps(x):
-    """Fill NaN days in each row by linear interpolation in time (ends: nearest value). Rows all-NaN stay NaN."""
+    """Fill interior NaN days in each row by linear interpolation in time. Leading/trailing NaNs stay NaN: a
+    missing last day is missing data, not something to invent from yesterday."""
     x = np.array(x, float)
     t = np.arange(x.shape[-1])
     for row in x:
         ok = ~np.isnan(row)
-        if ok.any() and not ok.all():
-            row[~ok] = np.interp(t[~ok], t[ok], row[ok])
+        if ok.sum() >= 2 and not ok.all():
+            a, b = np.argmax(ok), len(ok) - 1 - np.argmax(ok[::-1])
+            gap = ~ok & (t > a) & (t < b)
+            row[gap] = np.interp(t[gap], t[ok], row[ok])
     return x
 
 
 def ensemble_summary(days, resid):
-    """days: [member, cell, quantile] doy (np.inf = never). resid: past real-minus-forecast errors (days).
+    """days: [member, cell, quantile] doy (np.inf = never). resid: past real-minus-forecast errors (days), either
+    one list for every quantile or [error, quantile] (onset errors for the early quantiles, peak errors after).
 
     median: the members' median day (None if most members never get there).
     lo / hi: 10th / 90th percentile of (member day + past error) over every member x error pair: weather spread
     and model error together, so a date already fixed by real weather still carries the model's honest error.
     """
     med = np.quantile(days, 0.5, axis=0, method="inverted_cdf")
-    tot = (days[:, None] + np.asarray(resid, float)[None, :, None, None]).reshape(-1, *days.shape[1:])
+    r = np.asarray(resid, float)
+    r = r[:, None] if r.ndim == 1 else r                       # [error, quantile or 1]
+    tot = (days[:, None] + r[None, :, None, :]).reshape(-1, *days.shape[1:])
     lo = np.quantile(tot, 0.1, axis=0, method="inverted_cdf")
     hi = np.quantile(tot, 0.9, axis=0, method="inverted_cdf")
 
@@ -120,6 +127,8 @@ def observed(cells, start, end, offsets):
     tmin += offsets[:, months, 0]
     tmax += offsets[:, months, 1]
     tmin, tmax = fill_gaps(tmin), fill_gaps(tmax)
+    if (np.isnan(tmin[:, -1]) | np.isnan(tmax[:, -1])).mean() > MAX_BAD_CELLS:
+        raise SystemExit(f"PRISM: {end} is missing for too many cells (not posted yet?); not writing.")
     bad = np.isnan(tmin).any(1) | np.isnan(tmax).any(1)
     if bad.mean() > MAX_BAD_CELLS:
         raise SystemExit(f"PRISM: {bad.sum()}/{len(cells)} cells have no data for {start}..{end}; not writing.")
@@ -186,7 +195,7 @@ def season_sightings(season, as_of, cutoffs):
 
 
 # ---------------------------------------------------------------- main
-def build(season, as_of, use_forecast, today):
+def build(season, as_of, use_forecast, today, prev=None):
     t0 = time.time()
     replay = json.loads(REPLAY.read_text())
     cells = replay["cells"]
@@ -208,8 +217,8 @@ def build(season, as_of, use_forecast, today):
 
     # 1. analog years (Daymet), the base every trajectory is written onto
     _, years, a_min, a_max = temperature_cube(cells, *ANALOG_YEARS, fdata.DATA / "daymet")
-    # 2. observed this season
-    start = dt.date(season, 3, 1)
+    # 2. observed this season, from the first model day (day index 59: 1 March, or 29 Feb in a leap year)
+    start = dt.date(season, 1, 1) + dt.timedelta(days=START_DOY - 1)
     o_min, o_max, n_borrowed = observed(cells, start, as_of, offsets)
     check_temps("PRISM", o_min, o_max)
     i0, i1 = day_index(start), day_index(as_of) + 1             # observed day indices [i0, i1)
@@ -223,6 +232,8 @@ def build(season, as_of, use_forecast, today):
         f_min, f_max = f_min + offsets[:, months, 0], f_max + offsets[:, months, 1]
         keep = ~(np.isnan(f_min).any(0) | np.isnan(f_max).any(0))   # trim days the API did not cover for all cells
         n_ok = int(np.argmin(keep)) if not keep.all() else len(keep)
+        if n_ok < MIN_FORECAST_DAYS:
+            raise SystemExit(f"Open-Meteo: only {n_ok} complete forecast days for all cells; not writing.")
         f_min, f_max = f_min[:, :n_ok], f_max[:, :n_ok]
         f_end = as_of + dt.timedelta(days=n_ok)
         check_temps("Open-Meteo", f_min, f_max)
@@ -230,7 +241,8 @@ def build(season, as_of, use_forecast, today):
 
     # 4. 11 weather endings x 11 fits
     members, out_now, dd_now = [], [], None
-    resid = [s["obs_peak"] - s["heat_peak"] for s in replay["scores"]]
+    # past real-minus-forecast errors per scored band-year: onset errors for q05/q25, peak errors for q50 onward
+    resid = [[s["obs_onset"] - s["heat_onset"]] * 2 + [s["obs_peak"] - s["heat_peak"]] * 3 for s in replay["scores"]]
     for yi in range(len(years)):
         tmin, tmax = a_min[:, yi].astype(float), a_max[:, yi].astype(float)
         if i1 > i0:
@@ -249,7 +261,14 @@ def build(season, as_of, use_forecast, today):
     days = np.array(members, float)
     median, lo, hi = ensemble_summary(days, resid)
 
-    sightings = season_sightings(season, as_of, [b["cutoff"] for b in replay["bands"]])
+    sightings, sightings_ok = [], True
+    try:   # an iNat outage should not cost the night's forecast: keep the previous file's dots and flag it
+        sightings = season_sightings(season, min(today, dt.date(season, *SEASON[1])), [b["cutoff"] for b in replay["bands"]])
+    except Exception as e:  # noqa: BLE001
+        print(f"WARNING: iNat sightings failed ({e}); keeping the previous file's", flush=True)
+        sightings_ok = False
+        if prev is not None and prev.get("season") == season:
+            sightings = prev.get("sightings", [])
     now = dt.datetime.now(dt.timezone.utc)
     out = {
         "version": 1, "kind": "live", "season": season,
@@ -262,7 +281,7 @@ def build(season, as_of, use_forecast, today):
                   "frozen": "one model for the whole season; never refit in-season"},
         "sources": {
             "observed": "PRISM daily (via RCC-ACIS), adjusted to the Daymet scale the model was fitted on",
-            "forecast": ("Open-Meteo 7-day forecast (CC BY 4.0)" if use_forecast
+            "forecast": (f"Open-Meteo {f_min.shape[1]}-day forecast (CC BY 4.0)" if use_forecast
                          else "none (rebuilt after the fact: real weather up to the as-of date, then past years)"),
             "after": f"Daymet {years[0]}-{years[-1]}, each year's weather run forward",
             "sightings": "iNaturalist (CC0 / CC BY / CC BY-NC only; research grade and needs-ID)"},
@@ -274,7 +293,7 @@ def build(season, as_of, use_forecast, today):
         "sightings": sightings,
         "checks": {"cells": len(cells), "observed_days": max(0, (as_of - start).days + 1),
                    "forecast_days": int(f_min.shape[1]), "members": int(days.shape[0]),
-                   "cells_borrowed_weather": n_borrowed, "sightings": len(sightings),
+                   "cells_borrowed_weather": n_borrowed, "sightings": len(sightings), "sightings_fresh": sightings_ok,
                    "seconds": round(time.time() - t0)},
     }
     return out
@@ -291,17 +310,29 @@ def main(argv=None):
     ap.add_argument("--no-forecast", action="store_true", help="skip the 7-day forecast (backfills)")
     ap.add_argument("--auto", action="store_true", help="nightly mode: this season, newest data, skip off-season")
     ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--prev", type=Path, help="last published file (its sightings are reused if iNat is down)")
     a = ap.parse_args(argv)
     today = dt.datetime.now(dt.timezone.utc).date()
     season = a.season or today.year
     if a.auto and not in_season(today, season):
         print(f"off-season ({today}): live forecast runs {SEASON[0]}..{SEASON[1]} (month, day); leaving the last file.")
         return 0
-    as_of = a.as_of or min(last_prism_day(today), dt.date(season, 9, 30))
-    if as_of < dt.date(season, 2, 28) or as_of > dt.date(season, 9, 30):
+    newest = last_prism_day(today) if (a.as_of is None or a.as_of >= today - dt.timedelta(days=10)) else None
+    if a.as_of and newest and a.as_of > newest:
+        raise SystemExit(f"--as-of {a.as_of} is after PRISM's newest day ({newest}); not inventing weather.")
+    as_of = a.as_of or min(newest, dt.date(season, 9, 30))
+    if a.auto:   # PRISM can lag a few days on 2 March; weather before the model's first day is ignored anyway
+        as_of = max(as_of, dt.date(season, 1, 1) + dt.timedelta(days=START_DOY - 2))
+    if as_of < dt.date(season, 1, 1) + dt.timedelta(days=START_DOY - 2) or as_of > dt.date(season, 9, 30):
         raise SystemExit(f"--as-of {as_of} is outside {season}'s season (28 Feb .. 30 Sep)")
     use_forecast = not a.no_forecast and as_of >= today - dt.timedelta(days=4)
-    out = build(season, as_of, use_forecast, today)
+    prev = None
+    if a.prev and a.prev.exists():
+        try:
+            prev = json.loads(a.prev.read_text())
+        except ValueError:
+            prev = None
+    out = build(season, as_of, use_forecast, today, prev)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
     tmp.write_text(json.dumps(out, separators=(",", ":")))

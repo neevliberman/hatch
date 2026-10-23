@@ -29,7 +29,7 @@ def test_first_reach_is_one_based_and_caps():
 def test_fill_gaps_interpolates_and_keeps_empty_rows():
     x = np.array([[1, np.nan, 3, np.nan], [np.nan] * 4])
     y = L.fill_gaps(x)
-    assert y[0].tolist() == [1, 2, 3, 3]
+    assert y[0][:3].tolist() == [1, 2, 3] and np.isnan(y[0][3])   # a missing last day is not invented
     assert np.isnan(y[1]).all()
 
 
@@ -46,6 +46,12 @@ def test_ensemble_summary_median_and_honest_range():
     never = np.array([[[np.inf]], [[np.inf]], [[200]]], float)
     med, lo, hi = L.ensemble_summary(never, [0.0])
     assert med == [[None]] and lo == [[None]] and hi == [[None]]
+
+
+def test_ensemble_summary_per_quantile_errors():
+    days = np.full((2, 1, 2), 150.0)
+    med, lo, hi = L.ensemble_summary(days, [[10, -10], [10, -10]])   # onset-style error late, peak-style early
+    assert lo[0] == [160, 140] and hi[0] == [160, 140]
 
 
 def test_season_window():

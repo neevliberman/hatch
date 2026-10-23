@@ -25,28 +25,50 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # Off-season nights stop here (cheap); manual runs always go ahead.
+      - name: Season gate
+        id: gate
+        run: |
+          MD=$(date -u +%m%d)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || { [ "$MD" -ge 0302 ] && [ "$MD" -le 1007 ]; }; then
+            echo "run=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "off-season ($MD): nothing to do"
+          fi
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == '1'
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == '1'
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: notebooks/requirements.txt
       - run: pip install -r notebooks/requirements.txt
-      # Daymet 2015-2025 at the 551 hex centres (~550 downloads the first time, then cached).
-      - uses: actions/cache@v4
+        if: steps.gate.outputs.run == '1'
+      # Daymet 2015-2025 at the 551 hex centres (~550 downloads the first time, then cached; saved even if a
+      # later step fails, so a retry does not download them again).
+      - uses: actions/cache/restore@v4
+        if: steps.gate.outputs.run == '1'
+        id: daymet
         with:
           path: notebooks/data/daymet
           key: daymet-r4-2015-2025-v1
+      - name: Last published file (sightings fallback if iNat is down)
+        if: steps.gate.outputs.run == '1'
+        run: |
+          mkdir -p "$RUNNER_TEMP/prev"
+          git fetch -q --depth 1 origin live-data && git show FETCH_HEAD:live/latest.json > "$RUNNER_TEMP/prev/latest.json" || echo "no previous live file"
       - name: Build live forecast
+        if: steps.gate.outputs.run == '1'
         id: build
         env:
           SEASON: ${{ inputs.season }}
           AS_OF: ${{ inputs.as_of }}
         run: |
           set -euo pipefail
-          ARGS=(--out "$RUNNER_TEMP/live/latest.json")
+          ARGS=(--out "$RUNNER_TEMP/live/latest.json" --prev "$RUNNER_TEMP/prev/latest.json")
           if [ -n "${SEASON:-}" ] || [ -n "${AS_OF:-}" ]; then
             [ -n "${SEASON:-}" ] && ARGS+=(--season "$SEASON")
             [ -n "${AS_OF:-}" ] && ARGS+=(--as-of "$AS_OF")
@@ -55,6 +77,11 @@ jobs:
           fi
           python3 pipeline/live/build_live.py "${ARGS[@]}"
           if [ -f "$RUNNER_TEMP/live/latest.json" ]; then echo "built=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/cache/save@v4
+        if: always() && steps.gate.outputs.run == '1' && steps.daymet.outputs.cache-hit != 'true'
+        with:
+          path: notebooks/data/daymet
+          key: daymet-r4-2015-2025-v1
       - name: Commit to live-data branch
         if: steps.build.outputs.built == '1'
         env:

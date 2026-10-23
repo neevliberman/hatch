@@ -40,9 +40,10 @@ def dates(start: dt.date, end: dt.date):
 
 
 def prism_point(lat, lng, start: dt.date, end: dt.date):
-    """PRISM daily Tmin/Tmax (deg C) at one point via ACIS: (tmin, tmax) arrays over start..end, NaN = missing."""
+    """PRISM daily Tmin/Tmax (deg C, 2 decimals; ACIS rounds to whole degrees without "prec") at one point via ACIS:
+    (tmin, tmax) arrays over start..end, NaN = missing."""
     js = _request(ACIS, {"loc": f"{lng:.4f},{lat:.4f}", "sdate": start.isoformat(), "edate": end.isoformat(),
-                         "grid": "21", "elems": [{"name": "maxt", "units": "degreeC"}, {"name": "mint", "units": "degreeC"}]})
+                         "grid": "21", "elems": [{"name": "maxt", "units": "degreeC", "prec": 2}, {"name": "mint", "units": "degreeC", "prec": 2}]})
     want = {d.isoformat(): i for i, d in enumerate(dates(start, end))}
     tmin = np.full(len(want), np.nan)
     tmax = tmin.copy()
