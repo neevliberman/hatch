@@ -312,8 +312,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-pane .note.small { font-size: 10.5px; fill: var(--muted); }
 .ex-pane .note.warn { font-size: 13px; fill: var(--warn); }
 .ex-pane .flap { animation: ex-flap 1.6s ease-in-out infinite alternate; }
+/* The cocoon stirs as the sun warms it. */
+.ex-pane .rock { animation: ex-rock 1.8s ease-in-out infinite alternate; }
+@keyframes ex-rock { 0%, 40% { transform: rotate(-3deg); } 100% { transform: rotate(4deg); } }
 @keyframes ex-flap { 0%, 60% { transform: scaleX(1); } 100% { transform: scaleX(0.75); } }
-@media (prefers-reduced-motion: reduce) { .ex-pane .flap { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ex-pane .flap, .ex-pane .rock { animation: none; } }
 
 .ex-spot, .ex-score { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
 .ex-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
