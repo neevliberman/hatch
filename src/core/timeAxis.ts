@@ -126,7 +126,8 @@ export class TimeAxis {
     const tick = (t: number) => {
       if (!this.playing) return;
       const raw = t - this.last;
-      const dt = Math.min(0.1, raw / 1000); // a slow or hidden frame must not skip days
+      // A slow device still moves at about the set speed; a hidden tab (no frames for seconds) jumps at most a few days.
+      const dt = Math.min(0.25, raw / 1000);
       this.last = t;
       this.watch(raw);
       this.ease(dt);

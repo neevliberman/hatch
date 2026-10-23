@@ -583,8 +583,10 @@ function start() {
   // The key folding to its chip (or opening) frees or takes room. Not while a card is up, though: a card hides the
   // key, and the tap that pinned it also folds it, and the map must not slide out from under that card.
   let keySeen = false; // the observer's first call is just it starting up
-  new ResizeObserver(() => (keySeen ? hit || refit(true) : (keySeen = true))).observe($('legend'));
-  window.addEventListener('resize', () => refit());
+  // A window resize can resize the key too: that refit is the window's, so it fits at once rather than gliding.
+  let resizedAt = -1e9;
+  new ResizeObserver(() => (keySeen ? hit || refit(performance.now() - resizedAt > 1000) : (keySeen = true))).observe($('legend'));
+  window.addEventListener('resize', () => ((resizedAt = performance.now()), (glide = false), refit()));
   document.fonts?.ready.then(() => refit());
   // The About panel slides in beside the map (or the phone sheet changes stop) without resizing anything the observer
   // watches. Glide with it, starting as it starts. (Mid-drag, the class flips only on letting go.)
