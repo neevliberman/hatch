@@ -526,9 +526,9 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         accent: mothInk,
         hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how well it matches.',
         steps: [
-          { title: 'Warm days count', text: 'Starting March 1, every day warmer than 50 °F (10 °C) adds to a running total. Hotter days add more, up to 86 °F.' },
-          { title: 'The jar fills', text: 'In past years, moths came out once the total reached about this line.' },
-          { title: 'Moths come out', text: 'So a warm spring means early moths, and a cold spring means late ones.' },
+          { title: 'Winter', text: 'The moth waits out the cold as a cocoon in fallen leaves.' },
+          { title: 'Warm days add up', text: 'From March 1, every day warmer than 50 °F (10 °C) adds a block to the jar. Hotter days add bigger blocks.' },
+          { title: 'Out they come', text: 'In past years, moths came out once the jar reached "enough". Warm spring, early moths.' },
         ],
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
