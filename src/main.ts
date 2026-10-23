@@ -4,7 +4,6 @@ import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec, type LunaLayer } from './layers/lunaReplay';
 import { createFireflyLayer, loadFirefly } from './layers/fireflyReplay';
 import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
-import { replayData } from './layers/replayData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
@@ -43,6 +42,7 @@ function start() {
   registry.register(luna, replayTimeSpec(initialMode, month, day));
   // The species on screen. Only one is active at a time; the firefly loads the first time it is picked.
   let cur: LunaLayer = luna;
+  let speciesPending = false;
   let firefly: LunaLayer | null = null;
   let seasonCount = firstBroodCount;
 
@@ -186,10 +186,10 @@ function start() {
         speciesSel.value = 'luna';
         return say('Couldn\u2019t load the fireflies. Try again later.');
       }
-      firefly = createFireflyLayer(file, picker.value);
-      registry.register(firefly, replayTimeSpec(picker.value, 5, 10), false);
-      const ff = replayData(file);
-      fireflyCount = ff.firstBroodCount;
+      const ff = createFireflyLayer(file, picker.value);
+      firefly = ff;
+      registry.register(ff, replayTimeSpec(picker.value, 5, 10), false);
+      fireflyCount = ff.seasonCount;
     }
     const next = want === 'firefly' ? firefly! : luna;
     speciesSel.value = want;
@@ -214,8 +214,14 @@ function start() {
     syncUrl();
   };
   let fireflyCount = firstBroodCount;
+  // The one-file preview has no firefly file next to it, so it offers luna only.
+  if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
   speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value === 'firefly' ? 'firefly' : 'luna'));
-  if (params.get('species') === 'firefly') void setSpecies('firefly');
+  // Until a ?species=firefly link has loaded, the address bar keeps asking for the firefly.
+  if (params.get('species') === 'firefly' && __BASEMAP__) {
+    speciesPending = true;
+    void setSpecies('firefly').finally(() => (speciesPending = false));
+  }
 
   mountScrubber($('bar'), time);
   mountLayerList($('layers'), registry);
@@ -252,7 +258,7 @@ function start() {
     const q = new URLSearchParams(location.search);
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
-    if (cur === luna) q.delete('species');
+    if (cur === luna && !speciesPending) q.delete('species');
     else q.set('species', 'firefly');
     if (picker.value === TYPICAL) q.delete('year');
     else q.set('year', picker.value);

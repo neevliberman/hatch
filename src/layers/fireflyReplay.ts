@@ -42,7 +42,7 @@ export const fireflyInk = '#8a5a00';
 const fmtDoy = (year: number, doy: number) =>
   new Date(doyToMs(year, Math.round(doy))).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): LunaLayer {
+export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): LunaLayer & { seasonCount(m: Mode): number } {
   const { data, sightingsFor, bandOf } = replayData(file);
   let mode = initial;
   let shown = sightingsFor(mode);
@@ -53,6 +53,7 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
   const forecast = () => data.forecast[mode] ?? data.forecast[TYPICAL]!;
   const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
+  let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
 
   const lookup = (lngLat: [number, number]) => {
     const cell = latLngToCell(lngLat[1], lngLat[0], GRID_RES);
@@ -120,6 +121,17 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
     },
     res: () => GRID_RES,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
+    seasonCount: (m: Mode) => sightingsFor(m).length,
+
+    points(t) {
+      // Cached per day and season, like luna's: the place names move out of the way of lit dots.
+      const key = `${dayOfYear(t)}|${mode}`;
+      if (lit.key !== key) {
+        const doy = dayOfYear(t);
+        lit = { key, pts: shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).map((s) => [s.lng, s.lat]) };
+      }
+      return lit.pts;
+    },
 
     summary(t) {
       const doy = dayOfYear(t);
@@ -263,18 +275,18 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
         'Fireflies are hard to name from a photo, and a flash at night is harder. Only records other iNaturalist users agreed on were used, and records of other firefly kinds were left out.',
         'Fireflies have one flying season a year, so there is no second wave. Records after late August were left out.',
         ...(m?.median_dd_at_lat?.['42']
-          ? [`Half the fireflies came out by about ${Math.round(m.median_dd_at_lat['42'] / 10) * 10} marks (degree-days, in °C). A published field study put the peak near 800, counted a slightly different way.`]
+          ? [`Half the fireflies came out after about ${Math.round(m.median_dd_at_lat['42'] / 10) * 10} degree-days of warmth (°C above 10, added up from March 1).`]
           : []),
-        'To allow for when people go looking, the model counts how many beetle photos people posted each day in each state.',
+        'To allow roughly for when people go looking, the model counts how many beetle photos people posted each day in each state. Most beetle photos are taken by day, so this is a rough stand-in, and nobody has checked yet whether it helps.',
         'Gray dots mean the photo’s location was blurred or rough, so the dot may sit off its true spot.',
         'Striped hexagons have no sightings of this firefly nearby, ever. There is nothing to check the forecast against there.',
         'There are no small hexagons for fireflies yet. Zooming in keeps the big ones.',
-        `For a single year, a hexagon’s card gives a "peak here likely" window. 8 in 10 strip peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast. One spot can miss by more.`,
+        `For a single year, a hexagon’s card gives a "peak here likely" window. In the 23 strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast. One spot can miss by more.`,
         ...(m?.holdout_mae
-          ? [`When it learned only from Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their own usual dates.`]
+          ? [`When it learned only from Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their own usual dates. That is only 4 strip-years, so it is a hint, not proof.`]
           : []),
         'Sightings show where people look as much as where fireflies are. Towns and backyards get counted too often. An empty spot does not mean no fireflies.',
-        'Only openly licensed photos are drawn. The forecast learned from all confirmed records.',
+        'Only openly licensed photos are drawn. The forecast learned from all confirmed records with a precise location, one per person, place and day.',
       ];
       if (yr && yr.n)
         bullets.push(
@@ -298,8 +310,8 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
         hook: 'Common eastern fireflies light up summer evenings once a year. This map predicts when they come out across seven Midwest states, based on how warm the spring has been. It is a first try, using the luna moth’s recipe.',
         steps: [
           { title: 'Winter', text: 'All winter the young firefly lives as a grub in damp soil.' },
-          { title: 'Warm days add up', text: 'From March 1, every day warmer than 50 °F (10 °C) adds marks. Hotter days add more.' },
-          { title: 'Out they come', text: 'In past years, fireflies started flashing at about this many marks. So a warm spring means early fireflies.' },
+          { title: 'Warmth wakes it', text: 'From March 1, every day warmer than 50\u00a0°F (10\u00a0°C) adds a little warmth. Hotter days add more.' },
+          { title: 'Warm spring, early fireflies', text: 'Once it has had enough warmth, out it comes and starts to flash. A warm spring gets there sooner.' },
         ],
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
@@ -307,11 +319,12 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
           title: 'How sure is it?',
           text:
             (sc.n
-              ? `For each strip of the map, the forecast’s dates for the first fireflies and the peak were off by about ${days(sc.heat)} on average, judged by people’s sightings. ` +
+              ? `For the strips of the map with enough sightings (Illinois to central Wisconsin and Michigan), the forecast’s dates for the first fireflies and the peak were off by about ${days(sc.heat)} on average, judged by people’s sightings. ` +
                 `Guessing each area’s usual date was off by about ${days(sc.calendar)}. ` +
                 `That was checked on ${mode === TYPICAL ? 'past years' : mode}, which the forecast hadn’t learned from. ` +
                 (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
+            (data.model ? `A simpler rule (the warmth at past sightings, no curve) did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}. ` : '') +
             'This is a first try and has not been tested as carefully as the luna moth.',
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },

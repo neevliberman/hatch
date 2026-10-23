@@ -77,6 +77,7 @@ def main():
     cells = BR.core_cells()
     raw, ctx = load(cells)
     H = EV.helpers(ctx)
+    assert set(EV.cutoffs(ctx.rec).values()) == {LAST_DOY}, "one-generation patch not in effect"
     print(f"{len(ctx.rec)} fit records, {len(ctx.hexes)} hexes ({time.time()-t0:.0f}s)", flush=True)
     _G.update(ctx=ctx, H=H)
     with mp.get_context("fork").Pool(4) as pool:
