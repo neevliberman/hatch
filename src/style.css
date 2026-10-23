@@ -126,7 +126,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   box-shadow: var(--shadow); }
 #probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
 /* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
-#probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link { display: none; }
+#probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link,
+  #probe.at-pointer:not(.pinned) .probe-more { display: none; }
 #probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
 #probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); }
 .probe-close { float: right; width: 32px; height: 32px; margin: -4px -8px 2px 6px; border: 0; border-radius: 8px; background: none;
@@ -189,6 +190,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #probe[hidden] { display: none; }
 .probe-cell { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
 .probe-title { font-weight: 700; color: var(--moon); }
+.probe-title .sw { margin-right: 6px; vertical-align: -2px; width: 16px; height: 14px; }
+.probe-more { margin-top: 4px; }
+.probe-more summary { cursor: pointer; color: var(--moon); font-weight: 600; min-height: 32px; padding-top: 6px; box-sizing: border-box; display: list-item; }
+.probe-more p { margin: 4px 0 0; }
 .probe-card + .probe-card { margin-top: 8px; }
 
 #bar { pointer-events: auto; background: var(--panel-solid); border-top: 1px solid var(--line);

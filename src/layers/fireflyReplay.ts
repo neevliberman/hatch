@@ -299,27 +299,38 @@ export function createFireflyLayer(
       const at = lookup(lngLat);
       if (!at) return null;
       const [q05, q25, q50, q75] = at.q;
-      const lines = [`Forecast for ${fmtDoy(year, doy)}: ${stageAt(at.q, doy)}.`];
+      // Same shape as the luna card: one answer up front, the detail behind "More".
+      const stage = stageAt(at.q, doy);
+      const label = stage === 'over' ? 'over' : STAGE_LABEL[stage]; // one wave a year, so plain "over"
+      const lines: string[] = [];
+      const more: string[] = [];
+      const pk = data.interval?.peak;
+      const likely = !!(pk && q50 != null && mode !== TYPICAL);
+      if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      if (!at.seen) lines.push('No fireflies of this kind ever seen near here to check this against.');
       if (q05 != null && q25 != null && q75 != null)
-        lines.push(`First fireflies about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+        more.push(`First fireflies about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
-      if (sc)
-        lines.push(
-          `Peak this year in this strip of the map (${band.label}°N): seen ${fmtDoy(year, sc.obs_peak)}, forecast ${fmtDoy(year, sc.heat_peak)}, usual date ${fmtDoy(year, sc.cal_peak)}.`,
+      if (sc) {
+        const off = sc.heat_peak - sc.obs_peak;
+        more.push(
+          `How the forecast did in this strip of the map (${band.label}°N): fireflies peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+            (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
+            `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
+      }
+      // Sightings are counted on the zoomed-out hexagon: a small one would almost always have none.
       const here = sightingsFor(mode).filter((s) => s.cell === at.parent);
       const where = shownRes === 5 ? 'the wider area (one zoomed-out hexagon)' : 'this hexagon';
-      lines.push(
+      more.push(
         here.length
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}.`
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      const pk = data.interval?.peak;
-      if (pk && q50 != null && mode !== TYPICAL) lines.push(`Peak here likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      if (!at.seen) lines.push('No fireflies of this kind ever seen near here, so there is nothing to check this forecast against. Shown striped.');
-      if (shownRes === 5) lines.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
-      return { title: `Firefly, ${modeLabel(mode)}`, lines };
+      if (shownRes === 5) more.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
+      return { title: `Firefly: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
     caveats(): CaveatCard {

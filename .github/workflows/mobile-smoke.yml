@@ -11,7 +11,8 @@ permissions:
 jobs:
   mobile:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The apt mirror behind --with-deps sometimes crawls (10+ minutes); the tests themselves take a few.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
