@@ -210,7 +210,10 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     // The canvas gets a Tab stop for deck's keyboard controls, which are off: drop it, so Tab goes straight to the controls.
     onLoad: (): void => deck.getCanvas()?.setAttribute('tabindex', '-1'),
-    onClick: (info: PickingInfo) => onProbe(hit(info), true),
+    // Touch taps are handled below; deck's own click for a touch arrives late, on the next touch.
+    onClick: (info: PickingInfo, e) => {
+      if ((e?.srcEvent as PointerEvent | undefined)?.pointerType !== 'touch') onProbe(hit(info), true);
+    },
     // Place names follow the drawn view (they skip the work when neither the view nor the dots changed).
     onAfterRender: () => {
       if (!drawn) firstDraw();
@@ -224,6 +227,22 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // While paused, today's newest dots breathe: a paper ring over each swells and settles by about half a pixel every
   // 2.4 s. CSS draws it (src/style.css, .breath), so the map itself never redraws for it. It rests after 15 s without
   // input and during playback; the browser stops it in a hidden tab; reduced motion never shows it.
+  // A tap on a touch screen pins its card. deck holds each tap back to rule out a double tap and only lets it go on
+  // the next touch (carrying that touch's spot), so a tap never pinned anything. A short, still, one-finger touch is
+  // a tap: pick under it here. Double-tap zoom still works, and pins the spot first.
+  let touchDown: { x: number; y: number; t: number } | null = null;
+  container.addEventListener('pointerdown', (e) => {
+    touchDown = e.pointerType === 'touch' && e.isPrimary ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+  });
+  container.addEventListener('pointerup', (e) => {
+    const d = touchDown;
+    touchDown = null;
+    if (!d || e.pointerType !== 'touch' || e.timeStamp - d.t > 500 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+    const r = container.getBoundingClientRect();
+    const info = deck.pickObject({ x: e.clientX - r.left, y: e.clientY - r.top });
+    onProbe(info ? hit(info) : null, true);
+  });
+  container.addEventListener('pointercancel', () => (touchDown = null));
   const rings = document.createElement('div');
   rings.className = 'breath';
   rings.setAttribute('aria-hidden', 'true');
