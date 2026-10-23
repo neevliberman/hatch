@@ -5,11 +5,11 @@ import { latLngToCell } from 'h3-js';
 import { palette } from '../theme';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear } from '../core/timeAxis';
-import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SpotStory } from '../core/layer';
+import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
 import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
-import { FINE_ZOOM, GLOW_DAYS, modeLabel, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, type LunaLayer, type Stage } from './lunaReplay';
+import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, type LunaLayer, type Stage } from './lunaReplay';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -52,6 +52,7 @@ export function createFireflyLayer(
   const { data, sightingsFor, bandOf } = replayData(file);
   let mode = initial;
   let shown = sightingsFor(mode);
+  const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
   const unseen = cells.filter((c) => !c.seen);
@@ -189,6 +190,13 @@ export function createFireflyLayer(
       const parts = STAGES.filter((s) => n[s]).map((s) => `${s} in ${n[s]}`);
       return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}. Firefly forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
         `${lit} firefl${lit === 1 ? 'y' : 'ies'} seen in the last ${GLOW_DAYS} days.`;
+    },
+
+    // One wave a summer, so the ribbon's line needs no notes.
+    profile() {
+      let p = profiles.get(mode);
+      if (!p) profiles.set(mode, (p = seasonProfile(forecast(), shown, day, yearOf(), [])));
+      return p;
     },
 
     render({ t, zoom, theme }) {
@@ -413,7 +421,7 @@ export function createFireflyLayer(
         items: [
           ...STAGES.map((s) => ({ color: css(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
-          { color: css(GLOW), label: 'firefly seen', shape: 'dot' },
+          { color: css(GLOW), label: 'seen, last 10 days', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },
         ],
       };

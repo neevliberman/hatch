@@ -50,7 +50,9 @@
   /* Narrower on mid-size windows so an open About drawer leaves most of the map visible. */
   --drawer-w: min(400px, max(300px, 36vw), 100%);
   --thumb: 22px;
-  --hit: 36px; /* the slider's tap row */
+  --rib: 34px; /* season ribbon height; the slider is 8px taller (--rh) */
+  --rh: calc(var(--rib) + 8px);
+  --ink-wash: rgba(43, 36, 28, 0.1);
   /* Side gutters that also clear a landscape iPhone's notch (viewport-fit=cover lets the page run under it). */
   --gl: max(var(--gutter), env(safe-area-inset-left));
   --gr: max(var(--gutter), env(safe-area-inset-right));
@@ -109,24 +111,24 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #layers[hidden] { display: none; }
 .season { margin-left: auto; min-width: 0; display: flex; }
 .species + .season { margin-left: 6px; }
+.species[hidden] + .season { margin-left: auto; }
 .species[hidden], #countdown[hidden] { display: none !important; }
 .species select { flex: none; }
 .season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--edge);
   padding: 0 10px; color: var(--text); }
-/* The caveat, countdown and two buttons live in a strip on top of the time bar, off the map. */
-#strip { pointer-events: auto; display: flex; align-items: center; gap: 10px; background: var(--grain) var(--panel-solid);
-  border-top: 1px solid var(--line); padding: 8px var(--gr) 0 var(--gl); }
-#strip + #bar { border-top: 0; padding-top: 6px; }
-#note { min-width: 0; flex: 1; font-size: 12.5px; line-height: 1.35; }
-#honesty, #countdown { margin: 0; }
+/* One paper band off the map: the caveat line, then one row of [prev play next] [date] [slider] [My area] [Share]. */
+#dock { pointer-events: auto; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 14px;
+  background: var(--grain) var(--panel-solid); border-top: 1px solid var(--line); padding: 6px var(--gr) 6px var(--gl); }
+#strip { grid-column: 1 / -1; margin: 0; font-size: 12.5px; line-height: 1.35; }
 #honesty b { font-weight: 600; }
 .unconfirmed { font-style: normal; font-weight: 600; color: var(--warn); }
 #why { margin-left: 4px; padding: 10px 6px; margin-block: -10px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
   font-size: inherit; min-height: 24px; }
 #why:active { opacity: 0.6; }
 #countdown { color: var(--muted); }
-#countdown:empty { display: none; }
-#actions { pointer-events: auto; position: relative; flex: none; display: flex; gap: 6px; }
+#countdown:not(:empty)::before { content: ' \00B7  '; }
+.cd { display: none; margin: 0 0 8px; font-size: 12.5px; color: var(--muted); }
+#actions { pointer-events: auto; display: flex; gap: 6px; }
 #actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; font-size: 12.5px; }
 #actions .icon-btn:disabled { opacity: 0.6; cursor: progress; }
 #locate svg { color: var(--accent); }
@@ -136,6 +138,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 /* Kept rendered (just invisible) when empty: live regions that appear and fill at once are often not announced. */
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
+/* Over the map's bottom-right corner on a wide screen (placed against #bottom); top of the button stack on a phone. */
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
 #recenter[hidden] { display: none; }
 /* Find a town: its name box opens just above the time controls, at thumb height (lifted over a phone keyboard from finder.ts). */
@@ -222,40 +225,47 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .probe-more p { margin: 4px 0 0; }
 .probe-card + .probe-card { margin-top: 8px; }
 
-/* min-height: the bar is filled by script; holding its height stops the panels above from jumping when it arrives. */
-#bar { pointer-events: auto; background: var(--grain) var(--panel-solid); border-top: 1px solid var(--line);
-  padding: 10px var(--gr) 12px var(--gl); min-height: 119px; }
-.bar-row { display: flex; align-items: center; gap: 14px; }
-.btns { display: flex; gap: 6px; }
+#bar { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.btns { display: flex; gap: 6px; flex: none; }
 .play { min-width: 56px; }
-.date { flex: 1; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.date { flex: none; min-width: 190px; white-space: nowrap; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
 .date em { font: 600 17px var(--font-note); color: var(--muted); }
 .date small { margin-left: 10px; font-size: 12px; font-weight: 600; color: var(--warn); }
 .year select { height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--edge); padding: 0 10px; }
 
-.track { position: relative; margin-top: 4px; padding: 0 calc(var(--thumb) / 2); }
-.track input[type=range] { width: 100%; height: var(--hit); margin: 0; background: transparent; appearance: none; -webkit-appearance: none;
+/* The slider runs over the season ribbon (scrubber.ts): the share of the map at each stage, in the map's own colours,
+   under an ink line of sightings per day. Ribbon, ticks and notes sit half a thumb in from each end, where the thumb's
+   centre can reach, so the thumb sits right on the day it shows. */
+.track { position: relative; flex: 1; min-width: 0; padding-bottom: 16px; }
+.ribbon { position: absolute; top: 4px; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); height: var(--rib); pointer-events: none; }
+.ribbon svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* Thin paper lines between the stage bands, and a muted frame (3:1 on the paper) so the pale "not yet" and "over"
+   ends still read as part of the ribbon. */
+.ribbon .band { stroke: var(--panel-solid); stroke-width: 0.75; stroke-opacity: 0.8; }
+.ribbon .frame { fill: none; stroke: var(--muted); stroke-width: 1; }
+.ribbon .seen { fill: var(--ink-wash); }
+.ribbon .seen-line { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linejoin: round; }
+.wave { position: absolute; top: -10px; margin-left: 4px; font: 600 15px/1 var(--font-note); white-space: nowrap;
+  padding: 0 3px; border-radius: 3px; background: var(--panel-solid); } /* paper behind the note breaks the frame line */
+.track input[type=range] { position: relative; width: 100%; height: var(--rh); margin: 0; background: none; appearance: none; -webkit-appearance: none;
   touch-action: pan-y; cursor: pointer; display: block; }
-.track input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
-  background: linear-gradient(90deg, var(--accent) var(--pct), var(--track) var(--pct)); }
-.track input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--track); }
-.track input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+/* The ring goes on the thumb itself, not round the whole ribbon. */
+.track input[type=range]:focus-visible { outline: none; }
+.track input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--panel-solid), 0 0 0 4px var(--accent); }
+.track input[type=range]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--panel-solid), 0 0 0 4px var(--accent); }
+.track input[type=range]::-webkit-slider-runnable-track { height: 100%; background: none; }
+.track input[type=range]::-moz-range-track { background: none; }
 .track input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--thumb); height: var(--thumb);
-  margin-top: calc((6px - var(--thumb)) / 2); border-radius: 50%; background: var(--thumb-fill); border: 3px solid var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+  margin-top: calc((var(--rh) - var(--thumb)) / 2); border-radius: 50%; background: var(--thumb-fill); border: 3px solid var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
 .track input[type=range]::-moz-range-thumb { width: calc(var(--thumb) - 6px); height: calc(var(--thumb) - 6px);
   border-radius: 50%; background: var(--thumb-fill); border: 3px solid var(--accent); }
-.ticks { position: relative; height: 22px; margin: 0 calc(var(--thumb) / 2); }
-.track .ticks { position: absolute; left: 0; right: 0; bottom: 0; margin: 0 calc(var(--thumb) / 2); }
-.track { padding-bottom: 17px; }
-.track .ticks { height: 17px; }
-.tick { position: absolute; transform: translateX(0); font-size: 12px; line-height: 15px; color: var(--muted); }
-/* Each tick hangs from the bottom of the track line. */
-.tick i { position: absolute; left: 0; top: calc(4px - var(--hit) / 2); width: 1px; height: 5px; background: var(--muted); }
-.tick { padding-left: 3px; }
-.now { position: absolute; top: calc(4px - var(--hit) / 2); transform: translateX(-50%); }
+.ticks { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; margin: 0 calc(var(--thumb) / 2); }
+.tick { position: absolute; padding-left: 3px; font-size: 12px; line-height: 15px; color: var(--muted); }
+.tick i { position: absolute; left: 0; top: -3px; width: 1px; height: 5px; background: var(--muted); }
+.now { position: absolute; top: calc(2px - var(--rh)); transform: translateX(-50%); }
 .now b { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; background: var(--accent); color: var(--on-accent);
   padding: 1px 5px; border-radius: 4px; }
-.now::after { content: ''; position: absolute; left: 50%; top: 14px; width: 2px; height: 4px; background: var(--accent); transform: translateX(-50%); }
+.now::after { content: ''; position: absolute; left: 50%; top: 14px; width: 2px; height: calc(var(--rib) - 14px); background: var(--accent); transform: translateX(-50%); }
 
 #drawer { position: absolute; top: 0; right: 0; bottom: 0; width: var(--drawer-w); padding: 0 var(--gutter) 24px;
   background: var(--panel-solid); border-left: 1px solid var(--line); overflow-y: auto; z-index: 5;
@@ -278,14 +288,30 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 @media (min-width: 701px) and (min-height: 501px) {
   #app:has(#drawer.open) #bottom { right: var(--drawer-w); }
 }
+/* Narrower windows keep the one row by dropping words: the end of the countdown, then the button labels. */
+@media (max-width: 1300px) { .more { display: none; } }
+@media (max-width: 1000px) { #actions .lbl { display: none; } #actions .icon-btn { padding: 0; } }
+@media (max-width: 820px) { .dots { display: none; } } /* the key says what the dots are */
+/* A bigger thumb for fingers. */
+@media (pointer: coarse), (max-width: 700px) { :root { --thumb: 28px; } }
+
+/* Phones, upright or on their side: My area, Find and Share float as a stack on the map's right edge (recenter on top),
+   so the caveat gets a line of its own. The "dots" sentence goes (the key says it), the countdown moves to About, and
+   the slider is dragged, so the day-step buttons go too (arrow keys still step). */
+@media (max-width: 700px), (orientation: landscape) and (max-height: 500px) {
+  #dock { display: block; padding: 4px var(--gr) 4px var(--gl); }
+  #strip { font-size: 12px; }
+  .dots, #countdown, #t-prev, #t-next, #actions .lbl { display: none; }
+  .cd { display: block; }
+  #actions { position: absolute; right: var(--gr); bottom: calc(100% + 10px); flex-direction: column; gap: 8px; }
+  #actions .icon-btn { padding: 0; background: var(--panel-solid); box-shadow: var(--shadow); }
+  #recenter { bottom: calc(100% + 10px + 3 * 44px + 2 * 8px + 8px); } /* above the stack */
+}
 
 @media (max-width: 700px) {
   :root { --gutter: 12px; }
   .brand small { display: none; }
-  #note { font-size: 12px; }
-  /* Phones get the short wording: the season is in the menu above, the detail is one tap away under "why?". */
-  .long, .more, #actions .lbl { display: none; }
-  #actions .icon-btn { padding: 0; }
+  .long { display: none; } /* the season is in the menu above */
   .layer { align-items: flex-start; flex-wrap: wrap; row-gap: 4px; }
   .layer .name { flex: 1 1 0; min-width: 0; font-size: 13px; }
   #floats { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
@@ -297,11 +323,6 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
   @media (max-width: 359px) { .brand { font-size: 0; } } /* smallest phones: the moth mark alone, so both menus stay readable */
-  .bar-row { flex-wrap: wrap; gap: 8px 10px; }
-  .date { font-size: 17px; order: 2; flex-basis: 100%; display: none; }
-  .date { display: block; order: 0; flex: 1; font-size: 18px; }
-  .date em { font-size: 16px; }
-  .btns .icon-btn { min-width: 44px; }
   #drawer { top: auto; width: 100%; height: 70%; border-left: 0; border-top: 1px solid var(--line); transform: translateY(104%); border-radius: 16px 16px 0 0; }
   #drawer.open { transform: none; }
   #drawer.dragging { transition: none; }
@@ -311,16 +332,25 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
     border-radius: 2px; background: color-mix(in srgb, var(--muted) 55%, transparent); }
 }
 
+/* Upright phones: one row of Play and the slider, with the date in a pill riding above the thumb. The track starts
+   66px into the bar (Play 56 + gap 10); --half is half the pill's width (scrubber.ts), so the pill stops at the edges. */
+@media (max-width: 700px) and (min-height: 501px) {
+  :root { --rib: 40px; }
+  #bar { position: relative; align-items: flex-start; gap: 10px; padding-top: 30px; }
+  .btns { margin-top: 0; }
+  .wave { top: -8px; }
+  .date { position: absolute; top: 4px; min-width: 0; transform: translateX(-50%); pointer-events: none; font-size: 14px;
+    left: clamp(var(--half, 70px), calc(66px + var(--thumb) / 2 + var(--p) * (100% - 66px - var(--thumb))), calc(100% - var(--half, 70px)));
+    padding: 1px 9px 2px; border-radius: 999px; background: var(--text); color: var(--on-accent); }
+  .date small, .date em { margin-left: 6px; color: inherit; font-size: 13px; }
+  .date em { margin-left: 0; font-size: 15px; }
+}
+
 @media (max-width: 340px) {
   .brand { font-size: 16px; padding: 6px 8px; gap: 6px; }
 }
 
 /* Fingers: a thumb you can find and a full-height tap row. */
-@media (pointer: coarse) {
-  :root { --thumb: 28px; --hit: 44px; }
-  .track { margin-top: 0; }
-  #bar { min-height: 123px; }
-}
 
 /* Phones on their side: about 280-430px tall, often wider than 700px. Squeeze every panel into single rows. */
 @media (orientation: landscape) and (max-height: 500px) {
@@ -329,13 +359,13 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .brand { padding: 4px 10px; font-size: 16px; }
   .brand small { display: none; }
   .icon-btn, .season select { height: 40px; }
-  #strip { padding-top: 4px; }
   #action-msg { top: calc(52px + env(safe-area-inset-top)); }
-  #note p { display: inline; }
-  #countdown::before { content: ' · '; }
-  #note { font-size: 12px; }
-  .long, .more, #actions .lbl { display: none; }
-  #actions .icon-btn { padding: 0; }
+  .long { display: none; }
+  /* The button stack stands beside the key, just above the paper, rather than over the short map. */
+  #dock { position: relative; }
+  #actions { bottom: calc(100% + 6px); }
+  #floats { padding-right: calc(var(--gr) + 52px); }
+  #recenter { right: calc(var(--gr) + 52px); bottom: calc(100% + 6px); } /* beside the stack: the short map has no room above it */
   .season select { font-size: 16px; }
   #floats { flex-direction: row; align-items: flex-end; padding-bottom: 6px; }
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
@@ -343,14 +373,10 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .lg-title { display: none; }
   .lg-items { font-size: 12.5px; gap: 2px 10px; }
   #probe { max-width: 50vw; max-height: 40vh; overflow-y: auto; font-size: 12px; padding: 6px 10px; }
-  #bar { display: flex; align-items: center; gap: 12px; padding-top: 6px; padding-bottom: 4px; min-height: 0; }
-  .bar-row { flex: none; gap: 8px; }
+  #bar { gap: 12px; }
   .btns .icon-btn { min-width: 40px; }
-  .date { font-size: 16px; white-space: nowrap; }
+  .date { min-width: 150px; font-size: 16px; }
   .date em { font-size: 15px; }
-  .track { flex: 1; margin-top: 0; padding-bottom: 0; }
-  :root { --hit: 30px; }
-  .track .ticks { position: relative; bottom: auto; height: 16px; margin-top: -2px; }
   .now { top: -12px; } /* the "now" flag would poke up into the legend row; keep just its line */
   .now b { visibility: hidden; }
   #drawer { top: 0; height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);

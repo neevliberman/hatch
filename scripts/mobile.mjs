@@ -140,10 +140,12 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     a.bad.forEach(fail);
     if (await blank(page)) fail('map looks blank');
 
-    // Tap the middle of the map: a card must appear, and the actions must stay reachable.
+    // Tap the map over land (central Illinois, so not a lake whatever the layout): a card must appear, and the
+    // actions must stay reachable. Falls back to the middle of the free area.
     const sub = await page.locator('#top').boundingBox();
     const bot = await page.locator('#bottom').boundingBox();
-    await page.touchscreen.tap(width / 2, (sub.y + sub.height + bot.y) / 2);
+    const land = await page.evaluate(() => window.__hatch?.map.project([-89.2, 40.1]));
+    await page.touchscreen.tap(...(land ?? [width / 2, (sub.y + sub.height + bot.y) / 2]));
     await page.waitForTimeout(500);
     await shot('3-card');
     if (await page.locator('#probe').isHidden()) fail('tapping the map showed no card');
