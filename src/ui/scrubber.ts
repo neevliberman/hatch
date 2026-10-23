@@ -1,5 +1,5 @@
 import { TimeAxis } from '../core/timeAxis';
-import { NEXT, PAUSE, PLAY, PREV } from './icons';
+import { NEXT, PAUSE, PLAY, PREV, REPLAY } from './icons';
 import type { SeasonProfile } from '../core/layer';
 
 /** Pick sensible tick marks for any range: years, months, days or hours. */
@@ -41,12 +41,21 @@ function ribbon(p: SeasonProfile): string {
   return `<svg viewBox="0 0 1000 28" preserveAspectRatio="none">${areas.join('')}<path class="seen" d="M0 13.5L${line}L1000 13.5Z"/>` +
     `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>` +
     `<rect class="frame" width="1000" height="28" vector-effect="non-scaling-stroke"/></svg>` +
-    p.notes.map((k) => `<span class="wave" style="left:${((k.at / (n - 1)) * 100).toFixed(2)}%">${k.text}</span>`).join('');
+    p.notes
+      .map((k) => `<span class="wave" data-full="${k.text}" data-short="${k.text.split(' ')[0]}" style="left:${((k.at / (n - 1)) * 100).toFixed(2)}%">${k.text}</span>`)
+      .join('');
 }
 
 /** Bottom bar bound to a TimeAxis: play/pause, step, slider over the season ribbon, month ticks, "now" marker, keyboard.
- * Returns a function that redraws the ribbon (call it when the season or species changes). */
-export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProfile | undefined) => void {
+ * When playback reaches the last day, Play turns into Replay and `showEnd` gets the layer's end note (`endNote`) for
+ * 5 s, then null; where it shows is up to the caller (main.ts puts it on empty paper). Returns a function that redraws
+ * the ribbon (call it when the season or species changes). */
+export function mountScrubber(
+  root: HTMLElement,
+  time: TimeAxis,
+  endNote: () => [string, string] | undefined = () => undefined,
+  showEnd: (words: [string, string] | null) => void = () => {},
+): (p: SeasonProfile | undefined) => void {
   root.innerHTML = `
     <div class="btns">
       <button id="t-prev" class="icon-btn" aria-label="Back one day (Left arrow)">${PREV}</button>
@@ -70,27 +79,64 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
   const ticks = $('t-ticks');
   const ribbonEl = $('t-ribbon');
   const dateBox = root.querySelector<HTMLElement>('.date')!;
+  // Playback that reaches the season's last day "ends": Replay, and the end note for a few seconds (see sync).
+  let ended = false;
+  let wasPlaying = false;
+  let noteOn = false;
+  let noteTimer = 0;
+  const endNoteOff = () => {
+    clearTimeout(noteTimer);
+    if (noteOn) (noteOn = false), showEnd(null);
+  };
+  // While playing, the slider takes the in-between value too, so the thumb (and the phone's date pill) glides
+  // instead of hopping a day at a time (not under reduced motion: frac stays 0 and the thumb hops). A screen reader
+  // still hears whole days.
+  const glide = () => {
+    range.step = time.gliding ? 'any' : '1';
+    range.value = String(time.stepIndex + time.frac);
+    range.setAttribute('aria-valuenow', String(time.stepIndex));
+    // Where the thumb is, 0-1: the phone's date pill rides above it.
+    root.style.setProperty('--p', String((time.stepIndex + time.frac) / Math.max(1, time.steps)));
+  };
   const asOfEl = $('t-asof');
   const fcEl = $('t-fc');
   const md = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
   // Wave notes sit just right of their peak. When the thumb would cover one, slide it to the nearest free spot:
-  // left of the peak, or just past the thumb on either side.
+  // left of the peak, or just past the thumb on either side. On a narrow track (a phone, or a desktop band squeezed
+  // by the About panel) notes that would run into each other or off the ribbon shorten to their first word ("1st"),
+  // and a note that still collides is left out.
   const placeWaves = () => {
-    const waves = ribbonEl.querySelectorAll<HTMLElement>('.wave');
+    const waves = [...ribbonEl.querySelectorAll<HTMLElement>('.wave')];
     if (!waves.length) return;
     const w = ribbonEl.clientWidth;
     const half = range.offsetWidth - w; // the ribbon is inset half a thumb each side, so this is one thumb
     const x = (time.stepIndex / Math.max(1, time.steps)) * w;
     const clear = half / 2 + 4;
-    for (const el of waves) {
-      el.style.transform = '';
-      const lw = el.offsetWidth;
-      const anchor = el.offsetLeft; // label's left edge (peak + its margin)
-      const peak = anchor - 4;
-      const hits = (l: number) => x + clear > l && x - clear < l + lw;
-      const spot = [anchor, peak - 4 - lw, x + clear, x - clear - lw].find((l) => !hits(l)) ?? anchor;
-      if (spot !== anchor) el.style.transform = `translateX(${(spot - anchor).toFixed(1)}px)`;
+    const lay = (short: boolean) =>
+      waves.map((el) => {
+        el.hidden = false;
+        el.textContent = (short ? el.dataset.short : el.dataset.full) ?? el.textContent;
+        el.style.transform = '';
+        const lw = el.offsetWidth;
+        const anchor = el.offsetLeft; // label's left edge (peak + its margin)
+        const peak = anchor - 4;
+        const hits = (l: number) => x + clear > l && x - clear < l + lw;
+        const spot = [anchor, peak - 4 - lw, x + clear, x - clear - lw].find((l) => !hits(l)) ?? anchor;
+        if (spot !== anchor) el.style.transform = `translateX(${(spot - anchor).toFixed(1)}px)`;
+        return [spot, spot + lw] as const;
+      });
+    const off = (r: readonly (readonly [number, number])[]) =>
+      r.map(([l, rt], i) => l < -half / 2 || rt > w + half / 2 || r.some(([l2, r2], j) => j !== i && l < r2 + 4 && l2 < rt + 4));
+    let spots = lay(false);
+    if (off(spots).some(Boolean)) {
+      spots = lay(true);
+      // Still in the way: drop the later notes (keep the first wave's) until the rest fit.
+      const kept: (readonly [number, number])[] = [];
+      spots.forEach((s, i) => {
+        if (off([...kept, s]).some(Boolean)) waves[i]!.hidden = true;
+        else kept.push(s);
+      });
     }
   };
 
@@ -127,9 +173,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
 
   const sync = () => {
     range.max = String(time.steps);
-    range.value = String(time.stepIndex);
-    // Where the thumb is, 0-1: the phone's date pill rides above it.
-    root.style.setProperty('--p', String(time.stepIndex / Math.max(1, time.steps)));
+    glide();
     const label = time.label(time.cursor);
     const after = time.asOf ? (time.cursor > time.asOf.at ? 'forecast' : '') : time.cursor > time.now ? 'after today' : '';
     doyEl.classList.toggle('fc', !!time.asOf);
@@ -151,9 +195,23 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
       drawTicks();
       root.style.setProperty('--half', `${Math.ceil(dateBox.offsetWidth / 2) + 4}px`); // the as-of badge may have changed
     }
-    play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : 'Play (Space)');
-    play.classList.toggle('on', time.playing);
-    play.innerHTML = time.playing ? PAUSE : PLAY;
+    // Playback stops on the last day: Play turns into Replay and a short note says what just happened.
+    const end = !time.playing && time.stepIndex === time.steps;
+    if (wasPlaying && end) {
+      ended = true;
+      const words = endNote(); // the layer's own copy
+      if (words) {
+        clearTimeout(noteTimer);
+        noteOn = true;
+        showEnd(words);
+        noteTimer = window.setTimeout(endNoteOff, 5000);
+      }
+    } else if (!end) ended = false;
+    if (!ended) endNoteOff();
+    wasPlaying = time.playing;
+    play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : ended ? 'Replay (Space)' : 'Play (Space)');
+    play.classList.toggle('on', time.playing || ended);
+    play.innerHTML = time.playing ? PAUSE : ended ? REPLAY : PLAY;
     placeWaves();
   };
 
@@ -162,29 +220,30 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
   let touched = false;
   let glideRaf = 0;
   let glideTimer = 0;
-  let gliding = false;
-  const touch = () => ((touched = true), (gliding = false), cancelAnimationFrame(glideRaf), clearTimeout(glideTimer));
+  let rewinding = false; // the first Play's rewind (its own raf and timer, apart from the playback clock's frames)
+  const touch = () => ((touched = true), (rewinding = false), cancelAnimationFrame(glideRaf), clearTimeout(glideTimer));
   const playFromStart = () => {
     touched = true;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches || time.stepIndex === 0) return (time.setStepIndex(0), time.play());
     const from = time.stepIndex;
     const { start, end } = time;
-    gliding = true;
+    rewinding = true;
     const t0 = performance.now();
     const frame = (t: number) => {
       if (time.start !== start || time.end !== end) return touch(); // the season changed under the rewind
       const k = Math.min(1, (t - t0) / 400);
       time.setStepIndex(Math.round(from * (1 - (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2)))); // ease in-out
       if (k < 1) glideRaf = requestAnimationFrame(frame);
-      else glideTimer = window.setTimeout(() => ((gliding = false), time.play()), 250);
+      else glideTimer = window.setTimeout(() => ((rewinding = false), time.play()), 250);
     };
     glideRaf = requestAnimationFrame(frame);
   };
 
   range.addEventListener('input', () => (touch(), time.setStepIndex(Number(range.value))));
   range.addEventListener('pointerdown', () => (touch(), time.pause()));
-  // A press during the rewind stops it, like Pause would.
-  const togglePlay = () => (gliding ? touch() : !touched && !time.playing ? playFromStart() : (touch(), time.toggle()));
+  // A press during the rewind stops it, like Pause would. Replay (after the last day) is a plain press too: touch()
+  // stops any rewind, and play() starts the season over.
+  const togglePlay = () => (rewinding ? touch() : !touched && !time.playing ? playFromStart() : (touch(), time.toggle()));
   play.addEventListener('click', togglePlay);
   $('t-prev').addEventListener('click', () => (touch(), time.pause(), time.step(-1)));
   $('t-next').addEventListener('click', () => (touch(), time.pause(), time.step(1)));
@@ -228,8 +287,10 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
   });
 
   time.subscribe(sync);
+  time.onFrame(glide);
   sync();
-  window.addEventListener('resize', placeWaves);
+  // The track narrows without a window resize too (the desktop About panel), so watch the ribbon itself.
+  new ResizeObserver(placeWaves).observe(ribbonEl);
   return (p) => {
     ribbonEl.innerHTML = p ? ribbon(p) : '';
     placeWaves();

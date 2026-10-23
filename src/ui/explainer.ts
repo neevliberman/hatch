@@ -49,6 +49,23 @@ export function spotHtml(s: SpotStory | null): string {
       .join('')}<span><i class="k-tick"></i>real sighting (${shown.length} here)</span><span><i class="k-today"></i>the date you picked</span></div>`;
 }
 
+/** The bold answer to "how sure is it?", from the forecast's days off and the plain guess's (each layer's own scores). */
+function scoreLead([f, base]: { label: string; days: number }[]): string {
+  if (!f) return '';
+  const n = (d: number) => `${Math.round(d)} day${Math.round(d) === 1 ? '' : 's'}`;
+  const lead = `Usually within about ${n(f.days)}.`;
+  if (!base || !(f.days > 0)) return lead; // no ratio against a perfect (or missing) score
+  const r = base.days / f.days;
+  const vs = `guessing the ${base.label.toLowerCase()}`;
+  return `${lead} ${
+    r >= 2.6 ? `About ${Math.round(r)} times as close as ${vs}.`
+    : r >= 1.75 ? `About twice as close as ${vs}.`
+    : r >= 1.15 ? `Closer than ${vs}, which is off by about ${n(base.days)}.`
+    : r > 0.87 ? `About as close as ${vs}.`
+    : `${vs[0]!.toUpperCase()}${vs.slice(1)} did better, at about ${n(base.days)}.`
+  }`;
+}
+
 /** The whole species section of the drawer. Its spot card is filled separately, so it can follow the map. */
 export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): string {
   const score = ex.score;
@@ -63,7 +80,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
         : ''
     }
     <figure class="ex-fig">${sketchStrip(id, ex, ex.steps.map((x) => `<b>${esc(x.title)}</b>${esc(x.text)}`))}</figure>
-    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}<span class="phone-only"> Close this panel, then tap the map.</span></p>
+    <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}</p>
       <label class="ex-place">Or pick a city <select data-place><option value="">Choose…</option>${CITIES.map(
         (c) => `<option value="${c.lat},${c.lng}">${esc(c.name)}</option>`,
       ).join('')}</select></label>
@@ -71,6 +88,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
     ${
       score
         ? `<div class="ex-score" data-why><div class="ex-h">${esc(score.title)}</div>
+        <p class="ex-lead">${esc(scoreLead(score.bars))}</p>
         <div class="ex-sub">Days off, on average. Shorter is better.</div>
         ${score.bars
           .map(
@@ -78,7 +96,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
             <b>${x.days.toFixed(1)} days</b></div>`,
           )
           .join('')}
-        <p>${esc(score.text)}</p></div>`
+        <ul class="ex-pts">${score.points.map(([tag, x]) => `<li><i>${esc(tag)}</i> ${esc(x)}</li>`).join('')}</ul></div>`
         : ''
     }
     <details class="ex-fine" data-key="fine-${esc(id)}"><summary>${esc(ex.finePrintLabel)}</summary>

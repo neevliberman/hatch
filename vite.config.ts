@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import packReplay from './scripts/pack-replay.mjs';
+import { loaderHtml } from './src/ui/loader';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -48,10 +49,14 @@ const chunkOf = (id: string): string | undefined => {
   return undefined;
 };
 
+// The loading caterpillar is drawn with the About panel's pen code at build time and written into the page, so it
+// shows before any script has arrived. Shared with the one-file build.
+export const loader = (): Plugin => ({ name: 'hatch-loader', transformIndexHtml: (html) => html.replace('<!-- loader -->', loaderHtml()) });
+
 // Normal multi-file build -> dist/. Relative base so it works under any sub-path (GitHub Pages etc.).
 export default defineConfig({
   base: './',
-  plugins: [packReplay(), serviceWorker()],
+  plugins: [packReplay(), serviceWorker(), loader()],
   build: {
     outDir: 'dist',
     target: 'es2022',

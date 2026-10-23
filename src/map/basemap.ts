@@ -184,44 +184,59 @@ function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {
   ];
 }
 
+// The state shapes never change: build their layers once. Fresh arrays as `data` each frame would make deck
+// re-tessellate every outline on every playback frame.
+let states: { under: Layer; neighbours: Layer; outline: Layer } | null = null;
+const stateLayers = () =>
+  (states ??= {
+    under: new GeoJsonLayer({
+      id: 'states-fill',
+      data: stateCollection.features,
+      filled: true,
+      stroked: false,
+      getFillColor: (f) => ((f.properties as { core: boolean }).core ? P.land : P.landOuter),
+      pickable: false,
+    }),
+    neighbours: new GeoJsonLayer({
+      id: 'states-outline-faint',
+      data: stateCollection.features.filter((f) => !f.properties.core),
+      filled: false,
+      stroked: true,
+      getLineColor: P.neighbourLine,
+      getLineWidth: 1,
+      lineWidthUnits: 'pixels',
+      pickable: false,
+    }),
+    outline: new GeoJsonLayer({
+      id: 'states-outline',
+      data: stateCollection.features.filter((f) => f.properties.core),
+      filled: false,
+      stroked: true,
+      getLineColor: P.stateLine,
+      getLineWidth: 1.4,
+      lineWidthUnits: 'pixels',
+      pickable: false,
+    }),
+  });
+
 /**
  * Basemap layers around the data: `under` the hexagons (land), `mid` between the hexagons and the sighting dots
- * (lakes, rivers, roads, forests: the dots stay on top), `over` everything (state lines).
+ * (lakes, rivers, roads, forests: the dots stay on top), `over` everything (state lines). The same objects come back
+ * until the zoom changes or another part of the basemap arrives, so a playback frame costs the basemap nothing.
  */
+let built: { key: string; layers: { under: Layer[]; mid: Layer[]; over: Layer[] } } | null = null;
 export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[]; over: Layer[] } {
+  const key = `${zoom}|${!!parts.overview}|${!!parts.detail}|${!!parts.woods}`;
+  if (built?.key === key) return built.layers;
   want(zoom);
-  const core = stateCollection.features.filter((f) => f.properties.core);
-  const under = new GeoJsonLayer({
-    id: 'states-fill',
-    data: stateCollection.features,
-    filled: true,
-    stroked: false,
-    getFillColor: (f) => ((f.properties as { core: boolean }).core ? P.land : P.landOuter),
-    pickable: false,
-  });
-  const neighbours = new GeoJsonLayer({
-    id: 'states-outline-faint',
-    data: stateCollection.features.filter((f) => !f.properties.core),
-    filled: false,
-    stroked: true,
-    getLineColor: P.neighbourLine,
-    getLineWidth: 1,
-    lineWidthUnits: 'pixels',
-    pickable: false,
-  });
-  const outline = new GeoJsonLayer({
-    id: 'states-outline',
-    data: core,
-    filled: false,
-    stroked: true,
-    getLineColor: P.stateLine,
-    getLineWidth: 1.4,
-    lineWidthUnits: 'pixels',
-    pickable: false,
-  });
-  return {
-    under: [under],
-    mid: [...woodsLayers(zoom), ...detailLayers('overview', zoom), ...detailLayers('detail', zoom)],
-    over: [neighbours, outline],
+  const { under, neighbours, outline } = stateLayers();
+  built = {
+    key,
+    layers: {
+      under: [under],
+      mid: [...woodsLayers(zoom), ...detailLayers('overview', zoom), ...detailLayers('detail', zoom)],
+      over: [neighbours, outline],
+    },
   };
+  return built.layers;
 }

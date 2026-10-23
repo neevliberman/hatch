@@ -28,7 +28,6 @@
   --track-faint: rgba(70, 52, 30, 0.08);
   --thumb-fill: #fffaf0;
   --swatch-rim: rgba(70, 52, 30, 0.4);
-  --stripe: rgba(43, 36, 28, 0.86);
   --shadow: 0 6px 18px rgba(60, 40, 20, 0.18);
   --today: #2b241c;
   /* Buttons and menus: a 4px corner and a firmer pencil edge. */
@@ -65,15 +64,29 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #map { position: absolute; inset: 0; touch-action: none; background: var(--bg); }
 #no-webgl { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); margin: 0;
   padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
-/* On a slow phone the map's code takes a few seconds to arrive; until its canvas lands, say so instead of blank paper.
-   Pure CSS (the canvas ends :empty), and dropped when the no-WebGL message is showing instead. */
-#map:empty:not(:has(~ #no-webgl))::after { content: 'Unfolding the map…'; position: absolute; top: 40%; left: 0; right: 0;
-  text-align: center; font: 600 22px var(--font-note); color: var(--text); }
-/* A gentle pulse, never below ~5:1 against the water; none at all for people who asked for less motion. */
+/* While the map's code downloads and draws, a pen caterpillar inches round a circle (src/ui/loader.ts). It fades on
+   the map's first frame (map.ts), and goes away if the no-WebGL message shows instead. */
+#loader { position: absolute; top: 34%; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  pointer-events: none; transition: opacity 0.2s; }
+#loader.done { opacity: 0; }
+#no-webgl ~ #loader { display: none; }
+#loader p { margin: 0; font: 600 22px var(--font-note); color: var(--text); }
+#loader svg { overflow: visible; }
+#loader .pen { fill: var(--text); }
+#loader .wash { fill: var(--wash-leaf); opacity: 0.6; }
+#loader .cat-path { fill: var(--line-strong); }
+/* Each segment's place along the body: stretched (120deg of the circle), then bunched with the middle lifted as the
+   tail catches up, then stretched again a step on. The lap turns 60deg a step, in time, so the loop never jumps. */
+#loader .walk > g { transform: rotate(calc(var(--k) * 120deg)) translateY(-24px); }
 @media (prefers-reduced-motion: no-preference) {
-  #map:empty:not(:has(~ #no-webgl))::after { animation: hatch-loading 1.6s ease-in-out infinite alternate; }
+  #loader .walk { animation: cat-lap 7.2s steps(6) infinite; }
+  #loader .walk > g { animation: cat-inch 1.2s ease-in-out infinite; }
 }
-@keyframes hatch-loading { from { opacity: 0.7; } to { opacity: 1; } }
+@keyframes cat-lap { to { transform: rotate(360deg); } }
+@keyframes cat-inch {
+  50% { transform: rotate(calc(60deg + var(--k) * 60deg)) translateY(calc(-24px - var(--b) * 9px)); }
+  100% { transform: rotate(calc(60deg + var(--k) * 120deg)) translateY(-24px); }
+}
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .muted { color: var(--muted); }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
@@ -138,6 +151,15 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 /* Kept rendered (just invisible) when empty: live regions that appear and fill at once are often not announced. */
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
+/* Season's end note: on empty paper beside the map, with the off-season note (placed from main.ts), never over the
+   hexes, the dock or the slider's ribbon. Fades in 240 ms, out 400 ms (instantly under reduced motion). */
+#end-note { position: absolute; left: 0; top: 0; z-index: 2; margin: 0; pointer-events: none; width: max-content;
+  max-width: min(280px, calc(100vw - 32px)); padding: 4px 12px; text-align: center; font: 600 21px/1.1 var(--font-note);
+  background: var(--panel-solid); border-radius: var(--radius); box-shadow: var(--shadow); opacity: 0; transition: opacity 0.4s; }
+#end-note.on { opacity: 1; transition-duration: 0.24s; }
+#end-note:empty { visibility: hidden; }
+#end-note small { display: block; font-size: 17px; color: var(--moon); }
+@media (prefers-reduced-motion: reduce) { #end-note { transition: none; } }
 /* Over the map's bottom-right corner on a wide screen (placed against #bottom); top of the button stack on a phone. */
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
 #recenter[hidden] { display: none; }
@@ -164,6 +186,16 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }
+/* "Sleeping till spring": a pencilled note on empty paper after the wave (placed from main.ts). */
+#asleep { position: absolute; left: 0; top: 0; pointer-events: none; display: grid; justify-items: center;
+  padding: 4px 16px; background: radial-gradient(var(--panel-solid) 60%, transparent 80%);
+  font: 600 24px/1 var(--font-note); opacity: 0; transition: opacity 0.6s; }
+#asleep.on { opacity: 1; }
+#asleep svg { width: 64px; height: 34px; fill: var(--text); overflow: visible; }
+#asleep .wash { fill: var(--wash-tan); opacity: 0.35; }
+#asleep span { font-size: 18px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { #asleep { transition: none; } }
+@media (orientation: landscape) and (max-height: 500px) { #asleep { display: none; } }
 .lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
 .lg-items li { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; flex: none; background: var(--c); }
@@ -172,7 +204,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   position: relative; background: var(--swatch-rim); }
 .sw.hex::after { content: ''; position: absolute; inset: 1.5px; background: var(--c); clip-path: inherit; }
 .sw.striped { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
-  background: repeating-linear-gradient(-45deg, var(--stripe) 0 2px, transparent 2px 5px), var(--c); }
+  background: repeating-linear-gradient(-45deg, var(--text) 0 1px, transparent 1px 5px), var(--c); }
 .sw.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text); box-shadow: 0 0 0 2px var(--panel-solid); }
 .probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
 .cav.credits { font-size: 13px; color: var(--muted); }
@@ -197,8 +229,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .lg-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
 .lg-note { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 3px; }
 .lg-fold, .lg-chip { display: none; }
-/* Under 1000px the key sits over the map: it can fold to a one-line chip (it folds itself after the first tap or Play). */
-@media (max-width: 999px) {
+/* Under 1000px (and on any phone on its side) the key sits over the map: it can fold to a one-line chip (it folds
+   itself after the first tap or Play). */
+@media (max-width: 999px), (orientation: landscape) and (max-height: 500px) {
   #legend .legend-card { position: relative; }
   /* A small round badge on the card's top-left corner (the right one is under the recenter button), so it costs the
      key no width (a row on the smallest phones). */
@@ -214,6 +247,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .lg-chip span { margin-left: 3px; }
   #legend.folded .lg-chip { position: relative; }
   .lg-chip::before { content: ''; position: absolute; inset: -4px; } /* 44px tall to the finger */
+  .lg-chip:focus-visible { outline-width: 1.5px; outline-offset: 1px; }
 }
 #probe { max-width: 300px; padding: 8px 12px; font-size: 13px; }
 #probe[hidden] { display: none; }
@@ -251,6 +285,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ribbon .frame { fill: none; stroke: var(--muted); stroke-width: 1; }
 .ribbon .seen { fill: var(--ink-wash); }
 .ribbon .seen-line { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linejoin: round; }
+.wave[hidden] { display: none; }
 .wave { position: absolute; top: -10px; margin-left: 4px; font: 600 15px/1 var(--font-note); white-space: nowrap;
   padding: 0 3px; border-radius: 3px; background: var(--panel-solid); } /* paper behind the note breaks the frame line */
 .track input[type=range] { position: relative; width: 100%; height: var(--rh); margin: 0; background: none; appearance: none; -webkit-appearance: none;
@@ -336,13 +371,22 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
   @media (max-width: 359px) { .brand { font-size: 0; } } /* smallest phones: the moth mark alone, so both menus stay readable */
-  #drawer { top: auto; width: 100%; height: 70%; border-left: 0; border-top: 1px solid var(--line); transform: translateY(104%); border-radius: 16px 16px 0 0; }
+  /* A bottom sheet with two stops (src/ui/caveatDrawer.ts): the middle one leaves the map above it in use, so it
+     doesn't scroll (a swipe up is for the tall stop); the tall one is for reading. */
+  #drawer { top: auto; width: 100%; height: 44%; border-left: 0; border-top: 1px solid var(--line); transform: translateY(104%); border-radius: 16px 16px 0 0;
+    transition: transform 0.22s ease, height 0.22s ease; }
+  #drawer:not(.full) { overflow-y: hidden; touch-action: none; }
+  #drawer.full { height: 92%; }
   #drawer.open { transform: none; }
   #drawer.dragging { transition: none; }
-  /* A bottom sheet: the grip says "drag me down", and the title bar is the handle (src/ui/caveatDrawer.ts). */
+  /* The grip says "drag me", and the title bar is the handle. */
   .drawer-head { padding-top: 16px; touch-action: none; }
-  .drawer-grip { display: block; position: absolute; top: 6px; left: 50%; width: 36px; height: 4px; margin-left: -18px;
-    border-radius: 2px; background: color-mix(in srgb, var(--muted) 55%, transparent); }
+  /* A 48x22 button around a 36x4 pill: tap or click it to swap the stops. */
+  .drawer-grip { display: block; position: absolute; top: 0; left: 50%; width: 48px; height: 22px; margin-left: -24px; padding: 0;
+    border: 0; border-radius: 6px; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .drawer-grip::before { content: ''; position: absolute; top: 6px; left: 6px; width: 36px; height: 4px; border-radius: 2px;
+    background: color-mix(in srgb, var(--muted) 55%, transparent); }
+  .drawer-grip:focus-visible { outline: 2px solid var(--accent); }
 }
 
 /* Upright phones: one row of Play and the slider, with the date in a pill riding above the thumb. The track starts
@@ -396,8 +440,15 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   .date em { font-size: 15px; }
   .now { top: -12px; } /* the "now" flag would poke up into the legend row; keep just its line */
   .now b { visibility: hidden; }
-  #drawer { top: 0; height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
-    padding-right: var(--gr); transform: translateX(104%); }
+  /* The map gets its height back: the caveat folds into the key chip, which says "test forecast", and comes back as
+     one short line while the key is open (the full wording would wrap and eat the map). */
+  #strip { display: none; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app:has(#legend:not(.folded)) #strip { display: block; }
+  #honesty { display: none; }
+  #strip::before { content: 'Dots: last 10 days. Colors: test forecast.'; }
+  #legend.folded .lg-chip::after { content: '\00B7\00A0 test forecast'; margin-left: 2px; color: var(--warn); }
+  #drawer:not(.full), #drawer.full { top: 0; height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
+    padding-right: var(--gr); transform: translateX(104%); overflow-y: auto; touch-action: auto; }
   .drawer-head { padding-top: 12px; touch-action: auto; margin-right: calc(-1 * var(--gr)); padding-right: var(--gr); }
   .sheet { margin-right: calc(-1 * var(--gr)); padding-right: var(--gr); }
   .drawer-grip { display: none; }
@@ -453,7 +504,11 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .bar-l i { height: 10px; border-radius: 5px; background: var(--muted); }
 .bar-l i.best { background: var(--ac); }
 .bar-l b { font-weight: 600; font-variant-numeric: tabular-nums; }
-.ex-score p { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+/* "How sure is it?": the answer in bold first, then the bars, then a few plain lines with a handwritten lead-in. */
+.ex-lead { margin: 4px 0 6px; font-size: 15px; font-weight: 700; }
+.ex-pts { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
+.ex-pts li { margin-top: 4px; }
+.ex-pts i { font: 600 16px var(--font-note); color: var(--ac); }
 .ex-fine, details.credits { margin-top: 10px; padding: 0 12px; }
 .ex-fine summary, details.credits summary { cursor: pointer; padding: 10px 0; font-weight: 600; min-height: 24px; }
 .ex-fine ul, details.credits ul { margin: 0 0 10px; padding-left: 18px; font-size: 13px; }
@@ -464,8 +519,6 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .spot-key .k-today { width: 3px; background: var(--today); }
 .spot-key .k-seg { width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; box-shadow: inset 0 0 0 1px var(--swatch-rim); }
 .ex-sub { font-size: 12.5px; color: var(--muted); }
-.phone-only { display: none; }
-@media (max-width: 700px), (orientation: landscape) and (max-height: 500px) { .phone-only { display: inline; } }
 
 /* First visit: the About button and Play glow a few times to show where to start. */
 .hint { animation: hint 1.4s ease-in-out 0.4s 4; }
@@ -504,6 +557,17 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 @media (max-width: 340px) {
   .lg-items { font-size: 12px; gap: 2px 8px; }
 }
+
+/* While paused, today's newest dots breathe (map.ts): a paper ring around each, over its own paper halo. Resting
+   after 15 s idle, and never for reduced motion. */
+.breath { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.breath i { position: absolute; left: -6.5px; top: -6.5px; width: 13px; height: 13px; border-radius: 50%; display: none;
+  box-shadow: 0 0 0 1px var(--panel-solid); }
+@media (prefers-reduced-motion: no-preference) {
+  /* In a few steps, not every frame: half a pixel needs no more, and the map under it is redrawn far less often. */
+  .breath:not(.rest) i { display: block; animation: breathe 1.2s steps(6) infinite alternate; }
+}
+@keyframes breathe { from { scale: 0.93; } to { scale: 1.07; } }
 
 /* Place names over the map (map/labels.ts). Ink on a paper halo, so a name reads over any hexagon colour; water and
    forest names handwritten, like notes in the margin. Never takes a tap: the map underneath does. */

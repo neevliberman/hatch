@@ -44,9 +44,10 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
   } catch {
     /* storage blocked: start open */
   }
-  let folded = stored === '1';
+  // A phone on its side has no height to spare: there the key starts as its chip unless the reader opened it.
+  let folded = stored === '1' || (stored !== 'open' && matchMedia('(orientation: landscape) and (max-height: 500px)').matches);
   let touched = stored === 'open'; // the reader opened or closed it themselves: stop folding it for them
-  const narrow = window.matchMedia('(max-width: 999px)');
+  const narrow = window.matchMedia('(max-width: 999px), (orientation: landscape) and (max-height: 500px)');
   const setFolded = (f: boolean, focus = false) => {
     folded = f;
     root.classList.toggle('folded', f);
@@ -88,7 +89,8 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
     const btn = (e.target as HTMLElement).closest('.lg-fold, .lg-chip');
     if (!btn) return;
     touched = true;
-    setFolded(btn.classList.contains('lg-fold'), true);
+    // Hand focus to the other button only for a keyboard (a click from Enter or Space has no detail); a tap needs no ring.
+    setFolded(btn.classList.contains('lg-fold'), (e as MouseEvent).detail === 0);
   });
   registry.subscribe(render);
   render();

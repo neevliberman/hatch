@@ -71,8 +71,10 @@ for (const [name, width, height, mobile] of shots) {
     console.log(`${tag}: centre colours=${m.distinct}, dominant=${(m.dominant * 100).toFixed(0)}%`);
     if (m.distinct < 4 || m.dominant > 0.97) problems.push(`${tag}: map looks blank (single colour): ${JSON.stringify(m)}`);
     if (label === 'default') {
-      if (mobile) await page.touchscreen.tap(width * 0.5, height * 0.5);
-      else await page.mouse.click(width * 0.5, height * 0.5);
+      // Central Illinois, so the tap lands on land (the screen's middle can be Lake Michigan).
+      const [x, y] = (await page.evaluate(() => window.__hatch?.map.project([-89.2, 40.1]))) ?? [width * 0.5, height * 0.5];
+      if (mobile) await page.touchscreen.tap(x, y);
+      else await page.mouse.click(x, y);
       await page.waitForTimeout(500);
       if (await page.locator('#probe').isHidden()) problems.push(`${tag}: tapping the map showed no probe card`);
       await page.screenshot({ path: `${out}/${prefix}-${name}-${label}-probe.png` });

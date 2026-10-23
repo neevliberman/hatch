@@ -16,6 +16,7 @@ import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
 import { isForecast } from './core/layer';
+import { MIDWEST_MARGIN } from './layers/stages';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
@@ -55,6 +56,10 @@ function start() {
 
   const time = new TimeAxis(registry.activeTime()!);
   let spec: TimeSpec | null = registry.activeTime();
+  // Playback slows to 8 days/s while the active layer says its season is in full swing and runs 18 days/s otherwise.
+  // Reduced motion keeps one steady speed.
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  time.pace = (t) => (still.matches ? 14 : registry.activeLayers().some((l) => l.busy?.(t)) ? 8 : 18);
 
   let hit: ProbeHit | null = null;
   let pinned = false;
@@ -80,6 +85,7 @@ function start() {
   };
   // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
   let followSpot = (_t: number) => {};
+  let placeNote = () => {}; // the after-the-wave margin note, set up once the map exists
   const updateProbe = () => {
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
     if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = cur.cellAt(hit.lngLat) ?? hit.cell;
@@ -103,21 +109,30 @@ function start() {
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
   const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
+  // A phone on its side: the caveat folds into the key chip, and the About panel opens at the side.
+  const slim = window.matchMedia('(orientation: landscape) and (max-height: 500px)');
   let legendH = 0;
   const padding = (): Padding => {
     const top = $('top').getBoundingClientRect().bottom + 8;
     // On wide screens the legend and card sit in the bottom-left corner, beside the map rather than under it.
     // On a phone the legend sits under the map, so leave room for it, but not for a docked card: that comes and
     // goes with every tap, and would make the map jump each time. (The card replaces the legend while it is up.)
+    // Folded to its small chip, it takes no room: the Midwest gets the height.
     const legend = $('legend').offsetHeight;
     if (legend) legendH = legend;
     const floats = $('floats');
-    const bottom = $('bottom').offsetHeight - floats.offsetHeight + (phone.matches ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0) + 8;
-    const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
-    // On a wide screen the open About panel sits beside the map: fit the Midwest into what is left.
+    const solid = $('bottom').offsetHeight - floats.offsetHeight;
+    const keyH = phone.matches && !$('legend').classList.contains('folded') ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0;
     const drawer = $('drawer');
-    // On a phone the My area / Share stack floats on the right edge: keep the Midwest clear of it.
-    const right = phone.matches ? $('actions').offsetWidth + 8 : drawer.classList.contains('open') ? drawer.offsetWidth : 0;
+    const open = drawer.classList.contains('open');
+    // A phone's About sheet at its middle stop leaves the map above it in use: fit the Midwest above the sheet.
+    // (Its target height, not its offsetHeight, which lags behind while it changes stop.)
+    const sheet = open && phone.matches && !slim.matches && !drawer.classList.contains('full') ? window.innerHeight * 0.44 : 0;
+    const bottom = Math.max(solid + keyH, sheet) + 8;
+    const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
+    // On a wide screen (or a phone on its side) the open About panel sits beside the map: fit the Midwest into what is
+    // left. Otherwise, on a phone, the My area / Share stack floats on the right edge: keep the Midwest clear of it.
+    const right = open && (!phone.matches || slim.matches) ? drawer.offsetWidth : phone.matches ? $('actions').offsetWidth + 8 : 0;
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2) };
   };
   const map = createMap({
@@ -130,8 +145,15 @@ function start() {
       $('recenter').hidden = !moved;
       document.querySelector('.brand')!.classList.toggle('over-map', moved);
     },
+    // The loading caterpillar bows out as the first frame lands.
+    onFirstDraw: () => {
+      const l = document.getElementById('loader');
+      l?.classList.add('done');
+      setTimeout(() => l?.remove(), 250);
+    },
     onView: () => {
       if (pinned) placeProbe();
+      placeNote();
       syncUrl(); // a shared link reopens the same place and zoom
     },
     onProbe: (h, clicked) => {
@@ -152,12 +174,95 @@ function start() {
 
   // The map is a canvas, so screen readers get the day's picture in words (read with the map, not announced each frame).
   const srSummary = $('sr-summary');
+  // After the season the map goes one flat colour, which reads as "no data". A margin note on empty paper (the
+  // layer's own words, sketch and spot, HatchLayer.offSeason) says they are asleep. It only shows on the fitted view,
+  // so it never sits on hexes, and fades as soon as any hexagon starts.
+  const note = document.createElement('div');
+  note.id = 'asleep';
+  note.setAttribute('aria-hidden', 'true'); // the screen-reader summary already says every hexagon is over
+  let shownNote: unknown = null;
+  // When playback reaches the last day, the layer's end note (HatchLayer.endNote) goes on the same empty paper: just
+  // under the margin note on a phone, just over it on a wide screen. Never over the map's hexes, the dock or the
+  // slider's ribbon: with no room for it, only Replay and the status message say it.
+  const endEl = document.createElement('p');
+  endEl.id = 'end-note';
+  endEl.setAttribute('role', 'status');
+  let endWords: [string, string] | null = null;
+  let endClear = 0;
+  $('app').append(note, endEl);
+  // Panels a note must stay clear of: the header, the dock (with the time slider and its ribbon), the key, the card,
+  // the phone's button stack, the recenter button, the town finder and an open About panel.
+  const blockers = () =>
+    [...document.querySelectorAll('#top, #dock, #legend .legend-card, #legend .lg-chip, #probe:not([hidden]), #actions, #recenter:not([hidden]), #finder:not([hidden]), #drawer.open')]
+      .map((e) => e.getBoundingClientRect())
+      .filter((r) => r.width && r.height);
+  const fits = (x: number, y: number, w: number, h: number, block: DOMRect[]) =>
+    x >= 4 && y >= 4 && x + w <= window.innerWidth - 4 && y + h <= window.innerHeight - 4 &&
+    block.every((r) => x + w <= r.left || x >= r.right || y + h <= r.top || y >= r.bottom);
+  const place = (el: HTMLElement, spot: [number, number] | null, tilt: number) => {
+    el.classList.toggle('on', !!spot);
+    if (spot) el.style.transform = `translate(${Math.round(spot[0])}px, ${Math.round(spot[1])}px) rotate(${tilt}deg)`;
+    return spot;
+  };
+  placeNote = () => {
+    // Runs on every pan and zoom frame: the cheap tests first, and no layout read unless a note will show.
+    if (map.moved() || (!endWords && !note.classList.contains('on') && !registry.activeLayers().some((l) => l.offSeason?.(time.cursor)))) {
+      place(note, null, 0);
+      place(endEl, null, 0);
+      return;
+    }
+    // The active layers' own note, only when every one of them has one to show (the layers cache this per day).
+    const notes = registry.activeLayers().map((l) => l.offSeason?.(time.cursor));
+    const n = notes.length && notes.every(Boolean) ? notes[0]! : null;
+    if (n && n !== shownNote) {
+      shownNote = n;
+      note.innerHTML = `<svg viewBox="0 0 64 34">${n.sketch}</svg><b>${n.title}</b><span>${n.line}</span>`;
+    }
+    const anchor = n?.at ?? notes.find(Boolean)?.at ?? MIDWEST_MARGIN;
+    const atPhone = phone.matches ? map.project(anchor.phone) : null;
+    const atWide = map.project(anchor.wide);
+    const block = blockers();
+    // Phone: centred on its spot under the data. Wide screen: starting at its spot east of the data, on blank paper,
+    // which is also where a phone on its side (no room under the data) puts the end note.
+    const spotFor = (w: number, h: number): [number, number] | null => {
+      const tries: [number, number][] = [];
+      if (atPhone) tries.push([atPhone[0] - w / 2, atPhone[1]]);
+      if (atWide) tries.push([atWide[0], atWide[1] - h / 2]);
+      return tries.find(([x, y]) => fits(x, y, w, h, block)) ?? null;
+    };
+    let box: [number, number, number, number] | null = null;
+    if (n) {
+      const { width: w, height: h } = note.getBoundingClientRect();
+      const s = place(note, w && h ? spotFor(w, h) : null, -3); // none on a phone on its side (style.css)
+      if (s) box = [s[0], s[1], w, h];
+    } else place(note, null, 0);
+    if (!endWords) return void place(endEl, null, 0);
+    const { width: w, height: h } = endEl.getBoundingClientRect();
+    let spot: [number, number] | null = null;
+    if (box) {
+      const [x0, y0, w0, h0] = box;
+      const x = x0 + (w0 - w) / 2;
+      const tries: [number, number][] = phone.matches ? [[x, y0 + h0 + 6], [x, y0 - h - 8]] : [[x, y0 - h - 8], [x, y0 + h0 + 6]];
+      spot = tries.find(([tx, ty]) => fits(tx, ty, w, h, block)) ?? null;
+    } else spot = spotFor(w, h);
+    place(endEl, spot, -2);
+  };
+  const showEnd = (words: [string, string] | null) => {
+    clearTimeout(endClear);
+    endWords = words;
+    if (words) endEl.replaceChildren(words[0], Object.assign(document.createElement('small'), { textContent: words[1] }));
+    // Emptied once faded, so the same words are announced again at the next ending.
+    else endClear = window.setTimeout(() => endEl.replaceChildren(), 450);
+    placeNote();
+  };
   const refresh = () => {
     map.refresh();
     updateProbe();
+    placeNote();
     srSummary.textContent = cur.summary(time.cursor);
   };
   time.subscribe(refresh);
+  time.onFrame(map.refresh); // in-between frames while playing: only the map moves, the card and summary keep the day
   onLunaData = refresh;
   registry.subscribe(() => {
     const next = registry.activeTime();
@@ -267,7 +372,7 @@ function start() {
     void setSpecies('firefly').finally(() => (speciesPending = false));
   }
 
-  const setRibbon = mountScrubber($('bar'), time);
+  const setRibbon = mountScrubber($('bar'), time, () => registry.activeLayers().find((l) => l.endNote)?.endNote, showEnd);
   // The slider's track pictures the active species' season; a season or species change redraws it.
   // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
   let ribbonFrame = 0;
@@ -285,7 +390,7 @@ function start() {
   // so the tap visibly lands even when the drawer is already open.
   let flashTimer = 0;
   $('why').addEventListener('click', () => {
-    toggleDrawer(true);
+    toggleDrawer(true, true); // the reading stop, on a phone
     const drawer = $('drawer');
     const target = drawer.querySelector<HTMLElement>('[data-why]');
     const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
@@ -376,7 +481,7 @@ function start() {
     pinned = true;
     map.setMarker(null);
     // Close enough to see the town's neighbours, and never further out than the current view.
-    map.focus([lng, lat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding());
+    map.focus([lng, lat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding(), true);
     updateProbe();
     return here === first ? 'exact' : 'nearby';
   };
@@ -387,9 +492,9 @@ function start() {
     const [lat, lng] = sel.value.split(',').map(Number) as [number, number];
     const name = sel.selectedOptions[0]?.text ?? '';
     sel.value = ''; // so picking the same city again (after the pin moved) still fires
+    // On a phone, drop the sheet to its middle stop first, so the place lands in the map above it.
+    if (phone.matches && !slim.matches) toggleDrawer(true);
     if (!showPlace(lat, lng, name)) return say(`No forecast for ${name}`);
-    // On a phone the panel hides the map, so close it to show the picked hexagon and its card.
-    if (phone.matches) toggleDrawer(false);
   });
 
   // Find a town: the same path as the city menu above.
@@ -474,7 +579,7 @@ function start() {
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
   if (sharedAt) map.focus([sharedAt[1], sharedAt[0]], sharedAt[2], padding());
-  $('recenter').addEventListener('click', () => map.fit(padding()));
+  $('recenter').addEventListener('click', () => map.fit(padding(), true));
   // Re-fit whenever the room for the map changes: the window, the panels (fonts arriving, a wrapped line, the
   // About panel opening beside the map) or the map itself (a late stylesheet). A view the user has panned or
   // zoomed is theirs, so it is left alone; the recenter button still fits it.
@@ -485,20 +590,37 @@ function start() {
   // Capture phase: the phone drawer swallows the taps that close it, and this must still hear them end.
   window.addEventListener('pointerup', () => (dragging = false), true);
   window.addEventListener('pointercancel', () => (dragging = false), true);
-  const refit = () => {
+  // A change the reader made (the key folding, the About panel opening) glides; a window resize just fits.
+  let glide = false;
+  const refit = (smooth = false, wait = 120) => {
     clearTimeout(fitTimer);
+    glide ||= smooth;
     fitTimer = window.setTimeout(() => {
       if (dragging) return refit();
-      if (!map.moved()) map.fit(padding());
+      if (!map.moved()) map.fit(padding(), glide);
+      glide = false;
       placeProbe();
-    }, 120);
+    }, wait);
   };
-  const ro = new ResizeObserver(refit);
+  const ro = new ResizeObserver(() => refit());
   for (const id of ['map', 'top', 'bottom']) ro.observe($(id));
-  window.addEventListener('resize', refit);
-  document.fonts?.ready.then(refit);
-  // The desktop About panel slides in beside the map without resizing anything the observer watches.
-  new MutationObserver(refit).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
+  // The key folding to its chip (or opening) frees or takes room. Not while a card is up, though: a card hides the
+  // key, and the tap that pinned it also folds it, and the map must not slide out from under that card.
+  let keySeen = false; // the observer's first call is just it starting up
+  // A window resize can resize the key too: that refit is the window's, so it fits at once rather than gliding.
+  let resizedAt = -1e9;
+  new ResizeObserver(() => (keySeen ? hit || refit(performance.now() - resizedAt > 1000) : (keySeen = true))).observe($('legend'));
+  window.addEventListener('resize', () => ((resizedAt = performance.now()), (glide = false), refit()));
+  document.fonts?.ready.then(() => refit());
+  // The About panel slides in beside the map (or the phone sheet changes stop) without resizing anything the observer
+  // watches. Glide with it, starting as it starts. (Mid-drag, the class flips only on letting go.)
+  // Only a change of stop counts: not the classes that come and go while it is dragged or scrolled.
+  let drawerState = 'falsefalse';
+  new MutationObserver(() => {
+    const d = $('drawer').classList;
+    const now = `${d.contains('open')}${d.contains('full')}`;
+    if (now !== drawerState) (drawerState = now), refit(true, 0);
+  }).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
 
   // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
   // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.
