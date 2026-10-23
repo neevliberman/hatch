@@ -85,6 +85,7 @@ export function createLabels(container: HTMLElement) {
     update(vp: WebMercatorViewport | undefined, free: { top: number; bottom: number; right?: number }, dots: [number, number][][],
       covers: Element[]) {
       if (!vp) return;
+      layer.classList.add('ready'); // the first frame is drawn: fade the names in with the map, not before it
       // Panels floating over the map (the header's buttons, the legend, a card) count as taken space too.
       const at = container.getBoundingClientRect();
       const coverBoxes = covers.map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height)
@@ -96,7 +97,7 @@ export function createLabels(container: HTMLElement) {
       lastDots = dots;
       last = key;
       const placed: Box[] = [...coverBoxes];
-      // Names keep off the dots, except lake names (the dots are on land, and a lake name has nowhere else to go).
+      // Names keep off the dots: the data comes first. A lake name that can't get clear waits for a closer zoom.
       let dotsIn = false;
       const addDots = () => {
         dotsIn = true;
@@ -110,7 +111,7 @@ export function createLabels(container: HTMLElement) {
       const clear = (b: Box) => placed.every((p) => b[0] > p[2] || b[2] < p[0] || b[1] > p[3] || b[3] < p[1]);
       for (const l of sorted) {
         if (l[3] > zoom || (l[4] === 'state' && zoom >= STATE_MAX_ZOOM)) continue;
-        if (!dotsIn && l[4] !== 'water') addDots();
+        if (!dotsIn) addDots();
         const [x, y] = vp.project([l[1], l[2]]) as [number, number];
         if (x < -50 || y < T - 20 || x > R + 50 || y > B + 20) continue;
         const w = width(l);

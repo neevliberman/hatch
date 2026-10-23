@@ -1,5 +1,5 @@
 import { GeoJsonLayer } from '@deck.gl/layers';
-import { DataFilterExtension } from '@deck.gl/extensions';
+import { DataFilterExtension, FillStyleExtension } from '@deck.gl/extensions';
 import type { Layer } from '@deck.gl/core';
 import type { Feature, FeatureCollection } from 'geojson';
 import { stateCollection } from '../core/grid';
@@ -32,7 +32,9 @@ interface Part {
  * you zoom in past DETAIL_ZOOM. Like the finer hexes, only over http(s): the one-file preview has no files beside it.
  */
 const DETAIL_ZOOM = 6.5;
-const parts: { overview?: Part; detail?: Part } = {};
+/** Woods (USGS land cover) show from here, in their own file: tree marks over the whole-Midwest view would be noise. */
+const WOODS_ZOOM = 6;
+const parts: { overview?: Part; detail?: Part; woods?: { version: number; woods: FeatureCollection } } = {};
 const asked = new Set<string>();
 let onLoad: () => void = () => {};
 
@@ -44,17 +46,20 @@ export function loadBasemap(zoom: number, loaded: () => void) {
 /** Fetch the part a zoom needs (the detail file half a step early, so it is there when you arrive). */
 function want(zoom: number) {
   if (!/^https?:$/.test(location.protocol)) return;
-  for (const name of zoom >= DETAIL_ZOOM - 0.5 ? ['overview', 'detail'] : ['overview']) {
+  const names = ['overview'];
+  if (zoom >= WOODS_ZOOM - 0.5) names.push('woods');
+  if (zoom >= DETAIL_ZOOM - 0.5) names.push('detail');
+  for (const name of names) {
     if (asked.has(name)) continue;
     asked.add(name);
     fetch(new URL(`basemap/${name}.json`, document.baseURI).href)
       .then((r) => {
         if (!r.ok) throw new Error(String(r.status));
-        return r.json() as Promise<Part>;
+        return r.json();
       })
       .then((p) => {
         if (p?.version !== 1) return;
-        parts[name as 'overview' | 'detail'] = p;
+        parts[name as keyof typeof parts] = p;
         onLoad();
       })
       .catch(() => asked.delete(name)); // a dropped connection: try again on a later zoom
@@ -66,6 +71,50 @@ export const basemapLabels = (): Label[] => [...(parts.overview?.labels ?? []), 
 // Each feature shows from its own zoom: a GPU filter on `z`, so zooming never re-uploads the lines.
 const zoomFilter = [new DataFilterExtension({ filterSize: 1 })];
 const getZ = (f: Feature) => (f.properties as Props).z;
+
+// Woods are drawn the way a map marks them: little trees scattered over the ground, not a fill that would hide
+// the forecast colour underneath. A 32 px tile with two trees, offset so the rows don't line up.
+const TREE_MAPPING = { trees: { x: 0, y: 0, width: 32, height: 32 } };
+let treeAtlas: HTMLCanvasElement | null = null;
+const trees = () => {
+  if (treeAtlas) return treeAtlas;
+  const c = Object.assign(document.createElement('canvas'), { width: 32, height: 32 });
+  const g = c.getContext('2d')!;
+  g.fillStyle = g.strokeStyle = '#fff'; // a mask: the colour comes from getFillColor
+  g.lineWidth = 1.4;
+  for (const [x, y] of [[8, 8], [24, 24]] as const) {
+    g.beginPath();
+    g.arc(x, y - 1.5, 3.4, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.moveTo(x, y + 1);
+    g.lineTo(x, y + 5);
+    g.stroke();
+  }
+  return (treeAtlas = c);
+};
+
+function woodsLayers(zoom: number): Layer[] {
+  const p = parts.woods;
+  if (!p || zoom < WOODS_ZOOM) return [];
+  return [
+    new GeoJsonLayer({
+      id: 'woods',
+      data: p.woods,
+      filled: true,
+      stroked: false,
+      getFillColor: P.trees,
+      pickable: false,
+      extensions: [new FillStyleExtension({ pattern: true })],
+      fillPatternAtlas: trees(),
+      fillPatternMapping: TREE_MAPPING,
+      fillPatternMask: true,
+      getFillPattern: () => 'trees',
+      fillPatternSizeUnits: 'pixels',
+      getFillPatternScale: 1,
+    }),
+  ];
+}
 
 function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {
   const p = parts[name];
@@ -165,5 +214,9 @@ export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[]; ove
     lineWidthUnits: 'pixels',
     pickable: false,
   });
-  return { under: [under], mid: [...detailLayers('overview', zoom), ...detailLayers('detail', zoom)], over: [neighbours, outline] };
+  return {
+    under: [under],
+    mid: [...woodsLayers(zoom), ...detailLayers('overview', zoom), ...detailLayers('detail', zoom)],
+    over: [neighbours, outline],
+  };
 }
