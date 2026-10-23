@@ -69,6 +69,8 @@ const bytesToQ = (days: Uint8Array, i: number) =>
 
 type RGBA = [number, number, number, number];
 // Stage colours and why they read in order: see palette.stages in src/theme.ts.
+type Ring = { s: Sighting; at: number };
+const still = matchMedia('(prefers-reduced-motion: reduce)');
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;
@@ -211,6 +213,8 @@ export interface LunaLayer extends HatchLayer {
   res(): number;
   /** The hexagon the card describes at lngLat, at the resolution on screen (null outside the map). */
   cellAt(lngLat: [number, number]): string | null;
+  /** Is any hexagon "starting" or at "peak" on this day? Playback slows down for those days. */
+  busy?(t: number): boolean;
 }
 
 interface FineCell {
@@ -236,6 +240,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
 
   const unseen = cells.filter((c) => !c.seen);
+  let rings: Ring[] = [];
+  let ringDay = -1;
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
   // Today's sightings, which breathe while paused (map.ts). Cached per day and season.
   let fresh = { key: '', list: [] as Sighting[] };
@@ -363,6 +369,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
     newest: (t) => newest(dayOfYear(t)),
+    // ~400 cheap checks, so no cache needed even once a frame.
+    busy: (t) => forecast().some((q) => /^(st|pe)/.test(stageAt(q, dayOfYear(t)))),
 
     points(t) {
       // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
@@ -398,8 +406,22 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return p;
     },
 
-    render({ t, zoom, theme, wash }) {
+    render({ t, zoom, theme, wash, playing, frac = 0 }) {
       const doy = dayOfYear(t);
+      // While playing, the dots get the in-between day and the hexes bleed into their next colour (not under
+      // reduced motion, and never by hand, so the map always matches the slider). At rest this is all off.
+      const anim = !!playing && !still.matches;
+      const fade = { getFillColor: anim ? 140 : 0 };
+      const now = performance.now();
+      if (!anim) rings = [];
+      else if (ringDay !== doy) {
+        const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
+        rings = [...rings, ...shown.filter((s) => day(s) === doy).map((s) => ({ s, at: now }))].slice(-40);
+      }
+      ringDay = anim ? doy : -1;
+      rings = rings.filter((r) => now - r.at < 600);
+      const age = (r: Ring) => 1 - (1 - (now - r.at) / 600) ** 3; // ease-out cubic, 0..1
+      const d = doy + frac;
       const res = pickRes(resForZoom(zoom));
       if (res !== shownRes) {
         shownRes = res;
@@ -409,8 +431,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const filter = {
         getFilterValue: (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy),
         // Whole-day values: a dot is lit from its own day through GLOW_DAYS - 1 days later.
-        filterRange: [doy - GLOW_DAYS + 0.5, doy + 0.5] as [number, number],
-        filterSoftRange: [doy - 0.5, doy + 0.5] as [number, number],
+        filterRange: [d - GLOW_DAYS + 0.5, d + 0.5] as [number, number],
+        filterSoftRange: [d - 0.5, d + 0.5] as [number, number],
         filterTransformSize: true,
         filterTransformColor: true,
         extensions: filterExt,
@@ -438,6 +460,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               autoHighlight: true,
               highlightColor: palette.hoverTint,
               updateTriggers: { getFillColor: [doy, mode, res] },
+              transitions: fade,
             }),
             new H3HexagonLayer<FineCell, FillStyleExtensionProps<FineCell>>({
               id: `luna-unseen-r${res}`,
@@ -476,6 +499,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           autoHighlight: true,
           highlightColor: palette.hoverTint,
           updateTriggers: { getFillColor: [doy, mode, wash], getLineColor: [wash] },
+          transitions: fade,
         }),
         new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
           id: 'luna-unseen-r4',
@@ -536,6 +560,24 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
         }),
+        // A ring spreads out from each moth on the day it is seen (4 to 18 px, fading out over 0.6 s), only while playing.
+        ...(rings.length
+          ? [
+              new ScatterplotLayer<Ring>({
+                id: 'luna-ripples',
+                data: rings,
+                getPosition: (r) => [r.s.lng, r.s.lat],
+                filled: false,
+                stroked: true,
+                radiusUnits: 'pixels',
+                lineWidthUnits: 'pixels',
+                getLineWidth: 2,
+                // A new array every frame, so these are re-read each frame (40 rings at most).
+                getRadius: (r) => 4 + 14 * age(r),
+                getLineColor: (r) => [43, 36, 28, 204 - 204 * age(r)], // ink
+              }),
+            ]
+          : []),
       ];
     },
 

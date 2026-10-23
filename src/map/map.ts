@@ -295,7 +295,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
 
   const refresh = () => {
     const { under, mid, over } = basemapLayers(zoom);
-    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash }));
+    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.playing, frac: time.frac }));
     // Lakes, rivers and roads go over the hexagons but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));

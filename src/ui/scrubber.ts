@@ -1,5 +1,5 @@
 import { TimeAxis } from '../core/timeAxis';
-import { NEXT, PAUSE, PLAY, PREV } from './icons';
+import { NEXT, PAUSE, PLAY, PREV, REPLAY } from './icons';
 import type { SeasonProfile } from '../core/layer';
 
 /** Pick sensible tick marks for any range: years, months, days or hours. */
@@ -69,6 +69,22 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
   const ticks = $('t-ticks');
   const ribbonEl = $('t-ribbon');
   const dateBox = root.querySelector<HTMLElement>('.date')!;
+  // The note shown when playback reaches the season's last day (see sync).
+  const note = document.createElement('p');
+  note.id = 'end-note';
+  note.role = 'status';
+  document.body.append(note);
+  let ended = false;
+  let wasPlaying = false;
+  let noteTimer = 0;
+  // While playing, the slider takes the in-between value too, so the thumb (and the phone's date pill) glides
+  // instead of hopping a day at a time.
+  const glide = () => {
+    range.step = time.playing ? 'any' : '1';
+    range.value = String(time.stepIndex + time.frac);
+    // Where the thumb is, 0-1: the phone's date pill rides above it.
+    root.style.setProperty('--p', String((time.stepIndex + time.frac) / Math.max(1, time.steps)));
+  };
 
   // Wave notes sit just right of their peak. When the thumb would cover one, slide it to the nearest free spot:
   // left of the peak, or just past the thumb on either side.
@@ -105,9 +121,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
 
   const sync = () => {
     range.max = String(time.steps);
-    range.value = String(time.stepIndex);
-    // Where the thumb is, 0-1: the phone's date pill rides above it.
-    root.style.setProperty('--p', String(time.stepIndex / Math.max(1, time.steps)));
+    glide();
     const label = time.label(time.cursor);
     const after = time.cursor > time.now ? 'after today' : '';
     range.setAttribute('aria-valuetext', label);
@@ -125,9 +139,20 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
       rangeKey = `${time.start}|${time.end}`;
       drawTicks();
     }
-    play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : 'Play (Space)');
-    play.classList.toggle('on', time.playing);
-    play.innerHTML = time.playing ? PAUSE : PLAY;
+    // Playback stops on the last day: Play turns into Replay and a short note says what just happened.
+    const end = !time.playing && time.stepIndex === time.steps;
+    if (wasPlaying && end) {
+      ended = true;
+      note.innerHTML = 'That was the first wave.<small>Tap replay to watch it roll north again</small>';
+      note.classList.add('on');
+      clearTimeout(noteTimer);
+      noteTimer = window.setTimeout(() => note.classList.remove('on'), 3000);
+    } else if (!end) ended = false;
+    if (!ended) note.classList.remove('on');
+    wasPlaying = time.playing;
+    play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : ended ? 'Replay (Space)' : 'Play (Space)');
+    play.classList.toggle('on', time.playing || ended);
+    play.innerHTML = time.playing ? PAUSE : ended ? REPLAY : PLAY;
     placeWaves();
   };
 
@@ -202,6 +227,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
   });
 
   time.subscribe(sync);
+  time.onFrame(glide);
   sync();
   window.addEventListener('resize', placeWaves);
   return (p) => {

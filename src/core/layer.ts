@@ -97,8 +97,9 @@ export interface SeasonProfile {
 export interface HatchLayer {
   id: string;
   title: string;
-  /** `wash`: ms since the map's first frame while the forecast washes in (south first, 900 ms in all), else undefined. */
-  render(ctx: { t: number; zoom: number; theme: Theme; wash?: number }): Layer[];
+  /** `wash`: ms since the map's first frame while the forecast washes in (south first, 900 ms in all), else undefined.
+   * `playing` and `frac` (how far into the next step, 0 at rest) let a layer draw in-between frames during playback. */
+  render(ctx: { t: number; zoom: number; theme: Theme; wash?: number; playing?: boolean; frac?: number }): Layer[];
   /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
   legend(): LegendSpec;

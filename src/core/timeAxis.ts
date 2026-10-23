@@ -37,8 +37,13 @@ export class TimeAxis {
   playing = false;
   /** Playback speed in steps per second. */
   speed = 14;
+  /** While playing, how far the clock is into the next step (0..1), for in-between frames. 0 at rest. */
+  frac = 0;
+  /** Optional story pacing: the speed (steps/s) wanted at a cursor. Playback eases toward it over ~0.5 s. */
+  pace?: (cursor: number) => number;
 
   private listeners = new Set<Listener>();
+  private frames = new Set<Listener>();
   private raf = 0;
   private last = 0;
   private acc = 0;
@@ -102,14 +107,19 @@ export class TimeAxis {
     this.acc = 0;
     const tick = (t: number) => {
       if (!this.playing) return;
-      this.acc += ((t - this.last) / 1000) * this.speed;
+      const dt = Math.min(0.1, (t - this.last) / 1000); // a slow or hidden frame must not skip days
       this.last = t;
+      this.ease(dt);
+      this.acc += dt * this.speed;
       const whole = Math.floor(this.acc);
       if (whole >= 1) {
         this.acc -= whole;
-        if (this.stepIndex >= this.steps) this.cursor = this.start - this.stepMs; // loop
+        this.frac = this.acc; // before the step, so its listeners already see the new day's fraction
         this.step(whole);
+        if (this.stepIndex >= this.steps) return this.pause(); // stop on the last day instead of looping
       }
+      this.frac = this.acc;
+      this.frames.forEach((fn) => fn());
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
@@ -119,6 +129,7 @@ export class TimeAxis {
   pause(): void {
     if (!this.playing) return;
     this.playing = false;
+    this.frac = 0;
     cancelAnimationFrame(this.raf);
     this.emit();
   }
@@ -126,6 +137,18 @@ export class TimeAxis {
   toggle(): void {
     if (this.playing) this.pause();
     else this.play();
+  }
+
+  /** Move speed toward pace() at up to 20 steps/s per second: 8 to 18 takes half a second, so it never jerks. */
+  private ease(dt: number): void {
+    if (!this.pace) return;
+    const d = this.pace(this.cursor) - this.speed;
+    this.speed += Math.sign(d) * Math.min(Math.abs(d), dt * 20);
+  }
+
+  /** Called on every animation frame while playing (frac changes), not only when the step does. */
+  onFrame(fn: Listener): void {
+    this.frames.add(fn);
   }
 
   subscribe(fn: Listener): () => void {

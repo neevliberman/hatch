@@ -50,6 +50,10 @@ function start() {
 
   const time = new TimeAxis(registry.activeTime()!);
   let spec: TimeSpec | null = registry.activeTime();
+  // Playback slows to 8 days/s while the wave is on (any hex starting or at peak) and runs 18 days/s otherwise.
+  // Reduced motion keeps one steady speed.
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  time.pace = (t) => (still.matches ? 14 : luna.busy?.(t) ? 8 : 18);
 
   let hit: ProbeHit | null = null;
   let pinned = false;
@@ -168,6 +172,7 @@ function start() {
     srSummary.textContent = cur.summary(time.cursor);
   };
   time.subscribe(refresh);
+  time.onFrame(map.refresh); // in-between frames while playing: only the map moves, the card and summary keep the day
   onLunaData = refresh;
   registry.subscribe(() => {
     const next = registry.activeTime();
