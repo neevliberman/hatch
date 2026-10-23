@@ -8,7 +8,8 @@ import { dayOfYear } from '../core/timeAxis';
 import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SpotStory } from '../core/layer';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
-import { GLOW_DAYS, modeLabel, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, type LunaLayer, type Stage } from './lunaReplay';
+import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
+import { FINE_ZOOM, GLOW_DAYS, modeLabel, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, type LunaLayer, type Stage } from './lunaReplay';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -42,7 +43,12 @@ export const fireflyInk = '#8a5a00';
 const fmtDoy = (year: number, doy: number) =>
   new Date(doyToMs(year, Math.round(doy))).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): LunaLayer & { seasonCount(m: Mode): number } {
+/** onData: called when the finer hexes arrive or the level on screen changes (the map should redraw). */
+export function createFireflyLayer(
+  file: ReplayFile,
+  initial: Mode = TYPICAL,
+  onData: () => void = () => {},
+): LunaLayer & { seasonCount(m: Mode): number } {
   const { data, sightingsFor, bandOf } = replayData(file);
   let mode = initial;
   let shown = sightingsFor(mode);
@@ -55,10 +61,52 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
 
+  // ---- finer hexes (res 5 only for fireflies), from public/fine-firefly/, loaded when the reader zooms in
+  type Cell = { id: string; i: number; seen: boolean };
+  const fine = fineSource('fine-firefly/');
+  let fineLevel: { level: FineLevel; data: Cell[]; unseen: Cell[] } | null = null;
+  const fineDays = new Map<Mode, Uint8Array>();
+  let hasFine = false;
+  let wantFine = false;
+  let shownRes = GRID_RES;
+  void fine.fineManifest().then((m) => {
+    hasFine = !!m?.levels['5'];
+    if (hasFine) onData(); // a zoomed-in view drawn before the manifest arrived can sharpen now
+  });
+  const loading = new Set<Mode>();
+  const loadFine = () => {
+    const m = mode;
+    if (loading.has(m)) return; // one request per season, not one per frame while it is on its way
+    loading.add(m);
+    void Promise.all([fine.fineLevel(5), fine.fineDays(5, m)]).then(([level, days]) => {
+      if (!level || !days || days.length !== level.cells.length * 5) return; // missing or stale: stay at res 4
+      if (!fineLevel) {
+        const data = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
+        fineLevel = { level, data, unseen: data.filter((c) => !c.seen) };
+      }
+      fineDays.set(m, days);
+      if (wantFine && m === mode) onData();
+    });
+  };
+  /** Res 5 from FINE_ZOOM[5]; back to res 4 a little further out, so a zoom resting on the line doesn't flicker. */
+  const resFor = (zoom: number) => {
+    wantFine = hasFine && zoom >= FINE_ZOOM[5]! - (wantFine ? 0.3 : 0);
+    const days = fineDays.get(mode);
+    if (wantFine && !(fineLevel && days)) loadFine();
+    return wantFine && fineLevel && days ? 5 : GRID_RES;
+  };
+
+  /** Forecast quantiles, "seen", the cell id and its res-4 parent at lngLat, on the level on screen. */
   const lookup = (lngLat: [number, number]) => {
+    const days = fineDays.get(mode);
+    if (shownRes === 5 && fineLevel && days) {
+      const cell = latLngToCell(lngLat[1], lngLat[0], 5);
+      const i = fineLevel.level.index.get(cell);
+      return i === undefined ? null : { cell, q: fineQ(days, i), seen: fineLevel.level.seen[i] === 1, parent: parentOf(cell) };
+    }
     const cell = latLngToCell(lngLat[1], lngLat[0], GRID_RES);
     const i = cellIndex.get(cell);
-    return i === undefined ? null : { cell, q: forecast()[i] ?? [], seen: cells[i]!.seen };
+    return i === undefined ? null : { cell, q: forecast()[i] ?? [], seen: cells[i]!.seen, parent: cell };
   };
 
   /** Mean days off for the heat forecast and the usual date, over the shipped strip-years (one year, or all). */
@@ -106,7 +154,7 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
         { from: q75, to: end, label: 'winding down', color: css(STAGE_COLOR['winding down']) },
         { from: end, to: 367, label: 'over', color: css(STAGE_COLOR.over) },
       ],
-      ticks: sightingsFor(mode).filter((s) => s.cell === hit.cell && !(s.flags & APPROXIMATE)).map(day),
+      ticks: sightingsFor(mode).filter((s) => s.cell === hit.parent && !(s.flags & APPROXIMATE)).map(day),
       today: doy,
     };
   };
@@ -119,7 +167,7 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
       mode = m;
       shown = sightingsFor(m);
     },
-    res: () => GRID_RES,
+    res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
     seasonCount: (m: Mode) => sightingsFor(m).length,
 
@@ -143,8 +191,16 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
         `${lit} firefl${lit === 1 ? 'y' : 'ies'} seen in the last ${GLOW_DAYS} days.`;
     },
 
-    render({ t, theme }) {
+    render({ t, zoom, theme }) {
       const doy = dayOfYear(t);
+      const res = resFor(zoom);
+      if (res !== shownRes) {
+        shownRes = res;
+        queueMicrotask(onData); // the card and its outline follow the new level
+      }
+      const days = res === 5 ? fineDays.get(mode)! : null;
+      const hexes = days ? fineLevel!.data : cells;
+      const qOf = (c: Cell) => (days ? fineQ(days, c.i) : forecast()[c.i]);
       const filter = {
         getFilterValue: day,
         filterRange: [doy - GLOW_DAYS + 0.5, doy + 0.5] as [number, number],
@@ -154,25 +210,26 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
         extensions: filterExt,
       };
       return [
-        new H3HexagonLayer<(typeof cells)[number]>({
-          id: 'firefly-forecast',
-          data: cells,
+        new H3HexagonLayer<Cell>({
+          // One id per level: reusing an id across levels left the other level's hexes drawn (see lunaReplay.ts).
+          id: `firefly-forecast-r${res}`,
+          data: hexes,
           getHexagon: (c) => c.id,
-          getFillColor: (c) => STAGE_COLOR[stageAt(forecast()[c.i], doy)],
+          getFillColor: (c) => STAGE_COLOR[stageAt(qOf(c), doy)],
           getLineColor: theme.hexEdge,
           stroked: true,
           filled: true,
           extruded: false,
           highPrecision: true,
-          lineWidthMinPixels: 0.6,
+          lineWidthMinPixels: days ? 0.4 : 0.6,
           pickable: true,
           autoHighlight: true,
           highlightColor: palette.hoverTint,
-          updateTriggers: { getFillColor: [doy, mode] },
+          updateTriggers: { getFillColor: [doy, mode, res] },
         }),
-        new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
-          id: 'firefly-unseen',
-          data: unseen,
+        new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
+          id: `firefly-unseen-r${res}`,
+          data: days ? fineLevel!.unseen : unseen,
           getHexagon: (c) => c.id,
           getFillColor: palette.stripes,
           stroked: false,
@@ -251,15 +308,17 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
         lines.push(
           `Peak this year in this strip of the map (${band.label}°N): seen ${fmtDoy(year, sc.obs_peak)}, forecast ${fmtDoy(year, sc.heat_peak)}, usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
-      const here = sightingsFor(mode).filter((s) => s.cell === at.cell);
+      const here = sightingsFor(mode).filter((s) => s.cell === at.parent);
+      const where = shownRes === 5 ? 'the wider area (one zoomed-out hexagon)' : 'this hexagon';
       lines.push(
         here.length
-          ? `${here.length} sighting${here.length > 1 ? 's' : ''} in this hexagon${mode === TYPICAL ? ' (all years)' : ''}.`
-          : `No sightings in this hexagon${mode === TYPICAL ? '' : ' this year'}.`,
+          ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}.`
+          : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
       const pk = data.interval?.peak;
       if (pk && q50 != null && mode !== TYPICAL) lines.push(`Peak here likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       if (!at.seen) lines.push('No fireflies of this kind ever seen near here, so there is nothing to check this forecast against. Shown striped.');
+      if (shownRes === 5) lines.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
       return { title: `Firefly, ${modeLabel(mode)}`, lines };
     },
 
@@ -280,7 +339,9 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
         'To allow roughly for when people go looking, the model counts how many beetle photos people posted each day in each state. Most beetle photos are taken by day, so this is a rough stand-in, and nobody has checked yet whether it helps.',
         'Gray dots mean the photo’s location was blurred or rough, so the dot may sit off its true spot.',
         'Striped hexagons have no sightings of this firefly nearby, ever. There is nothing to check the forecast against there.',
-        'There are no small hexagons for fireflies yet. Zooming in keeps the big ones.',
+        ...(hasFine
+          ? ['Zoom in and the hexagons get smaller, about 17 km wide. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale. So a small hexagon\u2019s date is no surer than a big one\u2019s. Its card counts the sightings in the big hexagon around it.']
+          : ['There are no small hexagons for fireflies here. Zooming in keeps the big ones.']),
         `For a single year, a hexagon’s card gives a "peak here likely" window. In the 23 strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast. One spot can miss by more.`,
         ...(m?.holdout_mae
           ? [`When it learned only from Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their own usual dates. That is only 4 strip-years, so it is a hint, not proof.`]
