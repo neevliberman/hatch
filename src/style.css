@@ -28,7 +28,6 @@
   --track-faint: rgba(70, 52, 30, 0.08);
   --thumb-fill: #fffaf0;
   --swatch-rim: rgba(70, 52, 30, 0.4);
-  --stripe: rgba(43, 36, 28, 0.86);
   --shadow: 0 6px 18px rgba(60, 40, 20, 0.18);
   --today: #2b241c;
   /* Buttons and menus: a 4px corner and a firmer pencil edge. */
@@ -185,6 +184,16 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }
+/* "Sleeping till spring": a pencilled note on empty paper after the wave (placed from main.ts). */
+#asleep { position: absolute; left: 0; top: 0; pointer-events: none; display: grid; justify-items: center;
+  padding: 4px 16px; background: radial-gradient(var(--panel-solid) 60%, transparent 80%);
+  font: 600 24px/1 var(--font-note); opacity: 0; transition: opacity 0.6s; }
+#asleep.on { opacity: 1; }
+#asleep svg { width: 64px; height: 34px; fill: var(--text); overflow: visible; }
+#asleep .wash { fill: var(--wash-tan); opacity: 0.35; }
+#asleep span { font-size: 18px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { #asleep { transition: none; } }
+@media (orientation: landscape) and (max-height: 500px) { #asleep { display: none; } }
 .lg-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
 .lg-items li { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; flex: none; background: var(--c); }
@@ -193,7 +202,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   position: relative; background: var(--swatch-rim); }
 .sw.hex::after { content: ''; position: absolute; inset: 1.5px; background: var(--c); clip-path: inherit; }
 .sw.striped { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
-  background: repeating-linear-gradient(-45deg, var(--stripe) 0 2px, transparent 2px 5px), var(--c); }
+  background: repeating-linear-gradient(-45deg, var(--text) 0 1px, transparent 1px 5px), var(--c); }
 .sw.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text); box-shadow: 0 0 0 2px var(--panel-solid); }
 .probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
 .cav.credits { font-size: 13px; color: var(--muted); }

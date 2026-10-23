@@ -6,11 +6,12 @@ import { palette } from '../theme';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear } from '../core/timeAxis';
 import type { CaveatCard, Explainer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import { restingSketch } from '../ui/sketch';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
-import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, stripes, washer, type LunaLayer, type Stage } from './lunaReplay';
+import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STAGES, stageAt, STRIPE_MAPPING, onPaper, stageCounts, isAsleep, stripes, washer, type LunaLayer, type Stage } from './lunaReplay';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -65,6 +66,7 @@ export function createFireflyLayer(
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
   let fresh = { key: '', list: [] as Sighting[] };
+  let sleepNote: { title: string; line: string; sketch: string } | undefined;
 
   // ---- finer hexes (res 5 only for fireflies), from public/fine-firefly/, loaded when the reader zooms in
   type Cell = { id: string; i: number; seen: boolean };
@@ -194,10 +196,11 @@ export function createFireflyLayer(
       return lit.pts;
     },
 
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till summer', line: 'larvae in the soil', sketch: restingSketch('firefly') }) : null),
+
     summary(t) {
       const doy = dayOfYear(t);
-      const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
-      for (const q of forecast()) n[stageAt(q, doy)]++;
+      const n = stageCounts(forecast(), doy);
       const lit = shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).length;
       const parts = STAGES.filter((s) => n[s]).map((s) => `${s} in ${n[s]}`);
       return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}. Firefly forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
@@ -268,7 +271,6 @@ export function createFireflyLayer(
           fillPatternMask: true,
           getFillPattern: () => 'stripes',
           fillPatternSizeUnits: 'pixels',
-          getFillPatternScale: 0.75,
         }),
         new ScatterplotLayer<Sighting>({
           id: 'firefly-glow',
@@ -439,7 +441,7 @@ export function createFireflyLayer(
       return {
         title: 'Forecast: when fireflies come out',
         items: [
-          ...STAGES.map((s) => ({ color: css(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
+          ...STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
           { color: css(GLOW), label: 'seen, last 10 days', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },

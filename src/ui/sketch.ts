@@ -170,6 +170,16 @@ function adult(kind: Explainer['creature'], cx: number, cy: number, k: number, s
   };
 }
 
+/** The off-season margin note's sketch (64x34): the moth's cocoon on the leaf litter, or the firefly's grub under the
+ * ground line. */
+export function restingSketch(kind: Explainer['creature']): string {
+  const moth = kind === 'moth';
+  const s = moth ? sleeper(kind, 26, 16, 1.1, 13) : sleeper(kind, 32, 22, 1, 40);
+  return `<path class="wash" d="${s.wash}"/><path d="${s.ink + (moth
+    ? pen([[3, 29], [30, 28], [61, 29.5]], 1.1, 3) + pen([[40, 27], [48, 22], [58, 26], [48, 28], [40, 27]], 0.9, 5)
+    : pen([[3, 11], [30, 10], [61, 11.5]], 1.1, 3))}"/>`;
+}
+
 const sunAt = (cx: number, cy: number, r: number, rays: number[][], seed: number) =>
   pen(loop(cx, cy, r, r, 0, 1.25), 1.3, seed) +
   rays

@@ -79,6 +79,7 @@ function start() {
   };
   // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
   let followSpot = (_t: number) => {};
+  let placeNote = () => {}; // the after-the-wave margin note, set up once the map exists
   const updateProbe = () => {
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
     if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = cur.cellAt(hit.lngLat) ?? hit.cell;
@@ -146,6 +147,7 @@ function start() {
     },
     onView: () => {
       if (pinned) placeProbe();
+      placeNote();
       syncUrl(); // a shared link reopens the same place and zoom
     },
     onProbe: (h, clicked) => {
@@ -166,9 +168,37 @@ function start() {
 
   // The map is a canvas, so screen readers get the day's picture in words (read with the map, not announced each frame).
   const srSummary = $('sr-summary');
+  // After the season the map goes one flat colour, which reads as "no data". A margin note on empty paper (the
+  // layer's own words and sketch, HatchLayer.offSeason) says they are asleep: off the Ohio River on a wide screen, under the Midwest on a phone (above the legend). It only
+  // shows on the whole-Midwest view, so it never sits on hexes, and fades as soon as any hexagon starts.
+  const note = document.createElement('div');
+  note.id = 'asleep';
+  note.setAttribute('aria-hidden', 'true'); // the screen-reader summary already says every hexagon is over
+  let shownNote: unknown = null;
+  $('app').append(note);
+  placeNote = () => {
+    // The active layers' own note (title, line, sketch), only when every one of them has one to show.
+    const notes = registry.activeLayers().map((l) => l.offSeason?.(time.cursor));
+    const n = notes.length && notes.every(Boolean) ? notes[0]! : null;
+    if (n && n !== shownNote) {
+      shownNote = n;
+      note.innerHTML = `<svg viewBox="0 0 64 34">${n.sketch}</svg><b>${n.title}</b><span>${n.line}</span>`;
+    }
+    const at = map.project(phone.matches ? [-86.6, 36.3] : [-79.6, 39.4]);
+    const { width: w, height: h } = note.getBoundingClientRect();
+    // Phone: centred under Kentucky, kept above the legend (or the card). Desktop: just east of Ohio, on the blank
+    // paper, and left out when an open About panel leaves no room there.
+    const show = !!at && !!n && !map.moved() && (phone.matches || at[0] + w < window.innerWidth - (padding().right ?? 0) - 8);
+    note.classList.toggle('on', show);
+    if (!show) return;
+    const floor = $(phone.matches ? 'floats' : 'bottom').getBoundingClientRect().top - h - 8;
+    const x = Math.max(8, Math.min(phone.matches ? at[0] - w / 2 : at[0], window.innerWidth - w - 8));
+    note.style.transform = `translate(${Math.round(x)}px, ${Math.round(Math.min(phone.matches ? at[1] : at[1] - h / 2, floor))}px) rotate(-3deg)`;
+  };
   const refresh = () => {
     map.refresh();
     updateProbe();
+    placeNote();
     srSummary.textContent = cur.summary(time.cursor);
   };
   time.subscribe(refresh);

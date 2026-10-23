@@ -6,6 +6,7 @@ import { cellToLatLng, latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Explainer, HatchLayer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import { restingSketch } from '../ui/sketch';
 import {
   APPROXIMATE,
   bandOf,
@@ -37,6 +38,18 @@ export const STAGES = ['not yet', 'starting', 'peak', 'winding down', 'over'] as
 export type Stage = (typeof STAGES)[number];
 /** What each stage is called on screen. The map forecasts the first wave only, so in August "over" alone would read
  * as "no moths" while the second wave flies. */
+/** How many hexagons are at each stage on day `doy`. */
+export function stageCounts(qs: readonly (readonly (number | null)[])[], doy: number) {
+  const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
+  for (const q of qs) n[stageAt(q, doy)]++;
+  return n;
+}
+/** After the season: every hexagon "over" or "not yet", and some "over" (so not early spring, before it starts). */
+export function isAsleep(qs: readonly (readonly (number | null)[])[], doy: number) {
+  const n = stageCounts(qs, doy);
+  return n.over > 0 && n.over + n['not yet'] === qs.length;
+}
+
 export const STAGE_LABEL: Record<Stage, string> = {
   'not yet': 'not yet',
   starting: 'starting',
@@ -69,24 +82,25 @@ const bytesToQ = (days: Uint8Array, i: number) =>
   [0, 1, 2, 3, 4].map((k) => (days[i * 5 + k] === 255 ? null : days[i * 5 + k]! + 60));
 
 type RGBA = [number, number, number, number];
-// Stage colours and why they read in order: see palette.stages in src/theme.ts.
+// The stage colours and why they are what they are: palette.stages in theme.ts.
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 const STRIPES: RGBA = palette.stripes;
-// One object for every render, so deck.gl doesn't rebuild the pattern each playback frame.
-export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
+// One object for every render, so deck.gl doesn't rebuild the pattern each playback frame. The 12px tile is drawn
+// at 1:1: a shrunken tile blurs thin lines and loses their contrast.
+export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 12, height: 12 } };
 let stripeAtlas: HTMLCanvasElement | null = null;
 export const stripes = () => {
   if (stripeAtlas) return stripeAtlas;
-  const c = Object.assign(document.createElement('canvas'), { width: 16, height: 16 });
+  const c = Object.assign(document.createElement('canvas'), { width: 12, height: 12 });
   const g = c.getContext('2d')!;
   g.strokeStyle = '#fff';
-  g.lineWidth = 3;
+  g.lineWidth = 1.5; // thin lines: the doubt is there, but it doesn't outshout the forecast
   // Three strokes so the diagonal tiles without seams.
-  for (const o of [-16, 0, 16]) {
+  for (const o of [-12, 0, 12]) {
     g.beginPath();
-    g.moveTo(o, 16);
-    g.lineTo(o + 16, 0);
+    g.moveTo(o, 12);
+    g.lineTo(o + 12, 0);
     g.stroke();
   }
   return (stripeAtlas = c);
@@ -95,6 +109,8 @@ const MOON: RGBA = palette.moth;
 const SECOND: RGBA = palette.second;
 const GREY: RGBA = palette.rough;
 const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
+/** A see-through stage colour as it lands on the paper, so a legend swatch looks like the hexes it names. */
+export const onPaper = (c: RGBA) => css(c.map((v, i) => v + ((palette.land[i]! - v) * (255 - c[3])) / 255 | 0) as RGBA);
 
 const dotColor = (s: Sighting): RGBA => (s.flags & APPROXIMATE ? GREY : s.flags & SECOND_BROOD ? SECOND : MOON);
 
@@ -239,6 +255,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const unseen = cells.filter((c) => !c.seen);
   // An ink ring spreads from each moth on the day it is seen, while playing.
   const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], palette.dotRim);
+  let sleepNote: { title: string; line: string; sketch: string } | undefined;
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
   // Today's sightings, which breathe while paused (map.ts). Cached per day and season.
   let fresh = { key: '', list: [] as Sighting[] };
@@ -381,10 +398,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return lit.pts;
     },
 
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till spring', line: 'cocoons in the leaf litter', sketch: restingSketch('moth') }) : null),
+
     summary(t) {
       const doy = dayOfYear(t);
-      const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
-      for (const q of forecast()) n[stageAt(q, doy)]++;
+      const n = stageCounts(forecast(), doy);
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
       const lit = shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).length;
       const parts = STAGES.filter((s) => n[s]).map((s) => `${STAGE_LABEL[s]} in ${n[s]}`);
@@ -466,7 +484,6 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               fillPatternMask: true,
               getFillPattern: () => 'stripes',
               fillPatternSizeUnits: 'pixels',
-              getFillPatternScale: 0.75,
             }),
           ]
         : null;
@@ -506,7 +523,6 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           fillPatternMask: true,
           getFillPattern: () => 'stripes',
           fillPatternSizeUnits: 'pixels',
-          getFillPatternScale: 0.75,
         }),
         ]),
         new ScatterplotLayer<Sighting>({
@@ -694,7 +710,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         title: 'Forecast: when moths come out',
         items: [
           ...STAGES.map((s) => ({
-            color: css(STAGE_COLOR[s]),
+            color: onPaper(STAGE_COLOR[s]),
             label: STAGE_LABEL[s],
             shape: 'hex' as const,
           })),

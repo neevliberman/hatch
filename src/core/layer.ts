@@ -118,6 +118,10 @@ export interface HatchLayer {
   profile?(): SeasonProfile;
   /** The sightings made on day t itself: while paused they breathe (map.ts). */
   newest?(t: number): { lng: number; lat: number }[];
+  /** A margin note for when nothing is out (after the season): a handwritten title, a muted line under it, and a
+   * small pen sketch (SVG markup in a 64x34 box). Null while anything is out. A layer without it gets no note.
+   * Return the same object each time: the note is only redrawn when it changes. */
+  offSeason?(t: number): { title: string; line: string; sketch: string } | null;
   /** Data sources to credit, rendered in the drawer. */
   /** Data sources, each a line of text; `href` links the line's source. */
   credits?(): { text: string; href?: string }[];
