@@ -157,7 +157,7 @@ function creatureArt(kind: Explainer['creature'], moving: boolean): [Art, Art] {
     MOTH.spots.map((s, i) => pen(M(s), 0.8, 90 + i, false)).join('');
   return [
     {
-      wash: `<path class="wash tan" d="${blob(loop(55, 62, 12, 5.5, -0.35, 1))}"/>`,
+      wash: `<path class="wash tan" d="${blob(loop(56, 63.5, 11, 5, -0.35, 1))}"/>`,
       // An oak leaf on the ground, with the cocoon tucked against it; silk wraps round the cocoon.
       ink: flake(18, 16, 1, 1) + flake(80, 22, 0.75, 4) +
         pen([[8, 71], [13, 63], [11, 57], [18, 56], [19, 49], [26, 50], [29, 43], [35, 46], [41, 41], [44, 49], [51, 50], [47, 57], [53, 61], [45, 66], [30, 70], [9, 71]], 1.2, 10) +
@@ -173,14 +173,15 @@ function creatureArt(kind: Explainer['creature'], moving: boolean): [Art, Art] {
     },
     {
       wash: `<path class="wash leaf" d="${MOTH.wash.map((w) => blob(M(w).map(([x, y]) => [x + 2, y + 1.5] as P))).join('')}"/>`,
-      ink: pen([[16, 64], [18, 70], [28, 72], [38, 69], [40, 63]], 1.4, 20) +
-        pen([[16, 64], [20, 61], [23, 64], [27, 60], [31, 63], [35, 61], [40, 63]], 0.7, 21, false) +
-        hatch(27, 71, 4, 2.6, 5, 1.2, 22) +
-        pen([[34, 73], [42, 65], [54, 62], [63, 66], [57, 71], [44, 73], [33, 73]], 1.1, 23) +
-        pen([[37, 72], [50, 66], [60, 66]], 0.6, 24, false) +
+      // The same cocoon as in winter, its top torn open.
+      ink: pen(loop(28, 64, 12, 5.5, -0.35, 0.5, 0), 1.4, 20) +
+        pen([[16.7, 68.1], [19, 64.5], [21.5, 66.5], [24, 62.5], [27, 64.5], [30, 60.5], [33, 62.5], [36, 58.5], [39.3, 59.9]], 0.7, 21, false) +
+        pen([[22, 69], [25, 66]], 0.5, 25, false) + pen([[32, 65], [34, 62]], 0.5, 26, false) +
+        hatch(25, 72, 4, 2.6, 4, 1.2, 22) +
+        pen([[8, 75], [28, 74], [46, 75.5]], 0.8, 23, false) +
         MOTH.body.map((b, i) => pen(M(b), i < 2 ? 1.1 : 0.7, 30 + i)).join('') +
         pen([[87, 40], [91, 37]], 0.7, 35, false) + pen([[88, 47], [93, 46]], 0.7, 36, false),
-      extra: `<path class="trail" d="M30 58c-2-12 8-20 22-22"/>
+      extra: `<path class="trail" d="M32 57c0-12 8-20 22-22"/>
         <g class="${moving ? 'flap' : ''}" style="transform-origin:70px 27px">${`<path class="pen" d="${wings}"/>`}</g>`,
     },
   ];
@@ -208,7 +209,7 @@ function tally(moving: boolean): Art {
       let d = '';
       for (let k = 0; k < 4; k++) {
         const x0 = x + k * 2.6 + (r() - 0.5) * 0.6;
-        d += pen([[x0, y + (r() - 0.5)], [x0 + 0.8, y - 11 - r()]], w, 100 + i * 9 + k, false);
+        d += pen([[x0, y + (r() - 0.5)], [x0 + (r() - 0.3) * 2.4, y - 10 - 2 * r()]], w, 100 + i * 9 + k, false);
       }
       d += pen([[x - 1.5, y - 2], [x + 10, y - 9.5]], w, 100 + i * 9 + 5, false);
       return `<path class="pen" d="${d}">${show(at(i))}</path>`;
@@ -216,9 +217,13 @@ function tally(moving: boolean): Art {
     .join('');
   const flag = pen([[55, 74], [56, 60], [55.5, 46]], 1.2, 40) + pen([[55.5, 46], [65, 48.5], [56, 53]], 1, 41);
   return {
-    wash: '<path class="wash sun" d="' + blob(loop(14.5, 15.5, 6, 6, 0, 1)) + '"/>',
+    wash: '<path class="wash sun" d="' + blob(loop(16, 17, 5.5, 5.5, 0, 1)) + '"/>',
     ink: sun,
-    extra: `<text class="note small" x="3" y="41" transform="rotate(-5 3 41)">Mar 1</text>${marks}
+    // A key by the sun: a warm day earns a mark, a hot day several.
+    extra: `<text class="note small" x="34" y="15" transform="rotate(-3 34 15)">warm day =</text>
+      <text class="note small" x="34" y="26" transform="rotate(-3 34 26)">hot day =</text>
+      <path class="pen" d="${pen([[80, 16], [81, 8]], 1.1, 50, false)}${[0, 1, 2].map((k) => pen([[75 + k * 3, 27], [76 + k * 3, 19]], 1.6, 51 + k, false)).join('')}"/>
+      <text class="note small" x="3" y="41" transform="rotate(-5 3 41)">Mar 1</text>${marks}
       <g><path class="wash warn" d="${blob([[56.5, 47], [64, 49], [57, 52]])}"/><path class="pen" d="${flag}"/><text class="note warn" x="59" y="66" transform="rotate(-6 59 66)">enough!</text>${show(at(7.5))}</g>`,
   };
 }
@@ -243,10 +248,9 @@ export function sketchStrip(id: string, ex: Explainer, captions: string[]): stri
   const moving = !matchMedia('(prefers-reduced-motion: reduce)').matches;
   boil();
   const [winter, out] = creatureArt(ex.creature, moving);
-  const frame = FRAME.map((s, i) => pen(s, 1, 300 + i, false)).join('');
   const panes = [winter, tally(moving), out].map(
     (a, i) => `<div class="ex-pic"><svg class="ex-pane" viewBox="0 0 100 84" aria-hidden="true"><g filter="url(#${fid})">
-      <path class="frame" d="${frame}"/>${a.wash ?? ''}<path class="pen" d="${a.ink}"/>${a.extra ?? ''}</g></svg>${i < 2 ? arrow(i) : ''}</div>`,
+      <path class="frame" d="${FRAME.map((s, k) => pen(s, 1, 300 + i * 10 + k, false)).join('')}"/>${a.wash ?? ''}<path class="pen" d="${a.ink}"/>${a.extra ?? ''}</g></svg>${i < 2 ? arrow(i) : ''}</div>`,
   );
   return `<svg class="ex-defs" aria-hidden="true" focusable="false"><filter id="${fid}" x="-5%" y="-5%" width="110%" height="110%">
       <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="1"/>
