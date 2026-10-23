@@ -1,0 +1,102 @@
+# Nightly live forecast (1 Mar - 7 Oct; off-season the script exits at once and the last file stands).
+# Builds live/latest.json, commits it to the `live-data` branch, then redeploys the site, which copies it in.
+# If anything fails, it opens (or comments on) a "Live forecast failed" issue, so a dead pipeline is loud.
+name: live-forecast
+on:
+  schedule:
+    - cron: '30 13 * * *'   # 8:30 am Central: PRISM has usually posted yesterday by then
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season year (blank = this year)'
+        required: false
+      as_of:
+        description: 'Last observed weather day YYYY-MM-DD (blank = newest available). Set for a backfill.'
+        required: false
+permissions:
+  contents: write   # push the live-data branch
+  actions: write    # start deploy-pages; keepalive
+  issues: write     # failure alarm
+concurrency:
+  group: live-forecast
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: notebooks/requirements.txt
+      - run: pip install -r notebooks/requirements.txt
+      # Daymet 2015-2025 at the 551 hex centres (~550 downloads the first time, then cached).
+      - uses: actions/cache@v4
+        with:
+          path: notebooks/data/daymet
+          key: daymet-r4-2015-2025-v1
+      - name: Build live forecast
+        id: build
+        env:
+          SEASON: ${{ inputs.season }}
+          AS_OF: ${{ inputs.as_of }}
+        run: |
+          set -euo pipefail
+          ARGS=(--out "$RUNNER_TEMP/live/latest.json")
+          if [ -n "${SEASON:-}" ] || [ -n "${AS_OF:-}" ]; then
+            [ -n "${SEASON:-}" ] && ARGS+=(--season "$SEASON")
+            [ -n "${AS_OF:-}" ] && ARGS+=(--as-of "$AS_OF")
+          else
+            ARGS+=(--auto)
+          fi
+          python3 pipeline/live/build_live.py "${ARGS[@]}"
+          if [ -f "$RUNNER_TEMP/live/latest.json" ]; then echo "built=1" >> "$GITHUB_OUTPUT"; fi
+      - name: Commit to live-data branch
+        if: steps.build.outputs.built == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          cd "$RUNNER_TEMP"
+          git clone -q --depth 1 --branch live-data --single-branch "$REPO" ld 2>/dev/null || {
+            git init -q ld && cd ld && git checkout -q -b live-data && git remote add origin "$REPO" && cd ..
+          }
+          cd ld
+          mkdir -p live
+          cp "$RUNNER_TEMP/live/latest.json" live/latest.json
+          git config user.name "hatch-live-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add live
+          git diff --cached --quiet && { echo "nothing new"; exit 0; }
+          git commit -q -m "live forecast $(python3 -c 'import json;d=json.load(open("live/latest.json"));print(d["season"], "as of", d["as_of"])')"
+          git push -q origin live-data
+      - name: Redeploy site
+        if: steps.build.outputs.built == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+      - name: Failure alarm
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Live forecast failed in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$N" ]; then
+            gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "Failed again $(date -u +%F): $URL"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Live forecast failed" \
+              --body "The nightly live forecast failed on $(date -u +%F): $URL. The site keeps showing the last good file, and its 'as of' badge turns amber after 36 hours. Close this once a run is green."
+          fi
+      # Scheduled workflows in public repos switch off after 60 days without repo activity; re-enabling resets the clock.
+      - name: Keepalive
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/live-forecast.yml/enable"
