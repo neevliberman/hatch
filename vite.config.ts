@@ -20,4 +20,5 @@ export default defineConfig({
     chunkSizeWarningLimit: 1500,
     rollupOptions: { output: { manualChunks: chunkOf } },
   },
+  define: { __BASEMAP__: true },
 });

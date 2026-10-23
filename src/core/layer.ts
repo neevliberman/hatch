@@ -88,7 +88,15 @@ export interface HatchLayer {
   probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }): ProbeCard | null;
   /** Visual About panel; see Explainer. */
   explainer?(): Explainer;
+  /** Points on the map at time t that place names must not cover (the sighting dots). Return the same array while
+   * they are unchanged: the names are only re-placed when it changes. */
+  points?(t: number): [number, number][];
   /** Data sources to credit, rendered in the drawer. */
   /** Data sources, each a line of text; `href` links the line's source. */
   credits?(): { text: string; href?: string }[];
 }
+
+/** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size (see lunaReplay.ts render). */
+export const isForecast = (layerId: string | undefined) => !!layerId?.startsWith('luna-forecast');
+/** The hexagon layers (forecast and its stripes): the map draws lakes, rivers and roads over these, under the dots. */
+export const isHexes = (layerId: string) => /^luna-(forecast|unseen)/.test(layerId);
