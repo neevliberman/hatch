@@ -151,7 +151,10 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     await page.waitForTimeout(400);
     if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
     if (sheet && (await tap('#why'))) {
-      await page.waitForTimeout(700);
+      // Slow CI frames: wait for the sheet to finish rising, or the tap aimed above it lands on it.
+      await page.waitForFunction(() => { const r = document.querySelector('#drawer')?.getBoundingClientRect();
+        return !!r && r.top < innerHeight * 0.15 && getComputedStyle(document.querySelector('#drawer')).transform === 'none'; }, null, { timeout: 4000 }).catch(() => {});
+      await page.waitForTimeout(300);
       const tall = await page.locator('#drawer').boundingBox();
       if (!(await page.locator('#drawer.open.full').count())) fail('"How sure?" did not open the sheet at its tall stop');
       // Above the sheet at the far left: the header's middle is the season menu, which a tap would open instead.
