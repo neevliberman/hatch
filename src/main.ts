@@ -11,6 +11,7 @@ import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { countdownParts } from './ui/countdown';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
+import { isForecast } from './core/layer';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
@@ -68,10 +69,10 @@ function start() {
   let followSpot = (_t: number) => {};
   const updateProbe = () => {
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
-    if (hit && (!hit.picked || hit.picked.layerId === 'luna-forecast')) hit.cell = luna.cellAt(hit.lngLat) ?? hit.cell;
+    if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = luna.cellAt(hit.lngLat) ?? hit.cell;
     showProbe(probeEl, registry, hit, time.cursor, pinned);
     // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
-    map.setPicked(pinned && hit && (!hit.picked || hit.picked.layerId === 'luna-forecast') ? hit.cell : null);
+    map.setPicked(pinned && hit && (!hit.picked || isForecast(hit.picked.layerId)) ? hit.cell : null);
     placeProbe();
     followSpot(time.cursor);
   };
@@ -107,6 +108,7 @@ function start() {
     registry,
     time,
     padding,
+    covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter')],
     onMove: (moved) => ($('recenter').hidden = !moved),
     onView: () => {
       if (pinned) placeProbe();
@@ -380,10 +382,10 @@ function start() {
   });
   // A sighting's card is about one day; once playback moves on, it would describe a dot that has gone out.
   time.subscribe(() => {
-    if (time.playing && pinned && hit?.picked && hit.picked.layerId !== 'luna-forecast') unpin();
+    if (time.playing && pinned && hit?.picked && !isForecast(hit.picked.layerId)) unpin();
   });
   refresh();
-  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map };
+  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding };
 }
 
 start();
