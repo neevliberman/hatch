@@ -5,16 +5,16 @@ import { loader } from './vite.config';
 import { readFileSync } from 'node:fs';
 
 // The one-file build has to work as a lone file (emailed, on an artifact host), so nothing may point at public/:
-// the moth (favicon + header mark) goes in as a data URL, and the install-only links go. An install manifest
+// the tab icon goes in as a data URL, and the install-only links go. An install manifest
 // can't load from file:// anyway (and would log an error). The service worker is off here too (__HATCH_SW__).
 const selfContained = (): Plugin => ({
   name: 'hatch-self-contained',
   transformIndexHtml(html) {
-    const moth = `data:image/svg+xml,${encodeURIComponent(readFileSync('public/favicon.svg', 'utf8').replace(/<!--.*?-->\s*/gs, ''))}`;
+    const icon = `data:image/svg+xml,${encodeURIComponent(readFileSync('public/favicon.svg', 'utf8').replace(/<!--.*?-->\s*/gs, ''))}`;
     return html
       .replace(/\s*<link rel="(manifest|apple-touch-icon)"[^>]*>/g, '')
       .replace(/\s*<link rel="icon" href="[^"]*\.png"[^>]*>/, '')
-      .replace(/"\.?\/favicon\.svg"/g, `"${moth}"`);
+      .replace(/"\.?\/favicon\.svg"/g, `"${icon}"`);
   },
 });
 

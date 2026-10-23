@@ -116,6 +116,9 @@ export interface SpeciesWords {
   countedAs: string;
   /** The share sheet's title, "Hatch: when ___ come out": "luna moths". */
   shareName: string;
+  /** The header's little sketch of the animal beside "Hatch" (an image URL; drawn to read at 24 px). The tab and app
+   * icons stay the neutral Hatch logo. */
+  mark: string;
 }
 
 export interface HatchLayer {

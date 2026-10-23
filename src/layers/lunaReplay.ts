@@ -7,6 +7,7 @@ import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Explainer, HatchLayer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import { restingSketch } from '../ui/sketch';
+import mark from '../marks/moth.svg';
 import {
   APPROXIMATE,
   bandOf,
@@ -430,7 +431,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   return {
     id: 'luna-replay',
     title: 'Luna moth',
-    words: { tagline: 'when luna moths fly', plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths' },
+    words: { tagline: 'when luna moths fly', plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths', mark },
     mode: () => mode,
     setMode(m) {
       mode = m;

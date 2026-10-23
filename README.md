@@ -104,7 +104,7 @@ npm run dev          # http://localhost:5173
 npm run build        # type-check + dist/
 npm run build:single # one self-contained dist-single/index.html (opens with no network)
 npm run check        # both builds, bundle budget and all smoke tests
-npm run icons        # app icons + favicon PNGs from public/icons/moth.svg and public/favicon.svg
+npm run icons        # app icons + favicon PNGs from public/icons/hatch.svg and public/favicon.svg (both drawn by scripts/logo.mjs)
 npm run og           # the link-preview card, public/og.png (a real map screenshot)
 ```
 
