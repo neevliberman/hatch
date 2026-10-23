@@ -685,7 +685,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             ]
           : []),
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
-        'The first version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run from about 1 day early in the far south to 3 or 4 days late further north.',
+        'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
         isLive()
           ? `This year, a hexagon\u2019s "peak likely" window is the middle 8 in 10 of the weather runs. It leaves out the model\u2019s own misses (about ${Math.round(data.model?.loyo_mae.heat ?? 4)} days on past years), so the real peak can fall outside it.`
           : `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,

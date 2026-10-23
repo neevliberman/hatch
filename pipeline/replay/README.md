@@ -11,7 +11,7 @@ Run it from the repo root: `pip install -r notebooks/requirements.txt`, then
 temperatures (a few minutes, rate-limited) into `notebooks/data/`; reruns are offline.
 Tests: `python3 -m pytest pipeline/replay`.
 
-Since P3 the forecast is the fitted model (see `pipeline/fit/README.md`; P3.1 since 2026-10-22: no daylength term, warmth targets at or above 0): warmth is counted as degree-days
+Since P3 the forecast is the fitted model (see `pipeline/fit/README.md`; P3, the daylength version. P3.1 was tried and not adopted): warmth is counted as degree-days
 (base 10 C, from 1 March), each moth has a warmth target on a skewed curve, and an adult flies for a week.
 For each year the builder refits the model on the other ten years (leave-one-year-out), so a replayed year
 never saw its own moths. A cell's quantiles are days by which that share of its expected first-brood *sightings*
