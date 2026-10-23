@@ -154,7 +154,8 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       await page.waitForTimeout(700);
       const tall = await page.locator('#drawer').boundingBox();
       if (!(await page.locator('#drawer.open.full').count())) fail('"How sure?" did not open the sheet at its tall stop');
-      await page.touchscreen.tap(width / 2, Math.max(4, tall.y / 2));
+      // Above the sheet at the far left: the header's middle is the season menu, which a tap would open instead.
+      await page.touchscreen.tap(12, Math.max(4, tall.y / 2));
       await page.waitForTimeout(400);
       if (await page.locator('#drawer.open').count()) fail('tapping outside the tall sheet did not close it');
       if (await page.locator('#probe').isVisible()) fail('the tap that closed the drawer also opened a card');
