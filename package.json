@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "shoot": "node scripts/shoot.mjs screenshots p2",
     "budget": "node scripts/budget.mjs",
-    "icons": "node scripts/icons.mjs",
+    "icons": "node scripts/logo.mjs && node scripts/icons.mjs",
     "og": "npm run build:single && node scripts/og.mjs",
     "check": "npm run build && npm run build:single && npm run budget && npm run shoot && npm run mobile && npm run desktop && npm run fine && npm run firstframes",
     "mobile": "node scripts/mobile.mjs screenshots/mobile",

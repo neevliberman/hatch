@@ -1,5 +1,5 @@
 // Share card (public/og.png, 1200x630): what a link to Hatch looks like in iMessage, Slack, LinkedIn etc.
-// A real screenshot of the map in mid-June, taped into a Field Notebook page beside the moth and the title.
+// A real screenshot of the map in mid-June, taped into a Field Notebook page beside the logo and the title.
 // Usage: npm run build:single && node scripts/og.mjs   (re-run when the look of the map changes)
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -11,7 +11,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 const app = pathToFileURL(resolve(process.env.DIST ?? 'dist-single/index.html')).href;
 // Fonts go in as data URLs: a page made with setContent may not load file:// fonts.
 const font = (f) => `data:font/woff2;base64,${readFileSync(resolve('src/fonts', f)).toString('base64')}`;
-const moth = readFileSync('public/icons/moth.svg', 'utf8');
+const logo = readFileSync('public/icons/hatch.svg', 'utf8');
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM || undefined,
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
@@ -35,7 +35,7 @@ body { margin: 0; width: 1200px; height: 630px; overflow: hidden; position: rela
   background: #f8f2e3 repeating-linear-gradient(180deg, transparent 0 37px, rgba(70, 52, 30, .13) 37px 38px); }
 body::before { content: ''; position: absolute; top: 0; bottom: 0; left: 64px; width: 2px; background: rgba(166, 63, 25, .35); }
 .text { position: absolute; left: 104px; top: 70px; width: 480px; }
-.moth { width: 150px; height: 150px; margin: 0 0 4px -10px; transform: rotate(-8deg); }
+.logo { width: 132px; height: 132px; margin: 0 0 14px -14px; transform: rotate(-6deg); }
 h1 { font: 700 104px/1 Fraunces; margin: 0; letter-spacing: -1px; }
 .note { font: 600 41px/1.05 Caveat; color: #8c570c; margin: 10px 0 22px; }
 p { font-size: 25px; line-height: 1.38; margin: 0; color: #2b241c; }
@@ -48,14 +48,14 @@ p { font-size: 25px; line-height: 1.38; margin: 0; color: #2b241c; }
 .tape.l { left: -30px; transform: rotate(-32deg); } .tape.r { right: -30px; transform: rotate(28deg); }
 </style></head><body>
 <div class="text">
-  <div class="moth">${moth.replace('<svg ', '<svg width="100%" height="100%" ')}</div>
+  <div class="logo">${logo.replace('<svg ', '<svg width="100%" height="100%" ').replace(/<rect class="tile"[^>]*>/, '')}</div>
   <h1>Hatch</h1>
-  <div class="note">when do luna moths fly near you?</div>
-  <p>Watch them roll north with the warmth across the Midwest: a heat forecast, checked against 3,000 real sightings.</p>
+  <div class="note">when do insects come out?</div>
+  <p>Watch luna moths and fireflies roll north with the warmth across the Midwest. A heat forecast, checked against real sightings.</p>
 </div>
 <div class="url">neevliberman.github.io/hatch</div>
 <figure class="photo" style="margin:0"><span class="tape l"></span><span class="tape r"></span>
-  <img src="data:image/png;base64,${shot}" alt=""><figcaption>10 June, every year since 2015</figcaption></figure>
+  <img src="data:image/png;base64,${shot}" alt=""><figcaption>Where luna moths were on 10 June, 2015 to now</figcaption></figure>
 </body></html>`);
 await card.evaluate(() => document.fonts.ready);
 await card.waitForTimeout(300);

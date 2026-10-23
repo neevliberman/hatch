@@ -10,9 +10,10 @@ import { restingSketch } from '../ui/sketch';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
-import { fineQ, fineSource, parentOf, type FineLevel } from './fineData';
-import { FINE_ZOOM, GLOW_DAYS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
+import { fineQ, fineSource, parentOf, RETRY_MS, type FineLevel } from './fineData';
+import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
+import mark from '../marks/firefly.svg';
 
 /**
  * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
@@ -76,18 +77,32 @@ export function createFireflyLayer(
   const fineDays = new Map<Mode, Uint8Array>();
   let hasFine = false;
   let wantFine = false;
+  let wantSince = 0;
   let shownRes = GRID_RES;
-  void fine.fineManifest().then((m) => {
-    hasFine = !!m?.levels['5'];
-    if (hasFine) onData(); // a zoomed-in view drawn before the manifest arrived can sharpen now
-  });
-  const loading = new Set<Mode>();
+  /** The res-5 days drawn last: kept on screen while a season switch loads its own (no flash back to res 4). */
+  let shownDays: Uint8Array | null = null;
+  /** Requests on their way or recently failed ('manifest', or a season): no retry before RETRY_MS. */
+  const loading = new Map<string, number>();
+  const loadManifest = () => {
+    loading.set('manifest', Infinity);
+    void fine.fineManifest().then((m) => {
+      hasFine = !!m?.levels['5'];
+      loading.set('manifest', m ? Infinity : performance.now() + RETRY_MS);
+      if (hasFine) onData(); // a zoomed-in view drawn before the manifest arrived can sharpen now
+    });
+  };
+  loadManifest();
   const loadFine = () => {
     const m = mode;
-    if (loading.has(m)) return; // one request per season, not one per frame while it is on its way
-    loading.add(m);
+    // One request per season, not one per frame while it is on its way; a failed one is asked again later.
+    if ((loading.get(m) ?? 0) > performance.now()) return;
+    loading.set(m, Infinity);
     void Promise.all([fine.fineLevel(5), fine.fineDays(5, m)]).then(([level, days]) => {
-      if (!level || !days || days.length !== level.cells.length * 5) return; // missing or stale: stay at res 4
+      if (!level || !days || days.length !== level.cells.length * 5) {
+        loading.set(m, performance.now() + RETRY_MS); // missing, stale or offline: stay at res 4 for now
+        return;
+      }
+      loading.delete(m);
       if (!fineLevel) {
         const data = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
         fineLevel = { level, data, unseen: data.filter((c) => !c.seen) };
@@ -97,16 +112,27 @@ export function createFireflyLayer(
     });
   };
   /** Res 5 from FINE_ZOOM[5]; back to res 4 a little further out, so a zoom resting on the line doesn't flicker. */
-  const resFor = (zoom: number) => {
-    wantFine = hasFine && zoom >= FINE_ZOOM[5]! - (wantFine ? 0.3 : 0);
+  /** The level to draw and its days: res 5 only once the zoom has rested there (SETTLE_MS), not mid fly-to. */
+  const resFor = (zoom: number): { res: number; days: Uint8Array | null } => {
+    if (!hasFine && zoom >= FINE_ZOOM[5]! && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
+    const want = hasFine && zoom >= FINE_ZOOM[5]! - (wantFine ? 0.3 : 0);
+    if (want !== wantFine) {
+      wantSince = performance.now();
+      if (want) setTimeout(onData, SETTLE_MS + 20); // look again once the zoom has rested
+    }
+    wantFine = want;
+    if (!wantFine) return { res: GRID_RES, days: null };
     const days = fineDays.get(mode);
-    if (wantFine && !(fineLevel && days)) loadFine();
-    return wantFine && fineLevel && days ? 5 : GRID_RES;
+    if (!(fineLevel && days)) loadFine();
+    if (shownRes !== 5 && performance.now() - wantSince < SETTLE_MS) return { res: GRID_RES, days: null };
+    if (fineLevel && days) return { res: 5, days };
+    // Old colours only while the new season's request is out: after a failure they'd sit under the wrong season.
+    return shownRes === 5 && shownDays && loading.get(mode) === Infinity ? { res: 5, days: shownDays } : { res: GRID_RES, days: null };
   };
 
   /** Forecast quantiles, "seen", the cell id and its res-4 parent at lngLat, on the level on screen. */
   const lookup = (lngLat: [number, number]) => {
-    const days = fineDays.get(mode);
+    const days = shownDays; // what is drawn (for a moment after a season switch, the last season's colours)
     if (shownRes === 5 && fineLevel && days) {
       const cell = latLngToCell(lngLat[1], lngLat[0], 5);
       const i = fineLevel.level.index.get(cell);
@@ -170,7 +196,7 @@ export function createFireflyLayer(
   return {
     id: 'firefly-replay',
     title: 'Common eastern firefly',
-    words: { tagline: 'when fireflies glow', plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies' },
+    words: { tagline: 'when fireflies glow', plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies', mark },
     mode: () => mode,
     setMode(m) {
       mode = m;
@@ -220,12 +246,12 @@ export function createFireflyLayer(
       const doy = dayOfYear(t);
       const anim = animating(playing);
       const d = anim ? doy + frac : doy; // the in-between day while playing, like luna's dots
-      const res = resFor(zoom);
+      const { res, days } = resFor(zoom);
+      shownDays = days;
       if (res !== shownRes) {
         shownRes = res;
         queueMicrotask(onData); // the card and its outline follow the new level
       }
-      const days = res === 5 ? fineDays.get(mode)! : null;
       const hexes = days ? fineLevel!.data : cells;
       const qOf = (c: Cell) => (days ? fineQ(days, c.i) : forecast()[c.i]);
       const filter = {
@@ -248,7 +274,8 @@ export function createFireflyLayer(
           stroked: true,
           filled: true,
           extruded: false,
-          highPrecision: true,
+          // Phones draw res 5 as one instanced shape (see COARSE in lunaReplay.ts): far less memory.
+          highPrecision: days && COARSE ? 'auto' : true,
           lineWidthMinPixels: days ? 0.4 : 0.6,
           pickable: true,
           autoHighlight: true,

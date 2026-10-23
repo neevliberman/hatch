@@ -92,6 +92,9 @@ export interface SeasonProfile {
   bands: { color: string; share: number[] }[];
   /** Animals seen per day, drawn as a line scaled to its own peak. */
   seen: number[];
+  /** Part of `seen` to wash in its own colour under the line (the same scale), such as a wave the forecast does not
+   * cover, in the colour of its dots on the map. */
+  seenOnly?: { color: string; seen: number[] }[];
   /** Handwritten notes on the line, at a day index. */
   notes: { at: number; text: string }[];
 }
@@ -116,6 +119,9 @@ export interface SpeciesWords {
   countedAs: string;
   /** The share sheet's title, "Hatch: when ___ come out": "luna moths". */
   shareName: string;
+  /** The header's little sketch of the animal beside "Hatch" (an image URL; drawn to read at 24 px). The tab and app
+   * icons stay the neutral Hatch logo. */
+  mark: string;
 }
 
 export interface HatchLayer {

@@ -344,6 +344,7 @@ function start() {
     seasonCount = cur === luna ? firstBroodCount : fireflyCount;
     fillPicker();
     $('tagline').textContent = cur.words.tagline;
+    ($('mark') as HTMLImageElement).src = cur.words.mark;
     $('dots-what').textContent = cur.words.plural;
     showCountdown();
     syncCountdown();

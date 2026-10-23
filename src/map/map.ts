@@ -84,10 +84,19 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     return { refresh() {}, fit() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {} };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
+  // The size the last fit was worked out for. Before layout (an in-app browser still sliding in) the map can be 0 x 0,
+  // and a fit for the 800 x 600 guess above comes out zoomed in.
+  let fitFor = '';
   const fitState = (p: Padding) => {
     const { width, height } = size();
+    fitFor = `${container.clientWidth}x${container.clientHeight}`;
+    // Panels can be taller than the map while the page is still laying out (or on a very short screen): shrink the
+    // padding so at least 40 px are left to fit into, or fitBounds throws.
+    const v = Math.min(1, Math.max(0, height - 40) / Math.max(1, p.top + p.bottom));
+    const right = 12 + (p.right ?? 0);
+    const h = Math.min(1, Math.max(0, width - 40) / (12 + right));
     let vp = new WebMercatorViewport({ width, height }).fitBounds(MIDWEST_BOUNDS, {
-      padding: { top: p.top, bottom: p.bottom, left: 12, right: 12 + (p.right ?? 0) },
+      padding: { top: p.top * v, bottom: p.bottom * v, left: 12 * h, right: right * h },
     });
     // On a tall phone the width limits the fit, which would centre the Midwest and leave a gap above it. Pin its
     // north edge under the header instead: the spare room goes to the bottom, where the hex card docks.
@@ -126,18 +135,39 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // Each glide gets a number: a glide that starts before the last one ends must not have its flag cleared by it.
   let gliding = 0;
   let glides = 0;
+  // Where the glide is headed, and whether the reader has grabbed the map since it set off. A resize mid-glide (a phone
+  // keyboard closing after Find a town) makes deck stop the glide where it is; it should land where it was going.
+  let target: { longitude: number; latitude: number; zoom: number } | null = null;
+  let grabbed = false;
+  let down = 0; // pointers on the map right now: a glide that starts under a finger is already grabbed
+  const land = (v: { longitude: number; latitude: number; zoom: number }) => {
+    nudge = nudge ? 0 : 1e-9;
+    current = { longitude: v.longitude, latitude: v.latitude, zoom: v.zoom };
+    zoom = v.zoom;
+    deck.setProps({ initialViewState: { ...fitted, ...current, zoom: v.zoom + nudge, transitionDuration: 0 } });
+    refresh();
+  };
   const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (2 - 2 * t) ** 3 / 2);
-  const glide = (ms: number, fly = false) => {
+  const glide = (ms: number, to: { longitude: number; latitude: number; zoom: number }, fly = false) => {
     const id = ++glides;
-    const end = () => void (gliding === id && (gliding = 0));
+    const end = () => void (gliding === id && ((gliding = 0), (target = null)));
+    // Cut short by anything but the reader (a new glide has a new number, so it never lands here): land anyway.
+    const cut = () => {
+      if (gliding !== id) return;
+      const to = target;
+      end();
+      if (to && !grabbed) land(to);
+    };
     gliding = ms && !still.matches ? id : 0;
+    target = gliding ? to : null;
+    grabbed = down > 0;
     return gliding
       ? {
           transitionDuration: ms,
           transitionInterpolator: fly ? new FlyToInterpolator() : new LinearInterpolator(),
           ...(fly ? {} : { transitionEasing: ease }),
           onTransitionEnd: end,
-          onTransitionInterrupt: end,
+          onTransitionInterrupt: cut,
         }
       : { transitionDuration: 0 };
   };
@@ -145,8 +175,23 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // since the first draw, handed to the layers; undefined once done (and from the start, for reduced motion).
   let wash: number | undefined = still.matches ? undefined : 0;
   let drawn = false;
+  // The map stays hidden until a frame is drawn at its real size, fitted for that size: otherwise a phone can flash a
+  // blurry, zoomed-in first frame (drawn for a guessed size, then stretched) before the re-fit. Two seconds at most.
+  const readyToShow = () => {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    const vp = deck.isInitialized ? deck.getViewports()[0] : undefined;
+    if (!w || !h || !vp || Math.abs(vp.width - w) > 1 || Math.abs(vp.height - h) > 1) return false; // deck redraws on resize
+    if (!moved && fitFor !== `${w}x${h}`) {
+      handle.fit(padding());
+      return false;
+    }
+    return true;
+  };
+  setTimeout(() => drawn || firstDraw(), 2000);
   const firstDraw = () => {
     drawn = true;
+    container.classList.add('drawn');
     onFirstDraw?.();
     if (wash === undefined) return;
     const t0 = performance.now();
@@ -187,6 +232,14 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     getCursor: ({ isDragging, isHovering }) => (isDragging ? 'grabbing' : isHovering ? (overSighting ? 'pointer' : 'default') : 'grab'),
     layers: [],
     onViewStateChange: ({ viewState }) => {
+      // Never draw a view that is not a number (the whole map would vanish, leaving plain water): go back to a real one.
+      if (![viewState.longitude, viewState.latitude, viewState.zoom].every(Number.isFinite)) {
+        const back = target ?? current;
+        gliding = 0;
+        target = null;
+        requestAnimationFrame(() => land(back));
+        return { ...viewState, ...back }; // deck draws what this returns
+      }
       zoom = viewState.zoom;
       // Only the view, not deck's whole viewState: that carries a stale width/height that would skew center().
       current = { longitude: viewState.longitude, latitude: viewState.latitude, zoom: viewState.zoom };
@@ -216,6 +269,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     // Place names follow the drawn view (they skip the work when neither the view nor the dots changed).
     onAfterRender: () => {
+      if (!drawn && !readyToShow()) return;
       if (!drawn) firstDraw();
       const vp = deck.isInitialized ? (deck.getViewports()[0] as WebMercatorViewport) : undefined;
       placeRings(vp); // the drawn view, so the rings ride along with glides and resizes
@@ -244,6 +298,18 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     onProbe(info ? hit(info) : null, true);
   });
   container.addEventListener('pointercancel', () => (touchDown = null));
+  // Capture phase: deck's own handler (on the canvas inside) stops the glide first, and must find this already set.
+  for (const type of ['pointerdown', 'wheel']) container.addEventListener(type, () => (grabbed = true), { capture: true, passive: true });
+  container.addEventListener('pointerdown', () => down++, { capture: true });
+  for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => (down = Math.max(0, down - 1)), { capture: true });
+  // A phone can take the graphics context back to save memory, which leaves only plain water. Say so, with a way back
+  // (the link in the address bar keeps the place, zoom and day).
+  container.addEventListener('webglcontextlost', () => {
+    if (document.getElementById('map-lost')) return;
+    container.insertAdjacentHTML('afterend', `<p id="map-lost" role="alert">The browser paused the map to save memory.
+      <button type="button">Redraw</button></p>`);
+    document.querySelector('#map-lost button')!.addEventListener('click', () => location.reload());
+  }, true);
   const rings = document.createElement('div');
   rings.className = 'breath';
   rings.setAttribute('aria-hidden', 'true');
@@ -335,7 +401,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       setMoved(false);
       nudge = nudge ? 0 : 1e-9;
       current = v;
-      const g = glide(smooth ? 320 : 0);
+      const g = glide(smooth ? 320 : 0, v);
       deck.setProps({ initialViewState: { ...v, zoom: v.zoom + nudge, ...g } });
       refresh(); // the hexagon size follows zoom: zooming back out must swap the small hexagons for big ones
       if (onView) requestAnimationFrame(onView);
@@ -361,7 +427,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       setMoved(true);
       nudge = nudge ? 0 : 1e-9;
       current = { longitude, latitude, zoom: z };
-      const g = glide(ms, true);
+      const g = glide(ms, current, true);
       deck.setProps({ initialViewState: { ...fitted, longitude, latitude, zoom: z + nudge, ...g } });
       refresh();
       if (onView) requestAnimationFrame(onView);
