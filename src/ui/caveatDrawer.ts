@@ -1,6 +1,7 @@
 import type { Explainer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import { explainerHtml, spotHtml } from './explainer';
+import { CROSS } from './scrubber';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -47,7 +48,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     const opened = new Set([...drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key));
     drawer.innerHTML = `
       <div class="drawer-head"><span class="drawer-grip" aria-hidden="true"></span><h2>About this map</h2>
-        <button class="icon-btn" id="drawer-close" aria-label="Close About this map">&times;</button></div>
+        <button class="icon-btn" id="drawer-close" aria-label="Close About this map">${CROSS}</button></div>
       ${
         layers.length
           ? layers

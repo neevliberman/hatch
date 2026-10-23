@@ -1,6 +1,7 @@
 import type { HatchLayer, ProbeCard } from '../core/layer';
 import type { ProbeHit } from '../map/map';
 import type { LayerRegistry } from '../core/registry';
+import { CROSS } from './scrubber';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -76,7 +77,7 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
                 .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
                 .join('')}</ul>`
             : '';
-          const fold = i === 0 ? '<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">&times;</button>' : '';
+          const fold = i === 0 ? `<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">${CROSS}</button>` : '';
           return `<div class="legend-card">${fold}<div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
           ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
         })

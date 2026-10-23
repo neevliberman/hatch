@@ -5,7 +5,7 @@ import type { Explainer } from '../core/layer';
 // a few quick hatch strokes on the shadow side. Each panel runs through a displacement filter whose noise seed
 // changes a few times a second while the panel is open, so the lines "boil" like hand-drawn animation.
 
-type P = [number, number];
+export type P = [number, number];
 
 /** A seeded random stream, so a drawing looks the same every time it is built. */
 const rng = (seed: number) => {
@@ -36,7 +36,7 @@ const f1 = (v: number) => v.toFixed(1);
 
 /** One pen stroke as a filled outline, thin at both ends and fuller in the middle. With `twice`, the hand goes
  * back over it once, a little off and lighter. */
-function pen(pts: P[], w = 1.3, seed = 1, twice = true): string {
+export function pen(pts: P[], w = 1.3, seed = 1, twice = true): string {
   const r = rng(seed);
   let d = '';
   for (let pass = 0; pass < (twice ? 2 : 1); pass++) {
@@ -63,7 +63,7 @@ function pen(pts: P[], w = 1.3, seed = 1, twice = true): string {
 }
 
 /** A hand-drawn loop: an ellipse that drifts as it goes round and overshoots where it started. */
-function loop(cx: number, cy: number, rx: number, ry: number, rot = 0, turns = 1.15, a0 = -2): P[] {
+export function loop(cx: number, cy: number, rx: number, ry: number, rot = 0, turns = 1.15, a0 = -2): P[] {
   const n = Math.round(10 * turns);
   const c = Math.cos(rot);
   const s = Math.sin(rot);
