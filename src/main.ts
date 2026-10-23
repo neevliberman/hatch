@@ -3,6 +3,7 @@ import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec, type LunaLayer } from './layers/lunaReplay';
 import { createFireflyLayer, loadFirefly } from './layers/fireflyReplay';
+import type { ReplayFile } from './layers/lunaData';
 import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
@@ -193,7 +194,8 @@ function start() {
         speciesSel.value = 'luna';
         return say('Couldn\u2019t load the fireflies. Try again later.');
       }
-      const ff = createFireflyLayer(file, picker.value);
+      fireflyFile = file;
+      const ff = createFireflyLayer(file, picker.value, () => onLunaData());
       firefly = ff;
       registry.register(ff, replayTimeSpec(picker.value, 5, 10), false);
       fireflyCount = ff.seasonCount;
@@ -211,8 +213,7 @@ function start() {
     fillPicker();
     $('tagline').textContent = cur === luna ? 'when luna moths fly' : 'when fireflies glow';
     $('dots-what').textContent = cur === luna ? 'moths' : 'fireflies';
-    // The off-season countdown is worked out for luna moths; fireflies come out weeks later.
-    $('countdown').hidden = cur !== luna;
+    showCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur === luna ? 'luna moth' : 'firefly'} sightings over hexagons colored by the forecast`);
     registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
     // Old one off first, so the two never draw together for a frame.
@@ -221,6 +222,7 @@ function start() {
     syncUrl();
   };
   let fireflyCount = firstBroodCount;
+  let fireflyFile: ReplayFile | null = null;
   // The one-file preview has no firefly file next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
   // On narrow phones both header menus can't show full names, so each species is listed by its first word ("Luna", "Monarch").
@@ -387,11 +389,16 @@ function start() {
 
   // ?today=2027-01-15 fakes the clock, to check the off-season countdown.
   const today = params.get('today');
-  const [short, more] = countdownParts(today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now());
-  const moreEl = document.createElement('span');
-  moreEl.className = 'more';
-  moreEl.textContent = more;
-  $('countdown').replaceChildren(short, moreEl);
+  // Each species has its own season: the firefly's starts weeks after the luna moth's.
+  function showCountdown() {
+    const now = today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now();
+    const [short, more] = cur === luna ? countdownParts(now) : countdownParts(now, 'firefly', fireflyFile!);
+    const moreEl = document.createElement('span');
+    moreEl.className = 'more';
+    moreEl.textContent = more;
+    $('countdown').replaceChildren(short, moreEl);
+  }
+  showCountdown();
 
   // First visit: the map comes first. The About button and Play glow briefly to show where the story and the
   // replay are; the panel itself opens only when asked (or with ?caveats).
@@ -463,3 +470,8 @@ function start() {
 }
 
 start();
+
+// Offline + install to home screen: only the deployed build has a dist/sw.js, and only https (not file://, artifacts).
+if (__HATCH_SW__ && 'serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}

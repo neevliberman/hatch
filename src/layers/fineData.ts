@@ -27,36 +27,75 @@ export interface FineLevel {
   index: Map<string, number>;
 }
 
-const base = () => new URL('fine/', document.baseURI).href;
 export const fineAvailable = () => typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
 
-let manifest: Promise<Manifest | null> | null = null;
-const levels = new Map<number, Promise<FineLevel | null>>();
-const modes = new Map<string, Promise<Uint8Array | null>>();
+/** One species' finer hexes, in a folder next to the page ('fine/' for luna, 'fine-firefly/' for the firefly). */
+export function fineSource(dir: string) {
+  const base = () => new URL(dir, document.baseURI).href;
+  let manifest: Promise<Manifest | null> | null = null;
+  const levels = new Map<number, Promise<FineLevel | null>>();
+  const modes = new Map<string, Promise<Uint8Array | null>>();
 
-const get = async (path: string): Promise<ArrayBuffer | null> => {
-  try {
-    const r = await fetch(base() + path);
-    return r.ok ? await r.arrayBuffer() : null;
-  } catch {
-    return null;
-  }
-};
-
-/** Which fine levels exist (null when none, or not served over http). */
-export function fineManifest(): Promise<Manifest | null> {
-  if (!fineAvailable()) return Promise.resolve(null);
-  manifest ??= get('manifest.json').then((b) => {
-    if (!b) return null;
+  const get = async (path: string): Promise<ArrayBuffer | null> => {
     try {
-      const m = JSON.parse(new TextDecoder().decode(b)) as Manifest;
-      return m.version === 1 ? m : null;
+      const r = await fetch(base() + path);
+      return r.ok ? await r.arrayBuffer() : null;
     } catch {
       return null;
     }
-  });
-  return manifest;
+  };
+
+  /** Which fine levels exist (null when none, or not served over http). */
+  function fineManifest(): Promise<Manifest | null> {
+    if (!fineAvailable()) return Promise.resolve(null);
+    manifest ??= get('manifest.json').then((b) => {
+      if (!b) return null;
+      try {
+        const m = JSON.parse(new TextDecoder().decode(b)) as Manifest;
+        return m.version === 1 ? m : null;
+      } catch {
+        return null;
+      }
+    });
+    return manifest;
+  }
+
+  function fineLevel(res: number): Promise<FineLevel | null> {
+    let p = levels.get(res);
+    if (!p) {
+      p = fineManifest().then(async (m) => {
+        if (!m?.levels[String(res)]) return null;
+        const b = await get(`r${res}/cells.bin`);
+        try {
+          return b ? decodeCells(b) : null;
+        } catch {
+          return null;
+        }
+      });
+      levels.set(res, p);
+    }
+    return p;
+  }
+
+  /** Days for one level and season: 5 bytes per cell (day of year minus offset; `never` = not reached). */
+  function fineDays(res: number, mode: string): Promise<Uint8Array | null> {
+    const key = `${res}/${mode}`;
+    let p = modes.get(key);
+    if (!p) {
+      p = fineManifest().then(async (m) => {
+        if (!m?.levels[String(res)] || !m.modes.includes(mode)) return null;
+        const b = await get(`r${res}/${mode}.bin`);
+        return b ? new Uint8Array(b) : null;
+      });
+      modes.set(key, p);
+    }
+    return p;
+  }
+
+  return { fineManifest, fineLevel, fineDays };
 }
+
+export const { fineManifest, fineLevel, fineDays } = fineSource('fine/');
 
 /** Decode cells.bin (format in build_fine.py): parents, child masks, seen bits. */
 export function decodeCells(buf: ArrayBuffer): FineLevel {
@@ -82,38 +121,6 @@ export function decodeCells(buf: ArrayBuffer): FineLevel {
   const seen = new Uint8Array(N);
   for (let i = 0; i < N; i++) seen[i] = (bits[i >> 3]! >> (i & 7)) & 1;
   return { res, cells, seen, index: new Map(cells.map((c, i) => [c, i] as const)) };
-}
-
-export function fineLevel(res: number): Promise<FineLevel | null> {
-  let p = levels.get(res);
-  if (!p) {
-    p = fineManifest().then(async (m) => {
-      if (!m?.levels[String(res)]) return null;
-      const b = await get(`r${res}/cells.bin`);
-      try {
-        return b ? decodeCells(b) : null;
-      } catch {
-        return null;
-      }
-    });
-    levels.set(res, p);
-  }
-  return p;
-}
-
-/** Days for one level and season: 5 bytes per cell (day of year minus offset; `never` = not reached). */
-export function fineDays(res: number, mode: string): Promise<Uint8Array | null> {
-  const key = `${res}/${mode}`;
-  let p = modes.get(key);
-  if (!p) {
-    p = fineManifest().then(async (m) => {
-      if (!m?.levels[String(res)] || !m.modes.includes(mode)) return null;
-      const b = await get(`r${res}/${mode}.bin`);
-      return b ? new Uint8Array(b) : null;
-    });
-    modes.set(key, p);
-  }
-  return p;
 }
 
 /** Quantile days of cell i, as the res-4 file has them (null = never). */
