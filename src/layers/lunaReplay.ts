@@ -254,6 +254,8 @@ export interface LunaLayer extends HatchLayer {
   summary(t: number): string;
   /** Resolution of the hexagons on screen now (4, 5 or 6). */
   res(): number;
+  /** True when the small hexagons on screen show this season's own days (false for big hexagons, or mid switch). */
+  fineCurrent?(): boolean;
   /** The hexagon the card describes at lngLat, at the resolution on screen (null outside the map). */
   cellAt(lngLat: [number, number]): string | null;
 }
@@ -299,8 +301,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     loading.set('manifest', Infinity);
     void fineManifest().then((m) => {
       fineLevels = m ? Object.keys(m.levels).map(Number) : [];
-      if (m) loading.delete('manifest');
-      else loading.set('manifest', performance.now() + RETRY_MS);
+      loading.set('manifest', m ? Infinity : performance.now() + RETRY_MS); // got it: never ask again
       if (fineLevels.length && wantRes > 4) onData();
     });
   };
@@ -344,8 +345,9 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const days = fineDaysLoaded.get(`${r}/${mode}`);
       if (!days) load(r);
       if (shown5or6.has(r) && days) return { res: r, days };
-      // A season switch: keep this level's last colours for the moment its new days are on their way.
-      if (r === shownRes && shownDays) return { res: r, days: shownDays };
+      // A season switch: keep this level's last colours for the moment its new days are on their way (only while
+      // the request is out: once it fails, the old season's colours would sit under the new season's name).
+      if (r === shownRes && shownDays && loading.get(`${r}/${mode}`) === Infinity) return { res: r, days: shownDays };
     }
     return { res: 4, days: null };
   };
@@ -353,7 +355,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const lookup = (lngLat: [number, number]) => {
     if (shownRes > 4) {
       const s = shown5or6.get(shownRes)!;
-      const days = fineDaysLoaded.get(`${shownRes}/${mode}`);
+      const days = shownDays; // what is drawn (for a moment after a season switch, the last season's colours)
       const cell = latLngToCell(lngLat[1], lngLat[0], shownRes);
       const i = s.level.index.get(cell);
       if (days && i !== undefined) return { cell, q: bytesToQ(days, i), seen: s.level.seen[i] === 1, parent: parentOf(cell) };
@@ -451,6 +453,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       shown = sightingsFor(m);
     },
     res: () => shownRes,
+    fineCurrent: () => shownRes > 4 && shownDays !== null && shownDays === fineDaysLoaded.get(`${shownRes}/${mode}`),
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
     points(t) {

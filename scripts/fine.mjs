@@ -159,6 +159,9 @@ for (const [name, width, height, mobile] of shots) {
       });
       if (seen.some((r) => r === 4)) problems.push(`${tag}: switching season flashed back to the big hexagons (${seen.join(',')})`);
       if (seen.at(-1) !== res) problems.push(`${tag}: after a season switch the map shows res ${seen.at(-1)}, expected ${res}`);
+      // ...and the new season's own colours arrive (not the last season's, kept on screen for the moment of the switch).
+      await page.waitForFunction(() => window.__hatch.luna.fineCurrent(), null, { timeout: 8000 })
+        .catch(() => problems.push(`${tag}: after a season switch the small hexagons never showed the new season`));
     }
     await ctx.close();
   }

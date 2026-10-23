@@ -32,7 +32,8 @@ jobs:
           path: screenshots/desktop
           retention-days: 14
       # Zoomed in: the finer hexagons (res 5 and 6) load over http, draw, and give a card when tapped.
-      - run: xvfb-run -a npm run fine
+      - if: success() || failure()   # its own result even when the desktop run failed
+        run: xvfb-run -a npm run fine
       - if: always()
         uses: actions/upload-artifact@v4
         with:

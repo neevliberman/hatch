@@ -118,12 +118,13 @@ export function createFireflyLayer(
     if (!(fineLevel && days)) loadFine();
     if (shownRes !== 5 && performance.now() - wantSince < SETTLE_MS) return { res: GRID_RES, days: null };
     if (fineLevel && days) return { res: 5, days };
-    return shownRes === 5 && shownDays ? { res: 5, days: shownDays } : { res: GRID_RES, days: null };
+    // Old colours only while the new season's request is out: after a failure they'd sit under the wrong season.
+    return shownRes === 5 && shownDays && loading.get(mode) === Infinity ? { res: 5, days: shownDays } : { res: GRID_RES, days: null };
   };
 
   /** Forecast quantiles, "seen", the cell id and its res-4 parent at lngLat, on the level on screen. */
   const lookup = (lngLat: [number, number]) => {
-    const days = fineDays.get(mode);
+    const days = shownDays; // what is drawn (for a moment after a season switch, the last season's colours)
     if (shownRes === 5 && fineLevel && days) {
       const cell = latLngToCell(lngLat[1], lngLat[0], 5);
       const i = fineLevel.level.index.get(cell);
