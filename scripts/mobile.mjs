@@ -94,8 +94,19 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       try {
         await page.locator(sel).tap({ timeout: 3000 });
         return true;
-      } catch {
-        fail(`could not tap ${sel}`);
+      } catch (e) {
+        // Software GL in CI can draw a frame or two a second, and Playwright waits for two quick identical frames
+        // before it taps. So check what a finger cares about instead: the target is visible and on top at its centre.
+        const onTop = await page.evaluate((s) => {
+          const el = document.querySelector(s);
+          const r = el?.getBoundingClientRect();
+          if (!r || !r.width || !r.height || el.disabled || getComputedStyle(el).visibility === 'hidden') return false;
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return !!hit && (hit === el || el.contains(hit));
+        }, sel).catch(() => false);
+        if (onTop && (await page.locator(sel).tap({ force: true, timeout: 3000 }).then(() => true, () => false))) return true;
+        // The last line of Playwright's log says why (hidden, or which element sits on top).
+        fail(`could not tap ${sel} (${String(e.message).trim().split('\n').pop().replace(/\x1b\[\d+m/g, '').trim()})`);
         return false;
       }
     };

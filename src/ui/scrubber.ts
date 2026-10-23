@@ -1,4 +1,5 @@
 import { TimeAxis } from '../core/timeAxis';
+import { NEXT, PAUSE, PLAY, PREV } from './icons';
 
 /** Pick sensible tick marks for any range: years, months, days or hours. */
 function makeTicks(start: number, end: number): { at: number; label: string }[] {
@@ -20,12 +21,6 @@ function makeTicks(start: number, end: number): { at: number; label: string }[] 
   }
   return out;
 }
-
-const svg = (d: string) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
-const PREV = svg('M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z');
-const NEXT = svg('M8.6 18.6 10 20l8-8-8-8-1.4 1.4 6.6 6.6z');
-const PLAY = svg('M8 5v14l11-7z');
-const PAUSE = svg('M7 5h4v14H7zm6 0h4v14h-4z');
 
 /** Bottom bar bound to a TimeAxis: play/pause, step, slider, month ticks, "now" marker, keyboard. */
 export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
