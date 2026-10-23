@@ -36,18 +36,21 @@ const FOLD_KEY = 'hatch-legend-folded';
  * Wide screens always show it; the folded class does nothing there.
  */
 export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoFold(): void } {
-  let folded = false;
-  let touched = false; // the reader opened or closed it themselves: stop folding it for them
+  // Stored: '1' folded, 'open' opened by hand (never fold it for them again), nothing yet: open until the first tap.
+  let stored: string | null = null;
   try {
-    folded = localStorage.getItem(FOLD_KEY) === '1';
+    stored = localStorage.getItem(FOLD_KEY);
   } catch {
     /* storage blocked: start open */
   }
+  let folded = stored === '1';
+  let touched = stored === 'open'; // the reader opened or closed it themselves: stop folding it for them
+  const narrow = window.matchMedia('(max-width: 999px)');
   const setFolded = (f: boolean, focus = false) => {
     folded = f;
     root.classList.toggle('folded', f);
     try {
-      localStorage.setItem(FOLD_KEY, f ? '1' : '0');
+      localStorage.setItem(FOLD_KEY, f ? '1' : touched ? 'open' : '0');
     } catch {
       /* not remembered, still works */
     }
@@ -78,7 +81,7 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
           ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
         })
         .join('') +
-      (layers.length ? `<button type="button" id="key-chip" class="lg-chip" aria-expanded="false">${swatches}<span>Key</span></button>` : '');
+      (layers.length ? `<button type="button" id="key-chip" class="lg-chip" aria-expanded="false" aria-label="Show the colour key">${swatches}<span>Key</span></button>` : '');
   };
   root.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('.lg-fold, .lg-chip');
@@ -91,6 +94,7 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
   root.classList.toggle('folded', folded);
   return {
     autoFold() {
+      if (!narrow.matches) return; // wide screens always show the key; don't fold it behind their back for later
       if (!touched && !folded) setFolded(true);
       touched = true; // once per visit
     },

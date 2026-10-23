@@ -148,7 +148,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     }
 
     // By now the map has been tapped and played, so the colour key has folded to its chip; the chip opens it again.
-    await page.locator('#probe .probe-close').tap({ timeout: 1000 }).catch(() => {});
+    if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
     if (!(await page.locator('#key-chip').isVisible())) fail('the colour key did not fold to its chip');
     else if (await tap('#key-chip')) {
       if (!(await page.locator('#key-fold').isVisible())) fail('the Key chip did not open the colour key');

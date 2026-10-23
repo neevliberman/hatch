@@ -160,8 +160,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 /* Under 1000px the key sits over the map: it can fold to a one-line chip (it folds itself after the first tap or Play). */
 @media (max-width: 999px) {
   #legend .legend-card { position: relative; }
-  /* A small round badge on the card's corner, so it costs the key no width (a row on the smallest phones). */
-  .lg-fold { display: grid; place-items: center; position: absolute; top: -12px; right: -6px; width: 28px; height: 28px; padding: 0;
+  /* A small round badge on the card's top-left corner (the right one is under the recenter button), so it costs the
+     key no width (a row on the smallest phones). */
+  .lg-fold { display: grid; place-items: center; position: absolute; top: -12px; left: -6px; width: 28px; height: 28px; padding: 0;
     border: 1px solid var(--line); background: var(--panel-solid); color: var(--muted); font-size: 18px; line-height: 1;
     cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
   .lg-fold::before { content: ''; position: absolute; inset: -8px; } /* 44px to the finger, 28px to the eye */
@@ -170,6 +171,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
     background: var(--panel); border: 1px solid var(--line); border-radius: 18px; font: inherit; font-size: 13px; font-weight: 700;
     color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .lg-chip span { margin-left: 3px; }
+  #legend.folded .lg-chip { position: relative; }
+  .lg-chip::before { content: ''; position: absolute; inset: -4px; } /* 44px tall to the finger */
 }
 #probe { max-width: 300px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; }
 #probe[hidden] { display: none; }
