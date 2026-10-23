@@ -23,7 +23,7 @@ mkdirSync(out, { recursive: true });
 const file = pathToFileURL(resolve(process.env.DIST ?? 'dist-single/index.html')).href;
 const engines = (process.env.ENGINES ?? 'chromium,webkit').split(',');
 // Software GL in CI draws its first map frame anywhere from 1 to 6 s in (a phone takes well under a second), so watch
-// until the map shows, then a little longer for the frames that follow it, up to WATCH_MS.
+// until the map shows (WATCH_MS at most), then AFTER_MS longer for the frames that follow it.
 const WATCH_MS = 15000;
 const AFTER_MS = 1500;
 
@@ -37,13 +37,17 @@ const screens = [
 ].filter((s) => engines.includes(s[1]));
 
 // Runs in the page before any of its scripts. Kept small and self-contained: it is a string to the browser.
-const recorder = (watchMs) => {
+const recorder = () => {
   const log = [];
   const t0 = performance.now();
   let drew = new Set();
+  // Canvases that have drawn to the screen at least once: looked at every frame after that, since a frame that draws
+  // nothing still shows the last picture, stretched if the canvas has since changed size.
+  const seen = new Set();
   const wrap = (proto) => {
     if (!proto) return;
-    for (const name of ['clear', 'drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced']) {
+    // Draw calls only: a clear alone shows nothing that could look stretched.
+    for (const name of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced']) {
       const orig = proto[name];
       if (orig) proto[name] = function (...a) {
         // Only draws to the screen count (not to an offscreen buffer, such as picking).
@@ -62,23 +66,24 @@ const recorder = (watchMs) => {
     return true;
   };
   const note = () => {
-    if (!drew.size) return;
+    for (const c of drew) seen.add(c);
+    drew = new Set();
+    if (!seen.size) return;
     const t = Math.round(performance.now() - t0);
-    for (const c of drew) {
+    for (const c of seen) {
       if (!(c instanceof HTMLCanvasElement) || !c.isConnected) continue;
       const r = c.getBoundingClientRect();
       const host = (c.closest('#map') ?? c.parentElement).getBoundingClientRect();
       log.push({
-        t, buf: [c.width, c.height], css: [r.width, r.height], dpr: devicePixelRatio, on: visible(c),
+        t, wall: Date.now(), buf: [c.width, c.height], css: [r.width, r.height], dpr: devicePixelRatio, on: visible(c),
         rect: [r.left, r.top, r.right, r.bottom].map(Math.round), host: [host.left, host.top, host.right, host.bottom].map(Math.round),
       });
     }
-    drew = new Set();
   };
   // Every animation-frame callback is followed by a look at what it drew, while it is still in the frame being painted.
   const raf = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = (cb) => raf((ts) => {
-    try { cb(ts); } finally { if (performance.now() - t0 < watchMs) note(); }
+    try { cb(ts); } finally { if (!window.__firstFramesStop) note(); }
   });
   window.__firstFrames = log;
 };
@@ -92,9 +97,11 @@ for (const e of new Set(screens.map((s) => s[1]))) {
   );
   for (const [name, engine, width, height, dpr, phone] of screens.filter((s) => s[1] === e)) {
     const fail = (m) => problems.push(`${name}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: phone, isMobile: phone && engine !== 'firefox' });
-    await ctx.addInitScript(recorder, WATCH_MS);
+    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: phone, isMobile: phone });
+    await ctx.addInitScript(recorder);
     const page = await ctx.newPage();
+    page.on('request', (r) => !/^(file|data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
     page.on('pageerror', (err) => fail(`pageerror: ${err.message}`));
     // Chromium: film the screen as painted (every frame that changes), for the contact sheet.
     const frames = [];
@@ -112,6 +119,7 @@ for (const e of new Set(screens.map((s) => s[1]))) {
       .waitForFunction(() => window.__firstFrames.some((f) => f.on), null, { timeout: WATCH_MS, polling: 100 })
       .then(() => true, () => false);
     if (showed) await page.waitForTimeout(AFTER_MS);
+    await page.evaluate(() => (window.__firstFramesStop = true));
     if (cdp) await cdp.send('Page.stopScreencast').catch(() => {});
     const log = await page.evaluate(() => window.__firstFrames);
     writeFileSync(`${out}/${name}.json`, JSON.stringify(log));
@@ -123,7 +131,7 @@ for (const e of new Set(screens.map((s) => s[1]))) {
     // devicePixelRatio times the CSS size. Stretched: width and height scaled differently. Blurry: fewer pixels than CSS.
     const stretched = shown.filter((f) => {
       const [sx, sy] = [f.buf[0] / f.css[0], f.buf[1] / f.css[1]];
-      return Math.abs(sx - sy) / Math.max(sx, sy) > 0.03 || Math.min(sx, sy) < 0.95;
+      return Math.abs(sx - sy) / Math.max(sx, sy) > 0.03 || Math.min(sx, sy) < 0.95 || Math.max(sx, sy) > f.dpr * 1.05;
     });
     if (stretched.length) {
       const f = stretched[0];
@@ -136,12 +144,17 @@ for (const e of new Set(screens.map((s) => s[1]))) {
     console.log(`${name}: ${log.length} map frames drawn, first visible at ${first ? first.t + ' ms' : 'never'}` +
       `${first ? ` (${first.buf.join('x')} px)` : ''}${frames.length ? `, ${frames.length} frames filmed` : ''}`);
 
-    // The contact sheet: 12 of the filmed frames, side by side, with their time. Frames that barely differ from the one
+    // The contact sheet: up to 13 of the filmed frames, side by side, with their time. Frames that barely differ from the one
     // before (the loading caterpillar inching) are skipped first, so the sheet spends its room on what changed.
     if (frames.length) {
       const start = frames[0].t;
       const early = frames.filter((f, i) => i === 0 || i === frames.length - 1 || Math.abs(f.data.length / frames[i - 1].data.length - 1) > 0.03);
-      const pick = early.length <= 12 ? early : Array.from({ length: 12 }, (_, i) => early[Math.round((i * (early.length - 1)) / 11)]);
+      const even = early.length <= 10 ? early : Array.from({ length: 10 }, (_, i) => early[Math.round((i * (early.length - 1)) / 9)]);
+      // Always the frame painted just after the map first showed and after the first bad frame (both clocks are wall
+      // time on this machine), and last, the page once settled.
+      const at = (wall) => wall && frames.findLast((f) => f.t <= wall / 1000 + 0.1);
+      const pick = [...new Set([...even, at(first?.wall), at(stretched[0]?.wall ?? off[0]?.wall)].filter(Boolean))].sort((x, y) => x.t - y.t);
+      pick.push({ t: Date.now() / 1000, data: (await page.screenshot({ type: 'jpeg', quality: 60 })).toString('base64'), settled: true });
       const sheet = await page.evaluate(async ({ pick, start }) => {
         const imgs = await Promise.all(pick.map(async (f) => createImageBitmap(await (await fetch('data:image/jpeg;base64,' + f.data)).blob())));
         const w = imgs[0].width > imgs[0].height ? 360 : 240;
@@ -158,14 +171,14 @@ for (const e of new Set(screens.map((s) => s[1]))) {
           const y = 8 + Math.floor(i / cols) * (h + 28);
           g.drawImage(im, x, y + 20, w, h);
           g.fillStyle = '#fff';
-          g.fillText(`${Math.round((pick[i].t - start) * 1000)} ms`, x, y + 14);
+          g.fillText(`${Math.round((pick[i].t - start) * 1000)} ms${pick[i].settled ? ' (settled)' : ''}`, x, y + 14);
         });
         const blob = await c.convertToBlob({ type: 'image/png' });
         const bytes = new Uint8Array(await blob.arrayBuffer());
         let s = '';
         for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         return btoa(s);
-      }, { pick: pick.map((f) => ({ t: f.t, data: f.data })), start });
+      }, { pick: pick.map((f) => ({ t: f.t, data: f.data, settled: !!f.settled })), start });
       writeFileSync(`${out}/${name}-filmstrip.png`, Buffer.from(sheet, 'base64'));
     }
     await ctx.close();

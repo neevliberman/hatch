@@ -26,11 +26,12 @@ jobs:
       # The Ubuntu apt mirror sometimes stalls and the step would sit until the job's 30-minute limit: give each try 8
       # minutes and try twice.
       - run: timeout 480 npx playwright install --with-deps chromium webkit || timeout 480 npx playwright install --with-deps chromium webkit
-      - run: npm run build:single
+      - id: build
+        run: npm run build:single
       - run: npm run mobile
       # The first seconds of load, which the step above skips: fails on a stretched or misplaced first map frame, and
       # films each screen (phones and two desktops) for the visual review in CONTRIBUTING.md. About 40 s.
-      - if: success() || failure()
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run firstframes
       - if: always()
         uses: actions/upload-artifact@v4
