@@ -16,7 +16,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     target: 'es2022',
-    // deck.gl alone is ~1.1 MB minified (~320 KB gzipped): expected, and budgeted by scripts/budget.mjs.
+    // deck.gl alone is ~1.1 MB minified (~320 KB gzipped): expected (scripts/budget.mjs caps the one-file build).
     chunkSizeWarningLimit: 1500,
     rollupOptions: { output: { manualChunks: chunkOf } },
   },
