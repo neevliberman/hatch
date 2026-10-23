@@ -78,6 +78,8 @@ export interface Explainer {
    * picked city, "you"). Null when there is nothing to show. */
   spot(lngLat: [number, number] | null, t: number, name?: string): SpotStory | null;
   score?: { title: string; text: string; bars: { label: string; days: number; best?: boolean }[] };
+  /** A short card near the top for a special mode (this year's live forecast): what it is, in plain words. */
+  notice?: { title: string; bullets: string[] };
   finePrintLabel: string;
 }
 

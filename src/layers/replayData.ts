@@ -24,18 +24,21 @@ export interface Sighting {
 
 const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 
+/** One row of a sightings list ([iNat id, year, day of year, lat, lng, flags]) as a dot. */
+export const toSighting = ([id, year, doy, lat, lng, flags]: ReplayFile['sightings'][number]): Sighting => ({
+  id,
+  year,
+  doy,
+  pdoy: isLeap(year) && doy >= 60 ? doy - 1 : doy,
+  lat,
+  lng,
+  flags,
+  cell: latLngToCell(lat, lng, GRID_RES),
+});
+
 /** One species' replay file plus the lookups every layer needs. Luna and the firefly share this. */
 export function replayData(data: ReplayFile) {
-  const sightings: Sighting[] = data.sightings.map(([id, year, doy, lat, lng, flags]) => ({
-    id,
-    year,
-    doy,
-    pdoy: isLeap(year) && doy >= 60 ? doy - 1 : doy,
-    lat,
-    lng,
-    flags,
-    cell: latLngToCell(lat, lng, GRID_RES),
-  }));
+  const sightings: Sighting[] = data.sightings.map(toSighting);
   /** Sightings shown in a mode: one year, or all years pooled by day of year. */
   const sightingsFor = (mode: Mode): Sighting[] => (mode === TYPICAL ? sightings : sightings.filter((s) => String(s.year) === mode));
   const bandOf = (lat: number) => {

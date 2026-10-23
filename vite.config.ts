@@ -23,7 +23,8 @@ function serviceWorker(): Plugin {
       const files = walk(outDir).map((f) => relative(outDir, f).split(sep).join('/')).filter((f) => f !== 'sw.js').sort();
       const src = readFileSync(template, 'utf8');
       const hash = createHash('sha256').update(src);
-      for (const f of files) hash.update(f).update(readFileSync(join(outDir, f)));
+      // Not the nightly live forecast: the worker fetches it network-first, so a new night needn't replace the whole cache.
+      for (const f of files.filter((f) => !f.startsWith('live/'))) hash.update(f).update(readFileSync(join(outDir, f)));
       const shell = files.filter((f) => /^(assets\/|icons\/)|^(index\.html|manifest\.webmanifest|favicon[^/]*)$/.test(f));
       const sw = src
         .replace('__VERSION__', hash.digest('hex').slice(0, 12))

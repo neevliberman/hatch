@@ -53,9 +53,10 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
       <button id="t-play" class="icon-btn play" aria-label="Play (Space)"></button>
       <button id="t-next" class="icon-btn" aria-label="Forward one day (Right arrow)">${NEXT}</button>
     </div>
-    <div class="date"><span id="t-date"></span><small id="t-doy"></small></div>
+    <div class="date"><span id="t-date"></span><small id="t-doy"></small><span id="t-asof" class="asof" hidden></span></div>
     <div class="track">
       <div class="ribbon" id="t-ribbon" aria-hidden="true"></div>
+      <div class="fc-wash" id="t-fc" aria-hidden="true" hidden></div>
       <input id="t-range" type="range" min="0" step="1" aria-label="Date within season"
         aria-description="Behind the slider: how much of the map is at each stage on each day, and a line of sightings per day." />
       <div class="ticks" id="t-ticks" aria-hidden="true"></div>
@@ -69,6 +70,9 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
   const ticks = $('t-ticks');
   const ribbonEl = $('t-ribbon');
   const dateBox = root.querySelector<HTMLElement>('.date')!;
+  const asOfEl = $('t-asof');
+  const fcEl = $('t-fc');
+  const md = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
   // Wave notes sit just right of their peak. When the thumb would cover one, slide it to the nearest free spot:
   // left of the peak, or just past the thumb on either side.
@@ -96,7 +100,25 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
     const parts = makeTicks(time.start, time.end).map(
       (k) => `<span class="tick" style="left:${(((k.at - time.start) / span) * 100).toFixed(2)}%"><i></i>${k.label}</span>`,
     );
-    const nf = time.nowFraction;
+    // Live data: an "as of" flag on the last day of observed weather, and the ribbon washed paler after it (forecast).
+    // Data from before the track starts makes all of it forecast; data past its end, none.
+    const a = time.asOf;
+    const af = a && a.at >= time.start && a.at <= time.end ? (a.at - time.start) / span : null;
+    fcEl.hidden = !a || a.at >= time.end;
+    root.style.setProperty('--fc', String(af ?? 0));
+    asOfEl.hidden = !a;
+    asOfEl.classList.toggle('stale', !!a?.stale);
+    if (a) {
+      asOfEl.innerHTML = `as of ${md(a.at)}${a.stale ? '<span class="long"> · data may be stale</span><span class="phone-only"> · stale?</span>' : ''}`;
+      asOfEl.title = a.stale
+        ? `Weather observed up to ${md(a.at)}. Tonight's update looks late, so this may be out of date. Later days are forecast.`
+        : `Weather observed up to ${md(a.at)}. Later days are forecast.`;
+    }
+    if (af !== null) {
+      parts.push(`<span class="now asof-flag" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>as of</b></span>`);
+    }
+    // The clock's own "now" flag still shows, unless it would sit on top of the as-of flag (the usual night: as of yesterday).
+    const nf = a && Math.abs(time.now - a.at) <= 2 * 86_400_000 ? null : time.nowFraction;
     if (nf !== null) {
       parts.push(`<span class="now" style="left:${(nf * 100).toFixed(2)}%" title="Today"><b>now</b></span>`);
     }
@@ -109,8 +131,10 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
     // Where the thumb is, 0-1: the phone's date pill rides above it.
     root.style.setProperty('--p', String(time.stepIndex / Math.max(1, time.steps)));
     const label = time.label(time.cursor);
-    const after = time.cursor > time.now ? 'after today' : '';
-    range.setAttribute('aria-valuetext', label);
+    const after = time.asOf ? (time.cursor > time.asOf.at ? 'forecast' : '') : time.cursor > time.now ? 'after today' : '';
+    doyEl.classList.toggle('fc', !!time.asOf);
+    // Screen readers hear when a day is forecast, as sighted users see from the washed ribbon.
+    range.setAttribute('aria-valuetext', label + (time.asOf && time.cursor > time.asOf.at ? ' (forecast)' : ''));
     if (dateEl.textContent !== label || doyEl.textContent !== after) {
       // "Jun 10 (all years)": the aside in brackets is set in the handwriting face.
       const [day, aside] = label.split(/ (?=\()/);
@@ -121,9 +145,11 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
       // Half the date pill's width, so on a phone the pill stops at the bar's edges instead of hanging off them.
       root.style.setProperty('--half', `${Math.ceil(dateBox.offsetWidth / 2) + 4}px`);
     }
-    if (rangeKey !== `${time.start}|${time.end}`) {
-      rangeKey = `${time.start}|${time.end}`;
+    const key = `${time.start}|${time.end}|${time.asOf?.at}|${time.asOf?.stale}`;
+    if (rangeKey !== key) {
+      rangeKey = key;
       drawTicks();
+      root.style.setProperty('--half', `${Math.ceil(dateBox.offsetWidth / 2) + 4}px`); // the as-of badge may have changed
     }
     play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : 'Play (Space)');
     play.classList.toggle('on', time.playing);

@@ -1,10 +1,11 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
-import { createLunaLayer, modeLabel, replayTimeSpec, type LunaLayer } from './layers/lunaReplay';
+import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { createFireflyLayer, loadFirefly } from './layers/fireflyReplay';
 import type { ReplayFile } from './layers/lunaData';
-import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
+import { data, firstBroodCount, LIVE, TYPICAL, type Mode } from './layers/lunaData';
+import { inSeason, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
@@ -22,12 +23,16 @@ const SEEN_KEY = 'hatch.seen.v2';
 function start() {
   const params = new URLSearchParams(location.search);
   const years = data.years.map(String);
-  // Default: every year pooled by day of year (one season alone is too sparse to show the wave). ?year=2025 replays one season.
-  const asked = params.get('year');
+  // Default: every year pooled by day of year (one season alone is too sparse to show the wave). ?year=2025 replays one
+  // season; ?season=live (or ?year=live) asks for this year's nightly forecast, which arrives after the first paint.
+  const asked = params.get('season') ?? params.get('year');
   const initialMode: Mode = asked && years.includes(asked) ? asked : TYPICAL;
   // ?date=06-10 (or 2025-06-10) puts the cursor on that calendar day; default 10 June, when the wave crosses the middle.
   const md = params.get('date')?.match(/(\d{2})-(\d{2})$/);
   const [month, day] = md ? [Number(md[1]) - 1, Number(md[2])] : [5, 10];
+  // ?today=2027-01-15 fakes the clock: the off-season countdown, and whether live mode is in season or its file is late.
+  const todayParam = params.get('today');
+  const clock = todayParam && !Number.isNaN(Date.parse(todayParam)) ? Date.parse(todayParam) : Date.now();
   // ?at=41.88,-87.63,6.5 reopens a shared link at the same place and zoom. Anything not near the Midwest (a typo,
   // an empty part) is ignored rather than handed to the map, which would throw and stay blank.
   const atParts = params.get('at')?.split(',') ?? [];
@@ -165,26 +170,38 @@ function start() {
 
   // Season picker: switching keeps the cursor on the same calendar day.
   const picker = $<HTMLSelectElement>('season');
+  // This year's live forecast (luna only), once its file has loaded.
+  let liveFile: Live | null = null;
+  // A ?season=live link opens on the default view until the file arrives: keep "season=live" in the address bar meanwhile.
+  let livePending = asked === LIVE;
   const fillPicker = () => {
     const what = cur === luna ? 'moths' : 'fireflies';
     const keep = picker.value || initialMode;
-    picker.innerHTML = [TYPICAL, ...[...years].reverse()]
+    const live = liveFile && cur === luna ? [LIVE] : [];
+    picker.innerHTML = [...live, TYPICAL, ...[...years].reverse()]
       // The count is first-wave moths (or fireflies) seen; "All years" goes without it so the closed menu fits a small phone.
-      .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : `${m} (${seasonCount(m).toLocaleString()} ${what})`}</option>`)
+      .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${seasonCount(m).toLocaleString()} ${what})`}</option>`)
       .join('');
-    picker.value = keep;
+    picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
     picker.title = `Season to replay (${cur === luna ? 'first-wave moths' : 'fireflies'} seen, in parentheses; ${seasonCount(TYPICAL).toLocaleString()} in all years)`;
   };
   fillPicker();
-  picker.addEventListener('change', () => {
+  // This season, live: "next real season ... days from now" would contradict the map.
+  const syncCountdown = () => ($('countdown').hidden = picker.value === LIVE && !!liveFile && inSeason(liveFile, clock));
+  // Live mode opens on its last day of observed weather (or the day a link asks for); the others keep the calendar day.
+  const switchMode = (m: Mode, at?: [number, number]) => {
     const now = new Date(time.cursor);
-    cur.setMode(picker.value);
+    cur.setMode(m);
     hit = null;
     pinned = false;
     map.setMarker(null);
-    $('season-name').textContent = modeLabel(picker.value);
-    registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
-  });
+    $('season-name').textContent = modeLabel(m);
+    at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
+    registry.setTime(cur.id, replayTimeSpec(m, at?.[0], at?.[1], clock));
+    updateProbe(); // a card pinned in the old season describes that season: it went with the switch
+    syncCountdown();
+  };
+  picker.addEventListener('change', () => switchMode(picker.value));
   $('season-name').textContent = modeLabel(initialMode);
 
   // Species switcher. Switching keeps the season and the calendar day, and drops any pinned card.
@@ -199,14 +216,20 @@ function start() {
         return say('Couldn\u2019t load the fireflies. Try again later.');
       }
       fireflyFile = file;
-      const ff = createFireflyLayer(file, picker.value, () => onLunaData());
+      const ffMode = picker.value === LIVE ? TYPICAL : picker.value;
+      const ff = createFireflyLayer(file, ffMode, () => onLunaData());
       firefly = ff;
-      registry.register(ff, replayTimeSpec(picker.value, 5, 10), false);
+      registry.register(ff, replayTimeSpec(ffMode, 5, 10), false);
       fireflyCount = ff.seasonCount;
     }
     const next = want === 'firefly' ? firefly! : luna;
     speciesSel.value = want;
     if (next === cur) return;
+    // Fireflies have no live season: switching to them from live mode goes to all years, on the same calendar day.
+    if (next !== luna && picker.value === LIVE) {
+      picker.value = TYPICAL;
+      $('season-name').textContent = modeLabel(TYPICAL);
+    }
     const now = new Date(time.cursor);
     hit = null;
     pinned = false;
@@ -218,6 +241,7 @@ function start() {
     $('tagline').textContent = cur === luna ? 'when luna moths fly' : 'when fireflies glow';
     $('dots-what').textContent = cur === luna ? 'moths' : 'fireflies';
     showCountdown();
+    syncCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur === luna ? 'luna moth' : 'firefly'} sightings over hexagons colored by the forecast`);
     registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
     // Old one off first, so the two never draw together for a frame.
@@ -287,9 +311,12 @@ function start() {
     const q = new URLSearchParams(location.search);
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
+    q.delete('season');
     if (cur === luna && !speciesPending) q.delete('species');
     else q.set('species', 'firefly');
-    if (picker.value === TYPICAL) q.delete('year');
+    if (livePending) (q.delete('year'), q.set('season', LIVE));
+    else if (picker.value === TYPICAL) q.delete('year');
+    else if (picker.value === LIVE) (q.delete('year'), q.set('season', LIVE));
     else q.set('year', picker.value);
     // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
     const c = map.center(padding());
@@ -406,12 +433,9 @@ function start() {
     );
   });
 
-  // ?today=2027-01-15 fakes the clock, to check the off-season countdown.
-  const today = params.get('today');
-  // Each species has its own season: the firefly's starts weeks after the luna moth's.
+  // Each species has its own season: the firefly's starts weeks after the luna moth's. (?today= fakes the clock.)
   function showCountdown() {
-    const now = today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now();
-    const [short, more] = cur === luna ? countdownParts(now) : countdownParts(now, 'firefly', fireflyFile!);
+    const [short, more] = cur === luna ? countdownParts(clock) : countdownParts(clock, 'firefly', fireflyFile!);
     const moreEl = document.createElement('span');
     moreEl.className = 'more';
     moreEl.textContent = more;
@@ -499,6 +523,26 @@ function start() {
   });
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };
+
+  // This year's nightly forecast, fetched after the first paint (none in the one-file build, or if the file is missing
+  // or broken). It goes at the top of the season menu (luna only), and becomes the default during its season
+  // (1 Mar - 30 Sep) when the link names no season, day or species, so shared links still open what they showed.
+  const cursor0 = time.cursor;
+  void loadLive().then((live) => {
+    livePending = false;
+    // A placeholder file (written before the pipeline's first real run) only shows when a link asks for it.
+    if (!live || (live.stub && asked !== LIVE)) return syncUrl();
+    setLive(live);
+    liveFile = live;
+    fillPicker();
+    if (cur !== luna || speciesPending) return syncUrl(); // fireflies have no live season
+    if (picker.value !== initialMode || time.cursor !== cursor0) return syncUrl(); // the user got there first: leave their choice
+    const explicit = params.has('season') || params.has('year') || params.has('date') || params.has('species');
+    if (asked !== LIVE && (explicit || !inSeason(live, clock))) return syncUrl();
+    picker.value = LIVE;
+    switchMode(LIVE, md ? [month, day] : undefined);
+    syncUrl();
+  });
 }
 
 start();
