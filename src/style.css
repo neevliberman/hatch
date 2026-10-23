@@ -302,15 +302,12 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-pane { display: block; width: 100%; height: auto; overflow: visible; }
 .ex-pane .pen { fill: var(--text); }
 .ex-pane .frame { fill: var(--line-strong); }
-.ex-pane .trail { fill: none; stroke: var(--muted); stroke-width: 0.9; stroke-linecap: round; stroke-dasharray: 0.4 3; }
 .ex-pane .wash { mix-blend-mode: multiply; }
 .ex-pane .wash.sun { fill: var(--sun); opacity: 0.4; }
 .ex-pane .wash.tan { fill: var(--wash-tan); opacity: 0.35; }
 .ex-pane .wash.leaf { fill: var(--wash-leaf); opacity: 0.55; }
-.ex-pane .wash.warn { fill: var(--warn); opacity: 0.35; }
 .ex-pane .note { font: 600 12px var(--font-note); fill: var(--text); }
 .ex-pane .note.small { font-size: 10.5px; fill: var(--muted); }
-.ex-pane .note.warn { font-size: 13px; fill: var(--warn); }
 .ex-pane .flap { animation: ex-flap 1.6s ease-in-out infinite alternate; }
 /* The cocoon stirs as the sun warms it. */
 .ex-pane .rock { animation: ex-rock 1.8s ease-in-out infinite alternate; }

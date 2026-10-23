@@ -127,7 +127,7 @@ interface Art {
   /** Washes go under the ink. */
   wash?: string;
   ink: string;
-  /** Anything that moves or needs its own element (wings that flap, marks that appear). */
+  /** Anything that moves or needs its own element (wings that flap, a cocoon that rocks, labels). */
   extra?: string;
 }
 
@@ -152,10 +152,11 @@ function sleeper(kind: Explainer['creature'], cx: number, cy: number, k: number,
 function adult(kind: Explainer['creature'], cx: number, cy: number, k: number, seed: number): { wash: string; wings: string; body: string } {
   if (kind === 'firefly') {
     const F = (pts: P[]) => place(pts, cx, cy, 0, k);
+    const w = Math.max(0.7, Math.sqrt(k));
     return {
       wash: blob(loop(cx, cy + 8 * k, 8 * k, 8 * k, 0, 1)),
-      wings: pen(F([[1, -6], [8, -9], [12, -2], [9, 6], [2, 4]]), 1, seed) + pen(F([[-1, -6], [-8, -9], [-12, -2], [-9, 6], [-2, 4]]), 1, seed + 1),
-      body: pen(F([[0, -11], [3, -4], [3, 6], [0, 12], [-3, 6], [-3, -4], [0, -11]]), 1.3, seed + 2) +
+      wings: pen(F([[1, -6], [8, -9], [12, -2], [9, 6], [2, 4]]), w, seed) + pen(F([[-1, -6], [-8, -9], [-12, -2], [-9, 6], [-2, 4]]), w, seed + 1),
+      body: pen(F([[0, -11], [3, -4], [3, 6], [0, 12], [-3, 6], [-3, -4], [0, -11]]), 1.3 * w, seed + 2) +
         ([[-8, 10], [0, 18], [8, 10]] as P[]).map(([x, y], i) => pen(F([[x * 0.8, y * 0.8 + 2], [x * 1.3, y * 1.2 + 2]]), 0.7, seed + 3 + i, false)).join(''),
     };
   }
@@ -225,9 +226,9 @@ function wake(kind: Explainer['creature'], moving: boolean): Art {
   const dayWash = ([[8, 1.4], [15, 2.4], [22, 1.6], [29, 3], [37, 2.2]] as P[]).map(([x, r]) => blob(loop(x + 0.6, 66.6, r, r, 0, 1))).join('');
   const stir = pen([[50, 56], [48, 60], [50, 64]], 0.7, 80, false) + pen([[82, 56], [84, 60], [82, 64]], 0.7, 81, false);
   return {
-    wash: `<path class="wash sun" d="${blob(loop(19.5, 18.5, 6.5, 6.5, 0, 1))}${dayWash}"/>`,
-    ink: days + pen([[41, 66], [45, 65.5]], 0.7, 96, false) + pen([[43, 63.5], [45.5, 65.5], [43, 67.5]], 0.7, 97, false) + sunAt(18, 17, 7, [[200, 5], [250, 6], [300, 5], [345, 6], [160, 4]], 1) +
-      pen([[46, 72], [64, 71], [88, 72.5]], 0.8, 82, false) + waves,
+    wash: `<path class="wash sun" d="${blob(loop(21.5, 20.5, 6.5, 6.5, 0, 1))}${dayWash}"/>`,
+    ink: days + pen([[41, 66], [45, 65.5]], 0.7, 96, false) + pen([[43, 63.5], [45.5, 65.5], [43, 67.5]], 0.7, 97, false) + sunAt(20, 19, 7, [[200, 3.5], [250, 4], [300, 3.5], [345, 5], [160, 3.5]], 1) +
+      pen([[54, 72], [68, 71], [88, 72.5]], 0.8, 82, false) + waves,
     extra: `<text class="note small" x="6" y="38" transform="rotate(-5 6 38)">50°F+</text>
       <text class="note small" x="4" y="78" transform="rotate(-3 4 78)">day after day</text>
       <g class="${moving ? 'rock' : ''}" style="transform-origin:66px 66px"><path class="wash tan" d="${c.wash}"/><path class="pen" d="${c.ink}${stir}"/></g>`,
@@ -245,17 +246,16 @@ function race(kind: Explainer['creature'], moving: boolean): Art {
   // The warm spring's cocoon is already empty, torn open at the top.
   const shell = pen(loop(30, 22, 6, 2.8, -0.35, 0.5, 0), 1, 175) +
     pen([[24.4, 24], [26, 22], [28, 23], [30, 20.5], [32, 21.5], [35.6, 20]], 0.6, 176, false);
-  const flap = (a: { wings: string }, x: number, y: number) =>
-    `<g class="${moving ? 'flap' : ''}" style="transform-origin:${x}px ${y}px"><path class="pen" d="${a.wings}"/></g>`;
-  const washClass = kind === 'firefly' ? 'sun' : 'leaf';
+  const flap = (a: { wash: string; wings: string }, x: number, y: number) =>
+    `<g class="${moving ? 'flap' : ''}" style="transform-origin:${x}px ${y}px">${kind === 'moth' ? `<path class="wash leaf" d="${a.wash}"/>` : ''}<path class="pen" d="${a.wings}"/></g>`;
   return {
-    wash: `<path class="wash sun" d="${blob(loop(13, 19.5, 4.5, 4.5, 0, 1))}"/><path class="wash ${washClass}" d="${early.wash}${late.wash}"/>` +
+    wash: `<path class="wash sun" d="${blob(loop(13, 19.5, 4.5, 4.5, 0, 1))}"/>${kind === 'firefly' ? `<path class="wash sun" d="${early.wash}${late.wash}"/>` : ''}` +
       `<path class="wash tan" d="${still.wash}"/>`,
-    ink: sunAt(12, 18, 4.5, [[200, 3], [250, 3.5], [300, 3], [340, 3.5], [20, 3]], 171) + cloud +
+    ink: sunAt(12, 18, 4.5, [[200, 1.8], [250, 3], [300, 3], [340, 3.5], [20, 3]], 171) + cloud +
       pen([[5, 43], [50, 42.2], [95, 43.5]], 0.6, 180, false) +
-      shell + pen([[37, 21], [41, 20.5], [44, 21]], 0.7, 181, false) + pen([[41.5, 18.5], [44.5, 21], [41.5, 23.5]], 0.7, 182, false) +
+      pen([[37, 21], [41, 20.5], [44, 21]], 0.7, 181, false) + pen([[41.5, 18.5], [44.5, 21], [41.5, 23.5]], 0.7, 182, false) +
       pen([[26, 64], [40, 63.5]], 0.7, 183, false) + pen([[60, 63.5], [72, 63]], 0.7, 184, false) + pen([[69, 60.5], [72.5, 63], [69, 65.5]], 0.7, 185, false) +
-      early.body + late.body + still.ink,
+      (kind === 'moth' ? shell : '') + early.body + late.body + still.ink,
     extra: `<text class="note small" x="4" y="36" transform="rotate(-4 4 36)">warm</text>
       <text class="note small" x="4" y="78" transform="rotate(-4 4 78)">cool</text>
       <text class="note small" x="47" y="40" transform="rotate(-3 47 40)">May</text>
