@@ -36,7 +36,7 @@ const screens = [
 const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
-const TAB_ORDER = ['season', 'info-btn', 'why', 'locate', 'find', 'share', 't-prev', 't-play', 't-next', 't-range'];
+const TAB_ORDER = ['season', 'info-btn', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
 const problems = [];
 const browsers = {};
 for (const e of new Set(screens.map((s) => s[0]))) {
@@ -226,8 +226,16 @@ for (const [engine, width, height] of screens) {
     const f = await page.evaluate(() => {
       const el = document.activeElement;
       if (!el || el === document.body) return null;
+      // The slider draws its ring on the thumb (a rectangle round the whole ribbon would be too loud). Chromium does
+      // not report a thumb's computed style, so check it is focus-visible and a stylesheet rings its thumb.
       const cs = getComputedStyle(el);
-      return { id: el.id || el.tagName.toLowerCase(), ring: (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none' };
+      const thumbRing = () =>
+        [...document.styleSheets].some((sh) => [...sh.cssRules].some((r) =>
+          r instanceof CSSStyleRule && r.selectorText.includes(':focus-visible::-webkit-slider-thumb') && r.style.boxShadow !== ''));
+      const ring = el.type === 'range'
+        ? el.matches(':focus-visible') && thumbRing()
+        : (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
+      return { id: el.id || el.tagName.toLowerCase(), ring };
     });
     if (!f) continue;
     if (!want.includes(f.id)) {
@@ -364,7 +372,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // Live: starts on the last observed day, flags it, says how fresh the data is.
       const asOfDate = new Date(Date.parse((served ?? stub).as_of)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
       if (label === 'early file') {
-        if ((await page.locator('#t-range').evaluate((r) => r.style.getPropertyValue('--fc'))) !== '0%') fail('a file from before April does not make the whole track forecast');
+        const wash = await page.locator('#t-fc').evaluate((el) => !el.hidden && getComputedStyle(el.parentElement.parentElement).getPropertyValue('--fc').trim());
+        if (wash !== '0') fail(`a file from before April does not make the whole track forecast (${wash})`);
         if (await page.locator('#t-ticks .now.asof-flag').count()) fail('an "as of" flag off the start of the track');
         if (!/^Apr 1,/.test(await page.locator('#t-date').textContent())) fail(`an early file opened on ${await page.locator('#t-date').textContent()}`);
         await shotL('1-map');
@@ -384,10 +393,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (!(await badge.isVisible())) fail('no "as of" badge');
       const stale = (await badge.getAttribute('class')).includes('stale');
       if (stale !== (label === 'late file')) fail(stale ? 'fresh data marked stale' : 'a late file is not marked stale');
-      if (!/^live/.test(new URL(page.url()).searchParams.get('season') ?? '')) {
-        await page.waitForTimeout(500);
-        if (new URL(page.url()).searchParams.get('season') !== 'live') fail(`address bar does not keep live mode: ${page.url()}`);
-      }
+      await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 3000 })
+        .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
       await page.mouse.move(2, height / 2);
       await shotL('1-map');
       // The hex card, from a tap (phone) or a click (desktop) near the middle of the map.

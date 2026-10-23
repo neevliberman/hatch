@@ -83,6 +83,16 @@ export interface Explainer {
   finePrintLabel: string;
 }
 
+/** The season at a glance, drawn in the time slider's track. Each series has one value per day of the layer's range. */
+export interface SeasonProfile {
+  /** Stacked from the bottom: each colour's share (0-1) of the map on each day. */
+  bands: { color: string; share: number[] }[];
+  /** Animals seen per day, drawn as a line scaled to its own peak. */
+  seen: number[];
+  /** Handwritten notes on the line, at a day index. */
+  notes: { at: number; text: string }[];
+}
+
 export interface HatchLayer {
   id: string;
   title: string;
@@ -97,6 +107,8 @@ export interface HatchLayer {
   /** Points on the map at time t that place names must not cover (the sighting dots). Return the same array while
    * they are unchanged: the names are only re-placed when it changes. */
   points?(t: number): [number, number][];
+  /** The season ribbon in the time slider's track (the active layer's own, so each species draws its season). */
+  profile?(): SeasonProfile;
   /** Data sources to credit, rendered in the drawer. */
   /** Data sources, each a line of text; `href` links the line's source. */
   credits?(): { text: string; href?: string }[];

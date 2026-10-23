@@ -5,7 +5,7 @@ import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps }
 import { latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
-import type { CaveatCard, Explainer, HatchLayer, LegendSpec, ProbeCard, SpotStory } from '../core/layer';
+import type { CaveatCard, Explainer, HatchLayer, LegendSpec, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import {
   APPROXIMATE,
   bandOf,
@@ -167,6 +167,63 @@ function liveNotice(L: Live): { title: string; bullets: string[] } {
   };
 }
 
+/**
+ * The slider's season ribbon for a species, one value per day of the replay's range in `year`: the share of map hexagons
+ * at each stage, sightings per day (smoothed over a week, so a quiet day doesn't read as a gap in the wave), and a note
+ * on the busiest day of each named wave.
+ */
+export function seasonProfile(
+  forecast: (number | null)[][],
+  seen: Sighting[],
+  day: (s: Sighting) => number,
+  year: number,
+  waves: [string, (s: Sighting) => boolean][],
+): SeasonProfile {
+  // The same days the slider spans (replayTimeSpec), so day i of the ribbon sits under step i of the slider.
+  const { start, end } = replayTimeSpec(String(year));
+  const d0 = dayOfYear(start);
+  const n = Math.round((end - start) / TimeAxis.DAY) + 1;
+  const bands = STAGES.map((s) => ({ color: `rgba(${STAGE_COLOR[s].slice(0, 3)},${STAGE_COLOR[s][3] / 255})`, share: Array<number>(n).fill(0) }));
+  // O(hexes + days): each hexagon adds +1 to a stage from the day it starts and -1 from the day the next stage starts
+  // (the same chain as stageAt: a missing quantile ends it), then a running sum gives each day's count.
+  const diff = STAGES.map(() => new Float64Array(n + 1));
+  const at = (doy: number) => Math.min(n, Math.max(0, Math.ceil(doy - d0)));
+  for (const q of forecast) {
+    const [q05, q25, , q75, q95] = q;
+    let from = 0;
+    let k = 0;
+    for (const edge of [q05, q25, q75, q95]) {
+      if (edge == null) break;
+      const to = Math.max(from, at(edge));
+      diff[k]![from]! += 1;
+      diff[k]![to]! -= 1;
+      from = to;
+      k++;
+    }
+    diff[k]![from]! += 1;
+    diff[k]![n]! -= 1;
+  }
+  const w = 1 / Math.max(1, forecast.length);
+  diff.forEach((d, k) => {
+    let run = 0;
+    for (let i = 0; i < n; i++) bands[k]!.share[i] = (run += d[i]!) * w;
+  });
+  const perDay = (keep: (s: Sighting) => boolean) => {
+    const h = Array<number>(n + 6).fill(0);
+    for (const s of seen) {
+      const i = day(s) - d0;
+      if (keep(s) && i >= 0 && i < n) for (let k = 0; k < 7; k++) h[i + k]! += 1 / 7;
+    }
+    return h.slice(3, n + 3);
+  };
+  const notes = waves.flatMap(([text, keep]) => {
+    const h = perDay(keep);
+    const at = h.indexOf(Math.max(...h));
+    return h[at]! > 0 ? [{ at, text }] : [];
+  });
+  return { bands, seen: perDay(() => true), notes };
+}
+
 /** Mean absolute error of the heat forecast and the calendar over the shipped band-year scores. */
 export function scoreSummary(year?: number) {
   const rows = data.scores.filter((r) => year === undefined || r.year === year);
@@ -205,6 +262,7 @@ interface Shown {
 export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = () => {}): LunaLayer {
   let mode = initial;
   let shown = sightingsFor(mode);
+  const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
   const isLive = () => mode === LIVE && live !== null;
@@ -381,6 +439,19 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const asOf = isLive() ? ` Weather observed up to ${fmtDoy(yearOf(), dayOfYear(live!.asOf))}, forecast after.` : '';
       return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}.${asOf} Forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
         `${lit} moth${lit === 1 ? '' : 's'} seen in the last ${GLOW_DAYS} days.`;
+    },
+
+    profile() {
+      let p = profiles.get(mode);
+      if (!p) {
+        // Live: this season's median forecast (a cell with none counts as "not yet") and this season's sightings.
+        p = seasonProfile(forecast().map((q) => q ?? []), shown, (s) => (mode === TYPICAL ? s.pdoy : s.doy), yearOf(), [
+          ['1st wave', (s) => !(s.flags & SECOND_BROOD)],
+          ['2nd wave', (s) => !!(s.flags & SECOND_BROOD)],
+        ]);
+        profiles.set(mode, p);
+      }
+      return p;
     },
 
     render({ t, zoom, theme }) {
@@ -679,7 +750,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             shape: 'hex' as const,
           })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
-          { color: css(MOON), label: 'moth seen', shape: 'dot' },
+          { color: css(MOON), label: 'seen, last 10 days', shape: 'dot' },
           { color: css(SECOND), label: 'seen, 2nd wave', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },
         ],
