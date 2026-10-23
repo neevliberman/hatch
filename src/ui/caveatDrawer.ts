@@ -34,6 +34,14 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   const render = () => {
     const layers = registry.activeLayers();
     const credits = layers.flatMap((l) => l.credits?.() ?? []);
+    // Where the code lives and where to report a problem: the same for every layer, so it closes the list.
+    if (credits.length)
+      credits.push(
+        { text: 'Code, data pipeline and method notes: github.com/neevliberman/hatch', href: 'https://github.com/neevliberman/hatch' },
+        { text: 'Spotted something wrong? Report it on GitHub', href: 'https://github.com/neevliberman/hatch/issues' },
+      );
+    const credit = (c: { text: string; href?: string }) =>
+      c.href ? `<a href="${esc(c.href)}" target="_blank" rel="noopener noreferrer">${esc(c.text)}<span class="sr"> (opens in a new tab)</span></a>` : esc(c.text);
     explainers = new Map();
     // A season change re-renders; keep folded sections the way the reader left them.
     const opened = new Set([...drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key));
@@ -58,7 +66,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
               .join('')
           : '<p class="muted">No layers are active.</p>'
       }
-      ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></details>` : ''}`;
+      ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}`;
     drawer.querySelector('#drawer-close')!.addEventListener('click', () => toggle(false));
     drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]').forEach((d) => (d.open = opened.has(d.dataset.key)));
     fillSpots();

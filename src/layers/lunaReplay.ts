@@ -34,6 +34,15 @@ const TYPICAL_AXIS_YEAR = 2025;
 
 export const STAGES = ['not yet', 'starting', 'peak', 'winding down', 'over'] as const;
 export type Stage = (typeof STAGES)[number];
+/** What each stage is called on screen. The map forecasts the first wave only, so in August "over" alone would read
+ * as "no moths" while the second wave flies. */
+export const STAGE_LABEL: Record<Stage, string> = {
+  'not yet': 'not yet',
+  starting: 'starting',
+  peak: 'peak',
+  'winding down': 'winding down',
+  over: 'first wave over',
+};
 
 /** Where a cell's forecast season stands on day `doy`. q = days the share of moths out reaches 5/25/50/75/95%. */
 export function stageAt(q: readonly (number | null)[] | undefined, doy: number): Stage {
@@ -252,7 +261,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         { from: q05, to: q25, label: 'starting', color: css(STAGE_COLOR.starting) },
         { from: q25, to: q75, label: 'peak', color: css(STAGE_COLOR.peak) },
         { from: q75, to: end, label: 'winding down', color: css(STAGE_COLOR['winding down']) },
-        { from: end, to: 367, label: 'over', color: css(STAGE_COLOR.over) },
+        { from: end, to: 367, label: STAGE_LABEL.over, color: css(STAGE_COLOR.over) },
       ],
       ticks: sightingsFor(mode)
         // Sightings are counted on the res-4 hexagon, even when a finer one is on screen.
@@ -279,7 +288,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       for (const q of forecast()) n[stageAt(q, doy)]++;
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
       const lit = shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).length;
-      const parts = STAGES.filter((s) => n[s]).map((s) => `${s} in ${n[s]}`);
+      const parts = STAGES.filter((s) => n[s]).map((s) => `${STAGE_LABEL[s]} in ${n[s]}`);
       return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}. Forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
         `${lit} moth${lit === 1 ? '' : 's'} seen in the last ${GLOW_DAYS} days.`;
     },
@@ -445,7 +454,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const q = at.q;
       const [q05, q25, q50, q75] = q;
       const stage = stageAt(q, doy);
-      const lines = [`Forecast for ${fmtDoy(year, doy)}: ${stage}.`];
+      const lines = [`Forecast for ${fmtDoy(year, doy)}: ${STAGE_LABEL[stage]}.`];
       if (q05 != null && q50 != null && q25 != null && q75 != null)
         lines.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
@@ -499,7 +508,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
         `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
-        'When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (about 7 days off, against 7). So it is not ready for places it has never seen.',
+        `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${data.model?.holdout_mae.heat.toFixed(1) ?? '7.4'} days off on average, against ${data.model?.holdout_mae.cal.toFixed(1) ?? '6.9'} for their own usual dates, over just 8 strip-years). So it is not ready for places it has never seen.`,
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
         'This version is about as accurate as the last one, with much less south/north lean. Both beat each area\u2019s usual date.',
       ];
@@ -536,13 +545,13 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           title: 'How sure is it?',
           text:
             (sc.n
-              ? `We checked the forecast against ${mode === TYPICAL ? 'past years' : mode}, which it hadn\u2019t learned from. ` +
-                `It missed the real start and peak by about ${days(sc.heat)} on average. ` +
-                `Guessing each area\u2019s usual date missed by about ${days(sc.calendar)}. ` +
-                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ') +
-                (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '')
+              ? (mode !== TYPICAL && sc.n < 3 ? `That year had enough sightings to check only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map. ` : '') +
+                `In short: for each strip of the map, the forecast\u2019s dates for the first moths and the peak were off by about ${days(sc.heat)} on average, judged by when people\u2019s sightings showed them. ` +
+                `Guessing each area\u2019s usual date was off by about ${days(sc.calendar)} on average. ` +
+                `That was checked on ${mode === TYPICAL ? 'past years' : mode}, which the forecast hadn\u2019t learned from. ` +
+                (sc.heat < sc.calendar ? '' : 'This time the usual date did as well or better. ')
               : `${mode} had too few sightings to check. The bars show all years combined. `) +
-            'Not proven yet. It passes on years it never saw, but it failed a test on states it never saw (Wisconsin and Minnesota). The real test is the 2026 season, once its weather data is out in mid-2027.',
+            'Not proven yet. It does well on years it was not trained on. But trained without Wisconsin and Minnesota, it did worse there than a guess from past years. The real test is the 2026 season, once its weather data is out in mid-2027.',
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
@@ -558,7 +567,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         items: [
           ...STAGES.map((s) => ({
             color: css(STAGE_COLOR[s]),
-            label: s,
+            label: STAGE_LABEL[s],
             shape: 'hex' as const,
           })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
@@ -571,9 +580,9 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
     credits() {
       return [
-        'Sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.',
-        'Temperatures: Daymet v4 daily 1 km, Thornton et al., ORNL DAAC.',
-        'State outlines: US Census Bureau, via us-atlas.',
+        { text: 'Sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.', href: `https://www.inaturalist.org/taxa/${data.species.inat_taxon}` },
+        { text: 'Temperatures: Daymet v4 daily 1 km, Thornton et al., ORNL DAAC.', href: 'https://daymet.ornl.gov/' },
+        { text: 'State outlines: US Census Bureau, via us-atlas.', href: 'https://github.com/topojson/us-atlas' },
       ];
     },
   };

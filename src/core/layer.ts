@@ -89,5 +89,6 @@ export interface HatchLayer {
   /** Visual About panel; see Explainer. */
   explainer?(): Explainer;
   /** Data sources to credit, rendered in the drawer. */
-  credits?(): string[];
+  /** Data sources, each a line of text; `href` links the line's source. */
+  credits?(): { text: string; href?: string }[];
 }
