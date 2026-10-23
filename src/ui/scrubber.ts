@@ -86,25 +86,34 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
   // The first Play of a visit starts from the beginning of the season, so it shows the wave rolling north
   // rather than the end of it. Once the reader has moved the time themselves, Play starts where they left it.
   let touched = false;
-  let glide = 0;
+  let glideRaf = 0;
+  let glideTimer = 0;
   let gliding = false;
-  const touch = () => ((touched = true), (gliding = false), cancelAnimationFrame(glide), clearTimeout(glide));
+  const touch = () => {
+    touched = true;
+    gliding = false;
+    cancelAnimationFrame(glideRaf);
+    clearTimeout(glideTimer);
+    glideRaf = glideTimer = 0;
+  };
   const playFromStart = () => {
     touched = true;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches || time.stepIndex === 0) return (time.setStepIndex(0), time.play());
     const from = time.stepIndex;
+    const { start, end } = time;
     gliding = true;
     const t0 = performance.now();
     const frame = (t: number) => {
+      if (time.start !== start || time.end !== end) return touch(); // the season changed under the rewind
       const k = Math.min(1, (t - t0) / 400);
       time.setStepIndex(Math.round(from * (1 - (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2)))); // ease in-out
-      if (k < 1) glide = requestAnimationFrame(frame);
-      else glide = window.setTimeout(() => ((gliding = false), time.play()), 250);
+      if (k < 1) glideRaf = requestAnimationFrame(frame);
+      else (glideRaf = 0), (glideTimer = window.setTimeout(() => ((gliding = false), (glideTimer = 0), time.play()), 250));
     };
-    glide = requestAnimationFrame(frame);
+    glideRaf = requestAnimationFrame(frame);
   };
 
-  range.addEventListener('input', () => time.setStepIndex(Number(range.value)));
+  range.addEventListener('input', () => (touch(), time.setStepIndex(Number(range.value))));
   range.addEventListener('pointerdown', () => (touch(), time.pause()));
   // A press during the rewind stops it, like Pause would.
   const togglePlay = () => (gliding ? touch() : !touched && !time.playing ? playFromStart() : (touch(), time.toggle()));
