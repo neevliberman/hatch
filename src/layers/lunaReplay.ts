@@ -273,6 +273,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
 
+    points(t) {
+      const doy = dayOfYear(t);
+      const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
+      return shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).map((s) => [s.lng, s.lat]);
+    },
+
     summary(t) {
       const doy = dayOfYear(t);
       const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };
@@ -303,10 +309,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       };
       const fine = res > 4 ? shown5or6.get(res)! : null;
       const days = fine ? fineDaysLoaded.get(`${res}/${mode}`)! : null;
+      // Each level gets its own layer ids. Reusing one id across levels let deck.gl keep the bigger level's
+      // triangles after a zoom out: the old small hexagons stayed drawn in the gaps along the shores.
       const hexLayers = fine && days
         ? [
             new H3HexagonLayer<FineCell>({
-              id: 'luna-forecast',
+              id: `luna-forecast-r${res}`,
               data: fine.data,
               getHexagon: (c) => c.id,
               getFillColor: (c) => STAGE_COLOR[stageAtBytes(days, c.i, doy)],
@@ -324,7 +332,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               updateTriggers: { getFillColor: [doy, mode, res] },
             }),
             new H3HexagonLayer<FineCell, FillStyleExtensionProps<FineCell>>({
-              id: 'luna-unseen',
+              id: `luna-unseen-r${res}`,
               data: fine.unseen,
               getHexagon: (c) => c.id,
               getFillColor: STRIPES,
@@ -346,7 +354,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return [
         ...(hexLayers ?? [
         new H3HexagonLayer<(typeof cells)[number]>({
-          id: 'luna-forecast',
+          id: 'luna-forecast-r4',
           data: cells,
           getHexagon: (c) => c.id,
           getFillColor: (c) => cellColor(c.i, doy),
@@ -362,7 +370,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           updateTriggers: { getFillColor: [doy, mode] },
         }),
         new H3HexagonLayer<(typeof cells)[number], FillStyleExtensionProps<(typeof cells)[number]>>({
-          id: 'luna-unseen',
+          id: 'luna-unseen-r4',
           data: unseen,
           getHexagon: (c) => c.id,
           getFillColor: STRIPES,
@@ -573,7 +581,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return [
         'Sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.',
         'Temperatures: Daymet v4 daily 1 km, Thornton et al., ORNL DAAC.',
-        'State outlines: US Census Bureau, via us-atlas.',
+        'Map: state outlines, town names and populations from the US Census Bureau (outlines via us-atlas); lakes, rivers, ' +
+          'highways and national parks from Natural Earth; national forests from the US Forest Service. All public domain.',
       ];
     },
   };

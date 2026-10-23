@@ -46,6 +46,21 @@ const measure = async (b64) => {
   return { distinct: counts.size, dominant: Math.max(...counts.values()) / (d.length / 4) };
 };
 
+// Share of pixels (top 60% of the screen: the map, not the panels) that clearly differ between two screenshots.
+const differ = async ([a, b]) => {
+  const px = async (b64) => {
+    const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
+    const c = Object.assign(document.createElement('canvas'), { width: bmp.width, height: bmp.height });
+    const g = c.getContext('2d');
+    g.drawImage(bmp, 0, 0);
+    return g.getImageData(0, 0, bmp.width, Math.floor(bmp.height * 0.6)).data;
+  };
+  const [x, y] = [await px(a), await px(b)];
+  let n = 0;
+  for (let i = 0; i < x.length; i += 4) if (Math.abs(x[i] - y[i]) + Math.abs(x[i + 1] - y[i + 1]) + Math.abs(x[i + 2] - y[i + 2]) > 40) n++;
+  return n / (x.length / 4);
+};
+
 // [label, query, lng, lat, zoom, expected res]: lake shores, a city and a river valley, then back out.
 const cases = [
   // Dates sit where the season is turning there, so the local differences show as two colours.
@@ -74,17 +89,39 @@ for (const [name, width, height, mobile] of shots) {
     await page.goto(`${origin}/${query}`);
     await page.waitForTimeout(1200);
     if (label === 'back-out-z5') {
-      // Zoom in to the finest level first, then back out: the map must return to the big hexagons.
-      await page.evaluate(() => window.__hatch.map.view([-87.9, 42.0], 9));
+      // Wheel in to the finest level and back out, as a person does (each level comes and goes many frames apart).
+      // A jump straight from res 6 to res 4 hid a bug that left small hexagons drawn in the gaps along the shores.
+      await page.evaluate(() => window.__hatch.map.view([-87.9, 42.0], 5));
+      await page.mouse.move(width * 0.5, height * 0.35);
+      for (let k = 0; k < 14; k++) await page.mouse.wheel(0, -250).then(() => page.waitForTimeout(200));
       await page.waitForFunction(() => window.__hatch.luna.res() > 4, null, { timeout: 8000 }).catch(() => problems.push(`${tag}: never zoomed in`));
+      await page.waitForTimeout(1000);
+      for (let k = 0; k < 14; k++) await page.mouse.wheel(0, 250).then(() => page.waitForTimeout(200));
+      await page.mouse.move(width * 0.5, height - 4); // off the map, so no hover card in the comparison
+      await page.waitForTimeout(1000);
     }
-    await page.evaluate(([a, b, z]) => window.__hatch.map.view([a, b], z), [lng, lat, zoom]);
+    // Back-out stays where the wheel left it: jumping again would redraw and hide what the zoom out left behind.
+    const at = label === 'back-out-z5' ? await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding())) : null;
+    if (!at) await page.evaluate(([a, b, z]) => window.__hatch.map.view([a, b], z), [lng, lat, zoom]);
     const ok = await page.waitForFunction((r) => window.__hatch.luna.res() === r, res, { timeout: 8000 }).then(() => true, () => false);
     const got = await page.evaluate(() => window.__hatch.luna.res());
     if (!ok) problems.push(`${tag}: expected res ${res}, map shows res ${got}`);
     await page.waitForTimeout(800);
     const png = await page.screenshot({ path: `${out}/${name}-${label}.png` });
     const m = await page.evaluate(measure, png.toString('base64'));
+    if (label === 'back-out-z5') {
+      // After zooming in and out, the map must look like a fresh load of the same view: no small hexagons left over.
+      const fresh = await ctx.newPage();
+      await fresh.goto(`${origin}/${query}`);
+      await fresh.waitForTimeout(1200);
+      await fresh.evaluate((c) => window.__hatch.map.focus(c.lngLat, c.zoom, window.__hatch.padding()), at);
+      await fresh.waitForTimeout(1500);
+      const ref = await fresh.screenshot({ path: `${out}/${name}-${label}-fresh.png` });
+      await fresh.close();
+      const diff = await page.evaluate(differ, [png.toString('base64'), ref.toString('base64')]);
+      console.log(`${tag}: differs from a fresh load in ${(diff * 100).toFixed(2)}% of pixels`);
+      if (diff > 0.005) problems.push(`${tag}: after zooming in and out the map differs from a fresh load (${(diff * 100).toFixed(1)}% of pixels)`);
+    }
     console.log(`${tag}: res ${got}, centre colours=${m.distinct}, dominant=${(m.dominant * 100).toFixed(0)}%`);
     // Zoomed in close, one hexagon can fill the middle of the screen, so only a single flat colour counts as blank there.
     if (got > 4 ? m.distinct < 2 : m.distinct < 4 || m.dominant > 0.97) problems.push(`${tag}: map looks blank: ${JSON.stringify(m)}`);
