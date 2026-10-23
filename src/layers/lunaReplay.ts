@@ -1,4 +1,5 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
+import { mothInk, palette } from '../theme';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps } from '@deck.gl/extensions';
 import { latLngToCell } from 'h3-js';
@@ -62,15 +63,9 @@ type RGBA = [number, number, number, number];
 // north/south ends of the wave never share a colour. The moths themselves are the only moonlight green on the map.
 // Lightness climbs to the peak and falls after it (starting is brighter than winding down, over is darkest), and
 // "not yet" is near-empty, so the stages read in order even for colour-blind eyes.
-const STAGE_COLOR: Record<Stage, RGBA> = {
-  'not yet': [26, 34, 56, 90],
-  starting: [70, 150, 215, 215],
-  peak: [72, 190, 202, 230],
-  'winding down': [118, 92, 170, 210],
-  over: [80, 68, 110, 170],
-};
+const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
 // Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
-const STRIPES: RGBA = [11, 15, 23, 150];
+const STRIPES: RGBA = palette.stripes;
 // One object for every render, so deck.gl doesn't rebuild the pattern each playback frame.
 const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 16, height: 16 } };
 let stripeAtlas: HTMLCanvasElement | null = null;
@@ -89,9 +84,9 @@ const stripes = () => {
   }
   return (stripeAtlas = c);
 };
-const MOON: RGBA = [196, 255, 206, 255];
-const SECOND: RGBA = [255, 196, 120, 255];
-const GREY: RGBA = [168, 176, 190, 255];
+const MOON: RGBA = palette.moth;
+const SECOND: RGBA = palette.second;
+const GREY: RGBA = palette.rough;
 const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
 
 const dotColor = (s: Sighting): RGBA => (s.flags & APPROXIMATE ? GREY : s.flags & SECOND_BROOD ? SECOND : MOON);
@@ -389,14 +384,23 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           id: 'luna-glow',
           data: shown,
           getPosition: (s) => [s.lng, s.lat],
-          getFillColor: (s) => {
-            const c = dotColor(s);
-            return [c[0], c[1], c[2], 60];
-          },
+          getFillColor: palette.dotShadow,
           radiusUnits: 'pixels',
           getRadius: 9,
-          pickable: true, // the halo is the touch target: 18 px beats a 5 px dot on a phone
-          updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
+          pickable: true, // the soft shadow is the touch target: 18 px beats an 8 px dot on a phone
+          updateTriggers: { getFilterValue: [mode] },
+          ...filter,
+        }),
+        // A paper ring under each dot, so it stands off the dark peak hexes as clearly as the ink rim does on pale ones.
+        new ScatterplotLayer<Sighting>({
+          id: 'luna-halo',
+          data: shown,
+          getPosition: (s) => [s.lng, s.lat],
+          getFillColor: palette.dotHalo,
+          radiusUnits: 'pixels',
+          getRadius: 6.5,
+          pickable: false,
+          updateTriggers: { getFilterValue: [mode] },
           ...filter,
         }),
         new ScatterplotLayer<Sighting>({
@@ -404,13 +408,13 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           data: shown,
           getPosition: (s) => [s.lng, s.lat],
           getFillColor: dotColor,
-          // A dark rim keeps the pale dots readable on the bright peak hexes.
+          // An ink rim keeps the pale dots readable on the pale hexes and the paper.
           stroked: true,
-          getLineColor: [11, 15, 23, 230],
+          getLineColor: palette.dotRim,
           lineWidthUnits: 'pixels',
-          getLineWidth: 1,
+          getLineWidth: 1.5,
           radiusUnits: 'pixels',
-          getRadius: 3,
+          getRadius: 4,
           pickable: false,
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,
@@ -519,7 +523,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         name: 'Luna moth',
         sci: data.species.sci,
         creature: 'moth',
-        accent: css(MOON),
+        accent: mothInk,
         hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how well it matches.',
         steps: [
           { title: 'Warm days count', text: 'Starting March 1, every day warmer than 50 °F (10 °C) adds to a running total. Hotter days add more, up to 86 °F.' },
