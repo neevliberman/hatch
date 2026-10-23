@@ -46,7 +46,8 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     explainers = new Map();
     // A season change re-renders; keep folded sections the way the reader left them.
     const opened = new Set([...drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]')].filter((d) => d.open).map((d) => d.dataset.key));
-    drawer.innerHTML = `
+    // One .sheet holds everything, title bar included, so its ruled paper scrolls with the text (see style.css).
+    drawer.innerHTML = `<div class="sheet">
       <div class="drawer-head"><span class="drawer-grip" aria-hidden="true"></span><h2>About this map</h2>
         <button class="icon-btn" id="drawer-close" aria-label="Close About this map">${CROSS}</button></div>
       ${
@@ -67,7 +68,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
               .join('')
           : '<p class="muted">No layers are active.</p>'
       }
-      ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}`;
+      ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}</div>`;
     drawer.querySelector('#drawer-close')!.addEventListener('click', () => toggle(false));
     drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]').forEach((d) => (d.open = opened.has(d.dataset.key)));
     fillSpots();

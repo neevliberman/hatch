@@ -356,6 +356,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   #drawer { top: 0; height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
     padding-right: var(--gr); transform: translateX(104%); }
   .drawer-head { padding-top: 12px; touch-action: auto; margin-right: calc(-1 * var(--gr)); padding-right: var(--gr); }
+  .sheet { margin-right: calc(-1 * var(--gr)); padding-right: var(--gr); }
   .drawer-grip { display: none; }
   #drawer.open { transform: none; }
 }
@@ -431,11 +432,13 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 
 /* Field Notebook touches: ruled lines in the About sheet, handwriting for the small asides.
    The sheet's own text (the intro under the species name) sits on 24px lines over 24px rules, with a faint red margin
-   rule down the left. The rules scroll with the text (local). */
-#drawer { line-height: 24px;
+   rule down the left. The rules are drawn on .sheet, which fills the drawer edge to edge and scrolls with the text. Not
+   background-attachment: local on the drawer: that stops Chromium scrolling it on the GPU, so every frame of the
+   sketches' animation repainted the whole sheet and slow phones dropped to a frame or two a second. */
+#drawer { line-height: 24px; }
+.sheet { box-sizing: border-box; min-height: 100%; margin: 0 calc(-1 * var(--gutter)) -24px; padding: 0 var(--gutter) 24px;
   background: linear-gradient(90deg, transparent calc(var(--gutter) - 6px), rgba(166, 63, 25, 0.28) 0 calc(var(--gutter) - 5px), transparent 0),
-    repeating-linear-gradient(transparent 0 23px, rgba(60, 90, 140, 0.11) 23px 24px) 0 4px, var(--panel-solid);
-  background-attachment: local; }
+    repeating-linear-gradient(transparent 0 23px, rgba(60, 90, 140, 0.11) 23px 24px) 0 4px, var(--panel-solid); }
 /* The cards in it are plain index cards pasted onto the page: solid paper, so the rules stop at their edge and the
    card text keeps its own, tighter lines. Square corners and a paper shadow. Each main card is held down by a strip of
    washi tape over its top edge; the fold-open ones (fine print, credits) are not. */
