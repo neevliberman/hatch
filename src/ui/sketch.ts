@@ -182,18 +182,19 @@ const sunAt = (cx: number, cy: number, r: number, rays: number[][], seed: number
 /** Panel 1: winter. The moth's cocoon tucked against an oak leaf under the snow; the firefly's grub in the soil. */
 function winter(kind: Explainer['creature']): Art {
   const z = '<text class="note" x="68" y="48" transform="rotate(-8 68 48)">zzz</text>';
+  const snow = ([[34, 12], [52, 22], [62, 9], [8, 32], [90, 40], [44, 32]] as P[]).map(([x, y], i) => pen(loop(x, y, 0.7, 0.7, 0, 1), 0.7, 20 + i, false)).join('');
   if (kind === 'firefly') {
     const g = sleeper(kind, 50, 62, 1, 40);
     return {
       wash: `<path class="wash tan" d="${g.wash}"/>`,
-      ink: flake(20, 16, 1, 1) + flake(76, 22, 0.8, 4) + pen([[8, 46], [30, 44], [52, 46], [92, 44]], 1.2, 7) + hatch(14, 54, 3, 22, 2, 1, 9) + g.ink,
+      ink: flake(20, 16, 1.4, 1) + flake(76, 22, 1.1, 4) + snow + pen([[8, 46], [30, 44], [52, 46], [92, 44]], 1.2, 7) + hatch(14, 54, 3, 22, 2, 1, 9) + g.ink,
       extra: z,
     };
   }
   const c = sleeper(kind, 54, 62, 1, 13);
   return {
     wash: `<path class="wash tan" d="${c.wash}"/>`,
-    ink: flake(18, 16, 1, 1) + flake(80, 22, 0.75, 4) +
+    ink: flake(18, 16, 1.4, 1) + flake(80, 22, 1.1, 4) + snow +
       pen([[8, 71], [13, 63], [11, 57], [18, 56], [19, 49], [26, 50], [29, 43], [35, 46], [41, 41], [44, 49], [51, 50], [47, 57], [53, 61], [45, 66], [30, 70], [9, 71]], 1.2, 10) +
       pen([[9, 71], [4, 74]], 1, 11, false) + pen([[10, 70], [26, 58], [42, 45]], 0.7, 12, false) +
       pen([[19, 63], [15, 59]], 0.5, 17, false) + pen([[26, 58], [22, 52]], 0.5, 18, false) + pen([[33, 52], [32, 46]], 0.5, 19, false) +
@@ -217,12 +218,18 @@ function wake(kind: Explainer['creature'], moving: boolean): Art {
       return pen(pts, 0.9, 70 + i);
     })
     .join('');
+  // Warm days pile up one after another: a row of small suns, bigger for hotter days.
+  const days = ([[8, 1.4], [15, 2.4], [22, 1.6], [29, 3], [37, 2.2]] as P[])
+    .map(([x, r], i) => pen(loop(x, 66, r, r, 0, 1.2), 0.8, 90 + i, false))
+    .join('');
+  const dayWash = ([[8, 1.4], [15, 2.4], [22, 1.6], [29, 3], [37, 2.2]] as P[]).map(([x, r]) => blob(loop(x + 0.6, 66.6, r, r, 0, 1))).join('');
   const stir = pen([[50, 56], [48, 60], [50, 64]], 0.7, 80, false) + pen([[82, 56], [84, 60], [82, 64]], 0.7, 81, false);
   return {
-    wash: `<path class="wash sun" d="${blob(loop(19.5, 18.5, 6.5, 6.5, 0, 1))}"/>`,
-    ink: sunAt(18, 17, 7, [[200, 5], [250, 6], [300, 5], [345, 6], [160, 4]], 1) +
+    wash: `<path class="wash sun" d="${blob(loop(19.5, 18.5, 6.5, 6.5, 0, 1))}${dayWash}"/>`,
+    ink: days + pen([[41, 66], [45, 65.5]], 0.7, 96, false) + pen([[43, 63.5], [45.5, 65.5], [43, 67.5]], 0.7, 97, false) + sunAt(18, 17, 7, [[200, 5], [250, 6], [300, 5], [345, 6], [160, 4]], 1) +
       pen([[46, 72], [64, 71], [88, 72.5]], 0.8, 82, false) + waves,
-    extra: `<text class="note small" x="4" y="40" transform="rotate(-5 4 40)">50°F+</text>
+    extra: `<text class="note small" x="6" y="38" transform="rotate(-5 6 38)">50°F+</text>
+      <text class="note small" x="4" y="78" transform="rotate(-3 4 78)">day after day</text>
       <g class="${moving ? 'rock' : ''}" style="transform-origin:66px 66px"><path class="wash tan" d="${c.wash}"/><path class="pen" d="${c.ink}${stir}"/></g>`,
   };
 }
@@ -233,7 +240,11 @@ function race(kind: Explainer['creature'], moving: boolean): Art {
   const early = adult(kind, 54, 17, 0.42, 100);
   const late = adult(kind, 84, 56, 0.42, 130);
   const still = sleeper(kind, 50, 64, 0.55, 160);
-  const cloud = pen([[5, 66], [4, 61], [8, 58], [11, 54], [17, 55], [20, 59], [22, 63], [18, 66.5], [6, 66.5]], 1.1, 170);
+  const cloud = pen([[5, 62], [4, 58], [8, 56], [10, 52], [15, 51], [18, 54], [21, 55], [23, 59], [20, 62], [6, 62]], 1.1, 170) +
+    pen([[8, 65], [7, 69]], 0.7, 172, false) + pen([[13, 65], [12, 69]], 0.7, 173, false) + pen([[18, 65], [17, 69]], 0.7, 174, false);
+  // The warm spring's cocoon is already empty, torn open at the top.
+  const shell = pen(loop(30, 22, 6, 2.8, -0.35, 0.5, 0), 1, 175) +
+    pen([[24.4, 24], [26, 22], [28, 23], [30, 20.5], [32, 21.5], [35.6, 20]], 0.6, 176, false);
   const flap = (a: { wings: string }, x: number, y: number) =>
     `<g class="${moving ? 'flap' : ''}" style="transform-origin:${x}px ${y}px"><path class="pen" d="${a.wings}"/></g>`;
   const washClass = kind === 'firefly' ? 'sun' : 'leaf';
@@ -242,13 +253,14 @@ function race(kind: Explainer['creature'], moving: boolean): Art {
       `<path class="wash tan" d="${still.wash}"/>`,
     ink: sunAt(12, 18, 4.5, [[200, 3], [250, 3.5], [300, 3], [340, 3.5], [20, 3]], 171) + cloud +
       pen([[5, 43], [50, 42.2], [95, 43.5]], 0.6, 180, false) +
-      pen([[22, 21], [32, 20], [42, 21]], 0.7, 181, false) + pen([[39, 18.5], [42.5, 21], [39, 23.5]], 0.7, 182, false) +
+      shell + pen([[37, 21], [41, 20.5], [44, 21]], 0.7, 181, false) + pen([[41.5, 18.5], [44.5, 21], [41.5, 23.5]], 0.7, 182, false) +
       pen([[26, 64], [40, 63.5]], 0.7, 183, false) + pen([[60, 63.5], [72, 63]], 0.7, 184, false) + pen([[69, 60.5], [72.5, 63], [69, 65.5]], 0.7, 185, false) +
       early.body + late.body + still.ink,
     extra: `<text class="note small" x="4" y="36" transform="rotate(-4 4 36)">warm</text>
       <text class="note small" x="4" y="78" transform="rotate(-4 4 78)">cool</text>
       <text class="note small" x="47" y="40" transform="rotate(-3 47 40)">May</text>
       <text class="note small" x="44" y="78" transform="rotate(-3 44 78)">May</text>
+      <text class="note small" x="55" y="57" transform="rotate(-8 55 57)">zz</text>
       <text class="note small" x="76" y="79" transform="rotate(-3 76 79)">June</text>
       ${flap(early, 54, 17)}${flap(late, 84, 56)}`,
   };
