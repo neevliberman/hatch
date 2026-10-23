@@ -411,7 +411,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       // While playing, the dots get the in-between day and the hexes bleed into their next colour (not under
       // reduced motion, and never by hand, so the map always matches the slider). At rest this is all off.
       const anim = !!playing && !still.matches;
-      const fade = { getFillColor: anim ? 140 : 0 };
+      // 1 ms, not 0, at rest: turning a colour transition off makes deck draw the hexes from a freed buffer (blank).
+      const fade = { getFillColor: anim ? 140 : 1 };
       const now = performance.now();
       if (!anim) rings = [];
       else if (ringDay !== doy) {
