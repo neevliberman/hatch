@@ -442,6 +442,8 @@ function start() {
     }, 400);
   };
   time.subscribe(syncUrl);
+  // A reload (the map's Redraw) or leaving must not drop the last move still waiting on the timer.
+  addEventListener('pagehide', () => { clearTimeout(urlTimer); urlTimer = 0; history.replaceState(null, '', viewUrl()); });
   picker.addEventListener('change', syncUrl);
 
   const msg = $('action-msg');

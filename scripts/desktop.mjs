@@ -150,7 +150,6 @@ for (const [engine, width, height] of screens) {
     const covers = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('#probe') !== null, spot);
     if (covers) fail('the hover card sits under the pointer');
     // Click pins it: it stays after the pointer leaves; clicking the same spot again lets it go.
-    // deck holds a single click back for the double-click window, so wait for the result rather than a fixed time.
     await page.mouse.click(...spot);
     await page.waitForTimeout(600);
     await page.mouse.move(2, height / 2, { steps: 4 });

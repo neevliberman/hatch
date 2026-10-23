@@ -263,10 +263,6 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     // The canvas gets a Tab stop for deck's keyboard controls, which are off: drop it, so Tab goes straight to the controls.
     onLoad: (): void => deck.getCanvas()?.setAttribute('tabindex', '-1'),
-    // Touch taps are handled below; deck's own click for a touch arrives late, on the next touch.
-    onClick: (info: PickingInfo, e) => {
-      if ((e?.srcEvent as PointerEvent | undefined)?.pointerType !== 'touch') onProbe(hit(info), true);
-    },
     // Place names follow the drawn view (they skip the work when neither the view nor the dots changed).
     onAfterRender: () => {
       if (!drawn && !readyToShow()) return;
@@ -281,18 +277,33 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // While paused, today's newest dots breathe: a paper ring over each swells and settles by about half a pixel every
   // 2.4 s. CSS draws it (src/style.css, .breath), so the map itself never redraws for it. It rests after 15 s without
   // input and during playback; the browser stops it in a hidden tab; reduced motion never shows it.
-  // A tap on a touch screen pins its card. deck holds each tap back to rule out a double tap and only lets it go on
-  // the next touch (carrying that touch's spot), so a tap never pinned anything. A short, still, one-finger touch is
-  // a tap: pick under it here. Double-tap zoom still works, and pins the spot first.
+  // A tap or click pins its card, picked here rather than through deck's onClick. deck holds each tap back to rule out
+  // a double tap and only lets it go on the next touch (carrying that touch's spot), so a tap never pinned anything;
+  // and it drops a click whose press and lift land more than 250 ms apart, which a busy main thread (a big screen
+  // drawing slowly) stamps on an ordinary click. A short, still press of one finger or the main button is a tap.
+  // Double-tap and double-click zoom still work: the first press toggles the pin, the rest of a double click don't.
   let touchDown: { x: number; y: number; t: number } | null = null;
+  let lastClick = { x: 0, y: 0, t: -Infinity };
   container.addEventListener('pointerdown', (e) => {
-    touchDown = e.pointerType === 'touch' && e.isPrimary ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+    const ok = e.isPrimary && (e.pointerType === 'touch' || (e.button === 0 && !e.ctrlKey)); // ctrl-click: Mac menu
+    touchDown = ok ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+  });
+  // Mouse 5 px, finger or pen 10. A press that wandered further is a pan, even if it comes back.
+  const slop = (e: PointerEvent) => (e.pointerType === 'mouse' ? 5 : 10);
+  container.addEventListener('pointermove', (e) => {
+    if (touchDown && e.isPrimary && Math.hypot(e.clientX - touchDown.x, e.clientY - touchDown.y) > slop(e)) touchDown = null;
   });
   container.addEventListener('pointerup', (e) => {
     const d = touchDown;
     touchDown = null;
-    // 1 s, not the usual 0.5: a busy phone can stamp the lift late, and a press that long still didn't move.
-    if (!d || e.pointerType !== 'touch' || e.timeStamp - d.t > 1000 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+    // 1 s, not the usual 0.5: a busy device can stamp the lift late, and a press that long still didn't move.
+    if (!d || e.timeStamp - d.t > 1000 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > slop(e)) return;
+    if (e.pointerType !== 'touch') {
+      // Pressed within 300 ms and 10 px of the last lift: the 2nd (or 3rd...) click of a double click, which zooms.
+      const again = d.t - lastClick.t < 300 && Math.hypot(d.x - lastClick.x, d.y - lastClick.y) < 10;
+      lastClick = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      if (again) return;
+    }
     const r = container.getBoundingClientRect();
     const info = deck.pickObject({ x: e.clientX - r.left, y: e.clientY - r.top });
     onProbe(info ? hit(info) : null, true);
@@ -302,14 +313,40 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   for (const type of ['pointerdown', 'wheel']) container.addEventListener(type, () => (grabbed = true), { capture: true, passive: true });
   container.addEventListener('pointerdown', () => down++, { capture: true });
   for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => (down = Math.max(0, down - 1)), { capture: true });
-  // A phone can take the graphics context back to save memory, which leaves only plain water. Say so, with a way back
-  // (the link in the address bar keeps the place, zoom and day).
-  container.addEventListener('webglcontextlost', () => {
-    if (document.getElementById('map-lost')) return;
-    container.insertAdjacentHTML('afterend', `<p id="map-lost" role="alert">The browser paused the map to save memory.
-      <button type="button">Redraw</button></p>`);
-    document.querySelector('#map-lost button')!.addEventListener('click', () => location.reload());
-  }, true);
+  // A phone can take the graphics context back to save memory, which leaves only plain water. Ask for it back
+  // (preventDefault is what lets the browser offer a restore), then redraw by reloading: the link in the address bar
+  // keeps the place, zoom and day (main.ts writes it on pagehide). Automatic reloads are capped at one a minute and
+  // three a visit, so a phone short on memory can't loop; past that, or while the tab is hidden, a Redraw button waits.
+  let lost = false;
+  const stamp = (): [number, number] => {
+    try { const [n, t] = (sessionStorage.getItem('hatch-redraw') ?? '0:0').split(':').map(Number); return [n || 0, t || 0]; }
+    catch { return [3, 0]; } // no storage, no count: don't reload on our own
+  };
+  const mayReload = () => { const [n, t] = stamp(); return n < 3 && Date.now() - t > 60_000; };
+  const recover = () => {
+    if (!lost || document.visibilityState !== 'visible' || !mayReload()) return;
+    try { sessionStorage.setItem('hatch-redraw', `${stamp()[0] + 1}:${Date.now()}`); } catch { return; }
+    location.reload();
+  };
+  const onLost = () => {
+    if (lost) return;
+    lost = true;
+    const auto = document.visibilityState === 'visible' && mayReload();
+    container.insertAdjacentHTML('afterend', auto ? '<p id="map-lost" role="alert">Redrawing the map…</p>'
+      : '<p id="map-lost" role="alert">The browser paused the map to save memory. <button type="button">Redraw</button></p>');
+    const button = document.querySelector<HTMLButtonElement>('#map-lost button');
+    button?.addEventListener('click', () => location.reload());
+    button?.focus();
+    // Lost while in view usually means no restore is coming: give the browser a moment, then try once.
+    if (auto) setTimeout(recover, 1500);
+  };
+  container.addEventListener('webglcontextlost', (e) => { e.preventDefault(); onLost(); }, true);
+  container.addEventListener('webglcontextrestored', recover, true);
+  document.addEventListener('visibilitychange', recover);
+  // Back from the back/forward cache with a dead context, no lost event fires.
+  addEventListener('pageshow', (e) => {
+    if (e.persisted && container.querySelector('canvas')?.getContext('webgl2')?.isContextLost()) { onLost(); recover(); }
+  });
   const rings = document.createElement('div');
   rings.className = 'breath';
   rings.setAttribute('aria-hidden', 'true');
