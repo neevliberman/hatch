@@ -30,9 +30,6 @@
   --swatch-rim: rgba(70, 52, 30, 0.4);
   --stripe: rgba(43, 36, 28, 0.86);
   --shadow: 0 6px 18px rgba(60, 40, 20, 0.18);
-  --fig-bg: rgba(192, 122, 22, 0.05);
-  --glass: rgba(70, 52, 30, 0.55);
-  --moth-body: #fffaf0;
   --today: #2b241c;
   --radius: 10px;
   --sun: #c07a16;
@@ -289,40 +286,35 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .ex-name { margin: 4px 0 2px; font-size: 17px; color: var(--ac); }
 .ex-name i { font-weight: 400; font-size: 13px; color: var(--muted); }
 .ex-hook { margin: 0 0 8px; color: var(--text); }
-.ex-fig { margin: 0; padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--fig-bg); }
-.ex-art { display: block; width: 100%; height: auto; max-height: 96px; overflow: visible; }
-.ex-steps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+.ex-fig { margin: 0; }
+/* The picture strip is pen on paper: ink lines, a watercolour wash under them, hatching for shade (src/ui/explainer.ts). */
+.ex-defs { position: absolute; width: 0; height: 0; }
+.ex-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
   font-size: 12.5px; line-height: 1.3; color: var(--muted); text-align: center; }
-.ex-steps b { display: block; color: var(--text); font-size: 12.5px; margin-bottom: 2px; }
-.ex-art .sun circle { fill: var(--sun); filter: drop-shadow(0 0 6px var(--sun)); }
-.ex-art .rays path { stroke: var(--sun); stroke-width: 2.5; stroke-linecap: round; }
-.ex-art .rays { animation: ex-spin 12s linear infinite; }
-.ex-art .coin { fill: var(--sun); opacity: 0; animation: ex-coin 2.7s ease-in infinite; }
-.ex-art .glass { fill: none; stroke: var(--glass); stroke-width: 2; }
-.ex-art .lid { stroke: var(--glass); stroke-width: 3; stroke-linecap: round; }
-.ex-art .mark { stroke: var(--ac); stroke-width: 1; stroke-dasharray: 3 3; }
-.ex-art .fill { fill: var(--sun); opacity: 0.85; transform-box: fill-box; transform-origin: bottom; animation: ex-fill 8s ease-in infinite; }
-.ex-art .arrow { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ex-art .bug { fill: var(--ac); animation: ex-out 8s ease-out infinite; }
-.ex-art .bug .eye { fill: var(--sun); }
-.ex-art .bug .body { fill: var(--moth-body); }
-.ex-art .bug .feelers { fill: none; stroke: var(--text); stroke-width: 1.2; }
-.ex-art .bug .glow { fill: var(--accent); filter: drop-shadow(0 0 5px var(--accent)); }
-.ex-art .flap { animation: ex-flap 0.5s ease-in-out infinite alternate; }
-@keyframes ex-spin { to { transform: rotate(360deg); } }
-/* Warm days drop from the sun into the jar. */
-@keyframes ex-coin { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(46px, 4px); } }
-/* The jar fills to the dashed "enough" line, then the moth comes out and flies; then the year starts over. */
-@keyframes ex-fill { 0% { transform: scaleY(0); } 55% { transform: scaleY(0.84); } 90% { transform: scaleY(0.84); } 100% { transform: scaleY(0); } }
-@keyframes ex-out { 0%, 52% { opacity: 0; transform: translate(-6px, 14px) scale(0.4); }
-  64% { opacity: 1; transform: translate(0, 0) scale(1); } 90% { opacity: 1; transform: translate(4px, -6px) scale(1); }
-  100% { opacity: 0; transform: translate(8px, -14px) scale(1); } }
-@keyframes ex-flap { from { transform: scaleX(1); } to { transform: scaleX(0.55); } }
+.ex-steps b { display: block; color: var(--text); font-size: 12.5px; margin: 2px 0; }
+.ex-pane { display: block; width: 100%; height: auto; overflow: visible; }
+.ex-pane path, .ex-pane circle { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.ex-pane .ghost { stroke-width: 0.6; opacity: 0.5; }
+.ex-pane .thin { stroke-width: 0.8; }
+.ex-pane .snow { stroke: var(--muted); stroke-width: 0.7; }
+.ex-pane .frame { stroke: var(--line-strong); stroke-width: 0.9; }
+.ex-pane .frame.ghost { stroke-width: 0.5; }
+.ex-pane .scr { stroke-width: 0.45; opacity: 0.7; }
+.ex-pane .dash { stroke: var(--warn); stroke-dasharray: 3 2.5; }
+.ex-pane .trail { stroke: var(--muted); stroke-width: 0.9; stroke-dasharray: 0.5 3; }
+.ex-pane .wash { stroke: none; opacity: 0.6; mix-blend-mode: multiply; }
+.ex-pane .wash.sun { fill: var(--sun); opacity: 0.45; }
+.ex-pane .wash.tan { fill: #b9955f; opacity: 0.35; }
+.ex-pane .wash.leaf { fill: #a9cf7a; }
+.ex-pane .note { font: 600 12px var(--font-note); fill: var(--warn); }
+.ex-pane .drop { fill: var(--sun); stroke: none; opacity: 0; animation: ex-drop 2.4s ease-in infinite; }
+.ex-pane .flap { animation: ex-flap 0.45s ease-in-out infinite alternate; }
+/* Warmth drips from the sun into the jar. */
+@keyframes ex-drop { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 50% { transform: translate(22px, -8px); }
+  85% { opacity: 1; } 100% { opacity: 0; transform: translate(43px, 2px); } }
+@keyframes ex-flap { from { transform: scaleX(1); } to { transform: scaleX(0.6); } }
 @media (prefers-reduced-motion: reduce) {
-  .ex-art .rays, .ex-art .coin, .ex-art .flap { animation: none; }
-  .ex-art .coin { opacity: 0.8; }
-  .ex-art .fill { animation: none; transform: scaleY(0.84); }
-  .ex-art .bug { animation: none; }
+  .ex-pane .flap, .ex-pane .drop { animation: none; }
 }
 
 .ex-spot, .ex-score { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); }
