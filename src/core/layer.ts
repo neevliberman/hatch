@@ -16,7 +16,11 @@ export interface CaveatCard {
 
 export interface ProbeCard {
   title: string;
+  /** Colour chip drawn before the title (the hexagon's stage). */
+  swatch?: string;
   lines: string[];
+  /** Detail behind a "More" fold (a hover card leaves it out). */
+  more?: string[];
   /** Optional outbound link (e.g. the iNaturalist photo). Linked, never rehosted. */
   link?: { href: string; label: string };
 }
@@ -67,13 +71,26 @@ export interface Explainer {
   creature: 'moth' | 'firefly';
   accent: string;
   hook: string;
-  /** Three beats of the picture strip: warm days, the bank fills, the insects come out. */
+  /** Captions for the three sketched panels: how it spends winter, warmth wakes it, a warm spring vs a cool one. */
   steps: [{ title: string; text: string }, { title: string; text: string }, { title: string; text: string }];
   spotIntro: string;
-  /** The season at a place (null = the layer's default spot), on the day `t`. Null when there is nothing to show. */
-  spot(lngLat: [number, number] | null, t: number): SpotStory | null;
+  /** The season at a place (null = the layer's default spot), on the day `t`, called `name` when it has one (a
+   * picked city, "you"). Null when there is nothing to show. */
+  spot(lngLat: [number, number] | null, t: number, name?: string): SpotStory | null;
   score?: { title: string; text: string; bars: { label: string; days: number; best?: boolean }[] };
+  /** A short card near the top for a special mode (this year's live forecast): what it is, in plain words. */
+  notice?: { title: string; bullets: string[] };
   finePrintLabel: string;
+}
+
+/** The season at a glance, drawn in the time slider's track. Each series has one value per day of the layer's range. */
+export interface SeasonProfile {
+  /** Stacked from the bottom: each colour's share (0-1) of the map on each day. */
+  bands: { color: string; share: number[] }[];
+  /** Animals seen per day, drawn as a line scaled to its own peak. */
+  seen: number[];
+  /** Handwritten notes on the line, at a day index. */
+  notes: { at: number; text: string }[];
 }
 
 export interface HatchLayer {
@@ -87,6 +104,17 @@ export interface HatchLayer {
   probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }): ProbeCard | null;
   /** Visual About panel; see Explainer. */
   explainer?(): Explainer;
+  /** Points on the map at time t that place names must not cover (the sighting dots). Return the same array while
+   * they are unchanged: the names are only re-placed when it changes. */
+  points?(t: number): [number, number][];
+  /** The season ribbon in the time slider's track (the active layer's own, so each species draws its season). */
+  profile?(): SeasonProfile;
   /** Data sources to credit, rendered in the drawer. */
-  credits?(): string[];
+  /** Data sources, each a line of text; `href` links the line's source. */
+  credits?(): { text: string; href?: string }[];
 }
+
+/** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size (see lunaReplay.ts render). */
+export const isForecast = (layerId: string | undefined) => /^(luna|firefly)-forecast/.test(layerId ?? '');
+/** The hexagon layers (forecast and its stripes): the map draws lakes, rivers and roads over these, under the dots. */
+export const isHexes = (layerId: string) => /^(luna|firefly)-(forecast|unseen)/.test(layerId);

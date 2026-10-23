@@ -1,65 +1,141 @@
 # Hatch
 
-**Try it: https://neevliberman.github.io/hatch/** (redeploys on every merge to `main`).
+**When will luna moths fly near you?** Hatch is a map of the US Midwest that forecasts when the luna moth comes out each spring, built from 11 years of public sightings and daily temperatures, and checked against years it never saw.
 
-A **bug forecast** for the Midwest: scrub a season slider and watch where and when insects (luna moth first, fireflies second) are likely to be flying, on a hex map. Plan: `build-plan-v2.md` (in the project folder).
+**Try it: [neevliberman.github.io/hatch](https://neevliberman.github.io/hatch/)** (works on phones too).
 
-**Status: P3, "the fit".** One real layer: luna moth sightings from iNaturalist (2015-2025) over a hex map coloured by the heat forecast. Pick a season (or all years pooled), scrub or press play, tap a hex for its forecast, tap a dot for the sighting and a link to its iNaturalist photo. **My area** asks for one location fix (used in your browser only, never stored or sent) and pins the forecast for your hex. **Share this view** copies a link that reopens the same season and day. The forecast is the fitted P3 model: about 3.9 days off on years it never saw, against 7.3 for the usual date, with the old south-early / north-late lean mostly gone. It failed a test on states it never saw, so it is not proven yet (see `pipeline/fit/RESULT.md`).
+TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari engines and on phone sizes on every pull request.
 
-### What you are looking at (plain words)
-- **Dots** are real sightings. Each glows for 10 days and fades, because an adult luna lives about a week. Green = first wave, amber = after a late-June or early-July cut-off for that latitude, counted as the second wave (shown, not forecast), grey = blurred location.
-- **Hex colours** are the forecast: blue (not yet / starting) → bright teal (peak) → violet (winding down / over). It works like a bank account: from 1 March each warm day pays in "warmth saved up" (degree-days above 10 °C), and each moth comes out once the balance reaches its own savings target. The targets sit on a lopsided curve (half are out by about 220 degree-days, with a long late tail). An adult then flies for about a week, and people log moths unevenly (weekends, Moth Week), so the hex shows when *sightings* are expected: "by today about 30% of this spot's sightings should have happened". In a single replayed year, a hex card also gives the strip's likely peak window, sized from how far past forecasts missed for whole latitude strips.
-- **Finer hexes when you zoom in:** the whole-Midwest view uses big hexagons (H3 res 4, ~45 km across). Zoom in and they split into res 5 (~17 km, from zoom 6.4) and then res 6 (~6 km, from zoom 7.9), each forecast from the temperatures at its own centre, so lake shores, cities and river valleys show. Same model and folds; accuracy is still only measured for whole latitude strips. The finer files live in `public/fine/` (built by `pipeline/replay/build_fine.py`) and are fetched only when needed, so the first load is unchanged. The one-file build opened from disk stays at res 4.
-- **Leave-one-year-out:** a replayed year's forecast is built from the *other* years' moths, like a teacher who writes the exam without seeing this year's answers. It does use that year's real temperatures, so it is a replay, not a spring forecast.
-- **Data:** `src/data/luna-replay.json` (≈270 KB), built by `pipeline/replay/build_replay.py` (see its README). Only CC0 / CC BY / CC BY-NC iNaturalist records are included, and photos are linked, not copied. The file is iNaturalist-derived data under those observers' licences (non-commercial terms apply); each record keeps its observation id, which links back to its observer.
+![A season of luna moths sweeping north across the Midwest, from mid-May to mid-July](docs/media/season.gif)
 
-### How time reaches the GPU
-The ~3,000 dots are uploaded once per season. Scrubbing only changes deck.gl's `DataFilterExtension` range, a single shader uniform: "show dots whose day is between today-10 and today, fading the older ones". Analogy: the dots are a printed transparency; moving the slider just slides the spotlight over it.
+*Hexagons are the forecast, dots are real moths people photographed. Spring warmth sweeps north from Illinois and Ohio to Minnesota, and the moths follow.*
 
-## Run
+**Live season (new).** From 2 March 2027 a nightly GitHub Action (`.github/workflows/live-forecast.yml`) rebuilds this season's forecast from real weather so far + a 7-day forecast + past years' weather run forward, and the map's **live** season shows it with a mark on the last day of real weather, this year's sightings and an "as of" badge that turns amber if the data goes stale. Until then the live season shows a 2026 dry run (`pipeline/live/DRYRUN_2026.md`). How it works: `pipeline/live/README.md`.
+
+## What you can do with it
+
+- **Press play** and watch a season: the forecast wave (hexagons) and the real sightings (dots) move north together.
+- **Pick a year** from 2015 to 2025, or "all years" pooled into one typical season.
+- **Hover or tap a hexagon** for its forecast: when the first moths show up and the busiest days.
+- **Tap a dot** to see that sighting and open the original photo on iNaturalist.
+- **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
+- **Install it:** on a phone, *Share → Add to Home Screen* (iPhone) or *Install app* (Android) puts a hand-drawn moth on your home screen. After one visit it opens with no signal too.
+- **"How sure?"** is always on screen and opens the honest version: how far off the forecast is, and what it can't do yet.
+
+| Desktop | Phone |
+|---|---|
+| <img src="docs/media/about-panel.png" alt="Desktop: the map with a sighting card open and the About panel explaining the model with hand-drawn sketches" width="560"> | <img src="docs/media/phone.png" alt="Phone: the whole Midwest map, legend and time controls in portrait" width="200"> |
+
+## How the forecast works
+
+**Picture a bank account for warmth.**
+
+1. All winter the moth waits as a cocoon in fallen leaves.
+2. From 1 March, every day warmer than 10 °C (50 °F) pays into the account. Hotter days pay more. Biologists call this unit a **degree-day**.
+3. Each moth has its own savings target. When its balance reaches the target, it comes out. Half of them are out by about 210 to 220 degree-days, with a long tail of late ones.
+4. An adult flies for about a week, and people log moths unevenly (more on weekends and during National Moth Week). So the map forecasts when *sightings* should happen, which is exactly what can be checked against real photos.
+
+```mermaid
+flowchart LR
+  T["Daily temperature<br/>(1 km grid)"] --> B["Warmth bank account<br/>degree-days since 1 March"]
+  B --> C["Lopsided curve of<br/>moth savings targets"]
+  C --> F["Adults fly ~1 week"]
+  E["When people log moths<br/>(weekends, Moth Week)"] --> S
+  F --> S["Expected sightings<br/>per hexagon, per day"]
+  S --> M["Map colors:<br/>not yet → peak → over"]
+```
+
+The curve's shape is learned from the data: the model tries many curve shapes and keeps the one that best explains the real sighting dates (maximum likelihood). A warm spring fills the account early, so moths come early, and the map shows it.
+
+## How good is it
+
+The test is **leave-one-year-out**: to grade the forecast for 2019, the model is fit on the other ten years only, then asked to call 2019's first moths and peak. It is like grading a student on a test they have not seen. The baseline to beat is each area's usual date.
+
+| Way of guessing the date | Average days off (lower is better) |
+|---|---|
+| The usual calendar date for that area | 7.3 days |
+| Hatch's first model (a quick prototype in a notebook) | about 4.0 days |
+| **Hatch's current model** | **about 3.9 days** |
+| A perfect forecaster, given how noisy the sightings are | about 3.0 days |
+
+- **It cuts the usual date's error from 7.3 to about 3.9 days.** The true gain could be as small as 1 day or as large as 5 (95% confidence interval). Scored on 31 test cases, each one east-west band of the map in one year, across seven states.
+- **It ties the first model on accuracy.** The gain over that model is the next point, not fewer days off.
+- **It mostly fixed a bias.** An earlier version called the south about 6 days too early and the north 4 days too late. The current model is within about 4 days in every strip, mostly leaning a little late.
+- **The rules were written down before scoring** ([FROZEN_P3.md](pipeline/fit/FROZEN_P3.md)), and both runs are reported, including the one that went worse. Full numbers: [pipeline/fit/RESULT.md](pipeline/fit/RESULT.md).
+
+## What it can't do yet
+
+- **It has never forecast a season live.** Every score above is a replay of past years using that year's real temperatures. The first true test is the 2026 season, once its temperature data is published (around mid-2027).
+- **Unseen places are shaky.** The model picked in advance failed a test where it learned on Illinois, Indiana and Ohio and guessed Wisconsin and Minnesota (7.4 days off). A simpler version does pass that test (5.1 days), but it was picked after seeing the failure, so it counts as a second look, not proof.
+- **Sightings are not moths.** The model sees when people photograph moths, not when moths emerge. It corrects for when people are out looking, but that correction could also soak up real changes in moth numbers.
+- **Accuracy is measured for whole latitude strips**, not single hexagons. Zoomed-in hexagons (down to about 6 km) use local temperatures, but nobody has scored them one by one.
+- **First wave only.** Lunas have a second summer wave in the south. It is shown as dots, not forecast.
+
+## How it's built
+
+```mermaid
+flowchart LR
+  subgraph Offline["Python pipeline (run by hand)"]
+    I["iNaturalist<br/>confirmed luna sightings"] --> P["Fit the model<br/>leave-one-year-out"]
+    D["Daymet<br/>daily 1 km temperatures"] --> P
+    P --> J["Forecast files<br/>JSON + small binary tiles"]
+  end
+  subgraph Web["Static web app"]
+    J --> V["TypeScript + Vite build"]
+    V --> G["GitHub Pages<br/>auto-deploy on merge"]
+  end
+  G --> U["Browser<br/>deck.gl WebGL + H3 hexagons"]
+  N["National Weather Service"] --> A["Nightly forecast archive<br/>(GitHub Actions)"]
+```
+
+- **Front end:** TypeScript, [deck.gl](https://deck.gl/) on WebGL, [H3](https://h3geo.org/) hexagons, Vite. No framework and no map tile server: state outlines are bundled, and lakes, rivers, highways, forests, woods (as little tree marks) and town names come from three small self-hosted files, so the app makes no outside requests. Scrubbing the timeline changes one number on the graphics card (a shader setting) instead of re-sending 3,000 dots, so it stays smooth on phones.
+- **Model and data:** Python (NumPy, SciPy, pandas). The fitter is tested by planting known values in a fake Midwest and checking it finds them again.
+- **Testing:** every pull request runs Playwright smoke tests (quick checks that the app loads and works) on phone sizes (iPhone and Android, portrait and landscape) and desktop sizes in Chromium, Firefox and WebKit. They fail on any page error, a blank map, a covered or off-screen button, or a broken keyboard path. `npm run check` also enforces a size limit: the whole app, in one file, stays under 500 KB compressed.
+- **Accessibility:** text meets WCAG 2.1 AA contrast, map marks meet 3:1, everything works by keyboard, and the map has a screen-reader summary.
+- **Forecast archive:** the National Weather Service keeps no old forecasts, so a nightly job saves them now for testing future live forecasts.
+
+More detail on the design choices (the layer plug-in contract, the single clock, why hexagons): [docs/engineering.md](docs/engineering.md).
+
+## Run it locally
+
 ```
 npm install
 npm run dev          # http://localhost:5173
 npm run build        # type-check + dist/
-npm run build:single # one self-contained dist-single/index.html (no network needed)
-npm run check        # both builds + the screenshot smoke test
-```
-See `RUNBOOK.md` for the screenshot test and how to resume after a break.
-
-## Layout (the web app lives at the repo root; `notebooks/` belongs to the Python work)
-```
-src/core/        grid.ts (H3 cells), timeAxis.ts (clock), layer.ts (contract), registry.ts
-src/layers/      lunaReplay.ts (the layer), lunaData.ts (typed access to the replay JSON), fineData.ts (lazy res 5/6 files)
-src/map/         map.ts (deck.gl view, picking), basemap.ts (state outlines)
-src/ui/          scrubber, caveat drawer, layer list, legend, probe card
-src/data/        midwest-states.json (generated by scripts/build-geo.mjs), luna-replay.json (generated by pipeline/replay)
-scripts/         build-geo.mjs, shoot.mjs (visual test), fine.mjs (zoomed-in test over http), budget.mjs (bundle size), archive/save_forecasts.py
-pipeline/replay/ Python: iNat + Daymet -> luna-replay.json (reuses notebooks/hatch_p1)
-.github/workflows/forecast-archive.yml   nightly NWS forecast archive (+ keepalive against GitHub's 60-day rule)
-notebooks/       Python luna notebook (separate owner)
+npm run build:single # one self-contained dist-single/index.html (opens with no network)
+npm run check        # both builds, bundle budget and all smoke tests
+npm run icons        # app icons + favicon PNGs from public/icons/moth.svg and public/favicon.svg
+npm run og           # the link-preview card, public/og.png (a real map screenshot)
 ```
 
-## The layer contract
-```ts
-interface HatchLayer {
-  id: string; title: string;
-  render(ctx: { t: number; zoom: number; theme: Theme }): deck.Layer[];
-  caveats(): CaveatCard;              // required: honesty one tap away
-  legend(): LegendSpec;
-  probe?(lngLat, t, picked?): ProbeCard | null;   // picked = the dot/hex object under the finger
-  credits?(): string[];
-}
-```
-A layer loads its own data and returns deck.gl layers for time `t`. Its preferred scrubber range is passed at registration: `registry.register(layer, { start, end, stepMs })`, so the contract stays tiny.
+The Python side: `pip install -r notebooks/requirements.txt`, then see [pipeline/fit/README.md](pipeline/fit/README.md) and [pipeline/replay/README.md](pipeline/replay/README.md). [RUNBOOK.md](RUNBOOK.md) covers the screenshot tests and deploys.
 
-## Why it is built this way
-- **Layers are plug-ins behind a tiny interface.** Like USB: the map is the laptop, a layer is a device. The laptop never needs to know what is inside. We cut `kind`, `resolutions` and `load()` because nothing needs them yet; add a field when a second layer actually demands it.
-- **Honesty is part of the contract.** `caveats()` is required, so a layer cannot ship without saying what it does not know. The luna layer says "first test, not yet confirmed" in an always-visible line, and the drawer opens by itself on a first visit.
-- **One clock, absolute UTC milliseconds.** Like a single wall clock in a house instead of each room keeping its own time. UTC ms has no timezone or daylight-saving surprises; step size (minute, day, year) is just a number, so season, year and radar layers share one scrubber.
-- **H3 hexagons.** Equal-sized, equal-distance neighbours, so a "wave" moves evenly and nothing looks bigger because of a county border. Res 4 (~1,770 km2) is the resolution the model numbers will live at.
-- **deck.gl on a plain canvas, no tile basemap yet.** deck.gl draws huge layers on the GPU. State outlines come from bundled data so the app works offline; `map/basemap.ts` is the single place a PMTiles basemap gets added later.
-- **One-file build.** `dist-single/index.html` has JS, CSS and data inline: a pocket copy you can open anywhere to check the app still works.
-- **Exact dependency versions plus a lockfile.** luma.gl once drifted between two patch versions underneath us; pinning means "works today" stays true next year.
-- **The screenshot test fails loudly.** The first version passed while the map was blank. Now any page error, external request, or a single-colour map centre fails the run: a smoke detector, not a decoration.
-- **Zoom is tracked from `onViewStateChange`.** deck.gl 9 builds its view manager asynchronously, so asking it for viewports right after creation throws. We listen instead of asking.
-- **Forecast archive from day one.** NWS keeps no old forecasts; every night not saved is a future backtest lost.
+## Repo layout
+
+```
+src/              the web app (core/ clock and hex grid, layers/ the luna layer, map/, ui/)
+pipeline/fit/     the model, its tests and the scored result
+pipeline/replay/  builds the forecast files the app reads
+pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
+pipeline/live/    nightly live forecast -> live/latest.json (PRISM + Open-Meteo + Daymet, frozen P3 fits)
+.github/workflows/live-forecast.yml  the nightly live job, 2 Mar-7 Oct
+notebooks/        the first prototype model (Jupyter notebook)
+scripts/          smoke tests, bundle budget, data build helpers
+docs/             engineering notes and README media
+```
+
+## Data and credits
+
+- **Sightings:** [iNaturalist](https://www.inaturalist.org/taxa/47916-Actias-luna) observers. Only CC0, CC BY and CC BY-NC records are shown or redistributed, so the app's data carries those observers' licenses (non-commercial terms apply). The model also learned from the dates and places of other confirmed records, which are not shipped. Photos are linked, never copied, and every shown record keeps its observation id.
+- **Temperatures:** [Daymet](https://daymet.ornl.gov/) v4 daily 1 km data, Thornton et al., ORNL DAAC.
+- **State outlines, town names and populations:** US Census Bureau (outlines via [us-atlas](https://github.com/topojson/us-atlas)). Public domain.
+- **Lakes, rivers, highways and national parks:** [Natural Earth](https://www.naturalearthdata.com/). Public domain.
+- **National forests:** [US Forest Service](https://data.fs.usda.gov/geodata/edw/datasets.php). Public domain.
+- **Woods (deciduous and mixed forest):** [USGS National Land Cover Database 2021](https://www.mrlc.gov/). Public domain.
+- **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
+
+**License:** the code is [MIT](LICENSE). The data keeps its own terms above. The sighting files (`src/data/luna-replay.json`, `public/firefly-replay.json`) mix CC0, CC BY and CC BY-NC records, so attribution and non-commercial terms apply to them. The fonts stay under the SIL Open Font License.
+
+## Who made it
+
+Neev Liberman, a mobile front-end engineer with a wet-lab genetics background. Hatch started as a way to put evolutionary biology, real data and an interactive map in one place.

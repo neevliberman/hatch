@@ -1,16 +1,21 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
-import { createLunaLayer, modeLabel, replayTimeSpec } from './layers/lunaReplay';
-import { data, firstBroodCount, TYPICAL, type Mode } from './layers/lunaData';
-import { createMap, type ProbeHit } from './map/map';
+import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
+import { createFireflyLayer, loadFirefly } from './layers/fireflyReplay';
+import type { ReplayFile } from './layers/lunaData';
+import { data, firstBroodCount, LIVE, TYPICAL, type Mode } from './layers/lunaData';
+import { inSeason, loadLive, type Live } from './layers/liveData';
+import { createMap, type Padding, type ProbeHit } from './map/map';
 import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { countdownParts } from './ui/countdown';
+import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { GRID_RES } from './core/grid';
+import { isForecast } from './core/layer';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
@@ -18,18 +23,35 @@ const SEEN_KEY = 'hatch.seen.v2';
 function start() {
   const params = new URLSearchParams(location.search);
   const years = data.years.map(String);
-  // Default: every year pooled by day of year (one season alone is too sparse to show the wave). ?year=2025 replays one season.
-  const asked = params.get('year');
+  // Default: every year pooled by day of year (one season alone is too sparse to show the wave). ?year=2025 replays one
+  // season; ?season=live (or ?year=live) asks for this year's nightly forecast, which arrives after the first paint.
+  const asked = params.get('season') ?? params.get('year');
   const initialMode: Mode = asked && years.includes(asked) ? asked : TYPICAL;
   // ?date=06-10 (or 2025-06-10) puts the cursor on that calendar day; default 10 June, when the wave crosses the middle.
   const md = params.get('date')?.match(/(\d{2})-(\d{2})$/);
   const [month, day] = md ? [Number(md[1]) - 1, Number(md[2])] : [5, 10];
+  // ?today=2027-01-15 fakes the clock: the off-season countdown, and whether live mode is in season or its file is late.
+  const todayParam = params.get('today');
+  const clock = todayParam && !Number.isNaN(Date.parse(todayParam)) ? Date.parse(todayParam) : Date.now();
+  // ?at=41.88,-87.63,6.5 reopens a shared link at the same place and zoom. Anything not near the Midwest (a typo,
+  // an empty part) is ignored rather than handed to the map, which would throw and stay blank.
+  const atParts = params.get('at')?.split(',') ?? [];
+  const atNums = atParts.map((x) => (x.trim() === '' ? NaN : Number(x)));
+  const sharedAt =
+    atNums.length === 3 && atNums.every(Number.isFinite) && Math.abs(atNums[0]! - 43) < 12 && Math.abs(atNums[1]! + 89) < 16
+      ? (atNums as [number, number, number])
+      : null;
 
   // Finer hexagons load when the user zooms in; when they arrive (or the level changes) redraw and re-sync the card.
   let onLunaData = () => {};
   const luna = createLunaLayer(initialMode, () => onLunaData());
   const registry = new LayerRegistry();
   registry.register(luna, replayTimeSpec(initialMode, month, day));
+  // The species on screen. Only one is active at a time; the firefly loads the first time it is picked.
+  let cur: LunaLayer = luna;
+  let speciesPending = false;
+  let firefly: LunaLayer | null = null;
+  let seasonCount = firstBroodCount;
 
   const time = new TimeAxis(registry.activeTime()!);
   let spec: TimeSpec | null = registry.activeTime();
@@ -60,39 +82,69 @@ function start() {
   let followSpot = (_t: number) => {};
   const updateProbe = () => {
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
-    if (hit && (!hit.picked || hit.picked.layerId === 'luna-forecast')) hit.cell = luna.cellAt(hit.lngLat) ?? hit.cell;
-    showProbe(probeEl, registry, hit, time.cursor);
+    if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = cur.cellAt(hit.lngLat) ?? hit.cell;
+    showProbe(probeEl, registry, hit, time.cursor, pinned);
     // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
-    map.setPicked(pinned && hit && (!hit.picked || hit.picked.layerId === 'luna-forecast') ? hit.cell : null);
+    map.setPicked(pinned && hit && (!hit.picked || isForecast(hit.picked.layerId)) ? hit.cell : null);
     placeProbe();
     followSpot(time.cursor);
   };
+  const unpin = () => {
+    if (!pinned && !hit) return;
+    pinned = false;
+    hit = null;
+    map.setMarker(null);
+    updateProbe();
+  };
+
+  const colourKey = mountLegend($('legend'), registry);
+  time.subscribe(() => time.playing && colourKey.autoFold());
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
   const phone = window.matchMedia('(max-width: 700px), (orientation: landscape) and (max-height: 500px)');
-  const padding = () => {
+  let legendH = 0;
+  const padding = (): Padding => {
     const top = $('top').getBoundingClientRect().bottom + 8;
     // On wide screens the legend and card sit in the bottom-left corner, beside the map rather than under it.
-    const bottom = (phone.matches ? $('bottom').offsetHeight : $('bottom').offsetHeight - $('floats').offsetHeight) + 8;
+    // On a phone the legend sits under the map, so leave room for it, but not for a docked card: that comes and
+    // goes with every tap, and would make the map jump each time. (The card replaces the legend while it is up.)
+    const legend = $('legend').offsetHeight;
+    if (legend) legendH = legend;
+    const floats = $('floats');
+    const bottom = $('bottom').offsetHeight - floats.offsetHeight + (phone.matches ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0) + 8;
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
-    return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k) };
+    // On a wide screen the open About panel sits beside the map: fit the Midwest into what is left.
+    const drawer = $('drawer');
+    // On a phone the My area / Share stack floats on the right edge: keep the Midwest clear of it.
+    const right = phone.matches ? $('actions').offsetWidth + 8 : drawer.classList.contains('open') ? drawer.offsetWidth : 0;
+    return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2) };
   };
   const map = createMap({
     container: $<HTMLDivElement>('map'),
     registry,
     time,
     padding,
-    onMove: (moved) => ($('recenter').hidden = !moved),
-    onView: () => pinned && placeProbe(),
+    covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter, #actions > *')],
+    onMove: (moved) => {
+      $('recenter').hidden = !moved;
+      document.querySelector('.brand')!.classList.toggle('over-map', moved);
+    },
+    onView: () => {
+      if (pinned) placeProbe();
+      syncUrl(); // a shared link reopens the same place and zoom
+    },
     onProbe: (h, clicked) => {
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
-        // A hex pinned from My area or the city menu has no picked object, so the cell alone decides.
-        const same = pinned && h !== null && hit !== null && h.cell === hit.cell && (!hit.picked || h.picked?.object === hit.picked.object);
+        // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
+        // landed on a neighbour (a point near a hex edge). A hex pinned from My area or the city menu has no picked
+        // object, so the cell alone decides.
+        const same = pinned && h !== null && hit !== null && (hit.picked ? h.picked?.object === hit.picked.object : h.cell === hit.cell);
         pinned = h !== null && !same;
         hit = pinned ? h : null;
         map.setMarker(null); // any tap replaces the "My area" pin
+        colourKey.autoFold(); // the reader has found the map: fold the key to a chip on small screens
       } else if (!pinned) hit = h;
       updateProbe();
     },
@@ -103,7 +155,7 @@ function start() {
   const refresh = () => {
     map.refresh();
     updateProbe();
-    srSummary.textContent = luna.summary(time.cursor);
+    srSummary.textContent = cur.summary(time.cursor);
   };
   time.subscribe(refresh);
   onLunaData = refresh;
@@ -118,28 +170,117 @@ function start() {
 
   // Season picker: switching keeps the cursor on the same calendar day.
   const picker = $<HTMLSelectElement>('season');
-  picker.innerHTML = [TYPICAL, ...[...years].reverse()]
-    // The count is first-wave moths seen; "All years" goes without it so the closed menu fits a small phone.
-    .map((m) => `<option value="${m}">${m === TYPICAL ? 'All years' : `${m} (${firstBroodCount(m).toLocaleString()} moths)`}</option>`)
-    .join('');
-  picker.value = initialMode;
-  picker.title = `Season to replay (first-wave moths seen, in parentheses; ${firstBroodCount(TYPICAL).toLocaleString()} in all years)`;
-  picker.addEventListener('change', () => {
+  // This year's live forecast (luna only), once its file has loaded.
+  let liveFile: Live | null = null;
+  // A ?season=live link opens on the default view until the file arrives: keep "season=live" in the address bar meanwhile.
+  let livePending = asked === LIVE;
+  const fillPicker = () => {
+    const what = cur === luna ? 'moths' : 'fireflies';
+    const keep = picker.value || initialMode;
+    const live = liveFile && cur === luna ? [LIVE] : [];
+    picker.innerHTML = [...live, TYPICAL, ...[...years].reverse()]
+      // The count is first-wave moths (or fireflies) seen; "All years" goes without it so the closed menu fits a small phone.
+      .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${seasonCount(m).toLocaleString()} ${what})`}</option>`)
+      .join('');
+    picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
+    picker.title = `Season to replay (${cur === luna ? 'first-wave moths' : 'fireflies'} seen, in parentheses; ${seasonCount(TYPICAL).toLocaleString()} in all years)`;
+  };
+  fillPicker();
+  // This season, live: "next real season ... days from now" would contradict the map.
+  const syncCountdown = () => ($('countdown').hidden = picker.value === LIVE && !!liveFile && inSeason(liveFile, clock));
+  // Live mode opens on its last day of observed weather (or the day a link asks for); the others keep the calendar day.
+  const switchMode = (m: Mode, at?: [number, number]) => {
     const now = new Date(time.cursor);
-    luna.setMode(picker.value);
+    cur.setMode(m);
     hit = null;
     pinned = false;
     map.setMarker(null);
-    $('season-name').textContent = modeLabel(picker.value);
-    registry.setTime(luna.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
-  });
+    $('season-name').textContent = modeLabel(m);
+    at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
+    registry.setTime(cur.id, replayTimeSpec(m, at?.[0], at?.[1], clock));
+    updateProbe(); // a card pinned in the old season describes that season: it went with the switch
+    syncCountdown();
+  };
+  picker.addEventListener('change', () => switchMode(picker.value));
   $('season-name').textContent = modeLabel(initialMode);
 
-  mountScrubber($('bar'), time);
+  // Species switcher. Switching keeps the season and the calendar day, and drops any pinned card.
+  const speciesSel = $<HTMLSelectElement>('species');
+  const setSpecies = async (want: 'luna' | 'firefly') => {
+    if (want === 'firefly' && !firefly) {
+      speciesSel.disabled = true;
+      const file = await loadFirefly();
+      speciesSel.disabled = false;
+      if (!file) {
+        speciesSel.value = 'luna';
+        return say('Couldn\u2019t load the fireflies. Try again later.');
+      }
+      fireflyFile = file;
+      const ffMode = picker.value === LIVE ? TYPICAL : picker.value;
+      const ff = createFireflyLayer(file, ffMode, () => onLunaData());
+      firefly = ff;
+      registry.register(ff, replayTimeSpec(ffMode, 5, 10), false);
+      fireflyCount = ff.seasonCount;
+    }
+    const next = want === 'firefly' ? firefly! : luna;
+    speciesSel.value = want;
+    if (next === cur) return;
+    // Fireflies have no live season: switching to them from live mode goes to all years, on the same calendar day.
+    if (next !== luna && picker.value === LIVE) {
+      picker.value = TYPICAL;
+      $('season-name').textContent = modeLabel(TYPICAL);
+    }
+    const now = new Date(time.cursor);
+    hit = null;
+    pinned = false;
+    map.setMarker(null);
+    next.setMode(picker.value);
+    cur = next;
+    seasonCount = cur === luna ? firstBroodCount : fireflyCount;
+    fillPicker();
+    $('tagline').textContent = cur === luna ? 'when luna moths fly' : 'when fireflies glow';
+    $('dots-what').textContent = cur === luna ? 'moths' : 'fireflies';
+    showCountdown();
+    syncCountdown();
+    $('map').setAttribute('aria-label', `Map of the Midwest: ${cur === luna ? 'luna moth' : 'firefly'} sightings over hexagons colored by the forecast`);
+    registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
+    // Old one off first, so the two never draw together for a frame.
+    registry.setActive((cur === luna ? firefly : luna)!.id, false);
+    registry.setActive(cur.id, true);
+    syncUrl();
+  };
+  let fireflyCount = firstBroodCount;
+  let fireflyFile: ReplayFile | null = null;
+  // The one-file preview has no firefly file next to it, so it offers luna only.
+  if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
+  // On narrow phones both header menus can't show full names, so each species is listed by its first word ("Luna", "Monarch").
+  const narrow = matchMedia('(max-width: 430px)');
+  const shortNames = () => {
+    for (const o of speciesSel.options) o.text = narrow.matches ? (o.dataset.full ??= o.text).split(' ')[0]! : (o.dataset.full ?? o.text);
+  };
+  shortNames();
+  narrow.addEventListener('change', shortNames);
+  speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value === 'firefly' ? 'firefly' : 'luna'));
+  // Until a ?species=firefly link has loaded, the address bar keeps asking for the firefly.
+  if (params.get('species') === 'firefly' && __BASEMAP__) {
+    speciesPending = true;
+    void setSpecies('firefly').finally(() => (speciesPending = false));
+  }
+
+  const setRibbon = mountScrubber($('bar'), time);
+  // The slider's track pictures the active species' season; a season or species change redraws it.
+  // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
+  let ribbonFrame = 0;
+  const drawRibbon = () =>
+    (ribbonFrame ||= requestAnimationFrame(() => {
+      ribbonFrame = 0;
+      setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
+    }));
+  registry.subscribe(drawRibbon);
+  setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
   mountLayerList($('layers'), registry);
-  mountLegend($('legend'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
-  followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t);
+  followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t, pinned ? hit?.label : undefined);
   // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,
   // so the tap visibly lands even when the drawer is already open.
   let flashTimer = 0;
@@ -149,7 +290,9 @@ function start() {
     const target = drawer.querySelector<HTMLElement>('[data-why]');
     const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     // Scroll the drawer itself: scrollIntoView would also nudge the fixed page and leave a gap at the bottom.
-    const top = target ? target.getBoundingClientRect().top - drawer.getBoundingClientRect().top + drawer.scrollTop - 12 : 0;
+    // The drawer's title bar sticks to its top, so land the target just below it.
+    const head = drawer.querySelector<HTMLElement>('.drawer-head')?.offsetHeight ?? 0;
+    const top = target ? target.getBoundingClientRect().top - drawer.getBoundingClientRect().top + drawer.scrollTop - head - 12 : 0;
     drawer.scrollTo({ top, behavior });
     if (target) {
       target.tabIndex = -1;
@@ -168,8 +311,17 @@ function start() {
     const q = new URLSearchParams(location.search);
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
-    if (picker.value === TYPICAL) q.delete('year');
+    q.delete('season');
+    if (cur === luna && !speciesPending) q.delete('species');
+    else q.set('species', 'firefly');
+    if (livePending) (q.delete('year'), q.set('season', LIVE));
+    else if (picker.value === TYPICAL) q.delete('year');
+    else if (picker.value === LIVE) (q.delete('year'), q.set('season', LIVE));
     else q.set('year', picker.value);
+    // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
+    const c = map.center(padding());
+    if (map.moved() && c) q.set('at', `${c.lngLat[1].toFixed(3)},${c.lngLat[0].toFixed(3)},${c.zoom.toFixed(1)}`);
+    else q.delete('at');
     q.delete('noauto');
     q.delete('today');
     return `${location.pathname}?${q}`;
@@ -197,7 +349,7 @@ function start() {
   $('share').addEventListener('click', async () => {
     const url = new URL(viewUrl(), location.href).href;
     try {
-      if (navigator.share) await navigator.share({ title: 'Hatch: when luna moths fly', url });
+      if (navigator.share) await navigator.share({ title: `Hatch: when ${cur === luna ? 'luna moths' : 'fireflies'} come out`, url });
       else {
         await navigator.clipboard.writeText(url);
         say('Link copied');
@@ -207,9 +359,10 @@ function start() {
     }
   });
 
-  // Pin the card (and the About panel's spot) on the hexagon at lat/lng. Lakeshore cities (Chicago, Milwaukee,
-  // Cleveland) can sit in a hex whose centre is in the lake, so fall back to the nearest land hex within two rings.
-  const showPlace = (lat: number, lng: number): 'exact' | 'nearby' | null => {
+  // Pin the card (and the About panel's spot) on the hexagon at lat/lng, named `label`, and bring the map to it.
+  // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so fall back to
+  // the nearest land hex within two rings.
+  const showPlace = (lat: number, lng: number, label: string): 'exact' | 'nearby' | null => {
     const ring = gridDisk(latLngToCell(lat, lng, GRID_RES), 2)
       .map((c) => {
         const [la, ln] = cellToLatLng(c);
@@ -217,11 +370,13 @@ function start() {
       })
       .sort((a, b) => a.d - b.d);
     const first = { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
-    const here: ProbeHit | undefined = [first, ...ring].find((h) => luna.probe?.(h.lngLat, time.cursor));
+    const here: ProbeHit | undefined = [first, ...ring].find((h) => cur.probe?.(h.lngLat, time.cursor));
     if (!here) return null;
-    hit = here;
+    hit = { ...here, label };
     pinned = true;
     map.setMarker(null);
+    // Close enough to see the town's neighbours, and never further out than the current view.
+    map.focus([lng, lat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding());
     updateProbe();
     return here === first ? 'exact' : 'nearby';
   };
@@ -232,10 +387,15 @@ function start() {
     const [lat, lng] = sel.value.split(',').map(Number) as [number, number];
     const name = sel.selectedOptions[0]?.text ?? '';
     sel.value = ''; // so picking the same city again (after the pin moved) still fires
-    if (!showPlace(lat, lng)) return say(`No forecast for ${name}`);
+    if (!showPlace(lat, lng, name)) return say(`No forecast for ${name}`);
     // On a phone the panel hides the map, so close it to show the picked hexagon and its card.
     if (phone.matches) toggleDrawer(false);
   });
+
+  // Find a town: the same path as the city menu above.
+  mountFinder($('find'), $('finder'), (lat, lng, name) => {
+    if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`);
+  }, say);
 
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
@@ -251,27 +411,50 @@ function start() {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         done();
-        const at = showPlace(coords.latitude, coords.longitude);
+        const at = showPlace(coords.latitude, coords.longitude, 'you');
         if (!at) {
           map.setMarker(null);
           say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)');
           return;
         }
         map.setMarker([coords.longitude, coords.latitude]);
-        say(at === 'exact' ? 'You are the yellow dot' : 'You are the yellow dot (the card shows the nearest hexagon on land)');
+        // The marker is the accent brown; the pale yellow dots are moths.
+        say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest hexagon on land)');
       },
-      (err) => (done(), say(err.code === err.PERMISSION_DENIED ? 'Location access is off for this site' : 'Could not get your location')),
+      (err) => (
+        done(),
+        say(
+          err.code === err.PERMISSION_DENIED
+            ? 'Location is off for this site. Pick a city in About (i) instead.'
+            : 'Could not get your location. Pick a city in About (i) instead.',
+        )
+      ),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     );
   });
 
-  // ?today=2027-01-15 fakes the clock, to check the off-season countdown.
-  const today = params.get('today');
-  const [short, more] = countdownParts(today && !Number.isNaN(Date.parse(today)) ? Date.parse(today) : Date.now());
-  const moreEl = document.createElement('span');
-  moreEl.className = 'more';
-  moreEl.textContent = more;
-  $('countdown').replaceChildren(short, moreEl);
+  // Each species has its own season: the firefly's starts weeks after the luna moth's. (?today= fakes the clock.)
+  function showCountdown() {
+    const [short, more] = cur === luna ? countdownParts(clock) : countdownParts(clock, 'firefly', fireflyFile!);
+    const moreEl = document.createElement('span');
+    moreEl.className = 'more';
+    moreEl.textContent = more;
+    $('countdown').replaceChildren(short, moreEl);
+  }
+  showCountdown();
+  // A phone's bar has no room for it, so there it opens the About panel instead (re-added each time the panel redraws).
+  // Phones hide the strip's countdown; it shows in About instead, under the opening line.
+  const aboutCountdown = () => {
+    const text = $('countdown').hidden ? '' : ($('countdown').textContent ?? '').trim();
+    const hook = $('drawer').querySelector('.ex-hook');
+    if (!text || !hook) return;
+    const p = document.createElement('p');
+    p.className = 'cd';
+    p.textContent = text;
+    hook.after(p);
+  };
+  registry.subscribe(aboutCountdown);
+  aboutCountdown();
 
   // First visit: the map comes first. The About button and Play glow briefly to show where the story and the
   // replay are; the panel itself opens only when asked (or with ?caveats).
@@ -290,14 +473,81 @@ function start() {
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
+  if (sharedAt) map.focus([sharedAt[1], sharedAt[0]], sharedAt[2], padding());
   $('recenter').addEventListener('click', () => map.fit(padding()));
-  let resizeTimer = 0;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => (map.fit(padding()), placeProbe()), 150);
+  // Re-fit whenever the room for the map changes: the window, the panels (fonts arriving, a wrapped line, the
+  // About panel opening beside the map) or the map itself (a late stylesheet). A view the user has panned or
+  // zoomed is theirs, so it is left alone; the recenter button still fits it.
+  let fitTimer = 0;
+  // Not mid-drag either: a re-fit would yank the map out from under the finger.
+  let dragging = false;
+  $('map').addEventListener('pointerdown', () => (dragging = true));
+  // Capture phase: the phone drawer swallows the taps that close it, and this must still hear them end.
+  window.addEventListener('pointerup', () => (dragging = false), true);
+  window.addEventListener('pointercancel', () => (dragging = false), true);
+  const refit = () => {
+    clearTimeout(fitTimer);
+    fitTimer = window.setTimeout(() => {
+      if (dragging) return refit();
+      if (!map.moved()) map.fit(padding());
+      placeProbe();
+    }, 120);
+  };
+  const ro = new ResizeObserver(refit);
+  for (const id of ['map', 'top', 'bottom']) ro.observe($(id));
+  window.addEventListener('resize', refit);
+  document.fonts?.ready.then(refit);
+  // The desktop About panel slides in beside the map without resizing anything the observer watches.
+  new MutationObserver(refit).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
+
+  // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
+  // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.
+  probeEl.addEventListener('click', (e) => {
+    if (!(e.target as Element).closest('.probe-close')) return;
+    unpin();
+    $('t-range').focus({ preventScroll: true });
+  });
+  // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !$('finder').hidden) return;
+    const hadFocus = probeEl.contains(document.activeElement);
+    unpin();
+    if (hadFocus) $('t-range').focus({ preventScroll: true });
+  }, true);
+  $('map').addEventListener('mouseleave', () => {
+    if (!pinned && hit) (hit = null), updateProbe();
+  });
+  // A sighting's card is about one day; once playback moves on, it would describe a dot that has gone out.
+  time.subscribe(() => {
+    if (time.playing && pinned && hit?.picked && !isForecast(hit.picked.layerId)) unpin();
   });
   refresh();
-  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map };
+  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };
+
+  // This year's nightly forecast, fetched after the first paint (none in the one-file build, or if the file is missing
+  // or broken). It goes at the top of the season menu (luna only), and becomes the default during its season
+  // (1 Mar - 30 Sep) when the link names no season, day or species, so shared links still open what they showed.
+  const cursor0 = time.cursor;
+  void loadLive().then((live) => {
+    livePending = false;
+    // A placeholder file (written before the pipeline's first real run) only shows when a link asks for it.
+    if (!live || (live.stub && asked !== LIVE)) return syncUrl();
+    setLive(live);
+    liveFile = live;
+    fillPicker();
+    if (cur !== luna || speciesPending) return syncUrl(); // fireflies have no live season
+    if (picker.value !== initialMode || time.cursor !== cursor0) return syncUrl(); // the user got there first: leave their choice
+    const explicit = params.has('season') || params.has('year') || params.has('date') || params.has('species');
+    if (asked !== LIVE && (explicit || !inSeason(live, clock))) return syncUrl();
+    picker.value = LIVE;
+    switchMode(LIVE, md ? [month, day] : undefined);
+    syncUrl();
+  });
 }
 
 start();
+
+// Offline + install to home screen: only the deployed build has a dist/sw.js, and only https (not file://, artifacts).
+if (__HATCH_SW__ && 'serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}

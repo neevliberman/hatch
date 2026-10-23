@@ -1,6 +1,7 @@
 import type { HatchLayer, ProbeCard } from '../core/layer';
 import type { ProbeHit } from '../map/map';
 import type { LayerRegistry } from '../core/registry';
+import { CROSS } from './icons';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -28,33 +29,81 @@ export function mountLayerList(root: HTMLElement, registry: LayerRegistry): void
   root.hidden = registry.all().length < 2; // one layer: a lone checkbox could only blank the map
 }
 
-export function mountLegend(root: HTMLElement, registry: LayerRegistry): void {
-  const render = () => {
-    root.innerHTML = registry
-      .activeLayers()
-      .map((l) => {
-        const lg = l.legend();
-        const stops = lg.stops ?? [];
-        const ramp = stops.length
-          ? `<div class="lg-ramp" style="background:linear-gradient(90deg,${stops.map((s) => s.color).join(',')})"></div>
-          <div class="lg-labels"><span>${esc(stops[0]!.label)}</span><span>${esc(stops[stops.length - 1]!.label)}</span></div>`
-          : '';
-        const items = lg.items?.length
-          ? `<ul class="lg-items">${lg.items
-              .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
-              .join('')}</ul>`
-          : '';
-        return `<div class="legend-card"><div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
-          ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
-      })
-      .join('');
+const FOLD_KEY = 'hatch-legend-folded';
+
+/**
+ * Colour key. On narrow screens (under 1000px, where it sits over the map) it can fold to a one-line "Key" chip:
+ * it starts open, folds itself after the first tap on the map or press of Play, and remembers that for next time.
+ * Wide screens always show it; the folded class does nothing there.
+ */
+export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoFold(): void } {
+  // Stored: '1' folded, 'open' opened by hand (never fold it for them again), nothing yet: open until the first tap.
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(FOLD_KEY);
+  } catch {
+    /* storage blocked: start open */
+  }
+  let folded = stored === '1';
+  let touched = stored === 'open'; // the reader opened or closed it themselves: stop folding it for them
+  const narrow = window.matchMedia('(max-width: 999px)');
+  const setFolded = (f: boolean, focus = false) => {
+    folded = f;
+    root.classList.toggle('folded', f);
+    try {
+      localStorage.setItem(FOLD_KEY, f ? '1' : touched ? 'open' : '0');
+    } catch {
+      /* not remembered, still works */
+    }
+    if (focus) root.querySelector<HTMLElement>(f ? '.lg-chip' : '.lg-fold')?.focus();
   };
+  const render = () => {
+    const layers = registry.activeLayers().map((l) => l.legend());
+    const swatches = layers
+      .flatMap((lg) => lg.items ?? [])
+      .slice(0, 4)
+      .map((it) => `<i class="sw ${it.shape}" style="--c:${it.color}"></i>`)
+      .join('');
+    root.innerHTML =
+      layers
+        .map((lg, i) => {
+          const stops = lg.stops ?? [];
+          const ramp = stops.length
+            ? `<div class="lg-ramp" style="background:linear-gradient(90deg,${stops.map((s) => s.color).join(',')})"></div>
+          <div class="lg-labels"><span>${esc(stops[0]!.label)}</span><span>${esc(stops[stops.length - 1]!.label)}</span></div>`
+            : '';
+          const items = lg.items?.length
+            ? `<ul class="lg-items">${lg.items
+                .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
+                .join('')}</ul>`
+            : '';
+          const fold = i === 0 ? `<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">${CROSS}</button>` : '';
+          return `<div class="legend-card">${fold}<div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
+          ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
+        })
+        .join('') +
+      (layers.length ? `<button type="button" id="key-chip" class="lg-chip" aria-expanded="false" aria-label="Show the colour key">${swatches}<span>Key</span></button>` : '');
+  };
+  root.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.lg-fold, .lg-chip');
+    if (!btn) return;
+    touched = true;
+    setFolded(btn.classList.contains('lg-fold'), true);
+  });
   registry.subscribe(render);
   render();
+  root.classList.toggle('folded', folded);
+  return {
+    autoFold() {
+      if (!narrow.matches) return; // wide screens always show the key; don't fold it behind their back for later
+      if (!touched && !folded) setFolded(true);
+      touched = true; // once per visit
+    },
+  };
 }
 
-/** Hover/tap probe card: each active layer's answer to "what's here?". */
-export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: ProbeHit | null, t: number): void {
+/** Hover/tap probe card: each active layer's answer to "what's here?". A pinned card gets a close button. */
+export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: ProbeHit | null, t: number, pinned = false): void {
   const cards = hit
     ? registry
         .activeLayers()
@@ -66,12 +115,26 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
     root.hidden = true;
     return;
   }
-  root.innerHTML = cards
+  // While the days play the card is rebuilt each tick: keep each "More" open, and keyboard focus, for the same hexagon.
+  const key = `${hit!.cell}|${pinned}`;
+  const same = root.dataset.key === key;
+  root.dataset.key = key;
+  const opened = same ? [...root.querySelectorAll('details')].map((d) => d.open) : [];
+  const focusables = () => [...root.querySelectorAll<HTMLElement>('button, summary, a')];
+  const focused = same && root.contains(document.activeElement) ? focusables().indexOf(document.activeElement as HTMLElement) : -1;
+  let fold = 0;
+  root.innerHTML = (pinned ? '<button type="button" class="probe-close" aria-label="Close this card">&times;</button>' : '') +
+    (hit?.label ? `<div class="probe-cell">Near ${esc(hit.label)}</div>` : '') +
+    cards
     .map(
       (card) =>
-        `<div class="probe-card"><div class="probe-title">${esc(card.title)}</div>${card.lines
+        `<div class="probe-card"><div class="probe-title">${card.swatch ? `<i class="sw hex" aria-hidden="true" style="--c:${esc(card.swatch)}"></i>` : ''}${esc(card.title)}</div>${card.lines
           .map((x) => `<div>${esc(x)}</div>`)
           .join('')}${
+          card.more?.length
+            ? `<details class="probe-more"${opened[fold++] ? ' open' : ''}><summary>More<span class="sr"> about ${esc(card.title)}</span></summary>${card.more.map((x) => `<p>${esc(x)}</p>`).join('')}</details>`
+            : ''
+        }${
           card.link
             ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)}<span aria-hidden="true"> &#8599;</span><span class="sr"> (opens in a new tab)</span></a>`
             : ''
@@ -79,4 +142,5 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
     )
     .join('');
   root.hidden = false;
+  if (focused >= 0) focusables()[focused]?.focus();
 }

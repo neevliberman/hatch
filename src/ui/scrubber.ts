@@ -1,4 +1,6 @@
 import { TimeAxis } from '../core/timeAxis';
+import { NEXT, PAUSE, PLAY, PREV } from './icons';
+import type { SeasonProfile } from '../core/layer';
 
 /** Pick sensible tick marks for any range: years, months, days or hours. */
 function makeTicks(start: number, end: number): { at: number; label: string }[] {
@@ -21,25 +23,42 @@ function makeTicks(start: number, end: number): { at: number; label: string }[] 
   return out;
 }
 
-const svg = (d: string) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
-const PREV = svg('M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z');
-const NEXT = svg('M8.6 18.6 10 20l8-8-8-8-1.4 1.4 6.6 6.6z');
-const PLAY = svg('M8 5v14l11-7z');
-const PAUSE = svg('M7 5h4v14H7zm6 0h4v14h-4z');
+/** The season ribbon in the track: stacked stage shares below, sightings as an ink line above. Drawn in a 1000 x 28
+ * box stretched to the track, so the line keeps its width with non-scaling-stroke. */
+function ribbon(p: SeasonProfile): string {
+  const n = p.seen.length;
+  if (n < 2) return '';
+  const xs = p.seen.map((_, i) => ((i / (n - 1)) * 1000).toFixed(1));
+  const edge = (h: number[]) => h.map((v, i) => `${xs[i]} ${(28 - v * 14).toFixed(2)}`);
+  const base = Array<number>(n).fill(0);
+  const areas = p.bands.map((b) => {
+    const lo = edge(base).reverse();
+    b.share.forEach((v, i) => (base[i]! += v));
+    return `<path class="band" fill="${b.color}" vector-effect="non-scaling-stroke" d="M${edge(base).join('L')}L${lo.join('L')}Z"/>`;
+  });
+  const top = Math.max(...p.seen) || 1;
+  const line = p.seen.map((v, i) => `${xs[i]} ${(13.5 - (v / top) * 12).toFixed(2)}`).join('L');
+  return `<svg viewBox="0 0 1000 28" preserveAspectRatio="none">${areas.join('')}<path class="seen" d="M0 13.5L${line}L1000 13.5Z"/>` +
+    `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>` +
+    `<rect class="frame" width="1000" height="28" vector-effect="non-scaling-stroke"/></svg>` +
+    p.notes.map((k) => `<span class="wave" style="left:${((k.at / (n - 1)) * 100).toFixed(2)}%">${k.text}</span>`).join('');
+}
 
-/** Bottom bar bound to a TimeAxis: play/pause, step, slider, month ticks, "now" marker, keyboard. */
-export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
+/** Bottom bar bound to a TimeAxis: play/pause, step, slider over the season ribbon, month ticks, "now" marker, keyboard.
+ * Returns a function that redraws the ribbon (call it when the season or species changes). */
+export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProfile | undefined) => void {
   root.innerHTML = `
-    <div class="bar-row">
-      <div class="btns">
-        <button id="t-prev" class="icon-btn" aria-label="Back one day (Left arrow)">${PREV}</button>
-        <button id="t-play" class="icon-btn play" aria-label="Play (Space)"></button>
-        <button id="t-next" class="icon-btn" aria-label="Forward one day (Right arrow)">${NEXT}</button>
-      </div>
-      <div class="date"><span id="t-date"></span><small id="t-doy"></small></div>
+    <div class="btns">
+      <button id="t-prev" class="icon-btn" aria-label="Back one day (Left arrow)">${PREV}</button>
+      <button id="t-play" class="icon-btn play" aria-label="Play (Space)"></button>
+      <button id="t-next" class="icon-btn" aria-label="Forward one day (Right arrow)">${NEXT}</button>
     </div>
+    <div class="date"><span id="t-date"></span><small id="t-doy"></small><span id="t-asof" class="asof" hidden></span></div>
     <div class="track">
-      <input id="t-range" type="range" min="0" step="1" aria-label="Date within season" />
+      <div class="ribbon" id="t-ribbon" aria-hidden="true"></div>
+      <div class="fc-wash" id="t-fc" aria-hidden="true" hidden></div>
+      <input id="t-range" type="range" min="0" step="1" aria-label="Date within season"
+        aria-description="Behind the slider: how much of the map is at each stage on each day, and a line of sightings per day." />
       <div class="ticks" id="t-ticks" aria-hidden="true"></div>
     </div>`;
 
@@ -49,6 +68,31 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
   const dateEl = $('t-date');
   const doyEl = $('t-doy');
   const ticks = $('t-ticks');
+  const ribbonEl = $('t-ribbon');
+  const dateBox = root.querySelector<HTMLElement>('.date')!;
+  const asOfEl = $('t-asof');
+  const fcEl = $('t-fc');
+  const md = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+  // Wave notes sit just right of their peak. When the thumb would cover one, slide it to the nearest free spot:
+  // left of the peak, or just past the thumb on either side.
+  const placeWaves = () => {
+    const waves = ribbonEl.querySelectorAll<HTMLElement>('.wave');
+    if (!waves.length) return;
+    const w = ribbonEl.clientWidth;
+    const half = range.offsetWidth - w; // the ribbon is inset half a thumb each side, so this is one thumb
+    const x = (time.stepIndex / Math.max(1, time.steps)) * w;
+    const clear = half / 2 + 4;
+    for (const el of waves) {
+      el.style.transform = '';
+      const lw = el.offsetWidth;
+      const anchor = el.offsetLeft; // label's left edge (peak + its margin)
+      const peak = anchor - 4;
+      const hits = (l: number) => x + clear > l && x - clear < l + lw;
+      const spot = [anchor, peak - 4 - lw, x + clear, x - clear - lw].find((l) => !hits(l)) ?? anchor;
+      if (spot !== anchor) el.style.transform = `translateX(${(spot - anchor).toFixed(1)}px)`;
+    }
+  };
 
   let rangeKey = '';
   const drawTicks = () => {
@@ -56,7 +100,25 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const parts = makeTicks(time.start, time.end).map(
       (k) => `<span class="tick" style="left:${(((k.at - time.start) / span) * 100).toFixed(2)}%"><i></i>${k.label}</span>`,
     );
-    const nf = time.nowFraction;
+    // Live data: an "as of" flag on the last day of observed weather, and the ribbon washed paler after it (forecast).
+    // Data from before the track starts makes all of it forecast; data past its end, none.
+    const a = time.asOf;
+    const af = a && a.at >= time.start && a.at <= time.end ? (a.at - time.start) / span : null;
+    fcEl.hidden = !a || a.at >= time.end;
+    root.style.setProperty('--fc', String(af ?? 0));
+    asOfEl.hidden = !a;
+    asOfEl.classList.toggle('stale', !!a?.stale);
+    if (a) {
+      asOfEl.innerHTML = `as of ${md(a.at)}${a.stale ? '<span class="long"> · data may be stale</span><span class="phone-only"> · stale?</span>' : ''}`;
+      asOfEl.title = a.stale
+        ? `Weather observed up to ${md(a.at)}. Tonight's update looks late, so this may be out of date. Later days are forecast.`
+        : `Weather observed up to ${md(a.at)}. Later days are forecast.`;
+    }
+    if (af !== null) {
+      parts.push(`<span class="now asof-flag" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>as of</b></span>`);
+    }
+    // The clock's own "now" flag still shows, unless it would sit on top of the as-of flag (the usual night: as of yesterday).
+    const nf = a && Math.abs(time.now - a.at) <= 2 * 86_400_000 ? null : time.nowFraction;
     if (nf !== null) {
       parts.push(`<span class="now" style="left:${(nf * 100).toFixed(2)}%" title="Today"><b>now</b></span>`);
     }
@@ -66,24 +128,66 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
   const sync = () => {
     range.max = String(time.steps);
     range.value = String(time.stepIndex);
-    range.style.setProperty('--pct', `${(time.stepIndex / Math.max(1, time.steps)) * 100}%`);
-    dateEl.textContent = time.label(time.cursor);
-    range.setAttribute('aria-valuetext', time.label(time.cursor));
-    doyEl.textContent = time.cursor > time.now ? 'after today' : '';
-    if (rangeKey !== `${time.start}|${time.end}`) {
-      rangeKey = `${time.start}|${time.end}`;
+    // Where the thumb is, 0-1: the phone's date pill rides above it.
+    root.style.setProperty('--p', String(time.stepIndex / Math.max(1, time.steps)));
+    const label = time.label(time.cursor);
+    const after = time.asOf ? (time.cursor > time.asOf.at ? 'forecast' : '') : time.cursor > time.now ? 'after today' : '';
+    doyEl.classList.toggle('fc', !!time.asOf);
+    // Screen readers hear when a day is forecast, as sighted users see from the washed ribbon.
+    range.setAttribute('aria-valuetext', label + (time.asOf && time.cursor > time.asOf.at ? ' (forecast)' : ''));
+    if (dateEl.textContent !== label || doyEl.textContent !== after) {
+      // "Jun 10 (all years)": the aside in brackets is set in the handwriting face.
+      const [day, aside] = label.split(/ (?=\()/);
+      const em = document.createElement('em');
+      em.textContent = aside ?? '';
+      dateEl.replaceChildren(day!, ...(aside ? [' ', em] : []));
+      doyEl.textContent = after;
+      // Half the date pill's width, so on a phone the pill stops at the bar's edges instead of hanging off them.
+      root.style.setProperty('--half', `${Math.ceil(dateBox.offsetWidth / 2) + 4}px`);
+    }
+    const key = `${time.start}|${time.end}|${time.asOf?.at}|${time.asOf?.stale}`;
+    if (rangeKey !== key) {
+      rangeKey = key;
       drawTicks();
+      root.style.setProperty('--half', `${Math.ceil(dateBox.offsetWidth / 2) + 4}px`); // the as-of badge may have changed
     }
     play.setAttribute('aria-label', time.playing ? 'Pause (Space)' : 'Play (Space)');
     play.classList.toggle('on', time.playing);
     play.innerHTML = time.playing ? PAUSE : PLAY;
+    placeWaves();
   };
 
-  range.addEventListener('input', () => time.setStepIndex(Number(range.value)));
-  range.addEventListener('pointerdown', () => time.pause());
-  play.addEventListener('click', () => time.toggle());
-  $('t-prev').addEventListener('click', () => (time.pause(), time.step(-1)));
-  $('t-next').addEventListener('click', () => (time.pause(), time.step(1)));
+  // The first Play of a visit starts from the beginning of the season, so it shows the wave rolling north
+  // rather than the end of it. Once the reader has moved the time themselves, Play starts where they left it.
+  let touched = false;
+  let glideRaf = 0;
+  let glideTimer = 0;
+  let gliding = false;
+  const touch = () => ((touched = true), (gliding = false), cancelAnimationFrame(glideRaf), clearTimeout(glideTimer));
+  const playFromStart = () => {
+    touched = true;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || time.stepIndex === 0) return (time.setStepIndex(0), time.play());
+    const from = time.stepIndex;
+    const { start, end } = time;
+    gliding = true;
+    const t0 = performance.now();
+    const frame = (t: number) => {
+      if (time.start !== start || time.end !== end) return touch(); // the season changed under the rewind
+      const k = Math.min(1, (t - t0) / 400);
+      time.setStepIndex(Math.round(from * (1 - (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2)))); // ease in-out
+      if (k < 1) glideRaf = requestAnimationFrame(frame);
+      else glideTimer = window.setTimeout(() => ((gliding = false), time.play()), 250);
+    };
+    glideRaf = requestAnimationFrame(frame);
+  };
+
+  range.addEventListener('input', () => (touch(), time.setStepIndex(Number(range.value))));
+  range.addEventListener('pointerdown', () => (touch(), time.pause()));
+  // A press during the rewind stops it, like Pause would.
+  const togglePlay = () => (gliding ? touch() : !touched && !time.playing ? playFromStart() : (touch(), time.toggle()));
+  play.addEventListener('click', togglePlay);
+  $('t-prev').addEventListener('click', () => (touch(), time.pause(), time.step(-1)));
+  $('t-next').addEventListener('click', () => (touch(), time.pause(), time.step(1)));
 
   window.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
@@ -94,7 +198,8 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
     const onButton = t instanceof HTMLButtonElement;
     const big = e.shiftKey ? 7 : 1;
     // On the slider itself, plain arrows are the slider's own step: let the browser move it.
-    if (onRange && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return time.pause();
+    if (onRange && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return (touch(), time.pause());
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) touch();
     switch (e.key) {
       case 'ArrowLeft':
         time.pause();
@@ -114,7 +219,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
         break;
       case ' ':
         if (onButton) return; // let the button's own click handle it
-        time.toggle();
+        togglePlay();
         break;
       default:
         return;
@@ -124,4 +229,9 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): void {
 
   time.subscribe(sync);
   sync();
+  window.addEventListener('resize', placeWaves);
+  return (p) => {
+    ribbonEl.innerHTML = p ? ribbon(p) : '';
+    placeWaves();
+  };
 }
