@@ -18,3 +18,9 @@ What differs from luna:
 **This fit is exploratory.** Nothing was written down before scoring, unlike luna's P3. `result.json` holds the
 leave-one-year-out and Illinois/Indiana/Ohio to Wisconsin/Minnesota scores, the per-fold parameters and the
 noise floor. The app says "first try" next to every firefly number.
+
+## Finer hexes
+`python3 pipeline/firefly/build_fine_firefly.py` (after `build_firefly.py`) writes res-5 hexes (~17 km) to
+`public/fine-firefly/`, the same format as luna's `public/fine/`, from the fold fits saved in `result.json`. It refuses
+to write unless those fits reproduce the res-4 file exactly. It needs Daymet for ~3,900 res-5 cells (cached; first run
+is slow). Res 6 is not built for fireflies.
