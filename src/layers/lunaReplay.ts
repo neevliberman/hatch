@@ -471,23 +471,24 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const stage = stageAt(q, doy);
       // One answer up front; the detail waits behind "More" (pinned cards only) so the card stays small over the map.
       const label = STAGE_LABEL[stage];
-      const title = `${label[0]!.toUpperCase()}${label.slice(1)} on ${fmtDoy(year, doy)}`;
+      const title = `Luna moth: ${label} on ${fmtDoy(year, doy)}`; // the species, as both layers can be on at once
       const lines: string[] = [];
       const more: string[] = [];
       // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
       // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
       const pk = data.interval?.peak;
-      if (pk && q50 != null && mode !== TYPICAL) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      const likely = !!(pk && q50 != null && mode !== TYPICAL);
+      if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       if (!at.seen) lines.push('No lunas ever seen near here to check this against.');
       if (q05 != null && q25 != null && q75 != null)
-        more.push(`First moths about ${fmtDoy(year, q05)}${mode === TYPICAL ? '' : `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}`}.`);
+        more.push(`First moths about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
         const off = sc.heat_peak - sc.obs_peak;
         more.push(
-          `Check, this strip of the map (${band.label}°N): moths peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+          `How the forecast did in this strip of the map (${band.label}°N): moths peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
             (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
             `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );

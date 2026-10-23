@@ -191,9 +191,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 #probe[hidden] { display: none; }
 .probe-cell { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
 .probe-title { font-weight: 700; color: var(--moon); }
-.probe-title .sw { margin-right: 6px; vertical-align: -1px; }
+.probe-title .sw { margin-right: 6px; vertical-align: -2px; width: 16px; height: 14px; }
 .probe-more { margin-top: 4px; }
-.probe-more summary { cursor: pointer; color: var(--moon); font-weight: 600; min-height: 24px; display: list-item; }
+.probe-more summary { cursor: pointer; color: var(--moon); font-weight: 600; min-height: 32px; padding-top: 6px; box-sizing: border-box; display: list-item; }
 .probe-more p { margin: 4px 0 0; }
 .probe-card + .probe-card { margin-top: 8px; }
 

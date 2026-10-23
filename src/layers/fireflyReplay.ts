@@ -248,17 +248,18 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
       const lines: string[] = [];
       const more: string[] = [];
       const pk = data.interval?.peak;
-      if (pk && q50 != null && mode !== TYPICAL) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      const likely = !!(pk && q50 != null && mode !== TYPICAL);
+      if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       if (!at.seen) lines.push('No fireflies of this kind ever seen near here to check this against.');
       if (q05 != null && q25 != null && q75 != null)
-        more.push(`First fireflies about ${fmtDoy(year, q05)}${mode === TYPICAL ? '' : `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}`}.`);
+        more.push(`First fireflies about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
         const off = sc.heat_peak - sc.obs_peak;
         more.push(
-          `Check, this strip of the map (${band.label}°N): fireflies peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+          `How the forecast did in this strip of the map (${band.label}°N): fireflies peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
             (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
             `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
@@ -269,7 +270,7 @@ export function createFireflyLayer(file: ReplayFile, initial: Mode = TYPICAL): L
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in this hexagon${mode === TYPICAL ? ' (all years)' : ''}.`
           : `No sightings in this hexagon${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      return { title: `${label[0]!.toUpperCase()}${label.slice(1)} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
+      return { title: `Firefly: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
     caveats(): CaveatCard {
