@@ -77,8 +77,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 6px 2px; flex: none; font-family: var(--font-display);
   text-shadow: 0 0 6px var(--panel-solid), 0 0 14px var(--panel-solid), 0 0 2px var(--panel-solid); }
 .brand small { font-weight: 400; color: var(--muted); font-size: 12px; }
-.brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sun);
-  align-self: center; }
+.brand .mark { width: 24px; height: 24px; align-self: center; margin: -4px 0; flex: none; }
 
 #layers { pointer-events: none; min-width: 0; padding: 0 var(--gr) 8px var(--gl); }
 #layers[hidden] { display: none; }
