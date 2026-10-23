@@ -53,7 +53,7 @@ function start() {
   // Playback slows to 8 days/s while the wave is on (any hex starting or at peak) and runs 18 days/s otherwise.
   // Reduced motion keeps one steady speed.
   const still = matchMedia('(prefers-reduced-motion: reduce)');
-  time.pace = (t) => (still.matches ? 14 : luna.busy?.(t) ? 8 : 18);
+  time.pace = (t) => (still.matches ? 14 : cur.busy?.(t) ? 8 : 18);
 
   let hit: ProbeHit | null = null;
   let pinned = false;
@@ -263,7 +263,7 @@ function start() {
     void setSpecies('firefly').finally(() => (speciesPending = false));
   }
 
-  const setRibbon = mountScrubber($('bar'), time);
+  const setRibbon = mountScrubber($('bar'), time, () => (cur === luna ? 'That was the first wave.' : 'That was the firefly season.'));
   // The slider's track pictures the active species' season; a season or species change redraws it.
   // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
   let ribbonFrame = 0;

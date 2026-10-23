@@ -45,8 +45,9 @@ function ribbon(p: SeasonProfile): string {
 }
 
 /** Bottom bar bound to a TimeAxis: play/pause, step, slider over the season ribbon, month ticks, "now" marker, keyboard.
- * Returns a function that redraws the ribbon (call it when the season or species changes). */
-export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProfile | undefined) => void {
+ * `endNote` gives the first line of the note shown when playback reaches the last day. Returns a function that
+ * redraws the ribbon (call it when the season or species changes). */
+export function mountScrubber(root: HTMLElement, time: TimeAxis, endNote = () => 'That was the season.'): (p: SeasonProfile | undefined) => void {
   root.innerHTML = `
     <div class="btns">
       <button id="t-prev" class="icon-btn" aria-label="Back one day (Left arrow)">${PREV}</button>
@@ -143,7 +144,7 @@ export function mountScrubber(root: HTMLElement, time: TimeAxis): (p: SeasonProf
     const end = !time.playing && time.stepIndex === time.steps;
     if (wasPlaying && end) {
       ended = true;
-      note.innerHTML = 'That was the first wave.<small>Tap replay to watch it roll north again</small>';
+      note.innerHTML = `${endNote()}<small>Tap replay to watch it roll north again</small>`;
       note.classList.add('on');
       clearTimeout(noteTimer);
       noteTimer = window.setTimeout(() => note.classList.remove('on'), 3000);

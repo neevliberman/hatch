@@ -172,6 +172,7 @@ export function createFireflyLayer(
     },
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
+    busy: (t) => forecast().some((q) => /^(st|pe)/.test(stageAt(q, dayOfYear(t)))),
     seasonCount: (m: Mode) => sightingsFor(m).length,
 
     newest(t) {
@@ -207,8 +208,9 @@ export function createFireflyLayer(
       return p;
     },
 
-    render({ t, zoom, theme, wash }) {
+    render({ t, zoom, theme, wash, frac = 0 }) {
       const doy = dayOfYear(t);
+      const d = doy + frac; // the in-between day while playing, like luna's dots
       const res = resFor(zoom);
       if (res !== shownRes) {
         shownRes = res;
@@ -219,8 +221,8 @@ export function createFireflyLayer(
       const qOf = (c: Cell) => (days ? fineQ(days, c.i) : forecast()[c.i]);
       const filter = {
         getFilterValue: day,
-        filterRange: [doy - GLOW_DAYS + 0.5, doy + 0.5] as [number, number],
-        filterSoftRange: [doy - 0.5, doy + 0.5] as [number, number],
+        filterRange: [d - GLOW_DAYS + 0.5, d + 0.5] as [number, number],
+        filterSoftRange: [d - 0.5, d + 0.5] as [number, number],
         filterTransformSize: true,
         filterTransformColor: true,
         extensions: filterExt,
