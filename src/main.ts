@@ -64,7 +64,6 @@ function start() {
 
   let hit: ProbeHit | null = null;
   let pinned = false;
-  let tappedAt = -1e9; // when the map last took a tap or click (see the card's click handler)
   let resetKeys = () => {}; // set once the keyboard explorer is built; a species or season switch starts it afresh
   let lastPin: [number, number] | null = null; // the last pinned spot, by any means: where the keyboard explorer starts
   const probeEl = $('probe');
@@ -165,7 +164,6 @@ function start() {
     },
     onProbe: (h, clicked) => {
       if (clicked) {
-        tappedAt = performance.now();
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
         // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
         // landed on a neighbour (a point near a hex edge). A hex pinned from My area or the city menu has no picked
@@ -739,9 +737,12 @@ function start() {
   // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
   // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.
   // A tap pins its card before the browser sends that tap's click, and a docked card (a phone on its side) can open
-  // right under the finger: that same click must not land on the card's × or "More".
+  // right under the finger: a pointer click on the card counts only if the press started on the card. Keyboard and
+  // screen-reader activations (detail 0) always count.
+  let pressOnCard = false;
+  window.addEventListener('pointerdown', (e) => (pressOnCard = probeEl.contains(e.target as Node)), true);
   probeEl.addEventListener('click', (e) => {
-    if (performance.now() - tappedAt < 500) return void (e.preventDefault(), e.stopPropagation());
+    if (e.detail > 0 && !pressOnCard) return void (e.preventDefault(), e.stopPropagation());
     if (!(e.target as Element).closest('.probe-close')) return;
     unpin();
     $('t-range').focus({ preventScroll: true });
