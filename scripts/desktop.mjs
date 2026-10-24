@@ -503,7 +503,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const stale = (await badge.getAttribute('class')).includes('stale');
       // Amber only when the nightly run is overdue; a frozen or rebuilt file shows its age without it.
       if (stale !== (label === 'late file')) fail(stale ? 'fresh data marked stale' : 'a late file is not marked stale');
-      await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 3000 })
+      // The address bar follows the view on a throttle; a software-GL page can take seconds per frame, so wait for it.
+      await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 10000 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
       await page.mouse.move(2, height / 2);
       await shotL('1-map');
@@ -565,6 +566,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'live') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
           if (!(await page.locator('#season option[value=live]').count())) fail('the firefly season menu does not offer live mode');
+          // Entering live mode lands on the species' own as-of day (its part of the file can run to another day than luna's).
+          const ffAsOf = someSpecies.species?.firefly?.as_of;
+          const ffDate = ffAsOf && new Date(Date.parse(ffAsOf)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+          if (ffDate && (await page.locator('#t-date').textContent()) !== ffDate)
+            fail(`firefly live mode opened on ${await page.locator('#t-date').textContent()}, not its as-of day ${ffDate}`);
           await page.locator('#species').selectOption('japanese-beetle');
           await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 8000 }).catch(() => fail('the beetle never loaded'));
           await page.waitForTimeout(800);

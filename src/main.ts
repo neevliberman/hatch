@@ -391,14 +391,16 @@ function start() {
     updateProbe(); // a card pinned in the old season describes that season: it went with the switch
     syncCountdown();
   };
-  picker.addEventListener('change', () => ((wantLiveFor = null), switchMode(picker.value)));
-  /** A species that should open on live mode once its live forecast is attached (see setSpecies). */
-  let wantLiveFor: string | null = null;
+  picker.addEventListener('change', () => ((wantLive = null), switchMode(picker.value)));
+  /** A species that should open on live mode once its live forecast is attached (see setSpecies), and the day to open
+   * on: a link's own date=, else none (live mode opens on that species' as-of day, however it is entered). */
+  let wantLive: { key: string; at?: [number, number] } | null = null;
   const goLiveIfWanted = () => {
-    if (wantLiveFor !== curKey || !cur.live() || picker.value === LIVE) return;
-    wantLiveFor = null;
+    if (wantLive?.key !== curKey || !cur.live() || picker.value === LIVE) return;
+    const at = wantLive.at;
+    wantLive = null;
     picker.value = LIVE;
-    switchMode(LIVE, speciesPending ? (md ? [month, day] : undefined) : wantDay); // a link opens on its as-of day
+    switchMode(LIVE, at);
     syncUrl();
   };
   $('season-name').textContent = modeLabel(initialMode);
@@ -440,7 +442,8 @@ function start() {
     if (next === cur) return;
     // Live was wanted for it (picked from live mode, or a ?season=live&species= link): goes live as soon as its live
     // forecast is there, now or when the file arrives.
-    wantLiveFor = picker.value === LIVE || (speciesPending === entry.key && asked === LIVE) ? entry.key : null;
+    const fromLink = speciesPending === entry.key && asked === LIVE;
+    wantLive = picker.value === LIVE || fromLink ? { key: entry.key, at: fromLink && md ? [month, day] : undefined } : null;
     // A species with no live season (yet): switching to it from live mode goes to all years, on the same day.
     if (!next.live() && picker.value === LIVE) {
       picker.value = TYPICAL;
@@ -464,13 +467,18 @@ function start() {
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur.words.sightingsOf} sightings over hexagons colored by the forecast`);
+    // Live mode opens on this species' own as-of day (each species' live forecast can run to its own), unless a link
+    // gave a date; any other season keeps the calendar day.
+    const live = picker.value === LIVE;
+    const at = live ? wantLive?.at : wantDay;
+    if (live) wantLive = null;
     asSwitch(() => {
-      // Live mode keeps the calendar day too: each species' live forecast can run to its own as-of day.
-      registry.setTime(cur.id, fitSeason(cur, timeFor(cur, picker.value, wantDay[0], wantDay[1])));
+      registry.setTime(cur.id, fitSeason(cur, timeFor(cur, picker.value, at?.[0], at?.[1])));
       // Old one off first, so the two never draw together for a frame.
       registry.setActive(prev.id, false);
       registry.setActive(cur.id, true);
     });
+    if (live && !at) wantDay = dayOf(time.cursor); // its as-of day becomes the day asked for, as in switchMode
     syncUrl();
     goLiveIfWanted();
   };

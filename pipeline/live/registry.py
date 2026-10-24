@@ -17,9 +17,10 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "notebooks"))
 sys.path.insert(0, str(ROOT / "pipeline"))
 
-# Taxon ids and windows come from where each species' fit defines them, never copied here.
+# Taxon ids and windows come from where each species' fit defines them, never copied here. Only modules with no
+# import-time side effects (the build scripts patch fit.evaluate when imported, so they are never imported here).
 import species as _species  # noqa: E402
-from firefly import build_firefly as _ff, fetch as _ff_fetch  # noqa: E402
+from firefly import fetch as _ff_fetch  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,7 @@ SPECIES = [
     LiveSpecies("luna", "Luna moth", LUNA_REPLAY_TAXON, ROOT / "src" / "data" / "luna-replay.json",
                 ROOT / "pipeline" / "replay" / "fold_fits.json", HERE / "effort_profile.json"),
     LiveSpecies("firefly", "Common eastern firefly", _ff_fetch.TAXON, ROOT / "public" / "firefly-replay.json",
-                ROOT / "pipeline" / "firefly" / "result.json", HERE / "effort" / "firefly.json", last_doy=_ff.LAST_DOY),
+                ROOT / "pipeline" / "firefly" / "result.json", HERE / "effort" / "firefly.json", last_doy=_ff_fetch.LAST_DOY),
     *[LiveSpecies(sp.key, sp.name, sp.taxon, sp.replay, sp.result, HERE / "effort" / f"{sp.key}.json", last_doy=sp.last_doy)
       for sp in (_species.get(k) for k in ("japanese-beetle",))],
 ]

@@ -211,3 +211,15 @@ def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_pa
     live["checks"]["species_failed"] = []
     (tmp_path / "latest.json").write_text(json.dumps(live))
     assert S.main(args) == 0
+
+
+def test_importing_the_live_pipeline_patches_nothing():
+    """The species list reads ids and windows without importing any build script (build_firefly / species.build set
+    fit.evaluate.cutoffs to a one-generation rule when imported, which would change luna's fit code in this process)."""
+    import subprocess
+    code = ("import sys; sys.path.insert(0, 'pipeline'); from fit import evaluate as EV; before = EV.cutoffs; "
+            "from live import registry, build_live, scorecard, rehearse; "
+            "assert EV.cutoffs is before and EV.cutoffs.__module__ == 'fit.evaluate', EV.cutoffs.__module__; "
+            "assert not any(m in sys.modules for m in ('firefly.build_firefly', 'species.build')), 'a build script was imported'")
+    root = Path(__file__).resolve().parents[2]
+    subprocess.run([sys.executable, "-c", code], cwd=root, check=True)
