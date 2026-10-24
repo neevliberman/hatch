@@ -15,11 +15,12 @@
     "budget": "node scripts/budget.mjs",
     "icons": "node scripts/logo.mjs && node scripts/icons.mjs",
     "og": "npm run build:single && node scripts/og.mjs",
-    "check": "npm run build && npm run build:single && npm run budget && npm run shoot && npm run mobile && npm run desktop && npm run fine && npm run firstframes",
+    "check": "npm run build && npm run build:single && npm run budget && npm run shoot && npm run mobile && npm run desktop && npm run fine && npm run firstframes && npm run labels",
     "mobile": "node scripts/mobile.mjs screenshots/mobile",
     "desktop": "node scripts/desktop.mjs screenshots/desktop",
     "fine": "node scripts/fine.mjs screenshots/fine",
-    "firstframes": "node scripts/firstframes.mjs screenshots/firstframes"
+    "firstframes": "node scripts/firstframes.mjs screenshots/firstframes",
+    "labels": "node scripts/labels.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "9.4.0",

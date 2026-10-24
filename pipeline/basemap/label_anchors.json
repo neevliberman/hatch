@@ -1,0 +1,382 @@
+{
+"park|Big South Fork NRA|15": [
+-84.556,
+36.652
+],
+"park|Chequamegon-Nicolet NF|938": [
+-91.061,
+46.325
+],
+"park|Chippewa NF|770": [
+-94.241,
+47.412
+],
+"park|Dakota Prairie NG|36": [
+-97.322,
+46.466
+],
+"park|Daniel Boone NF|840": [
+-83.547,
+37.175
+],
+"park|Hiawatha NF|611": [
+-86.678,
+46.098
+],
+"park|Hoosier NF|270": [
+-86.281,
+39.014
+],
+"park|Huron-Manistee NF|920": [
+-84.067,
+44.524
+],
+"park|Isle Royale NP|69": [
+-88.884,
+47.998
+],
+"park|Jefferson NF|32": [
+-82.767,
+37.086
+],
+"park|Land Between the Lakes NRA|46": [
+-88.07,
+36.852
+],
+"park|Mark Twain NF|1260": [
+-91.171,
+36.792
+],
+"park|Midewin NTP|12": [
+-88.098,
+41.382
+],
+"park|Ottawa NF|740": [
+-89.241,
+46.389
+],
+"park|Pictured Rocks NL|37": [
+-86.374,
+46.546
+],
+"park|Shawnee NF|382": [
+-88.642,
+37.517
+],
+"park|Sleeping Bear Dunes NL|30": [
+-85.888,
+44.935
+],
+"park|Superior NF|1891": [
+-91.358,
+47.959
+],
+"park|Voyageurs NP|63": [
+-92.866,
+48.525
+],
+"park|Wayne NF|361": [
+-82.502,
+38.714
+],
+"state|ILLINOIS|0": [
+-89.2,
+40.0
+],
+"state|INDIANA|0": [
+-86.17,
+39.79
+],
+"state|IOWA|0": [
+-93.15,
+41.94
+],
+"state|MICHIGAN|0": [
+-84.7,
+43.6
+],
+"state|MINNESOTA|0": [
+-94.4,
+46.0
+],
+"state|OHIO|0": [
+-82.8,
+40.3
+],
+"state|WISCONSIN|0": [
+-90.37,
+44.73
+],
+"water|Agassiz Pool|7": [
+-95.982,
+48.347
+],
+"water|Barren River Lake|5": [
+-86.091,
+36.888
+],
+"water|Basswood Lake|8": [
+-91.678,
+48.063
+],
+"water|Black Lake|5": [
+-84.261,
+45.458
+],
+"water|Bull Shoals Lake|9": [
+-93.102,
+36.598
+],
+"water|Burt Lake|6": [
+-84.67,
+45.466
+],
+"water|Carlyle Lake|8": [
+-89.267,
+38.703
+],
+"water|Cass Lake|7": [
+-94.574,
+47.425
+],
+"water|Cave Run Lake|4": [
+-83.501,
+38.073
+],
+"water|Elk Lake|6": [
+-85.386,
+44.875
+],
+"water|Grand Lake-St.-Marys|5": [
+-84.5,
+40.515
+],
+"water|Green River Lake|6": [
+-85.315,
+37.234
+],
+"water|Gull Lake|5": [
+-94.353,
+46.446
+],
+"water|Houghton Lake|7": [
+-84.73,
+44.342
+],
+"water|Kentucky L.|11": [
+-88.105,
+36.742
+],
+"water|Lac la Croix|12": [
+-91.819,
+48.196
+],
+"water|Lake Barkley|13": [
+-87.954,
+36.859
+],
+"water|Lake Butte Des Morts|5": [
+-88.661,
+44.07
+],
+"water|Lake Charlevoix|7": [
+-85.132,
+45.282
+],
+"water|Lake Chippewa|7": [
+-91.179,
+45.938
+],
+"water|Lake Cumberland|10": [
+-85.003,
+36.919
+],
+"water|Lake Dubay|6": [
+-89.706,
+44.716
+],
+"water|Lake Erie|129": [
+-81.27,
+42.129
+],
+"water|Lake Huron|209": [
+-82.288,
+44.686
+],
+"water|Lake Koshkonong|5": [
+-88.954,
+42.871
+],
+"water|Lake Mendota|5": [
+-89.417,
+43.106
+],
+"water|Lake Michigan|203": [
+-87.089,
+43.878
+],
+"water|Lake Of The Ozarks|12": [
+-92.697,
+38.154
+],
+"water|Lake Ontario|21": [
+-79.608,
+43.389
+],
+"water|Lake Poygan|6": [
+-88.838,
+44.154
+],
+"water|Lake Red Rock|5": [
+-93.072,
+41.411
+],
+"water|Lake Shelbyville|7": [
+-88.707,
+39.503
+],
+"water|Lake St. Clair|28": [
+-82.684,
+42.504
+],
+"water|Lake Superior|251": [
+-88.201,
+47.726
+],
+"water|Lake Traverse|7": [
+-96.731,
+45.709
+],
+"water|Lake Wappapello|4": [
+-90.398,
+37.007
+],
+"water|Lake Winnebago|19": [
+-88.423,
+44.028
+],
+"water|Lake Winnibigoshish|13": [
+-94.252,
+47.436
+],
+"water|Lake of the Woods|32": [
+-94.959,
+49.117
+],
+"water|Laurel River Lake|4": [
+-84.246,
+36.975
+],
+"water|Leech Lake|17": [
+-94.444,
+47.176
+],
+"water|Lower Red Lake|22": [
+-95.018,
+47.987
+],
+"water|Lower Whitefish Lake|5": [
+-94.228,
+46.693
+],
+"water|Mark Twain Lake|7": [
+-91.797,
+39.487
+],
+"water|Mille Lacs Lake|19": [
+-93.68,
+46.247
+],
+"water|Monroe Lake|6": [
+-86.46,
+39.047
+],
+"water|Mullett Lake|7": [
+-84.517,
+45.501
+],
+"water|Northern Light Lake|6": [
+-90.927,
+48.22
+],
+"water|Otter Tail Lake|6": [
+-95.672,
+46.399
+],
+"water|Patoka Lake|5": [
+-86.665,
+38.412
+],
+"water|Pelican Lake|5": [
+-94.184,
+46.574
+],
+"water|Pelican Lake|6": [
+-92.908,
+48.064
+],
+"water|Petenwell Lake|11": [
+-90.011,
+44.06
+],
+"water|Pokegama Lake|4": [
+-93.612,
+47.204
+],
+"water|Pomme De Terre Lake|4": [
+-93.363,
+37.854
+],
+"water|Rainy Lake|19": [
+-93.036,
+48.492
+],
+"water|Rathbun Lake|6": [
+-92.955,
+40.852
+],
+"water|Rend Lake|7": [
+-88.975,
+38.111
+],
+"water|Saginaw Bay|14": [
+-83.812,
+43.982
+],
+"water|St. Marys River|10": [
+-84.152,
+46.444
+],
+"water|Stockton Lake|8": [
+-93.688,
+37.579
+],
+"water|Table Rock Lake|12": [
+-93.473,
+36.614
+],
+"water|Torch Lake|7": [
+-85.299,
+44.981
+],
+"water|Truman Res.|14": [
+-93.544,
+38.208
+],
+"water|Turtle-Flambeau Flowage|6": [
+-90.166,
+46.071
+],
+"water|Upper Red Lake|19": [
+-94.799,
+48.129
+],
+"water|Vermilion Lake|11": [
+-92.295,
+47.873
+],
+"water|Whitefish Bay|6": [
+-84.529,
+46.438
+]
+}
