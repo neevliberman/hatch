@@ -73,7 +73,7 @@ export function fillScores(root: HTMLElement): void {
       const s = card(el, 'record')?.summary;
       const scored = !!(s?.scored && s.miss != null && s.calendar_miss != null);
       if (scored)
-        checks.push({ where: `in ${f.season}`, days: s!.miss!, usual: s!.calendar_miss!, size: `${s!.scored} strip-year${s!.scored > 1 ? 's' : ''}` });
+        checks.push({ where: `in ${f.season}`, days: s!.miss!, usual: s!.calendar_miss!, size: `${s!.scored} strip-\u2060year${s!.scored > 1 ? 's' : ''}` });
       el.textContent = recordLine(checks, scored ? undefined : Number(el.dataset.through) || undefined);
       el.hidden = !el.textContent;
     });

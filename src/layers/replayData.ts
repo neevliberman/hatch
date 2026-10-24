@@ -61,7 +61,8 @@ export type ReplayData = ReturnType<typeof replayData>;
 export function modelChecks(data: ReplayFile, past: { n: number; heat: number; calendar: number }, holdoutYears?: number): RecordCheck[] {
   const h = data.model?.holdout_mae;
   const nh = data.model?.holdout_band_years || holdoutYears;
-  const sy = (n: number) => `${n} strip-year${n === 1 ? '' : 's'}`;
+  // A word joiner after the hyphen keeps "strip-years" on one line (the fonts have no non-breaking hyphen).
+  const sy = (n: number) => `${n} strip-\u2060year${n === 1 ? '' : 's'}`;
   return [
     ...(past.n ? [{ where: 'on past years', days: past.heat, usual: past.calendar, size: sy(past.n) }] : []),
     ...(h && Number.isFinite(h.heat) && Number.isFinite(h.cal)
