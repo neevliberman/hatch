@@ -48,9 +48,11 @@ export interface MapHandle {
   zoom(): number | null;
   /** Jump (or, given `ms`, fly) to lngLat at a zoom level (also used by the zoomed-in smoke test, scripts/fine.mjs). */
   view(lngLat: [number, number], zoom: number, ms?: number): void;
-  /** Layers drawn over the hexagons and woods, under the lakes, roads, rivers and lines (the radar replay, src/radar/).
+  /** Layers drawn over the hexagons and woods, under the lakes, roads, rivers and lines (the radar replay, src/radar/),
+   * and `overWater` just above the lakes, for what must show on a lake too: under the rivers, and under the roads and
+   * state lines until the zoomed-in shore draws the lakes over those (then over them, never under a lake).
    * While any are set the sighting dots stand down, so nothing but the overlay's own story sits on it. [] clears it. */
-  setOverlay(layers: Layer[]): void;
+  setOverlay(layers: Layer[], overWater?: Layer[]): void;
 }
 
 export interface Padding {
@@ -470,6 +472,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       : [];
 
   let overlay: Layer[] = [];
+  let overWater: Layer[] = [];
   let picked: string | null = null;
   let pickedBuilt: Layer[] = [];
   const pickedLayers = (): Layer[] =>
@@ -523,10 +526,15 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
-    // An overlay goes over the woods' tree marks and under the lakes, roads and rivers.
-    const cut = overlay.length ? mid.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
+    // An overlay goes over the woods' tree marks and under the lakes, roads and rivers; its over-water part just after
+    // the last layer of water: the lakes, or zoomed in, the shore (lakes drawn again over the state lines, so a coast
+    // never shows as an ink line off the shore). So a swarm over a lake shows, and the rivers stay on top of it.
+    const on = overlay.length > 0;
+    const cut = on ? mid.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
     const at = cut < 0 ? mid.length : cut;
-    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid.slice(0, at), ...overlay, ...mid.slice(at), ...(overlay.length ? [] : rest), ...pickedBuilt, ...markerBuilt] });
+    const dry = mid.reduce((d, l, i) => (/^water-|^(sea|lakes)-top$/.test(l.id) ? i + 1 : d), at);
+    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid.slice(0, at), ...overlay, ...mid.slice(at, dry), ...(on ? overWater : []),
+      ...mid.slice(dry), ...(on ? [] : rest), ...pickedBuilt, ...markerBuilt] });
   };
 
   const handle: MapHandle = {
@@ -589,8 +597,9 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       markerBuilt = markerLayers();
       refresh();
     },
-    setOverlay(layers) {
+    setOverlay(layers, wet = []) {
       overlay = layers;
+      overWater = wet;
       refresh();
     },
     setPicked(cell) {

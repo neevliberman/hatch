@@ -16,7 +16,8 @@ import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
-import { RADAR_LINKS } from './radar/index';
+import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
+import type { Radar, View } from './radar/radarReplay';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
@@ -109,7 +110,7 @@ function start() {
   let resetKeys = () => {}; // set once the keyboard explorer is built; a species or season switch starts it afresh
   let lastPin: [number, number] | null = null; // the last pinned spot, by any means: where the keyboard explorer starts
   // An open radar replay (src/radar/): the map belongs to it for now, so hexagons give no cards.
-  let radar: { id: string; close(back?: boolean): void } | null = null;
+  let radar: Radar | null = null;
   const probeEl = $('probe');
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
@@ -905,13 +906,22 @@ function start() {
   // load only when one is opened, from the About panel's link or a ?radar= link; not in the one-file build (no files
   // beside it). While open, its card takes the key's place and the time bar steps aside: it has its own play button.
   let radarAsking = 0;
+  // Where × goes back to, carried over while one replay hands over to another (the map is at the old radar by then).
+  let radarBack: View | null | undefined;
   // A pen radar: the dish's dot, two range rings and the sweep.
   const RADAR_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="10" stroke-dasharray="3 2.4"/><path d="M12 12l6.4-6.6"/></g><circle cx="12" cy="12" r="1.9" fill="currentColor"/></svg>';
   const openRadar = async (id: string) => {
     if (!__BASEMAP__) return;
     if ($('drawer').classList.contains('open')) toggleDrawer(false);
     if (radar?.id === id) return;
-    radar?.close();
+    // Switching: the open one closes where it is, and the next one takes over its way back. radar-on stays, so the
+    // time bar doesn't flash up while the next one loads.
+    if (radar) {
+      const old = radar;
+      radar = null;
+      radarBack = old.before;
+      old.close(false);
+    }
     const ticket = ++radarAsking;
     time.pause();
     unpin();
@@ -921,27 +931,44 @@ function start() {
         map,
         padding,
         mount: $('floats'),
+        before: radarBack,
+        stale: () => ticket !== radarAsking,
         onClose: () => {
-          if (radar?.id === id) radar = null;
+          // Only the open one owns the page's radar state: one closed for a switch, or a late one, leaves it be.
+          if (radar?.id !== id) return;
+          radar = null;
           $('app').classList.remove('radar-on');
           syncUrl();
         },
       }))
       .catch(() => null);
-    if (ticket !== radarAsking) return opened?.close();
-    if (!opened) return say('Couldn\u2019t load the radar replay. Try again later.');
+    // A later click took over while this one loaded: it is that one's turn.
+    if (ticket !== radarAsking) return opened?.close(false);
+    const back = radarBack;
+    radarBack = undefined;
+    if (!opened) {
+      // Nothing opened after a switch: the map is still at the old radar, so take it back.
+      if (back !== undefined) {
+        $('app').classList.remove('radar-on');
+        if (back) map.focus(back.lngLat, back.zoom, padding(), true);
+        else map.fit(padding(), true);
+        syncUrl();
+      }
+      return say('Couldn\u2019t load the radar replay. Try again later.');
+    }
     msg.textContent = '';
     radar = opened;
     $('app').classList.add('radar-on');
     syncUrl();
   };
-  // The About panel's way in, under its opening lines (re-added each time the panel redraws).
+  // The About panel's way in, under its opening lines (re-added each time the panel redraws): a short row of evenings.
   const aboutRadar = () => {
     const hook = $('drawer').querySelector('.ex-hook');
     // Not without WebGL: there is no map to replay it on.
     if (!__BASEMAP__ || document.getElementById('no-webgl') || !hook || hook.parentElement!.querySelector('.ex-radar')) return;
-    const links = RADAR_LINKS.map((r) => `<button type="button" class="ex-radar" data-radar="${r.id}">${RADAR_ICON}${r.label}</button>`);
-    (hook.parentElement!.querySelector('.cd') ?? hook).insertAdjacentHTML('afterend', `<p class="ex-radars">${links.join('')}</p>`);
+    const links = RADAR_LINKS.map((r) => `<button type="button" class="ex-radar" data-radar="${r.id}" title="${r.title}">${RADAR_ICON}${r.label}</button>`);
+    (hook.parentElement!.querySelector('.cd') ?? hook).insertAdjacentHTML('afterend',
+      `<div class="ex-radars" role="group" aria-labelledby="ex-radars-h"><p id="ex-radars-h">${RADAR_HEAD}</p>${links.join('')}</div>`);
   };
   registry.subscribe(aboutRadar);
   aboutRadar();

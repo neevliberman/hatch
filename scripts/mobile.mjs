@@ -4,10 +4,15 @@
 //      ENGINES (comma list, default "chromium,webkit").
 // FAILS (exit 1) on errors, a map squeezed out by the panels, controls that are covered or off-screen, or a broken
 // tap flow (hex card, play, My area, Share, drawer).
+// Then, when dist/ (DIST_DIR) has been built, the radar replays over http on the smallest phone of each engine, both
+// orientations: each opens from its ?radar= link, its card fits and taps, "How we know" keeps clear of the radar, and ×
+// closes it.
 import { createRequire } from 'node:module';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { extname, join, normalize, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 
@@ -321,6 +326,101 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     console.log(`${tag}: map ${Math.round(a.map * 100)}% (with card ${Math.round(b.map * 100)}%)`);
   }
 }
+// The radar replays (src/radar/), over http: the one-file build has none, their frames are files beside the page.
+// Every event in the About list, from its ?radar= link: the card's buttons can be tapped, nothing spills off the side,
+// "How we know" opens (on a phone on its side the radar moves to the right of it, upright it stays above the card),
+// the radar sits at the map's centre, and × gives back the time bar.
+const RADARS = { 'karx-2014-07-20': { at: [-91.19, 43.82], tz: 'CDT' }, 'kcle-2019-06-26': { at: [-81.86, 41.41], tz: 'EDT' } };
+const distDir = resolve(process.env.DIST_DIR ?? 'dist');
+// CI builds only the one-file page for this script, so build the http one here rather than skip the replays.
+if (!process.env.DIST_DIR && !existsSync(join(distDir, 'radar'))) execSync('npx vite build --logLevel warn', { stdio: 'inherit' });
+if (existsSync(join(distDir, 'radar'))) {
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
+  const server = createServer((req, res) => {
+    const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
+    let f = join(distDir, path);
+    if (existsSync(f) && statSync(f).isDirectory()) f = join(f, 'index.html');
+    if (!f.startsWith(distDir) || !existsSync(f)) return res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': types[extname(f)] ?? 'application/octet-stream' }).end(readFileSync(f));
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  // The smallest phone of each engine: the tightest fit.
+  const small = [...new Set(phones.map((p) => p[1]))].map((e) => phones.filter((p) => p[1] === e).sort((a, b) => a[2] * a[3] - b[2] * b[3])[0]);
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    for (const orient of ['portrait', 'landscape']) {
+      for (const [id, ev] of Object.entries(RADARS)) {
+        const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
+        const tag = `radar ${id} ${phone} ${orient}`;
+        const fail = (m) => problems.push(`${tag}: ${m}`);
+        const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+        const page = await ctx.newPage();
+        page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
+        page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+        // A finger tap at the centre of `sel`, if it is shown, on-screen and on top there.
+        const tap = async (sel) => {
+          const at = await page.evaluate((s) => {
+            const el = document.querySelector(s);
+            const r = el?.getBoundingClientRect();
+            if (!r || !r.width || !r.height) return null;
+            const [x, y] = [r.x + r.width / 2, r.y + r.height / 2];
+            const hit = x >= 0 && y >= 0 && x < innerWidth && y < innerHeight ? document.elementFromPoint(x, y) : null;
+            return hit && (hit === el || el.contains(hit)) ? [x, y] : null;
+          }, sel);
+          if (!at) return fail(`could not tap ${sel}`), false;
+          await page.touchscreen.tap(...at);
+          return true;
+        };
+        try {
+          await page.goto(`${origin}/?radar=${id}&noauto&today=2027-01-15`);
+          await page.waitForSelector('#radar', { timeout: 30000 });
+          const cap = (await page.locator('#radar .rd-cap').innerText()).replace(/\s+/g, ' ');
+          if (!cap.includes(ev.tz) || !/[Mm]ayflies/.test(cap)) fail(`the caption reads "${cap}"`);
+          await page.waitForFunction(([lng, lat]) => {
+            const c = window.__hatch.map.center(window.__hatch.padding());
+            return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && Math.abs(c.lngLat[0] - lng) < 0.6 && Math.abs(c.lngLat[1] - lat) < 0.7;
+          }, ev.at, { timeout: 30000, polling: 250 }).catch(() => fail('the map did not go to the radar'));
+          const card = await page.evaluate(() => {
+            const bad = [];
+            for (const el of document.querySelectorAll('#radar button')) {
+              const r = el.getBoundingClientRect();
+              if (r.left < -1 || r.right > innerWidth + 1 || r.top < -1 || r.bottom > innerHeight + 1) bad.push(`${el.className} is off-screen`);
+              else if (Math.min(r.width, r.height) < 24) bad.push(`${el.className} is only ${Math.round(r.width)}x${Math.round(r.height)}px`);
+            }
+            return { bad, overflowX: document.documentElement.scrollWidth > innerWidth };
+          });
+          card.bad.forEach(fail);
+          if (card.overflowX) fail('the page scrolls sideways');
+          await page.waitForTimeout(1500);
+          await page.screenshot({ path: `${out}/radar-${id}-${phone}-${orient}-1.png` });
+          if (await tap('#radar .rd-i')) {
+            await page.waitForTimeout(300);
+            if (await page.locator('#radar .rd-more').isHidden()) fail('"How we know" did not open');
+            // Clear of the card: beside it on a phone on its side, above it upright.
+            const clear = await page.waitForFunction(([lngLat, side]) => {
+              const at = window.__hatch.map.project(lngLat);
+              const r = document.getElementById('radar').getBoundingClientRect();
+              return !!at && (side ? at[0] > r.right : at[1] < r.top) && r.top >= 0 && r.bottom <= innerHeight + 1;
+            }, [ev.at, orient === 'landscape' && height <= 500], { timeout: 30000, polling: 250 }).then(() => true, () => false);
+            if (!clear) fail('with "How we know" open, the card covers the radar or runs off the screen');
+            await page.waitForTimeout(800);
+            await page.screenshot({ path: `${out}/radar-${id}-${phone}-${orient}-2-how.png` });
+          }
+          if (await tap('#radar .rd-x')) {
+            await page.waitForTimeout(600);
+            if (await page.locator('#radar').count()) fail('× did not close the replay');
+            if (await page.locator('#dock').isHidden()) fail('the time bar did not come back');
+          }
+        } catch (e) {
+          fail(`stopped: ${e.message.split('\n')[0]}`);
+        }
+        await ctx.close();
+        console.log(`${tag}: checked`);
+      }
+    }
+  }
+  server.close();
+} else problems.push(`radar replays not checked: no ${join(distDir, 'radar')} (run npm run build first)`);
 for (const b of Object.values(browsers)) await b.close();
 if (problems.length) {
   console.error('MOBILE FAILED:\n - ' + [...new Set(problems)].join('\n - '));

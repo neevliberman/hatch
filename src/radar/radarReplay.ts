@@ -27,11 +27,21 @@ export interface RadarHost {
   mount: HTMLElement;
   /** Called once the replay has closed (its × or Escape, or close()). */
   onClose(): void;
+  /** Where × goes back to, when this replay takes over from another (that one's own `before`): null is the whole
+   * Midwest. Left out, it is wherever the map is now. */
+  before?: View | null;
+  /** True once the reader has asked for something else while this one loaded: it then opens nothing and returns null. */
+  stale?(): boolean;
 }
+
+/** A place on the map to go back to (MapHandle.center's answer). */
+export type View = NonNullable<ReturnType<MapHandle['center']>>;
 
 export interface Radar {
   id: string;
-  /** Close it; `back` (the default) returns the map to where it was before. */
+  /** Where × goes back to: a place the reader had panned to, or null for the whole Midwest. */
+  before: View | null;
+  /** Close it; `back` (the default) returns the map to `before`. */
   close(back?: boolean): void;
 }
 
@@ -159,6 +169,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   } catch {
     return null;
   }
+  if (host.stale?.()) return null;
   const { map } = host;
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   const pal = ramp(meta.levels.count);
@@ -211,7 +222,8 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   };
 
   // A sheet of paper under the radar's reach, so the forecast hexagons don't read as part of it; the rivers and state
-  // lines still draw on top. Range rings at 40 and 80 km, and the radar itself as an ink dot.
+  // lines still draw on top. Range rings at half the reach and at the reach (40 and 80 km, or 60 and 120), and the
+  // radar itself as an ink dot.
   const reach = meta.kept.range_km[1] * 1000;
   const sheet = new SolidPolygonLayer<{ ring: [number, number][] }>({
     id: 'radar-sheet',
@@ -241,7 +253,9 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     if (key === drawn) return;
     drawn = key;
     const image = new BitmapLayer({ id: 'radar-frame', bounds: S.bounds, image: paint(a, b, f), pickable: false });
-    map.setOverlay([sheet, image, rings, site] as Layer[]);
+    // The paper goes under the lakes, so they keep their shape; the echo, rings and dot go over them (a swarm off a lake
+    // is over the water), still under the rivers and state lines.
+    map.setOverlay([sheet] as Layer[], [image, rings, site] as Layer[]);
   };
 
   // The card: play or pause, the time and a one-line caption, "How we know" behind an i, and a close button.
@@ -272,8 +286,9 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   const more = q<HTMLElement>('.rd-more');
   const info = q<HTMLButtonElement>('.rd-i');
 
-  // Glide to the radar: its whole 80 km reach in the free map between the header and the card.
-  const before = map.moved() ? map.center(host.padding()) : null;
+  // Glide to the radar: its whole reach (80 km, or 120 for an event that keeps more) in the free map between the header
+  // and the card.
+  const before: View | null = host.before !== undefined ? host.before : map.moved() ? map.center(host.padding()) : null;
   // On a wide screen the card sits in a corner, so the radar only keeps clear of its closed height; on a phone it spans
   // the width, so the radar sits above all of it.
   // A phone on its side has no height to spare: with "How we know" open the radar moves to the right of the card.
@@ -381,7 +396,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   label(idx, 0);
   setPlaying(playing);
   // After the card is laid out, so the glide knows how much room it takes.
-  requestAnimationFrame(() => look(true));
+  requestAnimationFrame(() => open && look(true));
   let resizeTimer = 0;
   const onResize = () => {
     clearTimeout(resizeTimer);
@@ -434,5 +449,5 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   window.addEventListener('keydown', onKey, true);
   q<HTMLButtonElement>('.rd-x').addEventListener('click', () => close());
   playBtn.focus({ preventScroll: true });
-  return { id, close };
+  return { id, before, close };
 }

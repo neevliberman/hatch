@@ -8,8 +8,8 @@ downloads raw radar volumes (~5 MB each). The app only ever reads what this writ
 
 Per scan: the lowest tilt (0.5 degrees), reflectivity and the dual-pol fields, gridded by Py-ART onto 160 x 160
 cells centred on the radar (its default azimuthal equidistant projection, sphere R = 6370997 m; cell centres from
--80 km to +80 km, so a cell is 160/159 km wide). Kept: 8 to 80 km from the radar (the blind centre and the far edge,
-where the beam is high, are blanked). Levels: 0 = nothing, 1..15 = 10 dBZ upwards in 2.5 dBZ steps. Rain-like cells
+-reach to +reach, so a cell is 2 x reach / 159 wide). Kept: 8 km to the reach, 80 km unless the event says otherwise
+(the blind centre and the far edge, where the beam is high, are blanked). Levels: 0 = nothing, 1..15 = 10 dBZ upwards in 2.5 dBZ steps. Rain-like cells
 (20 dBZ or more with a correlation coefficient of 0.95 or more) are dropped. Output: frames.bin.gz (all frames, 4 bits
 a cell, rows south to north, high nibble first) and meta.json (times, grid, levels, and the insect check below).
 
@@ -49,11 +49,24 @@ EVENTS = {
         # The first echo off the river shows at about 8:55 pm; before that the map is empty (or clutter).
         "start": "2014-07-21T01:50:00Z",
     },
+    "kcle-2019-06-26": {
+        "site": "KCLE",
+        "lat": 41.4132,
+        "lon": -81.8599,
+        # Evening of Wednesday 26 June 2019, EDT (UTC-4): 9:45 pm to 1 am. Sunset at Cleveland 9:06 pm.
+        "from": "2019-06-27T01:45:00Z",
+        "to": "2019-06-27T05:00:00Z",
+        # The plume starts to rise over the islands at 10:28 pm: the replay opens on that scan (README: 10:21 pm is quiet).
+        "start": "2019-06-27T02:28:00Z",
+        # The swarm leaves the western basin 60 to 120 km from the radar, so this one keeps 120 km (1.5 km cells).
+        "reach_km": 120,
+    },
 }
 
 N = 160
-HALF = 80_000.0  # metres from the radar to the outermost cell centres
-RANGE = (8.0, 80.0)  # km kept
+NEAR = 8.0  # km: the blind centre, blanked
+REACH = 80.0  # km kept, unless an event says otherwise ("reach_km"); the grid's half-width is the same, so cells are
+#               2 x reach / 159 wide (about 1 km at 80 km, 1.5 km at 120 km) and every pack is 160 x 160
 DBZ0, STEP, LEVELS = 10.0, 2.5, 15
 RAIN = (20.0, 0.95)  # dBZ, CC at or above which a cell reads as rain
 
@@ -97,7 +110,7 @@ def fetch(key: str, cache: Path) -> Path:
     return path
 
 
-def grid(path: Path, lat: float, lon: float) -> dict[str, np.ndarray]:
+def grid(path: Path, lat: float, lon: float, half: float) -> dict[str, np.ndarray]:
     import pyart  # build-time only
 
     radar = pyart.io.read_nexrad_archive(str(path))
@@ -108,29 +121,29 @@ def grid(path: Path, lat: float, lon: float) -> dict[str, np.ndarray]:
     g = pyart.map.grid_from_radars(
         radar.extract_sweeps([0]),
         grid_shape=(1, N, N),
-        grid_limits=((0, 500), (-HALF, HALF), (-HALF, HALF)),
+        grid_limits=((0, 500), (-half, half), (-half, half)),
         fields=["reflectivity", "cross_correlation_ratio", "differential_reflectivity"],
     )
     return {k: np.ma.filled(g.fields[k]["data"][0].astype(float), np.nan) for k in g.fields}
 
 
-def levels(d: dict[str, np.ndarray], rng: np.ndarray) -> np.ndarray:
+def levels(d: dict[str, np.ndarray], rng: np.ndarray, kept: tuple[float, float]) -> np.ndarray:
     z, cc = d["reflectivity"], d["cross_correlation_ratio"]
     with np.errstate(invalid="ignore"):
         lvl = np.nan_to_num(np.clip(np.floor((z - DBZ0) / STEP) + 1, 0, LEVELS), nan=0)
-        lvl[(rng < RANGE[0]) | (rng > RANGE[1])] = 0
+        lvl[(rng < kept[0]) | (rng > kept[1])] = 0
         lvl[(z >= RAIN[0]) & (cc >= RAIN[1])] = 0
     return lvl.astype(np.uint8)
 
 
-def check(d: dict[str, np.ndarray], rng: np.ndarray) -> dict | None:
+def check(d: dict[str, np.ndarray], rng: np.ndarray, kept: tuple[float, float]) -> dict | None:
     z, cc, zdr = d["reflectivity"], d["cross_correlation_ratio"], d["differential_reflectivity"]
     with np.errstate(invalid="ignore"):
-        m = (z >= 25) & (rng > RANGE[0]) & (rng < RANGE[1]) & np.isfinite(cc)
+        m = (z >= 25) & (rng > kept[0]) & (rng < kept[1]) & np.isfinite(cc)
     if m.sum() < 30:
         return None
     return {"cells": int(m.sum()), "cc": round(float(np.median(cc[m])), 2), "zdr": round(float(np.nanmedian(zdr[m])), 1),
-            "rain_like": int(((z >= RAIN[0]) & (cc >= RAIN[1]) & (rng > RANGE[0]) & (rng < RANGE[1])).sum())}
+            "rain_like": int(((z >= RAIN[0]) & (cc >= RAIN[1]) & (rng > kept[0]) & (rng < kept[1])).sum())}
 
 
 def main() -> None:
@@ -161,16 +174,18 @@ def main() -> None:
     if not scans:
         sys.exit("no scans found")
 
-    spacing = 2 * HALF / (N - 1)
-    c = (np.arange(N) * spacing - HALF) / 1000  # cell centres, km
+    kept = (NEAR, float(ev.get("reach_km", REACH)))
+    half = kept[1] * 1000
+    spacing = 2 * half / (N - 1)
+    c = (np.arange(N) * spacing - half) / 1000  # cell centres, km
     y, x = np.meshgrid(c, c, indexing="ij")
     rng = np.hypot(x, y)
     frames, times, checks = [], [], []
     for t, p in scans:
-        d = grid(p, ev["lat"], ev["lon"])
-        frames.append(levels(d, rng))
+        d = grid(p, ev["lat"], ev["lon"], half)
+        frames.append(levels(d, rng, kept))
         times.append(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
-        ck = check(d, rng)
+        ck = check(d, rng, kept)
         checks.append(ck)
         print(f"{t:%H:%M} UTC  cells>0 {int((frames[-1] > 0).sum()):5d}  " +
               (f"Z>=25: {ck['cells']:4d} cells, CC median {ck['cc']:.2f}, ZDR median {ck['zdr']:.1f} dB, rain-like {ck['rain_like']}" if ck else "Z>=25: too few cells"),
@@ -189,12 +204,12 @@ def main() -> None:
         "lon": ev["lon"],
         "times": times,
         "start": start,
-        "grid": {"n": N, "half_m": HALF, "spacing_m": round(spacing, 3), "rows": "south to north", "packing": "4 bits, high nibble first",
+        "grid": {"n": N, "half_m": half, "spacing_m": round(spacing, 3), "rows": "south to north", "packing": "4 bits, high nibble first",
                  "projection": "azimuthal equidistant on a sphere, R 6370997 m, centred on the radar (Py-ART grid_from_radars)"},
         "levels": {"none": 0, "dbz_min": DBZ0, "dbz_step": STEP, "count": LEVELS},
-        "kept": {"range_km": list(RANGE), "rain_dropped": f"{RAIN[0]:g} dBZ or more with CC {RAIN[1]} or more"},
+        "kept": {"range_km": list(kept), "rain_dropped": f"{RAIN[0]:g} dBZ or more with CC {RAIN[1]} or more"},
         "insect_check": {
-            "what": "cells of 25 dBZ or more, 8 to 80 km out, in scans with 100 or more of them",
+            "what": f"cells of 25 dBZ or more, {kept[0]:g} to {kept[1]:g} km out, in scans with 100 or more of them",
             "scans": len(busy),
             "cc_median": [min(ck["cc"] for ck in busy), max(ck["cc"] for ck in busy)] if busy else None,
             "zdr_median_db": [min(ck["zdr"] for ck in busy), max(ck["zdr"] for ck in busy)] if busy else None,
