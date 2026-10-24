@@ -35,3 +35,9 @@ lean the daylength term was there to remove. As of 15 May P3.1 scored 4.7 to 7.0
 So the map and the live pipeline stay on P3. The first summary jumps when a strip's median switches hexes, so the
 other two are steadier.
 
+
+## Rebuilt 2026-10-24 for the scorecard
+`public/live/latest.json` was rebuilt as of 30 Sep with the model hash and strip dates the scorecard needs. PRISM
+had revised some 2026 days since the 23 Oct build (up to about 30 degree-days banked at a hex by 30 Sep), which moved
+about 1 in 5 hex dates, most by a day or two (at most 10). The tables above are from the 23 Oct build. The proper
+week-by-week score of this season is in `SCORECARD_2026.md`.

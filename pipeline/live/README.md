@@ -52,3 +52,18 @@ too). A run takes a few minutes, mostly the 551 PRISM calls. `build_static.py` r
 
 Manual backfill from GitHub: Actions > live-forecast > Run workflow, with a season and an as-of date. That
 publishes to the live map, so put the newest date back afterwards (or run it blank in season).
+
+## Scorecard (how the season's forecast did)
+Every night the job also archives the forecast's strip dates (`live/archive/<season>/<issued>.json` on `live-data`,
+about 1 KB: each 2-degree latitude strip's onset and peak, the days 10% and 50% of its first-wave sightings should
+have happened, with the "likely" range and the model id + hash) and rewrites `live/scorecard.json` with
+`scorecard.py`, which the deploy copies next to `latest.json`. The app shows it in About > "How sure is it?".
+- Graded against research-grade iNaturalist records, with the fit's filters, first wave only, at least 20 per strip.
+- A strip is **pending** until its first wave is over and its last day is 14 days old; it is never scored early.
+- Each real date is graded on the newest forecast issued at least 7 days before it, from the season's frozen model
+  only (the id + hash of the season's first archived forecast; anything else is counted, never graded).
+- The baseline is the calendar: each strip's mean onset and peak over 2015-2025. Scores move once a week (Mondays).
+- If the scorecard fails, the forecast still publishes and the run then fails, so the alarm issue opens.
+
+Rehearsed on 2026 with weekly rebuilt forecasts (`rehearse.py`, archive in `archive/2026/`): see `SCORECARD_2026.md`.
+`public/live/scorecard.json` on `main` is that rehearsal, shown until the first 2027 night replaces it.

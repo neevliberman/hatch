@@ -41,8 +41,8 @@ self.addEventListener('fetch', (e) => {
     );
     return;
   }
-  if (url.pathname.endsWith('/live/latest.json')) {
-    // This season's live forecast changes every night: network first, the last copy only when offline.
+  if (/\/live\/(latest|scorecard)\.json$/.test(url.pathname)) {
+    // This season's live forecast and its scorecard change every night: network first, the last copy only when offline.
     e.respondWith(
       fetch(req)
         .then((res) => {
