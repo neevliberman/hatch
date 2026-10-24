@@ -838,7 +838,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             holdoutPass
               ? ['also', 'it did well on states it never saw (Wisconsin and Minnesota), but it was chosen after seeing that test.']
               : ['weak spot', 'trained without Wisconsin and Minnesota, it did worse there than a guess from past years.'],
-            ['real test', 'the 2026 season, once its weather data is out in mid-2027.'],
+            ['final test', 'the live check below is quick; the frozen test on 2026 waits for its final weather data, out in mid-2027.'],
           ],
           bars: [
             { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },

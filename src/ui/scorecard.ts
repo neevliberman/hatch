@@ -23,7 +23,7 @@ function html(f: File, c: Card): string {
   const when = f.rehearsal ? `${f.season} (rebuilt after the fact)` : `${f.season} so far`;
   const line =
     s.scored && s.miss != null && s.calendar_miss != null
-      ? `${when}: the forecast missed by ${days(s.miss)} on average, the usual date by ${days(s.calendar_miss)}. ${s.scored} strip${s.scored > 1 ? 's' : ''} scored, ${s.pending || 'none'} pending.`
+      ? `${when}: counting start and peak dates, the forecast missed by ${days(s.miss)} on average, the usual date by ${days(s.calendar_miss)}. The table shows peaks. ${s.scored} strip${s.scored > 1 ? 's' : ''} scored, ${s.pending || 'none'} pending.`
       : !s.scored && !s.pending
         ? (s.no_forecast ?? 0) > 0
           ? `${when}: no strip could be scored: too few sightings, or no forecast made early enough.`
