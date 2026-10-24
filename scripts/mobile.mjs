@@ -90,22 +90,40 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     const shot = (step) => page.screenshot({ path: `${out}/${phone}-${orient}-${step}.png` });
+    // Runs in the page: the centre of `s` if a finger could tap it there (shown, on-screen, on top), else null. With
+    // `gone`, true once it can't be tapped any more.
+    const reachable = ([s, gone]) => {
+      const el = document.querySelector(s);
+      const r = el?.getBoundingClientRect();
+      let at = null;
+      if (r && r.width && r.height && !el.disabled && getComputedStyle(el).visibility !== 'hidden') {
+        const [x, y] = [r.x + r.width / 2, r.y + r.height / 2];
+        const hit = x >= 0 && y >= 0 && x < innerWidth && y < innerHeight ? document.elementFromPoint(x, y) : null;
+        if (hit && (hit === el || el.contains(hit))) at = [x, y];
+      }
+      return gone ? !at : at;
+    };
+    // Resolves once the page has drawn a frame and run a task after it: its main thread has caught up.
+    const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)))).catch(() => {});
     const tap = async (sel) => {
+      // The first touch on the map makes deck draw its picking buffer, and on software GL (CI) setting that up blocks
+      // the main thread for several seconds. A tap sent meanwhile waits for the page to take it, past the 3 s timeout.
+      // So let the page catch up first.
+      await settle();
       try {
         await page.locator(sel).tap({ timeout: 3000 });
         return true;
       } catch (e) {
+        // Timed out while performing the tap: the touch was already sent, and Playwright gave up waiting for a busy page
+        // to take it. It can still land a moment later (the drawer closes), and then the target is gone: that tap
+        // worked, and a second one would find nothing to tap. A target still there gets the fallback below.
+        // (Gone: hidden, slid off-screen like the closed drawer, or covered.)
+        if (/performing tap action\s*$/.test(String(e.message).replace(/\x1b\[\d+m/g, '').trim()) &&
+          (await page.waitForFunction(reachable, [sel, true], { timeout: 4000 }).then(() => true, () => false))) return true;
         // Software GL in CI can draw a frame or two a second, and Playwright waits for two quick identical frames
         // before it taps. So check what a finger cares about instead: the target is visible and on top at its centre.
         // Then a plain finger tap at its centre: no more waiting on frames.
-        const at = await page.evaluate((s) => {
-          const el = document.querySelector(s);
-          const r = el?.getBoundingClientRect();
-          if (!r || !r.width || !r.height || el.disabled || getComputedStyle(el).visibility === 'hidden') return null;
-          const [x, y] = [r.x + r.width / 2, r.y + r.height / 2];
-          const hit = document.elementFromPoint(x, y);
-          return !!hit && (hit === el || el.contains(hit)) ? [x, y] : null;
-        }, sel).catch(() => null);
+        const at = await page.evaluate(reachable, [sel, false]).catch(() => null);
         if (at && (await page.touchscreen.tap(...at).then(() => true, () => false))) return true;
         // The last line of Playwright's log says why (hidden, or which element sits on top).
         fail(`could not tap ${sel} (${String(e.message).trim().split('\n').pop().replace(/\x1b\[\d+m/g, '').trim()})`);
