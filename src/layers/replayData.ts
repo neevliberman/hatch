@@ -57,5 +57,5 @@ export function windowCheck(data: ReplayFile): [string, string] | null {
   const c = data.interval?.checked?.peak;
   if (!c) return null;
   const [k, n, lo, hi] = c;
-  return ['window', `the "likely" margin caught a whole strip's peak in ${k} of ${n} strip-years it never saw (aim: 8 in 10; so few checks fit ${lo} to ${hi}%). One hexagon can miss by more.`];
+  return ['window', `the "likely" dates caught the real peak of a whole band of the map in ${k} of ${n} past tries it never saw. The aim is 8 in 10; with this few tries the true rate could be anywhere from ${lo} to ${hi}%. One hexagon can miss by more.`];
 }
