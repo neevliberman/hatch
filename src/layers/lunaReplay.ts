@@ -158,7 +158,7 @@ function seasonCheck(): string | null {
   const ss = data.interval?.checked?.season;
   if (!ss) return null;
   const upTo = new Date(`${ss.as_of}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  return `Rerun on ${ss.year} with real weather only to ${upTo}, the window caught the real peak in ${ss.peak[0]} of ${ss.peak[1]} strips of the map.`;
+  return `Rerun on ${ss.year} with real weather only to ${upTo}, the window caught the real peak in ${ss.peak[0]} of ${ss.peak[1]} strips of the map (some had already peaked by then).`;
 }
 
 /** The live-mode card at the top of the About panel: how this year's map is made, in plain words. */

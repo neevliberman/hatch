@@ -6,7 +6,7 @@ No refit, and the forecast model (P3) is unchanged.
 
 **Answer.** Close to 8 in 10 everywhere it can be checked fairly. None of the checks is clearly off, so the
 window's width was **not changed**. With 23 to 31 checks per case, the true rate could be anywhere from about 60%
-to 90%. With five checks for 2026, it could be 34% to 99%.
+to 90%. With five checks for 2026, it could be 34% to 99%. These ranges treat strip-years as independent; strips in one year share weather and model, so the real ranges are somewhat wider.
 
 | What is checked | Inside the window | Share | 90% range |
 |---|---|---|---|
@@ -32,8 +32,8 @@ The shipped window is sized from all 31 luna strip-years, including the one bein
 same strip-years is partly marking your own homework. It catches 25 of 31 luna peaks that way (the same when rounded to
 whole days, as the card shows it).
 
-The fair version works like a split exam. To score year Y, size the window from the misses of **the other ten
-years only**, then check year Y's strips against it. Repeat for every year. This is the conformal check: it never
+The fair version works like a split exam. To score year Y, size the window from the misses of **the other scored
+years only** (8 of the 9), then check year Y's strips against it. Repeat for every year. This is a leave-one-year-out check (conformal in spirit; it uses interpolated percentiles, not the exact order-statistic rule): it never
 uses a fold's own miss to size the window that scores it. The windows it builds are 7 to 12 days wide (10 to 11 for
 peaks), about the same as the shipped ones. Results are in the table above.
 
@@ -76,7 +76,7 @@ The card shows the window for one hexagon, but it is sized from whole-strip miss
 10 first-wave sightings, the hexagon's median sighting day fell inside its own window:
 - luna, past years: 3 of 5 (the openly licensed sightings shipped in the app);
 - firefly, past years: 7 of 17 (41%, 90% range 21-64%: clearly below 80%);
-- luna 2026: 4 of 10.
+- luna 2026: 4 of 10 (90% range 15-70%: also clearly below 80%).
 
 Much of that is the target, not the forecast. With 10 to 30 photos, a hexagon's median day itself wobbles by 3.4 to
 7.9 days (bootstrap SD, median over hexagons). A strip's wobbles by about 3.4. Widening the card's window to cover
