@@ -16,7 +16,7 @@ export const theme: Theme = {
 
 /** [text, lng, lat, zoom it shows from, kind, rank (population for towns; bigger names first)]. */
 export type Label = [string, number, number, number, 'state' | 'water' | 'park' | 'city' | 'town', number, number?, number?];
-type Props = { z: number; great?: number; w?: number };
+type Props = { z: number; great?: number; w?: number; kind?: number };
 interface Part {
   version: number;
   water: FeatureCollection;
@@ -24,6 +24,10 @@ interface Part {
   roads: FeatureCollection;
   green: FeatureCollection;
   labels: Label[];
+  /** The sea (kind 0) and land (kind 1) around the forecast states, and the other states' faint lines (kind 2). */
+  outside?: FeatureCollection;
+  /** Shore hexagons by resolution: [hexagon, forecast neighbour whose colour it takes] (see pipeline/basemap). */
+  pads?: Record<string, [string, string][]>;
 }
 
 /**
@@ -71,6 +75,14 @@ function want(zoom: number) {
   }
 }
 
+/**
+ * The hexagons just past the shores and state lines, paired with the forecast neighbour they take their colour from,
+ * once the mask that trims them (`outside`, drawn over the hexagons) is loaded: they fill the strip of bare paper a
+ * hexagon grid leaves along every edge. Null when not available (the one-file build, or not loaded yet).
+ */
+export const padsFor = (res: number): [string, string][] | null =>
+  (parts.overview?.outside && (res > 4 ? parts.detail : parts.overview)?.pads?.[res]) || null;
+
 export const basemapLabels = (): Label[] => [...(parts.overview?.labels ?? []), ...(parts.detail?.labels ?? [])];
 
 // Each feature shows from its own zoom: a GPU filter on `z`, so zooming never re-uploads the lines.
@@ -101,7 +113,7 @@ const trees = () => {
 
 function woodsLayers(zoom: number): Layer[] {
   const p = parts.woods;
-  if (!p || zoom < WOODS_ZOOM) return [];
+  if (!__BASEMAP__ || !p || zoom < WOODS_ZOOM) return [];
   return [
     new GeoJsonLayer({
       id: 'woods',
@@ -121,11 +133,50 @@ function woodsLayers(zoom: number): Layer[] {
   ];
 }
 
+// Over the hexagons: the land around the forecast states (paper, a shade darker), and the sea, so a hexagon poking
+// past a shore or a state line is cut off there. Built once: it never changes.
+let outsideLayer: Layer | null = null;
+const outside = (p: Part): Layer[] =>
+  p.outside
+    ? [
+        (outsideLayer ??= new GeoJsonLayer({
+          id: 'outside',
+          data: p.outside,
+          filled: true,
+          stroked: true,
+          getFillColor: (f: Feature) => ((f.properties as Props).kind ? P.landOuter : P.water),
+          getLineColor: (f: Feature) => ((f.properties as Props).kind === 2 ? P.neighbourLine : P.transparent),
+          getLineWidth: 1,
+          lineWidthUnits: 'pixels',
+          pickable: false,
+        })),
+      ]
+    : [];
+
+// Zoomed in, the state outlines' coasts (Census) and the lake shores (Natural Earth) run a little apart, which leaves
+// an ink line floating in the lake or a strip beside it. From SHORE_ZOOM the sea and the Great Lakes are drawn again
+// over the state lines, so the shore is just where the hexagons meet the water.
+const SHORE_ZOOM = 7;
+let shoreLayers: Layer[] | null = null;
+const shore = (zoom: number): Layer[] => {
+  const p = parts.overview;
+  if (!__BASEMAP__ || !p?.outside || zoom < SHORE_ZOOM) return [];
+  const water = (id: string, features: Feature[]) =>
+    // A water-coloured edge as well, over the half of the ink line that lies on the land side of the shore.
+    new GeoJsonLayer({ id, data: features, filled: true, stroked: true, getFillColor: P.water, getLineColor: P.water,
+      getLineWidth: 2, lineWidthUnits: 'pixels', pickable: false });
+  return (shoreLayers ??= [
+    water('sea-top', p.outside.features.filter((f) => !(f.properties as Props).kind)),
+    water('lakes-top', p.water.features.filter((f) => (f.properties as Props).great)),
+  ]);
+};
+
 function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {
   const p = parts[name];
-  if (!p) return [];
+  if (!__BASEMAP__ || !p) return [];
   const filter = { extensions: zoomFilter, getFilterValue: getZ, filterRange: [-1, zoom + 1e-3] as [number, number], pickable: false };
   return [
+    ...(name === 'overview' ? outside(p) : []),
     // National forests and parks: an ink outline in leaf green, no fill, so the forecast colours stay readable.
     new GeoJsonLayer({
       id: `green-${name}`,
@@ -221,21 +272,28 @@ const stateLayers = () =>
 
 /**
  * Basemap layers around the data: `under` the hexagons (land), `mid` between the hexagons and the sighting dots
- * (lakes, rivers, roads, forests: the dots stay on top), `over` everything (state lines). The same objects come back
- * until the zoom changes or another part of the basemap arrives, so a playback frame costs the basemap nothing.
+ * (the mask round the forecast states, lakes, roads, forests, state lines, rivers: the dots stay on top). The same
+ * objects come back until the zoom changes or another part of the basemap arrives, so a playback frame costs nothing.
+ *
+ * A river along a state line is drawn on the line itself (pipeline/basemap snaps it), so the order is: river casings,
+ * then the state lines, then the river ink. A border river reads as one blue river edged in paper, not as a river
+ * beside an ink line; a river crossing a state line shows as a blue dot on it.
  */
-let built: { key: string; layers: { under: Layer[]; mid: Layer[]; over: Layer[] } } | null = null;
-export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[]; over: Layer[] } {
+let built: { key: string; layers: { under: Layer[]; mid: Layer[] } } | null = null;
+export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[] } {
   const key = `${zoom}|${!!parts.overview}|${!!parts.detail}|${!!parts.woods}`;
   if (built?.key === key) return built.layers;
   want(zoom);
   const { under, neighbours, outline } = stateLayers();
+  const all = [...detailLayers('overview', zoom), ...detailLayers('detail', zoom)];
+  const kind = (re: RegExp) => all.filter((l) => re.test(l.id));
   built = {
     key,
     layers: {
       under: [under],
-      mid: [...woodsLayers(zoom), ...detailLayers('overview', zoom), ...detailLayers('detail', zoom)],
-      over: [neighbours, outline],
+      // The overview's `outside` mask comes first: woods and everything else go over it.
+      mid: [...kind(/^outside/), ...woodsLayers(zoom), ...kind(/^(green|water|roads)-/), ...kind(/^rivers-case-/),
+        neighbours, outline, ...shore(zoom), ...kind(/^rivers-(overview|detail)/)],
     },
   };
   return built.layers;
