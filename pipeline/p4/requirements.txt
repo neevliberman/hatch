@@ -1,0 +1,4 @@
+-r ../../notebooks/requirements.txt
+jax==0.12.0.1
+lightgbm
+scikit-learn
