@@ -166,6 +166,8 @@ def score_band(band, recs, season, cut, score_date, entries, model, cal):
         return {**row, "status": "pending"}
     if len(recs) < MIN_N:
         return {**row, "status": "too_few"}
+    if not np.all(np.isfinite(cal.get(band, (np.nan, np.nan)))):
+        return {**row, "status": "too_few"}  # no 2015-2025 baseline for this strip: nothing to grade against
     real = {"onset": float(np.quantile(recs.doy, Q_ONSET)), "peak": float(np.quantile(recs.doy, Q_PEAK))}
     out = {**row, "status": "scored"}
     errs, cal_errs = [], []
@@ -241,6 +243,12 @@ def scorecard(season, raw, entries, today: dt.date, replay=None, layer="luna", p
     }
 
 
+def finite_only(summary):
+    """A summary without its non-finite numbers (NaN / inf), so one can never be carried forward into a file the app
+    cannot parse. None stays (it is valid JSON: "no value yet")."""
+    return {k: v for k, v in summary.items() if not (isinstance(v, float) and not np.isfinite(v))}
+
+
 def season_summaries(card):
     """Every season a scorecard file speaks for, as {season: entry}: its own (top-level layers, summaries only) and
     the past ones it carries (`seasons`). A file that is not a v1 scorecard speaks for nothing."""
@@ -249,10 +257,12 @@ def season_summaries(card):
     out = {}
     for e in card.get("seasons") or []:
         if isinstance(e, dict) and isinstance(e.get("season"), int) and isinstance(e.get("layers"), dict):
-            out[e["season"]] = e
+            out[e["season"]] = {**e, "layers": {k: {**l, "summary": finite_only(l["summary"])}
+                                                for k, l in e["layers"].items()
+                                                if isinstance(l, dict) and isinstance(l.get("summary"), dict)}}
     if isinstance(card.get("season"), int) and isinstance(card.get("layers"), dict):
         e = {"season": card["season"], "score_date": card.get("score_date"),
-             "layers": {k: {"model": l.get("model"), "summary": l["summary"]}
+             "layers": {k: {"model": l.get("model"), "summary": finite_only(l["summary"])}
                         for k, l in card["layers"].items() if isinstance(l, dict) and isinstance(l.get("summary"), dict)}}
         if card.get("rehearsal"):
             e["rehearsal"] = True
@@ -270,19 +280,20 @@ def with_seasons(card, *olds):
         for y, e in season_summaries(old).items():
             if y == card["season"]:
                 continue
-            m = merged.setdefault(y, {"season": y, "score_date": None, "layers": {}, "_on": {}})
+            m = merged.setdefault(y, {"season": y, "score_date": None, "layers": {}, "_on": {}, "_card": None})
             on = str(e.get("score_date") or "")
             for k, l in e["layers"].items():
                 if k not in m["layers"] or on > m["_on"][k]:
                     m["layers"][k], m["_on"][k] = l, on
-            if on > str(m["score_date"] or ""):
-                m["score_date"] = e.get("score_date")
-            if e.get("rehearsal"):
-                m["rehearsal"] = True
+            if m["_card"] is None or on > m["_card"]:       # the flag comes from the newest source only
+                m["score_date"], m["_card"] = e.get("score_date"), on
+                m.pop("rehearsal", None)
+                if e.get("rehearsal"):
+                    m["rehearsal"] = True
     seasons = []
     for y in sorted(merged):
         m = merged[y]
-        del m["_on"]
+        del m["_on"], m["_card"]
         if m["layers"]:
             seasons.append(m)
     return {**card, "seasons": seasons}
@@ -380,7 +391,7 @@ def main(argv=None):
     out = with_seasons(out, prev, None if a.past.resolve() == a.out.resolve() else read_card(a.past))
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
-    tmp.write_text(json.dumps(out, separators=(",", ":")))
+    tmp.write_text(json.dumps(out, separators=(",", ":"), allow_nan=False))   # a NaN fails the run; the old file stands
     tmp.replace(a.out)
     for k, layer in out["layers"].items():
         print(f"wrote {a.out} [{k}]: {json.dumps(layer['summary'])}")

@@ -79,20 +79,27 @@ export function fillScores(root: HTMLElement): void {
         return; // a bad attribute just means no line
       }
       const key = el.dataset.record!.replace(/-replay$/, '');
-      const add = (season: number, s: Summary & { miss: number; calendar_miss: number }) =>
-        checks.push({ where: `in ${season}`, days: s.miss, usual: s.calendar_miss, size: stripYears(s.scored), season, n: s.scored });
+      // A season rebuilt after the fact is named as such and kept out of the pooled clause with real ones.
+      const add = (season: number, s: Summary & { miss: number; calendar_miss: number }, rehearsal?: boolean) =>
+        checks.push({
+          where: `in ${season}`, days: s.miss, usual: s.calendar_miss, season, n: s.scored,
+          size: rehearsal ? `rebuilt after the fact, ${stripYears(s.scored)}` : stripYears(s.scored),
+          ...(rehearsal ? { rehearsal } : {}),
+        });
       let through = Number(el.dataset.through) || 0;
       const past = (Array.isArray(f.seasons) ? f.seasons : [])
         .filter((p) => p && Number.isInteger(p.season) && p.season !== f.season && p.layers?.[key])
         .sort((a, b) => a.season - b.season);
       for (const p of past) {
         const s = p.layers![key]!.summary;
-        if (isScored(s)) add(p.season, s);
-        through = Math.max(through, p.season);
+        if (isScored(s)) {
+          add(p.season, s, p.rehearsal);
+          through = Math.max(through, p.season); // only a season that is in the line
+        }
       }
       const s = card(el, 'record')?.summary;
       const scored = isScored(s);
-      if (scored) add(f.season, s);
+      if (scored) add(f.season, s, f.rehearsal);
       el.textContent = recordLine(checks, scored ? undefined : through || undefined);
       el.hidden = !el.textContent;
     });

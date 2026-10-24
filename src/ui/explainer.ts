@@ -88,7 +88,7 @@ function years(ys: number[]): string {
 /** One verb group's live seasons as one check: "in 2026 and 2027", their strip-years added up, days off averaged per
  * strip-year. Every season in it already has the group's verb, so the pooled numbers keep it too. Other checks stay. */
 function poolSeasons(cs: RecordCheck[]): RecordCheck[] {
-  const live = cs.filter((c) => c.season != null && c.n);
+  const live = cs.filter((c) => c.season != null && c.n && !c.rehearsal);
   if (live.length < 2) return cs;
   const n = live.reduce((a, c) => a + c.n!, 0);
   const mean = (f: (c: RecordCheck) => number) => Math.round((live.reduce((a, c) => a + f(c) * c.n!, 0) / n) * 10) / 10;
@@ -97,6 +97,7 @@ function poolSeasons(cs: RecordCheck[]): RecordCheck[] {
     days: mean((c) => c.days),
     usual: mean((c) => c.usual),
     size: stripYears(n),
+    avg: true,
   };
   const at = cs.indexOf(live[0]!);
   return [...cs.slice(0, at).filter((c) => !live.includes(c)), pooled, ...cs.slice(at).filter((c) => !live.includes(c))];
@@ -113,8 +114,8 @@ export function recordLine(checks: RecordCheck[], through?: number): string {
   const size = (c: RecordCheck, more = '') => (c.size || more ? ` (${[c.size, more].filter(Boolean).join(': ')})` : '');
   const groups: [string, RecordCheck[], (c: RecordCheck) => string][] = [
     ['beat', poolSeasons(checks.filter((c) => t(c.days) < t(c.usual))), (c) => size(c)],
-    ['tied with', poolSeasons(checks.filter((c) => t(c.days) === t(c.usual))), (c) => size(c, `${c.days.toFixed(1)} days off each`)],
-    ['lost to', poolSeasons(checks.filter((c) => t(c.days) > t(c.usual))), (c) => size(c, `${c.days.toFixed(1)} days off against ${c.usual.toFixed(1)}`)],
+    ['tied with', poolSeasons(checks.filter((c) => t(c.days) === t(c.usual))), (c) => size(c, `${c.days.toFixed(1)} days off${c.avg ? ' on average' : ''} each`)],
+    ['lost to', poolSeasons(checks.filter((c) => t(c.days) > t(c.usual))), (c) => size(c, `${c.days.toFixed(1)} days off${c.avg ? ' on average' : ''} against ${c.usual.toFixed(1)}`)],
   ];
   const clauses = groups
     .filter(([, cs]) => cs.length)

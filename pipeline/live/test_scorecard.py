@@ -235,3 +235,37 @@ def test_main_keeps_the_bundled_season_on_the_first_night(tmp_path, monkeypatch)
     bundled.unlink()
     assert S.main([*args, "--today", "2027-03-09"]) == 0
     assert json.loads(out.read_text())["seasons"] == got["seasons"]
+
+
+def test_strip_without_a_calendar_is_too_few_not_nan():
+    days = list(range(110, 150))                  # plenty of records and a forecast, but no 2015-2025 baseline
+    row = S.score_band("37-39", recs(days), SEASON, 177, dt.date(2027, 8, 2), [entry("2027-03-20", 112, 128)], MODEL, {})
+    assert row["status"] == "too_few" and "miss" not in row
+    nan = S.score_band("37-39", recs(days), SEASON, 177, dt.date(2027, 8, 2), [entry("2027-03-20", 112, 128)], MODEL,
+                       {"37-39": (float("nan"), float("nan"))})
+    assert nan["status"] == "too_few"
+
+
+def test_a_nan_fails_the_write_and_never_travels(tmp_path, monkeypatch):
+    import pytest
+    bad = card(2027, "2027-08-02", luna=(2, float("nan"), 6.0))
+    out = tmp_path / "scorecard.json"
+    monkeypatch.setattr(S, "scorecard_all", lambda *a, **k: (bad, []))
+    out.write_text('{"keep":"me"}')
+    with pytest.raises(ValueError):
+        S.main(["--archive", str(tmp_path / "a"), "--season", "2027", "--out", str(out),
+                "--past", str(tmp_path / "none.json"), "--today", "2027-08-04"])
+    assert out.read_text() == '{"keep":"me"}'                    # the old file stands
+    # a NaN already sitting in a source summary is dropped, not copied forward
+    got = S.with_seasons(card(2028, "2028-03-06"), bad)
+    assert "miss" not in got["seasons"][0]["layers"]["luna"]["summary"]
+    json.dumps(got, allow_nan=False)
+
+
+def test_rehearsal_flag_follows_the_newest_source():
+    rehearsed = {**card(2026, "2026-10-19", luna=(5, 5.6, 8.2)), "rehearsal": True}
+    real = card(2026, "2026-10-26", luna=(5, 5.0, 8.0))
+    new = card(2027, "2027-03-01")
+    assert S.with_seasons(new, rehearsed)["seasons"][0]["rehearsal"] is True
+    assert "rehearsal" not in S.with_seasons(new, rehearsed, real)["seasons"][0]
+    assert "rehearsal" not in S.with_seasons(new, real, rehearsed)["seasons"][0]   # order does not matter
