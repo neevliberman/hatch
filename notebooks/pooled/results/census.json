@@ -1,0 +1,30 @@
+{
+ "species_total": 1998,
+ "clean_in_window_ratio": 0.691,
+ "ratio_from_species": 82,
+ "selection": {
+  "candidates_400plus": 91,
+  "name_excluded": 15,
+  "dropped_phenology_or_window": 24,
+  "selected": 52,
+  "pass_rate": 0.571
+ },
+ "species_with_at_least_raw": {
+  "10": 1560,
+  "25": 1142,
+  "50": 839,
+  "100": 588,
+  "200": 378,
+  "400": 206,
+  "1000": 71
+ },
+ "species_with_at_least_clean_est": {
+  "10": 1385,
+  "25": 982,
+  "50": 693,
+  "100": 485,
+  "200": 275,
+  "400": 125,
+  "1000": 41
+ }
+}
