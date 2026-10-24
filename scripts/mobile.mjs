@@ -10,6 +10,7 @@
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { extname, join, normalize, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
@@ -331,6 +332,8 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
 // the radar sits at the map's centre, and × gives back the time bar.
 const RADARS = { 'karx-2014-07-20': { at: [-91.19, 43.82], tz: 'CDT' }, 'kcle-2019-06-26': { at: [-81.86, 41.41], tz: 'EDT' } };
 const distDir = resolve(process.env.DIST_DIR ?? 'dist');
+// CI builds only the one-file page for this script, so build the http one here rather than skip the replays.
+if (!process.env.DIST_DIR && !existsSync(join(distDir, 'radar'))) execSync('npx vite build --logLevel warn', { stdio: 'inherit' });
 if (existsSync(join(distDir, 'radar'))) {
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
   const server = createServer((req, res) => {
