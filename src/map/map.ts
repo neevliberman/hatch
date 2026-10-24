@@ -48,9 +48,10 @@ export interface MapHandle {
   zoom(): number | null;
   /** Jump (or, given `ms`, fly) to lngLat at a zoom level (also used by the zoomed-in smoke test, scripts/fine.mjs). */
   view(lngLat: [number, number], zoom: number, ms?: number): void;
-  /** Layers drawn over the hexagons and woods, under the lakes, roads, rivers and lines (the radar replay, src/radar/).
+  /** Layers drawn over the hexagons and woods, under the lakes, roads, rivers and lines (the radar replay, src/radar/),
+   * and `overWater` just above the lakes (still under roads, rivers and lines), for what must show on a lake too.
    * While any are set the sighting dots stand down, so nothing but the overlay's own story sits on it. [] clears it. */
-  setOverlay(layers: Layer[]): void;
+  setOverlay(layers: Layer[], overWater?: Layer[]): void;
 }
 
 export interface Padding {
@@ -470,6 +471,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       : [];
 
   let overlay: Layer[] = [];
+  let overWater: Layer[] = [];
   let picked: string | null = null;
   let pickedBuilt: Layer[] = [];
   const pickedLayers = (): Layer[] =>
@@ -523,10 +525,16 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
-    // An overlay goes over the woods' tree marks and under the lakes, roads and rivers.
-    const cut = overlay.length ? mid.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
-    const at = cut < 0 ? mid.length : cut;
-    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid.slice(0, at), ...overlay, ...mid.slice(at), ...(overlay.length ? [] : rest), ...pickedBuilt, ...markerBuilt] });
+    // An overlay goes over the woods' tree marks and under the lakes, roads and rivers; its over-water part just after
+    // the last of the lakes (overview and detail). With one there, the zoomed-in shore (lakes drawn again over the
+    // state lines) stands down, or it would cover that part again.
+    const on = overlay.length > 0;
+    const base = on ? mid.filter((l) => !/^(sea|lakes)-top$/.test(l.id)) : mid;
+    const cut = on ? base.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
+    const at = cut < 0 ? base.length : cut;
+    const dry = base.reduce((d, l, i) => (/^water-/.test(l.id) ? i + 1 : d), at);
+    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...base.slice(0, at), ...overlay, ...base.slice(at, dry), ...(on ? overWater : []),
+      ...base.slice(dry), ...(on ? [] : rest), ...pickedBuilt, ...markerBuilt] });
   };
 
   const handle: MapHandle = {
@@ -589,8 +597,9 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       markerBuilt = markerLayers();
       refresh();
     },
-    setOverlay(layers) {
+    setOverlay(layers, wet = []) {
       overlay = layers;
+      overWater = wet;
       refresh();
     },
     setPicked(cell) {

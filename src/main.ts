@@ -16,7 +16,7 @@ import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
-import { RADAR_LINKS } from './radar/index';
+import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
@@ -935,13 +935,14 @@ function start() {
     $('app').classList.add('radar-on');
     syncUrl();
   };
-  // The About panel's way in, under its opening lines (re-added each time the panel redraws).
+  // The About panel's way in, under its opening lines (re-added each time the panel redraws): a short row of evenings.
   const aboutRadar = () => {
     const hook = $('drawer').querySelector('.ex-hook');
     // Not without WebGL: there is no map to replay it on.
     if (!__BASEMAP__ || document.getElementById('no-webgl') || !hook || hook.parentElement!.querySelector('.ex-radar')) return;
-    const links = RADAR_LINKS.map((r) => `<button type="button" class="ex-radar" data-radar="${r.id}">${RADAR_ICON}${r.label}</button>`);
-    (hook.parentElement!.querySelector('.cd') ?? hook).insertAdjacentHTML('afterend', `<p class="ex-radars">${links.join('')}</p>`);
+    const links = RADAR_LINKS.map((r) => `<button type="button" class="ex-radar" data-radar="${r.id}" title="${r.title}">${RADAR_ICON}${r.label}</button>`);
+    (hook.parentElement!.querySelector('.cd') ?? hook).insertAdjacentHTML('afterend',
+      `<div class="ex-radars" role="group" aria-labelledby="ex-radars-h"><p id="ex-radars-h">${RADAR_HEAD}</p>${links.join('')}</div>`);
   };
   registry.subscribe(aboutRadar);
   aboutRadar();

@@ -659,7 +659,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 /* Radar replay (src/radar/): a specimen label in the key's place, with its own play button, so the time bar, key, hex
    cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. */
 #app.radar-on :is(#legend, #probe, #dock, #recenter, #asleep, #end-note, #explore) { display: none !important; }
-.ex-radars { margin: 0 0 10px; }
+.ex-radars { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 10px; }
+.ex-radars p { flex: 1 0 100%; margin: 0; font-size: 12px; color: var(--muted); }
 .ex-radar { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 4px 12px 4px 9px; font: inherit; font-size: 13px; font-weight: 700;
   color: var(--moon); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); cursor: pointer; text-align: left; }
 .ex-radar:hover { border-color: var(--line-strong); }

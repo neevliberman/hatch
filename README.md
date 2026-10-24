@@ -23,7 +23,7 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
 - **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
 - **Install it:** on a phone, *Share → Add to Home Screen* (iPhone) or *Install app* (Android) puts a hand-drawn moth on your home screen. After one visit it opens with no signal too.
-- **See a real mayfly hatch on radar** (in About): a replay of the evening of 20 July 2014, when the National Weather Service radar at La Crosse, Wisconsin saw a cloud of mayflies rise off the Mississippi. Its frames load only when opened ([pipeline/radar](pipeline/radar/README.md)).
+- **Real mayfly hatches on radar** (in About): replays of evenings when a National Weather Service radar saw a cloud of mayflies come off the water: the Mississippi at La Crosse, Wisconsin (20 July 2014) and western Lake Erie on the Cleveland radar (26 June 2019). Their frames load only when one is opened ([pipeline/radar](pipeline/radar/README.md)).
 - **"How sure?"** is always on screen and opens the honest version: how far off the forecast is, and what it can't do yet.
 
 | Desktop | Phone |

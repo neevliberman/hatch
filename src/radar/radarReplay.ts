@@ -211,7 +211,8 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   };
 
   // A sheet of paper under the radar's reach, so the forecast hexagons don't read as part of it; the rivers and state
-  // lines still draw on top. Range rings at 40 and 80 km, and the radar itself as an ink dot.
+  // lines still draw on top. Range rings at half the reach and at the reach (40 and 80 km, or 60 and 120), and the
+  // radar itself as an ink dot.
   const reach = meta.kept.range_km[1] * 1000;
   const sheet = new SolidPolygonLayer<{ ring: [number, number][] }>({
     id: 'radar-sheet',
@@ -241,7 +242,9 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     if (key === drawn) return;
     drawn = key;
     const image = new BitmapLayer({ id: 'radar-frame', bounds: S.bounds, image: paint(a, b, f), pickable: false });
-    map.setOverlay([sheet, image, rings, site] as Layer[]);
+    // The paper goes under the lakes, so they keep their shape; the echo, rings and dot go over them (a swarm off a lake
+    // is over the water), still under the rivers and state lines.
+    map.setOverlay([sheet] as Layer[], [image, rings, site] as Layer[]);
   };
 
   // The card: play or pause, the time and a one-line caption, "How we know" behind an i, and a close button.
@@ -272,7 +275,8 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   const more = q<HTMLElement>('.rd-more');
   const info = q<HTMLButtonElement>('.rd-i');
 
-  // Glide to the radar: its whole 80 km reach in the free map between the header and the card.
+  // Glide to the radar: its whole reach (80 km, or 120 for an event that keeps more) in the free map between the header
+  // and the card.
   const before = map.moved() ? map.center(host.padding()) : null;
   // On a wide screen the card sits in a corner, so the radar only keeps clear of its closed height; on a phone it spans
   // the width, so the radar sits above all of it.
