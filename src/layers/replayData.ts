@@ -50,3 +50,12 @@ export function replayData(data: ReplayFile) {
 }
 
 export type ReplayData = ReturnType<typeof replayData>;
+
+/** The "How sure?" point on a card's "likely" window, from the file's own check (interval.checked): how often the real
+ * peak landed inside it on past years, each year's window sized without that year. Species-neutral; null if unchecked. */
+export function windowCheck(data: ReplayFile): [string, string] | null {
+  const c = data.interval?.checked?.peak;
+  if (!c) return null;
+  const [k, n, lo, hi] = c;
+  return ['window', `the "likely" dates caught the real peak of a whole band of the map in ${k} of ${n} past tries it never saw. The aim is 8 in 10; with this few tries the true rate could be anywhere from ${lo} to ${hi}%. One hexagon can miss by more.`];
+}

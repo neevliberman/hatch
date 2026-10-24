@@ -8,7 +8,7 @@ import { dayOfYear } from '../core/timeAxis';
 import type { CaveatCard, Explainer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import { restingSketch } from '../ui/sketch';
 import { doyToMs, type ReplayFile } from './lunaData';
-import { APPROXIMATE, replayData, TYPICAL, type Mode, type Sighting } from './replayData';
+import { APPROXIMATE, replayData, TYPICAL, windowCheck, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, parentOf, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
@@ -410,7 +410,11 @@ export function createFireflyLayer(
         ...(hasFine
           ? ['Zoom in and the hexagons get smaller, about 17 km wide. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale. So a small hexagon\u2019s date is no surer than a big one\u2019s. Its card counts the sightings in the big hexagon around it.']
           : ['There are no small hexagons for fireflies here. Zooming in keeps the big ones.']),
-        `For a single year, a hexagon’s card gives a "peak here likely" window. In the 23 strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast. One spot can miss by more.`,
+        `For a single year, a hexagon’s card gives a "peak here likely" window. In the ${data.scores.length} strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast.` +
+          (data.interval?.checked
+            ? ` Sized without the year being checked, it caught ${data.interval.checked.peak[0]} of ${data.interval.checked.peak[1]}.`
+            : '') +
+          ' One spot can miss by more.',
         ...(m?.holdout_mae
           ? [`When it learned only from Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their own usual dates. That is only 4 strip-years, so it is a hint, not proof.`]
           : []),
@@ -455,6 +459,7 @@ export function createFireflyLayer(
             ...(data.model
               ? [['simpler rule', `the warmth at past sightings alone did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}.`] as [string, string]]
               : []),
+            ...(windowCheck(data) ? [windowCheck(data)!] : []),
             ['first try', 'not tested as carefully as the luna moth yet.'],
           ],
           bars: [

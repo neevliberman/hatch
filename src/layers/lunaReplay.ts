@@ -25,6 +25,7 @@ import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, parentOf, RETRY_MS, type FineLevel } from './fineData';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
+import { windowCheck } from './replayData';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
 export const GLOW_DAYS = 10;
@@ -152,6 +153,14 @@ export function replayTimeSpec(mode: Mode, month?: number, day?: number, now = D
   };
 }
 
+/** The live window's check on a fresh season (interval.checked.season, pipeline/fit/CALIBRATION.md), or null. */
+function seasonCheck(): string | null {
+  const ss = data.interval?.checked?.season;
+  if (!ss) return null;
+  const upTo = new Date(`${ss.as_of}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return `Rerun on ${ss.year} with real weather only to ${upTo}, the window caught the real peak in ${ss.peak[0]} of ${ss.peak[1]} east-west bands of the map (some had already peaked by then).`;
+}
+
 /** The live-mode card at the top of the About panel: how this year's map is made, in plain words. */
 function liveNotice(L: Live): { title: string; bullets: string[] } {
   const f = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -162,7 +171,7 @@ function liveNotice(L: Live): { title: string; bullets: string[] } {
       ...(L.stub ? ['Sample data for testing the page, not a real forecast.'] : []),
       ...(L.backfill ? [`Rebuilt after the season${Number.isFinite(L.generated) ? `, on ${f(L.generated)},` : ''} the way the nightly forecast would have run. It is not being updated.`] : []),
       `Real weather up to ${f(L.asOf)}${src(L.sources.observed)}, then the 7-day forecast${src(L.sources.forecast)}, then each past year\u2019s weather run forward from there${src(L.sources.after)}. Each past year gives one way the rest of the season could go.`,
-      'The colours use the middle of those runs. "Peak likely" on a hexagon\u2019s card is their spread: wide early in spring, narrower as real weather comes in.',
+      'The colours use the middle of those runs. "Peak likely" on a hexagon\u2019s card is their spread plus the model\u2019s past misses: wide early in spring, narrower as real weather comes in.',
       `Days after ${f(L.asOf)} are forecast; the time bar is paler there.${L.backfill ? '' : ` The map updates every night, ${Number.isFinite(L.generated) ? `last on ${f(L.generated)}` : 'when new weather arrives'}.`}`,
       `The model (${L.model.id}) is frozen for the season: this year\u2019s sightings are shown to check it, never used to tune it.`,
     ],
@@ -760,8 +769,14 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
         'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
         isLive()
-          ? `This year, a hexagon\u2019s "peak likely" window is the middle 8 in 10 of the weather runs. It leaves out the model\u2019s own misses (about ${Math.round(data.model?.loyo_mae.heat ?? 4)} days on past years), so the real peak can fall outside it.`
-          : `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast. One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.`,
+          ? `This year, a hexagon\u2019s "peak likely" window spans the middle 8 in 10 of the weather runs, widened by how far the model missed on past years.` +
+            (seasonCheck() ? ` ${seasonCheck()}` : '') +
+            ' One spot can miss by more.'
+          : `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast.` +
+            (data.interval?.checked
+              ? ` Sized without the year being checked, it caught ${data.interval.checked.peak[0]} of ${data.interval.checked.peak[1]}.`
+              : '') +
+            ' One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.',
         ...(holdoutPass
           ? [
               `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota about ${Math.round(hoHeat!)} days off. Their own usual dates were about ${Math.round(hoCal!)} days off. That gap is small enough that it could be chance. We also chose this version after seeing that test, so it is a second look, not proof. The version we picked first failed it.`,
@@ -815,6 +830,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             ...(isLive()
               ? ([['this year', 'those checks knew the real weather; this forecast has to guess the weeks ahead, so expect it to be off by more early in spring.']] as [string, string][])
               : []),
+            ...((): [string, string][] => {
+              if (isLive()) return seasonCheck() ? [['window', `${seasonCheck()!.replace(/^R/, 'r')} One season is a rough check.`]] : [];
+              const w = windowCheck(data);
+              return w ? [w] : [];
+            })(),
             holdoutPass
               ? ['also', 'it did well on states it never saw (Wisconsin and Minnesota), but it was chosen after seeing that test.']
               : ['weak spot', 'trained without Wisconsin and Minnesota, it did worse there than a guess from past years.'],
