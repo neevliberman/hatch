@@ -5,54 +5,85 @@ import { latLngToCell } from 'h3-js';
 import { palette } from '../theme';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear } from '../core/timeAxis';
-import type { CaveatCard, Explainer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import type { CaveatCard, Creature, Explainer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpeciesWords, SpotStory } from '../core/layer';
 import { restingSketch } from '../ui/sketch';
+import { countdownParts, type SeasonWords } from '../ui/countdown';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, windowCheck, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, parentOf, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
-import mark from '../marks/firefly.svg';
-
-/**
- * The common eastern firefly, Hatch's second species (built by pipeline/firefly/build_firefly.py).
- * Same file format and forecast as the luna moth, with one generation a year (no second wave) and only the big
- * hexagons: there are no finer levels for fireflies yet. The file is fetched when the reader first picks the
- * firefly, so the luna page stays as light as it was.
- */
-export const FIREFLY_URL = `${import.meta.env.BASE_URL}firefly-replay.json`;
-
-/** Fetch the firefly file. Null when it is missing (the one-file preview build) or broken. */
-export async function loadFirefly(): Promise<ReplayFile | null> {
-  try {
-    const r = await fetch(FIREFLY_URL);
-    if (!r.ok) return null;
-    const js = (await r.json()) as ReplayFile;
-    return Array.isArray(js.cells) && js.forecast?.[TYPICAL] ? js : null;
-  } catch {
-    return null;
-  }
-}
 
 type RGBA = [number, number, number, number];
+
+/**
+ * Everything one species with one generation a year says and draws, beyond its data file. The layer below is the
+ * same for every such species (the firefly, the Japanese beetle, ...): same file format and forecast as the luna moth
+ * (built by pipeline/firefly or pipeline/species), one flight season a year, big hexagons plus res-5 ones if the
+ * species has a fine/ folder. A new species is one of these (src/species/) plus its data.
+ */
+export interface SpeciesConfig {
+  /** Layer ids start with it: `${key}-forecast-r4`. Also the ?species= value. */
+  key: string;
+  /** "Common eastern firefly": the panel's name and the layer title. */
+  name: string;
+  /** One of them, capitalised, for card titles: "Firefly seen Jun 3", "Firefly: peak on Jun 20". */
+  one: string;
+  /** One of them in a sentence: "1 firefly seen". */
+  oneLower: string;
+  /** "this firefly" / "Japanese beetles", for "no sightings of this firefly nearby". */
+  thisOne: string;
+  /** The card line on a hexagon with no sightings nearby: "No fireflies of this kind ever seen near here to ...". */
+  noneSeen: string;
+  /** Adults, for the dots bullet: "adult common eastern fireflies". */
+  adults: string;
+  /** When people see them at their busiest: "nights" (fireflies) or "days". */
+  busyWhen: 'nights' | 'days';
+  words: SpeciesWords;
+  season: SeasonWords;
+  /** Dot colour (its own, so species never read alike when switched). */
+  glow: RGBA;
+  /** Text colour for its name and marks in the About panel. */
+  ink: string;
+  creature: Creature;
+  /** Folder of res-5 hexes next to the page ('fine-firefly/'), or none. */
+  fine?: string;
+  endNote: [string, string];
+  sleep: { title: string; line: string };
+  hook: string;
+  steps: Explainer['steps'];
+  /** Where the leave-one-year-out check was scored ("Illinois to central Wisconsin and Michigan"). */
+  checkedWhere: string;
+  /** Its own fine-print bullets: how hard it is to name, its season, its effort background. */
+  idNote: string;
+  seasonNote: string;
+  effortNote: string;
+  /** Extra bullets after the shared ones (the species' own story, such as where it came from). */
+  extra?: string[];
+  /** Strip-years in the holdout, for files that predate model.holdout_band_years. */
+  holdoutYears?: number;
+}
+
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
-// Firefly light is yellow-green; a warm yellow keeps it apart from the luna's pale green.
-const GLOW: RGBA = palette.firefly;
 const GREY: RGBA = palette.rough;
 const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const TYPICAL_AXIS_YEAR = 2025;
-export const fireflyInk = '#8a5a00';
 
 const fmtDoy = (year: number, doy: number) =>
   new Date(doyToMs(year, Math.round(doy))).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
+/** A fetched species file that looks whole (not missing, broken or cut off). */
+export const isReplay = (js: unknown): js is ReplayFile => {
+  const f = js as ReplayFile | null;
+  return !!f && Array.isArray(f.cells) && !!f.forecast?.[TYPICAL];
+};
+
 /** onData: called when the finer hexes arrive or the level on screen changes (the map should redraw). */
-export function createFireflyLayer(
-  file: ReplayFile,
-  initial: Mode = TYPICAL,
-  onData: () => void = () => {},
-): LunaLayer & { seasonCount(m: Mode): number } {
+export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, initial: Mode = TYPICAL, onData: () => void = () => {}): LunaLayer {
+  const { key, one, words } = cfg;
+  const plural = words.plural;
+  const GLOW = cfg.glow;
   const { data, sightingsFor, bandOf } = replayData(file);
   let mode = initial;
   let shown = sightingsFor(mode);
@@ -64,15 +95,15 @@ export function createFireflyLayer(
   const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : Number(mode));
   const forecast = () => data.forecast[mode] ?? data.forecast[TYPICAL]!;
   const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
-  const rings = ripples<Sighting>('firefly-ripples', (s) => [s.lng, s.lat], palette.dotRim);
+  const rings = ripples<Sighting>(`${key}-ripples`, (s) => [s.lng, s.lat], palette.dotRim);
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
   let fresh = { key: '', list: [] as Sighting[] };
   let sleepNote: OffSeasonNote | undefined;
 
-  // ---- finer hexes (res 5 only for fireflies), from public/fine-firefly/, loaded when the reader zooms in
+  // ---- finer hexes (res 5 only), from the species' fine/ folder, loaded when the reader zooms in
   type Cell = { id: string; i: number; seen: boolean };
-  const fine = fineSource('fine-firefly/');
+  const fine = cfg.fine ? fineSource(cfg.fine) : null;
   let fineLevel: { level: FineLevel; data: Cell[]; unseen: Cell[] } | null = null;
   const fineDays = new Map<Mode, Uint8Array>();
   let hasFine = false;
@@ -84,6 +115,7 @@ export function createFireflyLayer(
   /** Requests on their way or recently failed ('manifest', or a season): no retry before RETRY_MS. */
   const loading = new Map<string, number>();
   const loadManifest = () => {
+    if (!fine) return;
     loading.set('manifest', Infinity);
     void fine.fineManifest().then((m) => {
       hasFine = !!m?.levels['5'];
@@ -95,7 +127,7 @@ export function createFireflyLayer(
   const loadFine = () => {
     const m = mode;
     // One request per season, not one per frame while it is on its way; a failed one is asked again later.
-    if ((loading.get(m) ?? 0) > performance.now()) return;
+    if (!fine || (loading.get(m) ?? 0) > performance.now()) return;
     loading.set(m, Infinity);
     void Promise.all([fine.fineLevel(5), fine.fineDays(5, m)]).then(([level, days]) => {
       if (!level || !days || days.length !== level.cells.length * 5) {
@@ -114,7 +146,7 @@ export function createFireflyLayer(
   /** Res 5 from FINE_ZOOM[5]; back to res 4 a little further out, so a zoom resting on the line doesn't flicker. */
   /** The level to draw and its days: res 5 only once the zoom has rested there (SETTLE_MS), not mid fly-to. */
   const resFor = (zoom: number): { res: number; days: Uint8Array | null } => {
-    if (!hasFine && zoom >= FINE_ZOOM[5]! && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
+    if (fine && !hasFine && zoom >= FINE_ZOOM[5]! && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
     const want = hasFine && zoom >= FINE_ZOOM[5]! - (wantFine ? 0.3 : 0);
     if (want !== wantFine) {
       wantSince = performance.now();
@@ -155,6 +187,7 @@ export function createFireflyLayer(
     };
   };
 
+  const busiest = `Busiest ${cfg.busyWhen}`;
   const HOME: [number, number] = [-88.0, 41.9];
   const spotStory = (lngLat: [number, number] | null, t: number, name?: string): SpotStory | null => {
     const hit = lookup(lngLat ?? HOME);
@@ -166,10 +199,10 @@ export function createFireflyLayer(
     const doy = dayOfYear(t);
     const place = lngLat ? (name ?? 'this spot') : 'Chicago';
     const sentence = {
-      'not yet': `On ${f(doy)}, the forecast says it is too early near ${place}. First fireflies about ${f(q05)}, busiest ${f(q25)} to ${f(q75)}.`,
-      starting: `On ${f(doy)}, the forecast says fireflies are just starting near ${place}. Busiest nights should be ${f(q25)} to ${f(q75)}.`,
+      'not yet': `On ${f(doy)}, the forecast says it is too early near ${place}. First ${plural} about ${f(q05)}, busiest ${f(q25)} to ${f(q75)}.`,
+      starting: `On ${f(doy)}, the forecast says ${plural} are just starting near ${place}. ${busiest} should be ${f(q25)} to ${f(q75)}.`,
       peak: `On ${f(doy)}, the forecast says it is peak time near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
-      'winding down': `On ${f(doy)}, the forecast says the season is winding down near ${place}. Busiest nights were ${f(q25)} to ${f(q75)}.`,
+      'winding down': `On ${f(doy)}, the forecast says the season is winding down near ${place}. ${busiest} were ${f(q25)} to ${f(q75)}.`,
       over: `By ${f(doy)}, the forecast says the season is over near ${place}. It started about ${f(q05)}.`,
     }[stageAt(hit.q, doy)];
     const end = q95 ?? 273;
@@ -193,10 +226,11 @@ export function createFireflyLayer(
     };
   };
 
+  const isDot = (id: string) => id === `${key}-glow` || id === `${key}-dots`;
   return {
-    id: 'firefly-replay',
-    title: 'Common eastern firefly',
-    words: { tagline: 'when fireflies glow', plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies', mark },
+    id: `${key}-replay`,
+    title: cfg.name,
+    words,
     mode: () => mode,
     setMode(m) {
       mode = m;
@@ -205,8 +239,9 @@ export function createFireflyLayer(
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
     busy: (t) => isBusy(forecast(), dayOfYear(t)),
-    endNote: ['That was the firefly season.', 'Press replay to watch it again'],
+    endNote: cfg.endNote,
     seasonCount: (m: Mode) => sightingsFor(m).length,
+    countdown: (now) => countdownParts(now, file, cfg.season),
 
     newest(t) {
       const doy = dayOfYear(t);
@@ -216,23 +251,23 @@ export function createFireflyLayer(
 
     points(t) {
       // Cached per day and season, like luna's: the place names move out of the way of lit dots.
-      const key = `${dayOfYear(t)}|${mode}`;
-      if (lit.key !== key) {
+      const k = `${dayOfYear(t)}|${mode}`;
+      if (lit.key !== k) {
         const doy = dayOfYear(t);
-        lit = { key, pts: shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).map((s) => [s.lng, s.lat]) };
+        lit = { key: k, pts: shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).map((s) => [s.lng, s.lat]) };
       }
       return lit.pts;
     },
 
-    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till summer', line: 'larvae in the soil', sketch: restingSketch('firefly'), at: MIDWEST_MARGIN }) : null),
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { ...cfg.sleep, sketch: restingSketch(cfg.creature), at: MIDWEST_MARGIN }) : null),
 
     summary(t) {
       const doy = dayOfYear(t);
       const n = stageCounts(forecast(), doy);
       const lit = shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).length;
       const parts = STAGES.filter((s) => n[s]).map((s) => `${s} in ${n[s]}`);
-      return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}. Firefly forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
-        `${lit} firefl${lit === 1 ? 'y' : 'ies'} seen in the last ${GLOW_DAYS} days.`;
+      return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}. ${one} forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
+        `${lit} ${lit === 1 ? cfg.oneLower : plural} seen in the last ${GLOW_DAYS} days.`;
     },
 
     // One wave a summer, so the ribbon's line needs no notes.
@@ -265,10 +300,10 @@ export function createFireflyLayer(
       return [
         new H3HexagonLayer<Cell>({
           // One id per level: reusing an id across levels left the other level's hexes drawn (see lunaReplay.ts).
-          id: `firefly-forecast-r${res}${hexFade(anim).id}`,
+          id: `${key}-forecast-r${res}${hexFade(anim).id}`,
           data: hexes,
           getHexagon: (c) => c.id,
-          // The first-frame wash (a ?species=firefly link), on the coarse hexagons only.
+          // The first-frame wash (a ?species= link), on the coarse hexagons only.
           getFillColor: wash === undefined || days ? (c) => STAGE_COLOR[stageAt(qOf(c), doy)] : (c) => washed(c.i, STAGE_COLOR[stageAt(qOf(c), doy)], wash),
           getLineColor: wash === undefined || days ? theme.hexEdge : (c) => washed(c.i, theme.hexEdge, wash),
           stroked: true,
@@ -284,7 +319,7 @@ export function createFireflyLayer(
           transitions: hexFade(anim).transitions,
         }),
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
-          id: `firefly-unseen-r${res}`,
+          id: `${key}-unseen-r${res}`,
           opacity: wash === undefined ? 1 : Math.min(1, wash / 900),
           data: days ? fineLevel!.unseen : unseen,
           getHexagon: (c) => c.id,
@@ -302,7 +337,7 @@ export function createFireflyLayer(
           fillPatternSizeUnits: 'pixels',
         }),
         new ScatterplotLayer<Sighting>({
-          id: 'firefly-glow',
+          id: `${key}-glow`,
           data: shown,
           getPosition: (s) => [s.lng, s.lat],
           getFillColor: palette.dotShadow,
@@ -313,7 +348,7 @@ export function createFireflyLayer(
           ...filter,
         }),
         new ScatterplotLayer<Sighting>({
-          id: 'firefly-halo',
+          id: `${key}-halo`,
           data: shown,
           getPosition: (s) => [s.lng, s.lat],
           getFillColor: palette.dotHalo,
@@ -324,7 +359,7 @@ export function createFireflyLayer(
           ...filter,
         }),
         new ScatterplotLayer<Sighting>({
-          id: 'firefly-dots',
+          id: `${key}-dots`,
           data: shown,
           getPosition: (s) => [s.lng, s.lat],
           getFillColor: (s) => (s.flags & APPROXIMATE ? GREY : GLOW),
@@ -345,10 +380,10 @@ export function createFireflyLayer(
     probe(lngLat, t, picked): ProbeCard | null {
       const year = yearOf();
       const doy = dayOfYear(t);
-      if (picked && (picked.layerId === 'firefly-glow' || picked.layerId === 'firefly-dots')) {
+      if (picked && isDot(picked.layerId)) {
         const s = picked.object as Sighting;
         return {
-          title: `Firefly seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
+          title: `${one} seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
           lines: s.flags & APPROXIMATE ? ['Location is approximate, so the dot is small and dark.'] : [],
           link: { href: `https://www.inaturalist.org/observations/${s.id}`, label: 'See the photo on iNaturalist' },
         };
@@ -365,15 +400,15 @@ export function createFireflyLayer(
       const likely = !!(pk && q50 != null && mode !== TYPICAL);
       if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
-      if (!at.seen) lines.push('No fireflies of this kind ever seen near here to check this against.');
+      if (!at.seen) lines.push(cfg.noneSeen);
       if (q05 != null && q25 != null && q75 != null)
-        more.push(`First fireflies about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
+        more.push(`First ${plural} about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
         const off = sc.heat_peak - sc.obs_peak;
         more.push(
-          `How the forecast did in this strip of the map (${band.label}°N): fireflies peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+          `How the forecast did in this strip of the map (${band.label}°N): ${plural} peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
             (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
             `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
@@ -387,7 +422,7 @@ export function createFireflyLayer(
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
       if (shownRes === 5) more.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
-      return { title: `Firefly: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
+      return { title: `${one}: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
     caveats(): CaveatCard {
@@ -395,30 +430,36 @@ export function createFireflyLayer(
       const c = data.counts;
       const m = data.model;
       const pk = data.interval?.peak ?? [0, 0];
+      const nHold = m?.holdout_band_years ?? cfg.holdoutYears;
       const bullets = [
-        'This is a first try. It is the luna moth’s recipe refit on fireflies, with nothing tuned for fireflies yet. The luna moth’s rules were written down before it was scored. These were not.',
+        `This is a first try. It is the luna moth’s recipe refit on ${plural}, with nothing tuned for ${plural} yet. The luna moth’s rules were written down before it was scored. These were not.`,
         'This is a look back. It uses the temperatures that actually happened. A forecast made during spring would have to guess the weather ahead.',
-        `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of adult common eastern fireflies (Photinus pyralis) that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days.`,
-        'Fireflies are hard to name from a photo, and a flash at night is harder. Only records other iNaturalist users agreed on were used, and records of other firefly kinds were left out.',
-        'Fireflies have one flying season a year, so there is no second wave. Records after late August were left out.',
+        `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of ${cfg.adults} (${data.species.sci}) that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days.`,
+        cfg.idNote,
+        cfg.seasonNote,
         ...(m?.median_dd_at_lat?.['42']
-          ? [`Half the fireflies came out after about ${Math.round(m.median_dd_at_lat['42'] / 10) * 10} degree-days of warmth (°C above 10, added up from March 1).`]
+          ? [`Half the ${plural} came out after about ${Math.round(m.median_dd_at_lat['42'] / 10) * 10} degree-days of warmth (°C above 10, added up from March 1).`]
           : []),
-        'To allow roughly for when people go looking, the model counts how many beetle photos people posted each day in each state. Most beetle photos are taken by day, so this is a rough stand-in, and nobody has checked yet whether it helps.',
+        cfg.effortNote,
         'Gray dots mean the photo’s location was blurred or rough, so the dot may sit off its true spot.',
-        'Striped hexagons have no sightings of this firefly nearby, ever. There is nothing to check the forecast against there.',
+        `Striped hexagons have no sightings of ${cfg.thisOne} nearby, ever. There is nothing to check the forecast against there.`,
         ...(hasFine
-          ? ['Zoom in and the hexagons get smaller, about 17 km wide. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale. So a small hexagon\u2019s date is no surer than a big one\u2019s. Its card counts the sightings in the big hexagon around it.']
-          : ['There are no small hexagons for fireflies here. Zooming in keeps the big ones.']),
+          ? ['Zoom in and the hexagons get smaller, about 17 km wide. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale. So a small hexagon’s date is no surer than a big one’s. Its card counts the sightings in the big hexagon around it.']
+          : [`There are no small hexagons for ${plural} here. Zooming in keeps the big ones.`]),
         `For a single year, a hexagon’s card gives a "peak here likely" window. In the ${data.scores.length} strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast.` +
           (data.interval?.checked
             ? ` Sized without the year being checked, it caught ${data.interval.checked.peak[0]} of ${data.interval.checked.peak[1]}.`
             : '') +
           ' One spot can miss by more.',
-        ...(m?.holdout_mae
-          ? [`When it learned only from Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their own usual dates. That is only 4 strip-years, so it is a hint, not proof.`]
+        ...(m?.holdout_mae && nHold
+          ? [`When it learned only from Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their own usual dates. That is only ${nHold} strip-years, so it is a hint, not proof.`]
           : []),
-        'Sightings show where people look as much as where fireflies are. Towns and backyards get counted too often. An empty spot does not mean no fireflies.',
+        // Strips of the map where the usual date beat the forecast, said plainly.
+        ...(data.scorecard ?? [])
+          .filter((b) => b.mae.cal < b.mae.heat)
+          .map((b) => `In the strip at ${b.band}°N the usual date did better than the forecast: ${b.mae.cal.toFixed(1)} days off against ${b.mae.heat.toFixed(1)}, over ${b.band_years} years.`),
+        ...(cfg.extra ?? []),
+        `Sightings show where people look as much as where ${plural} are. Towns and backyards get counted too often. An empty spot does not mean no ${plural}.`,
         'Only openly licensed photos are drawn. The forecast learned from all confirmed records with a precise location, one per person, place and day.',
       ];
       if (yr && yr.n)
@@ -428,23 +469,28 @@ export function createFireflyLayer(
             '.',
         );
       else if (yr) bullets.push(`${mode} had too few sightings to check. Each strip of the map needs at least 20.`);
-      return { title: 'Firefly replay: what you are looking at', severity: 'normal', bullets };
+      return { title: `${one} replay: what you are looking at`, severity: 'normal', bullets };
     },
 
     explainer(): Explainer {
       const sc = mode === TYPICAL ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
+      const lm = data.model?.loyo_mae;
+      // The simpler rule (warmth at past sightings alone, luna's first model), said as its numbers say it.
+      const simpler = lm
+        ? Math.abs(lm.p1 - lm.heat) < 0.5
+          ? `the warmth at past sightings alone did about as well: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
+          : lm.p1 < lm.heat
+            ? `the warmth at past sightings alone did better: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
+            : `the warmth at past sightings alone did worse: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
+        : null;
       return {
-        name: 'Common eastern firefly',
+        name: cfg.name,
         sci: data.species.sci,
-        creature: 'firefly',
-        accent: fireflyInk,
-        hook: 'Common eastern fireflies light up summer evenings once a year. This map predicts when they come out across seven Midwest states, based on how warm the spring has been. It is a first try, using the luna moth’s recipe.',
-        steps: [
-          { title: 'Winter', text: 'All winter the young firefly lives as a grub in damp soil.' },
-          { title: 'Warmth wakes it', text: 'From March 1, every day warmer than 50\u00a0°F (10\u00a0°C) adds a little warmth. Hotter days add more.' },
-          { title: 'Warm spring, early fireflies', text: 'Once it has had enough warmth, out it comes and starts to flash. A warm spring gets there sooner.' },
-        ],
+        creature: cfg.creature,
+        accent: cfg.ink,
+        hook: cfg.hook,
+        steps: cfg.steps,
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
         spot: (lngLat, t, name) => spotStory(lngLat, t, name),
         score: {
@@ -453,12 +499,10 @@ export function createFireflyLayer(
             [
               'checked',
               sc.n
-                ? `the dates of the first fireflies and the peak, against people’s sightings, on ${mode === TYPICAL ? 'years' : mode} it never learned from (Illinois to central Wisconsin and Michigan).`
+                ? `the dates of the first ${plural} and the peak, against people’s sightings, on ${mode === TYPICAL ? 'years' : mode} it never learned from (${cfg.checkedWhere}).`
                 : `${mode} had too few sightings to check, so this is all years together.`,
             ],
-            ...(data.model
-              ? [['simpler rule', `the warmth at past sightings alone did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}.`] as [string, string]]
-              : []),
+            ...(simpler ? [['simpler rule', simpler] as [string, string]] : []),
             ...(windowCheck(data) ? [windowCheck(data)!] : []),
             ['first try', 'not tested as carefully as the luna moth yet.'],
           ],
@@ -473,7 +517,7 @@ export function createFireflyLayer(
 
     legend(): LegendSpec {
       return {
-        title: 'Forecast: when fireflies come out',
+        title: `Forecast: when ${plural} come out`,
         items: [
           ...STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
@@ -485,7 +529,7 @@ export function createFireflyLayer(
 
     credits() {
       return [
-        { text: 'Firefly sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.', href: `https://www.inaturalist.org/taxa/${data.species.inat_taxon}` },
+        { text: `${one} sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.`, href: `https://www.inaturalist.org/taxa/${data.species.inat_taxon}` },
         { text: 'Temperatures: Daymet v4 daily 1 km, Thornton et al., ORNL DAAC.', href: 'https://daymet.ornl.gov/' },
         { text: 'State outlines: US Census Bureau, via us-atlas.', href: 'https://github.com/topojson/us-atlas' },
       ];

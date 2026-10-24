@@ -35,8 +35,11 @@ export interface ReplayFile {
     /** Degree-days at which half have come out, by latitude. */
     median_dd_at_lat?: Record<string, number>;
     loyo_mae: { heat: number; p1: number; cal: number };
-    holdout_mae: { heat: number; p1: number; cal: number; cal_lat: number };
+    holdout_mae: { heat: number; p1: number; cal: number; cal_lat: number } | null;
     noise_floor: number;
+    /** Strip-years scored leave-one-year-out and in the IL/IN/OH to WI/MN holdout (species built by pipeline/species). */
+    band_years?: number;
+    holdout_band_years?: number;
   };
   /** Added in P3: 80% band for a forecast date, as day offsets [low, high] of real minus forecast. */
   interval?: {

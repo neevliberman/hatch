@@ -553,6 +553,59 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   }
+  // The species menu, from src/species.ts: every species is listed, a ?species= link opens on it, each one loads,
+  // names itself in the header and the About panel, keeps the link, and draws a coloured map. Desktop and phones.
+  const keyOf = (src) => [...src.matchAll(/key: '([a-z-]+)'/g)].map((m) => m[1]);
+  const listed = keyOf(readFileSync('src/species.ts', 'utf8'));
+  const speciesCases = [
+    ['desktop', 1440, 900, false],
+    ['phone', 390, 844, true],
+    ['small phone', 320, 640, true],
+  ];
+  for (const [label, width, height, phone] of speciesCases) {
+    const tag = `species ${label}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const shotS = (step) => page.screenshot({ path: `${out}/species-${label.replace(/\W+/g, '-')}-${step}.png` });
+    try {
+      await page.goto(origin + '/?species=japanese-beetle&noauto&today=2027-01-15&date=07-05');
+      await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 30000 })
+        .catch(() => fail('a ?species=japanese-beetle link never opened on the beetle'));
+      await page.waitForTimeout(1500);
+      const keys = await page.locator('#species option').evaluateAll((os) => os.map((o) => o.value));
+      if (keys.join() !== listed.join()) fail(`species menu lists ${keys.join(', ')}, src/species.ts has ${listed.join(', ')}`);
+      if (!/Japanese beetle/.test(await page.locator('#tagline').textContent())) fail('the header does not name the Japanese beetle');
+      if ((await page.locator('#dots-what').textContent()) !== 'beetles') fail('the dots line does not count beetles');
+      if (!new URL(page.url()).searchParams.get('species')?.startsWith('japanese-beetle')) fail(`the link dropped the species: ${page.url()}`);
+      const bad = await page.evaluate(audit);
+      bad.bad.forEach((m) => fail(m));
+      if (bad.scrolls) fail('page scrolls');
+      const png = await page.screenshot({ path: `${out}/species-${label.replace(/\W+/g, '-')}-1-map.png` });
+      const m = await midwest(page, png);
+      if (m.w < 0.3) fail(`the beetle's coloured hexagons span only ${Math.round(m.w * 100)}% of the width`);
+      await page.locator('#info-btn').click();
+      await page.waitForTimeout(700);
+      if (!/Popillia japonica/.test(await page.locator('#drawer').textContent())) fail('the About panel does not describe the Japanese beetle');
+      await shotS('2-about');
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      // Every other species from the menu, then back: each loads (its own layer id) and is drawn.
+      for (const k of listed.filter((k) => k !== 'japanese-beetle')) {
+        await page.locator('#species').selectOption(k);
+        await page.waitForFunction((k) => window.__hatch.current().id === `${k}-replay`, k, { timeout: 30000 }).catch(() => fail(`${k} never loaded`));
+      }
+      await page.waitForTimeout(600);
+      await shotS('3-last');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  }
   await browser.close();
   server.close();
 } else if (engines.includes('chromium')) problems.push(`live mode not checked: no ${join(distDir, 'live/latest.json')} (run npm run build first)`);

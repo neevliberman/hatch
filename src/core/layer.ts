@@ -60,6 +60,20 @@ export interface SpotStory {
   today: number;
 }
 
+/** A species' pen drawing for the About panel's sketch strip and the off-season note (ui/sketch.ts draws the scenes
+ * around it). Shapes are SVG path data, centred on (cx, cy) at scale k; `seed` keeps the wobble the same each time. */
+export interface Creature {
+  /** Winter quarters: 'litter' = a cocoon in the fallen leaves (luna), 'soil' = a grub under the ground line. */
+  winters: 'litter' | 'soil';
+  sleeper(cx: number, cy: number, k: number, seed: number): { wash: string; ink: string };
+  /** The adult; `wings` are drawn apart so they can flap. */
+  adult(cx: number, cy: number, k: number, seed: number): { wash: string; wings: string; body: string };
+  /** The adult's wash is a sun-yellow glow under it (a firefly), not a leaf-green one under its wings. */
+  glow?: boolean;
+  /** Leaves an empty cocoon behind once out. */
+  shell?: boolean;
+}
+
 /**
  * The visual About panel for a species (plan v2: "wow first, honesty one tap away"). Optional: a layer without one
  * falls back to its caveats() list. The fine print is always caveats(), so the honesty lives in one place.
@@ -67,8 +81,8 @@ export interface SpotStory {
 export interface Explainer {
   name: string;
   sci: string;
-  /** Which drawing (ui/explainer.ts) to use for the animal; the strip and timeline take their colour from `accent`. */
-  creature: 'moth' | 'firefly';
+  /** The animal's drawing for the sketch strip (ui/sketch.ts); the strip and timeline take their colour from `accent`. */
+  creature: Creature;
   accent: string;
   hook: string;
   /** Captions for the three sketched panels: how it spends winter, warmth wakes it, a warm spring vs a cool one. */
@@ -161,8 +175,8 @@ export interface HatchLayer {
   credits?(): { text: string; href?: string }[];
 }
 
-/** Forecast hexagon layers are named luna-forecast-r4/-r5/-r6, one per hexagon size, with -blend added while playback
+/** Forecast hexagon layers are named <species>-forecast-r4/-r5/-r6 (luna-forecast-r4), one per hexagon size, with -blend added while playback
  * glides (see lunaReplay.ts render and motion.ts hexFade). */
-export const isForecast = (layerId: string | undefined) => /^(luna|firefly)-forecast/.test(layerId ?? '');
+export const isForecast = (layerId: string | undefined) => /^[a-z-]+-forecast-r\d/.test(layerId ?? '');
 /** The hexagon layers (forecast and its stripes): the map draws lakes, rivers and roads over these, under the dots. */
-export const isHexes = (layerId: string) => /^(luna|firefly)-(forecast|unseen)/.test(layerId);
+export const isHexes = (layerId: string) => /^[a-z-]+-(forecast|unseen)-r\d/.test(layerId);

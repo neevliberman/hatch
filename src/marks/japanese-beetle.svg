@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- The Japanese beetle for the header (24 px), seen from above: metallic green head and shield, copper wing covers, white side tufts. Heavy ink, like the moth. -->
+  <circle cx="256" cy="256" r="256" fill="#f8f2e3"/>
+  <g fill="none" stroke="#2b241c" stroke-width="24" stroke-linecap="round">
+    <path d="M168 230 L106 196 M164 300 L96 304 M176 362 L118 410 M344 230 L406 196 M348 300 L416 304 M336 362 L394 410"/>
+    <path d="M236 96 C226 72 210 58 188 50 M276 96 C286 72 302 58 324 50"/>
+  </g>
+  <path d="M256 210 C196 210 166 250 166 304 C166 372 204 430 256 444 C308 430 346 372 346 304 C346 250 316 210 256 210 Z" fill="#c7743a" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M256 214 L256 440" stroke="#2b241c" stroke-width="18"/>
+  <path d="M256 128 C306 128 336 152 340 190 C342 210 318 222 256 222 C194 222 170 210 172 190 C176 152 206 128 256 128 Z" fill="#2f7a5a" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
+  <ellipse cx="256" cy="110" rx="34" ry="26" fill="#2f7a5a" stroke="#2b241c" stroke-width="20"/>
+  <g fill="#fffaf0" stroke="#2b241c" stroke-width="10">
+    <circle cx="178" cy="356" r="15"/><circle cx="334" cy="356" r="15"/><circle cx="196" cy="404" r="13"/><circle cx="316" cy="404" r="13"/>
+  </g>
+</svg>

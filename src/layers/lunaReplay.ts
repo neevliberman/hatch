@@ -6,13 +6,15 @@ import { cellToLatLng, latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Explainer, HatchLayer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
-import { restingSketch } from '../ui/sketch';
+import { MOTH_ART, restingSketch } from '../ui/sketch';
+import { countdownParts } from '../ui/countdown';
 import mark from '../marks/moth.svg';
 import {
   APPROXIMATE,
   bandOf,
   data,
   doyToMs,
+  firstBroodCount,
   LIVE,
   SECOND_BROOD,
   sightingsFor,
@@ -278,6 +280,10 @@ export interface LunaLayer extends HatchLayer {
   fineCurrent?(): boolean;
   /** The hexagon the card describes at lngLat, at the resolution on screen (null outside the map). */
   cellAt(lngLat: [number, number]): string | null;
+  /** Sightings the season menu counts for a mode (the species' words.countedAs). */
+  seasonCount(mode: Mode): number;
+  /** The real calendar's next season, or that it is on now (ui/countdown.ts). */
+  countdown(now: number): [string, string];
 }
 
 interface FineCell {
@@ -480,6 +486,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     title: 'Luna moth',
     words: { tagline: 'when luna moths fly', plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths', mark },
     mode: () => mode,
+    seasonCount: firstBroodCount,
     setMode(m) {
       mode = m;
       shown = sightingsFor(m);
@@ -491,6 +498,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     newest: (t) => newest(dayOfYear(t)),
     busy: (t) => isBusy(forecast(), dayOfYear(t)),
     endNote: ['That was the first wave.', 'Press replay to watch it again'],
+    countdown: (now) => countdownParts(now, data, { on: ['Luna season is on', '. The first wave is out somewhere in the Midwest right now.'], where: 'southern Illinois, Indiana and Ohio' }),
 
     points(t) {
       // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
@@ -503,7 +511,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return lit.pts;
     },
 
-    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till spring', line: 'cocoons in the leaf litter', sketch: restingSketch('moth'), at: MIDWEST_MARGIN }) : null),
+    offSeason: (t) => (isAsleep(forecast(), dayOfYear(t)) ? (sleepNote ??= { title: 'Sleeping till spring', line: 'cocoons in the leaf litter', sketch: restingSketch(MOTH_ART), at: MIDWEST_MARGIN }) : null),
 
     summary(t) {
       const doy = dayOfYear(t);
@@ -807,7 +815,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return {
         name: 'Luna moth',
         sci: data.species.sci,
-        creature: 'moth',
+        creature: MOTH_ART,
         accent: mothInk,
         hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how well it matches.',
         steps: [
