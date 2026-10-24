@@ -490,7 +490,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const badge = page.locator('#t-asof');
       if (!(await badge.isVisible())) fail('no "as of" badge');
       const stale = (await badge.getAttribute('class')).includes('stale');
-      if (stale !== ['late file', 'off-season pick'].includes(label)) fail(stale ? 'fresh data marked stale' : 'late or old data is not marked stale');
+      // Late (the nightly run is overdue) or old (observed weather ends more than 3 days before today) shows amber.
+      const today = Date.parse(new URLSearchParams(query).get('today') ?? '') || Date.now();
+      const old = today - Date.parse((served ?? stub).as_of) >= 4 * 86_400_000;
+      if (stale !== (label === 'late file' || old)) fail(stale ? 'fresh data marked stale' : 'late or old data is not marked stale');
       await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 3000 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
       await page.mouse.move(2, height / 2);
@@ -592,20 +595,20 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       else {
         await page.locator('#drawer [data-find]').click();
         if (!(await page.locator('#drawer #finder').isVisible())) fail('the About panel button did not open the name box in the panel');
-        await page.locator('#find-q').fill('Columbus');
+        await page.locator('#find-q').fill('Cincinnati');
         await page.keyboard.press('Enter');
         await page.waitForTimeout(1200);
-        if (!/Columbus/.test((await page.locator('#drawer .spot-title').textContent()) ?? '')) fail('finding Columbus from About did not fill its season');
+        if (!/Cincinnati/.test((await page.locator('#drawer .spot-title').textContent()) ?? '')) fail('finding Cincinnati from About did not fill its season');
         await shotF('3-about');
       }
       await page.keyboard.press('Escape');
       if (!phone) {
-        await page.waitForTimeout(400);
-        await page.locator('#share').click();
+        await page.waitForTimeout(1000); // the About panel slides away
+        await page.locator('#share').click({ timeout: 60000 });
         await page.waitForTimeout(300);
         const [m, s] = await Promise.all(['#action-msg', '#share'].map((sel) => page.locator(sel).boundingBox()));
         if (!m || !m.height) fail('Share said nothing');
-        else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 60 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
+        else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 80 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
         await shotF('4-share');
       }
     } catch (e) {

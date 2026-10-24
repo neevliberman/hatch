@@ -169,11 +169,9 @@ export function mountScrubber(
           ? `data ${days} days old`
           : `as of ${days === 0 ? 'today' : days === 1 ? 'yesterday' : md(a.at)}${a.stale ? '<span class="long"> · data may be stale</span><span class="phone-only"> · stale?</span>' : ''}`;
       asOfEl.title =
-        days > 3
-          ? `Real weather ends ${md(a.at)}, ${days} days ago. Later days are forecast.`
-          : a.stale
-            ? `Weather observed up to ${md(a.at)}. Tonight's update looks late, so this may be out of date. Later days are forecast.`
-            : `Weather observed up to ${md(a.at)}. Later days are forecast.`;
+        (days > 3
+          ? `Real weather ends ${md(a.at)}, ${days} days ago.`
+          : `Weather observed up to ${md(a.at)}.${a.stale ? " Tonight's update looks late, so this may be out of date." : ''}`) + ' Later days are forecast.';
     }
     if (af !== null) {
       parts.push(`<span class="now asof-flag" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>as of</b></span>`);

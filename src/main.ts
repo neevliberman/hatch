@@ -291,7 +291,7 @@ function start() {
     // The counts are sightings (photos), so the menu says "seen", not a number of animals. "All years" goes without
     // one so the closed menu fits a small phone.
     // This year's forecast is luna's alone so far: say so at the top of the list rather than drop it silently.
-    picker.innerHTML = (liveFile && cur !== luna ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
+    picker.innerHTML = (__BASEMAP__ && liveFile && cur !== luna ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
       [...live, TYPICAL, ...[...years].reverse()]
         .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${seasonCount(m).toLocaleString()} seen)`}</option>`)
         .join('');
@@ -473,7 +473,10 @@ function start() {
       const column = getComputedStyle(from!.parentElement!).flexDirection === 'column';
       const x = column ? b.left - 8 - w : b.right - w;
       // In the time bar it clears the bar's own text line too, sitting just over the paper.
-      const y = column ? b.top + (b.height - h) / 2 : Math.min(b.top, from!.closest('#dock')?.getBoundingClientRect().top ?? b.top) - 6 - h;
+      let y = column ? b.top + (b.height - h) / 2 : Math.min(b.top, from!.closest('#dock')?.getBoundingClientRect().top ?? b.top) - 6 - h;
+      // A card docked in that corner keeps its lines readable: the message goes above it.
+      const c = probeEl.hidden ? null : probeEl.getBoundingClientRect();
+      if (c && !column && x < c.right && x + w > c.left && y < c.bottom && y + h > c.top) y = c.top - 6 - h;
       msg.style.left = `${Math.round(Math.max(8, x))}px`;
       msg.style.top = `${Math.round(Math.max(8, y))}px`;
     } else msg.style.left = msg.style.top = '';
