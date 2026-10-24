@@ -7,13 +7,14 @@ import type { ReplayFile } from './layers/lunaData';
 import { data, firstBroodCount, LIVE, TYPICAL, type Mode } from './layers/lunaData';
 import { inSeason, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
-import { theme } from './map/basemap';
+import { basemapLabels, theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { countdownParts } from './ui/countdown';
 import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
+import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
 import { isForecast } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
@@ -63,6 +64,8 @@ function start() {
 
   let hit: ProbeHit | null = null;
   let pinned = false;
+  let resetKeys = () => {}; // set once the keyboard explorer is built; a species or season switch starts it afresh
+  let lastPin: [number, number] | null = null; // the last pinned spot, by any means: where the keyboard explorer starts
   const probeEl = $('probe');
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
@@ -89,6 +92,7 @@ function start() {
   const updateProbe = () => {
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
     if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = cur.cellAt(hit.lngLat) ?? hit.cell;
+    if (pinned && hit) lastPin = hit.lngLat;
     showProbe(probeEl, registry, hit, time.cursor, pinned);
     // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
     map.setPicked(pinned && hit && (!hit.picked || isForecast(hit.picked.layerId)) ? hit.cell : null);
@@ -140,7 +144,7 @@ function start() {
     registry,
     time,
     padding,
-    covers: () => [...document.querySelectorAll('#top > *, #legend, #probe, #recenter, #actions > *')],
+    covers: () => [...document.querySelectorAll('#top > :not(#explore), #explore:focus, #legend, #probe, #recenter, #actions > *')],
     onMove: (moved) => {
       $('recenter').hidden = !moved;
       document.querySelector('.brand')!.classList.toggle('over-map', moved);
@@ -299,6 +303,7 @@ function start() {
     cur.setMode(m);
     hit = null;
     pinned = false;
+    resetKeys();
     map.setMarker(null);
     $('season-name').textContent = modeLabel(m);
     at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
@@ -338,6 +343,7 @@ function start() {
     const now = new Date(time.cursor);
     hit = null;
     pinned = false;
+    resetKeys();
     map.setMarker(null);
     next.setMode(picker.value);
     cur = next;
@@ -467,16 +473,19 @@ function start() {
     }
   });
 
-  // Pin the card (and the About panel's spot) on the hexagon at lat/lng, named `label`, and bring the map to it.
-  // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so fall back to
-  // the nearest land hex within two rings.
-  const showPlace = (lat: number, lng: number, label: string): 'exact' | 'nearby' | null => {
-    const ring = gridDisk(latLngToCell(lat, lng, GRID_RES), 2)
+  // The hexagons within k rings of lat/lng, nearest centre first.
+  const nearby = (lat: number, lng: number, k: number) =>
+    gridDisk(latLngToCell(lat, lng, GRID_RES), k)
       .map((c) => {
         const [la, ln] = cellToLatLng(c);
         return { cell: c, lngLat: [ln, la] as [number, number], d: (la - lat) ** 2 + (ln - lng) ** 2 };
       })
       .sort((a, b) => a.d - b.d);
+  // Pin the card (and the About panel's spot) on the hexagon at lat/lng, named `label`, and bring the map to it.
+  // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so fall back to
+  // the nearest land hex within two rings.
+  const showPlace = (lat: number, lng: number, label: string): 'exact' | 'nearby' | null => {
+    const ring = nearby(lat, lng, 2);
     const first = { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
     const here: ProbeHit | undefined = [first, ...ring].find((h) => cur.probe?.(h.lngLat, time.cursor));
     if (!here) return null;
@@ -488,6 +497,79 @@ function start() {
     updateProbe();
     return here === first ? 'exact' : 'nearby';
   };
+  // "Explore map with keys": arrows walk a pinned selection hex to hex (the same pinned card, announced by its live
+  // region), Enter or Space pins where it starts, Escape lets go (the handler below). It starts at the last pinned hex,
+  // or else the middle of the free map, and pans the map when the selection leaves the view.
+  let col = 0; // the longitude of the column an up or down walk keeps to
+  let keyCell = ''; // the hexagon the keys last selected: pinned any other way, the walk starts afresh from there
+  let steps = 0;
+  let nudge = false; // alternates a trailing space, so a repeated message is announced again
+  resetKeys = () => ((keyCell = ''), (steps = 0));
+  const hasForecast = (p: [number, number]) => !!cur.probe?.(p, time.cursor);
+  // The free area of the map, inside a margin: where a selected hexagon is in view.
+  const inView = (lngLat: [number, number]) => {
+    const p = padding();
+    const at = map.project(lngLat);
+    return !!at && at[0] > 24 && at[1] > p.top + 24 && at[0] < innerWidth - (p.right ?? 0) - 24 && at[1] < innerHeight - p.bottom - 24;
+  };
+  // What the card says first, new at every step so a screen reader reads each one: the nearest town in the map's own
+  // names (when one is close), and how many steps and which way.
+  const where = (lngLat: [number, number], dir: string) => {
+    let town = '';
+    let best = 0.35 ** 2; // degrees, squared
+    for (const [name, lng, lat, , kind] of basemapLabels()) {
+      const d = (lng - lngLat[0]) ** 2 + (lat - lngLat[1]) ** 2;
+      if ((kind === 'city' || kind === 'town') && d < best) (best = d), (town = name);
+    }
+    return `${steps ? `Step ${steps} ${dir}` : 'Start'}${town ? `, near ${town}` : ''}`;
+  };
+  const selectCell = (cell: string, dir = '') => {
+    const [la, ln] = cellToLatLng(cell);
+    hit = { cell, lngLat: [ln, la] };
+    hit.note = where(hit.lngLat, dir);
+    keyCell = cell;
+    pinned = true;
+    // Off the free area (or near its edge): bring the hexagon to the middle of it, as the town finder does.
+    if (!inView(hit.lngLat)) map.focus(hit.lngLat, map.zoom() ?? 0, padding(), true);
+    updateProbe();
+  };
+  // Where a first key press lands: the last pinned hexagon if it is in view, else the middle of the free map; the
+  // nearest hexagon with a forecast, within view, if that spot has none.
+  const startCell = (): string | null => {
+    const mid = map.center(padding())?.lngLat;
+    const from = lastPin && inView(lastPin) ? lastPin : mid;
+    if (!from) return null;
+    const at = [{ lngLat: from }, ...nearby(from[1], from[0], 4)].find((h) => inView(h.lngLat) && hasForecast(h.lngLat));
+    return at ? cur.cellAt(at.lngLat) : null;
+  };
+  const pin = () => {
+    if (pinned) return say('Already pinned. Arrow keys move it, Escape lets go.');
+    const c = startCell();
+    if (!c) return say('No forecast in view');
+    steps = 0;
+    col = cellToLatLng(c)[1];
+    selectCell(c);
+  };
+  const arrow = (a: Arrow) => {
+    const from = pinned && hit ? cur.cellAt(hit.lngLat) : null;
+    if (!from) return pin();
+    if (from !== keyCell) (col = cellToLatLng(from)[1]), (steps = 0); // pinned by mouse or tap since: start afresh there
+    const next = stepCell(from, a, col, (c) => hasForecast(cellToLatLng(c).reverse() as [number, number]));
+    if (!next) return say(`No forecast to the ${WORD[a]}${(nudge = !nudge) ? '\u00a0' : ''}`);
+    if (a === 'ArrowLeft' || a === 'ArrowRight') col = cellToLatLng(next)[1]; // a new column; up and down keep theirs
+    steps++;
+    selectCell(next, WORD[a]);
+  };
+  // The time slider listens on the window for these same keys (and Home, End): while this has focus it owns them.
+  $('explore').addEventListener('keydown', (e) => {
+    const move = e.key in AIM;
+    const own = move || ['Enter', ' ', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key);
+    if (e.ctrlKey || e.metaKey || e.altKey || !own) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (move) arrow(e.key as Arrow);
+    else if (e.key === 'Enter' || e.key === ' ') pin();
+  });
   // The About panel's city menu: a way to read a place's season without pointing at the map.
   $('drawer').addEventListener('change', (e) => {
     const sel = (e.target as Element).closest<HTMLSelectElement>('select[data-place]');

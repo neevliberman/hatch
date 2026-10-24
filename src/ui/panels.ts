@@ -126,7 +126,7 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
   const focused = same && root.contains(document.activeElement) ? focusables().indexOf(document.activeElement as HTMLElement) : -1;
   let fold = 0;
   root.innerHTML = (pinned ? '<button type="button" class="probe-close" aria-label="Close this card">&times;</button>' : '') +
-    (hit?.label ? `<div class="probe-cell">Near ${esc(hit.label)}</div>` : '') +
+    (hit?.label ? `<div class="probe-cell">Near ${esc(hit.label)}</div>` : hit?.note ? `<div class="probe-cell">${esc(hit.note)}</div>` : '') +
     cards
     .map(
       (card) =>
