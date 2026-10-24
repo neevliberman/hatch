@@ -28,7 +28,7 @@ import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
-import { windowCheck } from './replayData';
+import { modelChecks, windowCheck } from './replayData';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
 export const GLOW_DAYS = 10;
@@ -876,6 +876,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
+          scope: sc.n && mode !== TYPICAL && mode !== LIVE ? `in ${mode}` : 'on past years',
+          checks: modelChecks(data, scoreSummary()),
         },
         finePrintLabel: 'Limits and fine print',
         notice: isLive() ? liveNotice(live!) : undefined,

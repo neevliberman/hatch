@@ -143,12 +143,13 @@ def settles_on(season, cut):
 
 
 def lean(err):
-    """Plain words for forecast minus real: positive = the forecast was late, so the moths came earlier."""
+    """Plain words for forecast minus real: positive = the forecast was late, so the real peak came earlier. Says no
+    animal, so one rule fits every species."""
     if err is None:
         return None
     if abs(err) < 2:
         return "on time"
-    return f"moths {abs(round(err))} days {'earlier' if err > 0 else 'later'} than forecast"
+    return f"peak {abs(round(err))} days {'earlier' if err > 0 else 'later'} than forecast"
 
 
 def score_band(band, recs, season, cut, score_date, entries, model, cal):
