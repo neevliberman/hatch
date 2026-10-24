@@ -75,12 +75,12 @@ export interface Explainer {
   steps: [{ title: string; text: string }, { title: string; text: string }, { title: string; text: string }];
   spotIntro: string;
   /** The season at a place (null = the layer's default spot), on the day `t`, called `name` when it has one (a
-   * picked city, "you"). Null when there is nothing to show. */
-  spot(lngLat: [number, number] | null, t: number, name?: string): SpotStory | null;
+   * picked city, "you"), or offered as the example (`example`: "Example: the Columbus area"). Null when there is
+   * nothing to show. */
+  spot(lngLat: [number, number] | null, t: number, name?: string, example?: boolean): SpotStory | null;
   /** How sure it is. The bold answer line is worked out from the bars (the forecast first, then what it is measured
-   * against), so it always says what this layer's own scores say. `points`: a few short lines, each with a
-   * handwritten lead-in ("checked", "real test"). */
-  score?: { title: string; points: [string, string][]; bars: { label: string; days: number; best?: boolean }[] };
+   * against), so it always says what this layer's own scores say. `points`: a few short plain sentences. */
+  score?: { title: string; points: string[]; bars: { label: string; days: number; best?: boolean }[] };
   /** A short card near the top for a special mode (this year's live forecast): what it is, in plain words. */
   notice?: { title: string; bullets: string[] };
   finePrintLabel: string;

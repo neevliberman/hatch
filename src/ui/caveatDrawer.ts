@@ -1,6 +1,6 @@
 import type { Explainer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
-import { explainerHtml, spotHtml } from './explainer';
+import { CITIES, explainerHtml, spotHtml } from './explainer';
 import { CROSS } from './icons';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -8,8 +8,11 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export interface Drawer {
   /** Open or close. On a phone held upright it opens as a sheet at its middle stop, or at the tall one with `full`. */
   (open: boolean, full?: boolean): void;
-  /** Point the explainer's spot card at a place (null = the layer's default) on day `t`. */
-  setSpot(lngLat: [number, number] | null, t: number, name?: string): void;
+  /** Point the explainer's spot card at a place on day `t`. With none, its example follows `near` (the view's centre),
+   * or the layer's default. */
+  setSpot(lngLat: [number, number] | null, t: number, name?: string, near?: [number, number]): void;
+  /** Called before the panel closes or redraws its contents: anything borrowed into it (the town box) goes home. */
+  onLeave(fn: () => void): void;
 }
 
 /**
@@ -20,6 +23,20 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   let spot: [number, number] | null = null;
   let spotT = 0;
   let spotName: string | undefined;
+  let near: [number, number] | undefined;
+  // Nothing picked but the map has moved: the example is the big city nearest the view (within about 200 km) that
+  // has a forecast, tried a little inland too, as a lakeshore city's own hexagon can be in the lake.
+  const story = (ex: Explainer) => {
+    if (spot || !near) return ex.spot(spot, spotT, spotName);
+    const [x, y] = near;
+    const d = (c: (typeof CITIES)[number]) => ((c.lng - x) * 0.75) ** 2 + (c.lat - y) ** 2;
+    for (const c of CITIES.filter((c) => d(c) < 3.5).sort((a, b) => d(a) - d(b)))
+      for (const [dx, dy] of [[0, 0], [-0.3, 0], [0.3, 0], [0, -0.3]]) {
+        const s = ex.spot([c.lng + dx!, c.lat + dy!], spotT, c.name.replace(/, [A-Z]{2}$/, ''), true);
+        if (s) return s;
+      }
+    return ex.spot(null, spotT);
+  };
   const lastSpot = new WeakMap<HTMLElement, string>();
   // Explainers built at the last render, so playback (which calls fillSpots every frame) doesn't rebuild them.
   let explainers = new Map<string, Explainer>();
@@ -27,13 +44,15 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     for (const [id, ex] of explainers) {
       const el = drawer.querySelector<HTMLElement>(`[data-spot="${CSS.escape(id)}"]`);
       if (!el) continue;
-      const html = spotHtml(ex.spot(spot, spotT, spotName));
+      const html = spotHtml(story(ex));
       if (html === lastSpot.get(el)) continue; // playback calls this every frame; skip unchanged days
       el.innerHTML = html;
       lastSpot.set(el, html);
     }
   };
+  let leave = () => {};
   const render = () => {
+    leave();
     const layers = registry.activeLayers();
     const credits = layers.flatMap((l) => l.credits?.() ?? []);
     // Where the code lives and where to report a problem: the same for every layer, so it closes the list.
@@ -81,6 +100,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
 
   const toggle = (open: boolean, full = false) => {
     const was = drawer.classList.contains('open');
+    if (!open) leave();
     if (open) drawer.classList.toggle('full', full);
     drawer.querySelector('.drawer-grip')?.setAttribute('aria-label', full ? 'Show less of this panel' : 'Show more of this panel');
     drawer.classList.toggle('open', open);
@@ -178,11 +198,13 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   drawer.inert = true;
   if (new URLSearchParams(location.search).has('caveats')) toggle(true);
   return Object.assign(toggle, {
-    setSpot(lngLat: [number, number] | null, t: number, name?: string) {
+    onLeave: (fn: () => void) => void (leave = fn),
+    setSpot(lngLat: [number, number] | null, t: number, name?: string, view?: [number, number]) {
       const moved = String(lngLat) !== String(spot);
       spot = lngLat;
       spotT = t;
       spotName = name;
+      near = view;
       fillSpots();
       // A hexagon tapped above the middle-stop sheet: bring its spot card up into the part of the sheet showing.
       const card = drawer.querySelector<HTMLElement>('.ex-spot');

@@ -152,11 +152,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; font-size: 12.5px; }
 #actions .icon-btn:disabled { opacity: 0.6; cursor: progress; }
 #locate svg { color: var(--accent); }
-/* The My area / Share status shows as a toast under the header, clear of the cards above the time bar. */
+/* A short status: beside the button that asked (.at, placed from main.ts), else under the header. */
 #action-msg { position: fixed; top: calc(62px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3;
   width: max-content; max-width: calc(100% - 24px); text-align: center; font-size: 12px; color: var(--text);
   padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 /* Kept rendered (just invisible) when empty: live regions that appear and fill at once are often not announced. */
+#action-msg.at { z-index: 6; transform: none; /* over the About panel (5): the finder speaks from inside it */ max-width: min(260px, calc(100vw - 80px)); padding: 4px 10px; text-align: left; border-radius: 3px;
+  border-color: var(--label-rule); }
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
 /* Season's end note: on empty paper beside the map, with the off-season note (placed from main.ts), never over the
    hexes, the dock or the slider's ribbon. Fades in 240 ms, out 400 ms (instantly under reduced motion). */
@@ -169,14 +171,28 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 @media (prefers-reduced-motion: reduce) { #end-note { transition: none; } }
 /* Over the map's bottom-right corner on a wide screen (placed against #bottom); top of the button stack on a phone. */
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
-#recenter[hidden] { display: none; }
-/* Find a town: its name box opens just above the time controls, at thumb height (lifted over a phone keyboard from finder.ts). */
-#finder { position: absolute; left: var(--gr); bottom: calc(100% + 10px); z-index: 5; pointer-events: auto; }
-#finder[hidden] { display: none; }
-#finder input { width: min(260px, calc(100vw - 32px)); height: 44px; padding: 0 14px; font: inherit; font-size: 16px;
-  color: var(--text); background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 20px; box-shadow: var(--shadow); }
+#recenter[hidden], #find[hidden] { display: none; }
+/* Find a town: a specimen label beside its button (placed from finder.ts, lifted over a phone keyboard), suggestions
+   stacked above the box; opened from About, it sits in the panel instead. */
+#finder { position: absolute; z-index: 5; pointer-events: auto; display: flex; flex-direction: column; width: min(272px, calc(100vw - 80px));
+  padding: 6px; background: var(--grain) var(--panel-solid); border: 1px solid var(--label-rule); border-radius: 3px; box-shadow: var(--label), var(--shadow); }
+#finder[hidden], #find-list[hidden] { display: none; }
+#finder.inline { position: static; width: auto; margin: 0 0 8px; transform: none !important; flex-direction: column-reverse; box-shadow: var(--label); }
+.find-row { display: flex; align-items: center; gap: 4px; }
+#finder input { flex: 1; min-width: 0; height: 36px; padding: 0 8px; font: inherit; font-size: 16px; color: var(--text); background: none;
+  border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; outline: none; }
+#finder input:focus-visible { border-bottom: 2px solid var(--accent); }
+.find-x { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius); background: none; color: var(--muted);
+  font-size: 22px; line-height: 1; cursor: pointer; }
+.find-x:hover { color: var(--text); background: var(--track-faint); }
+#find-list { list-style: none; margin: 0 0 4px; padding: 0; font-size: 14px; overflow-y: auto; overscroll-behavior: contain; }
+#finder.inline #find-list { margin: 4px 0 0; }
+#find-list li { padding: 6px 8px; border-radius: var(--radius); cursor: pointer; }
+#find-list li:hover, #find-list li[aria-selected="true"] { background: var(--track-faint); box-shadow: inset 2px 0 var(--accent); }
+#find-list small { color: var(--muted); font-size: 12px; }
 /* With a mouse the hex card is a tooltip beside the pointer (placed from main.ts); it only takes clicks once pinned. */
-#probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: max-content; max-width: min(300px, calc(100vw - 16px));
+/* One width, hovered or pinned, so pinning never re-wraps the title or shifts the card. */
+#probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: min(310px, calc(100vw - 16px)); max-width: none;
   max-height: calc(100vh - 16px); overflow-y: auto; pointer-events: none;
   box-shadow: var(--label), var(--shadow); }
 #probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
@@ -185,7 +201,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   #probe.at-pointer:not(.pinned) .probe-more { display: none; }
 #probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
 #probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); }
-.probe-close { float: right; width: 32px; height: 32px; margin: -4px -8px 2px 6px; border: 0; border-radius: 8px; background: none;
+/* In the card's top-right corner, over its padding, so the title keeps its width. */
+#probe { position: relative; }
+.probe-close + .probe-cell, .probe-close + .probe-card .probe-title { padding-right: 22px; }
+.probe-close { position: absolute; top: 2px; right: 2px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: none;
   color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .probe-close:hover { color: var(--text); background: var(--track-faint); }
 .probe-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -363,6 +382,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   #actions { position: absolute; right: var(--gr); bottom: calc(100% + 10px); flex-direction: column; gap: 8px; }
   #actions .icon-btn { padding: 0; background: var(--panel-solid); box-shadow: var(--shadow); }
   #recenter { bottom: calc(100% + 10px + 3 * 44px + 2 * 8px + 8px); } /* above the stack */
+  #bottom:has(#find[hidden]) #recenter { bottom: calc(100% + 10px + 2 * 44px + 8px + 8px); } /* two buttons (no Find) */
 }
 
 @media (max-width: 700px) {
@@ -375,7 +395,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .legend-card { width: 100%; padding: 7px 10px; } /* 7px: room for the label's inner hairline */
   .lg-items { gap: 2px 10px; font-size: 12.5px; }
   .lg-title { display: none; } /* the swatch names say what they are; the drawer explains the colours */
-  #probe { max-width: none; }
+  #probe { max-width: none; padding: 6px 10px; }
+  .probe-more summary { min-height: 28px; padding-top: 4px; }
+  .probe-more p { margin-top: 2px; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
@@ -498,8 +520,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .ex-notice ul { margin: 4px 0 0; padding-left: 18px; } .ex-notice li { margin: 4px 0; }
 .ex-spot, .ex-score { padding: 10px 12px; }
 .ex-intro { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
-.ex-place { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12.5px; color: var(--muted); }
-.ex-place select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); padding: 4px 6px; }
+.ex-find { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px; padding: 4px 10px; min-height: 32px; font: inherit; font-size: 12.5px;
+  color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); cursor: pointer; }
+.ex-find svg { width: 15px; height: 15px; }
 .spot-title, .ex-h { font-weight: 700; font-size: 14px; }
 .spot-say { margin: 2px 0 8px; }
 .spot-strip { position: relative; height: 14px; border-radius: 7px; overflow: hidden; background: var(--track-faint); }
@@ -515,9 +538,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .bar-l b { font-weight: 600; font-variant-numeric: tabular-nums; }
 /* "How sure is it?": the answer in bold first, then the bars, then a few plain lines with a handwritten lead-in. */
 .ex-lead { margin: 4px 0 6px; font-size: 15px; font-weight: 700; }
-.ex-pts { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
+.ex-pts { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
 .ex-pts li { margin-top: 4px; }
-.ex-pts i { font: 600 16px var(--font-note); color: var(--ac); }
+.ex-pts li::marker { color: var(--ac); }
 .ex-fine, details.credits { margin-top: 10px; padding: 0 12px; }
 .ex-fine summary, details.credits summary { cursor: pointer; padding: 10px 0; font-weight: 600; min-height: 24px; }
 .ex-fine ul, details.credits ul { margin: 0 0 10px; padding-left: 18px; font-size: 13px; }

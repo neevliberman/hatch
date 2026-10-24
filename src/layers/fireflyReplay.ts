@@ -168,7 +168,7 @@ export function createFireflyLayer(
   };
 
   const HOME: [number, number] = [-88.0, 41.9];
-  const spotStory = (lngLat: [number, number] | null, t: number, name?: string): SpotStory | null => {
+  const spotStory = (lngLat: [number, number] | null, t: number, name?: string, example = false): SpotStory | null => {
     const hit = lookup(lngLat ?? HOME);
     if (!hit) return null;
     const [q05, q25, , q75, q95] = hit.q;
@@ -186,7 +186,7 @@ export function createFireflyLayer(
     }[stageAt(hit.q, doy)];
     const end = q95 ?? 273;
     return {
-      title: lngLat ? (name ? `Near ${name}` : 'The spot you picked') : 'Example: the Chicago area',
+      title: !lngLat || example ? `Example: the ${place} area` : name ? `Near ${name}` : 'The spot you picked',
       sentence,
       span: [dayOfYear(Date.UTC(year, 3, 1)), dayOfYear(Date.UTC(year, 8, 30))],
       months: [3, 4, 5, 6, 7, 8].map((m) => {
@@ -378,10 +378,12 @@ export function createFireflyLayer(
       const pk = data.interval?.peak;
       const likely = !!(pk && q50 != null && mode !== TYPICAL);
       if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      // In date order: the first fireflies, then the busiest stretch.
+      else if (q25 != null && q75 != null)
+        lines.push(`${q05 != null ? `First fireflies about ${fmtDoy(year, q05)}. ` : ''}Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       if (!at.seen) lines.push('No fireflies of this kind ever seen near here to check this against.');
-      if (q05 != null && q25 != null && q75 != null)
-        more.push(`First fireflies about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
+      if (likely && q05 != null && q25 != null && q75 != null)
+        more.push(`First fireflies about ${fmtDoy(year, q05)}. Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
@@ -460,24 +462,21 @@ export function createFireflyLayer(
           { title: 'Warm spring, early fireflies', text: 'Once it has had enough warmth, out it comes and starts to flash. A warm spring gets there sooner.' },
         ],
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
-        spot: (lngLat, t, name) => spotStory(lngLat, t, name),
+        spot: (lngLat, t, name, example) => spotStory(lngLat, t, name, example),
         score: {
           title: 'How sure is it?',
           points: [
-            [
-              'checked',
-              sc.n
-                ? `the dates of the first fireflies and the peak, against people’s sightings, on ${mode === TYPICAL ? 'years' : mode} it never learned from (Illinois to central Wisconsin and Michigan).`
-                : `${mode} had too few sightings to check, so this is all years together.`,
-            ],
+            sc.n
+              ? `It was checked against real sightings: the dates of the first fireflies and the peak, on ${mode === TYPICAL ? 'years' : mode} it never learned from, from Illinois to central Wisconsin and Michigan.`
+              : `${mode} had too few sightings to check, so these numbers are for all years together.`,
             ...(data.model
-              ? [['simpler rule', `the warmth at past sightings alone did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}.`] as [string, string]]
+              ? [`A simpler rule, the warmth at past sightings alone, did about as well: ${data.model.loyo_mae.p1.toFixed(1)} days off against ${data.model.loyo_mae.heat.toFixed(1)}.`]
               : []),
-            ...(windowCheck(data) ? [windowCheck(data)!] : []),
-            ['first try', 'not tested as carefully as the luna moth yet.'],
+            ...[windowCheck(data)].filter((w): w is string => !!w),
+            'It is a first try, not tested as carefully as the luna moth yet.',
           ],
           bars: [
-            { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
+            { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
         },
