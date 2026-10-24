@@ -2,7 +2,12 @@
 
 The "weather day" rule (one rule for every source): a day is the local calendar date at the hex centre.
 - PRISM (via RCC-ACIS, grid 21): PRISM's day runs 12:00 UTC to 12:00 UTC (7 am to 7 am Central), the usual
-  co-op observer day; we file it under its ACIS date. Missing days come back as -999 and become NaN.
+  co-op observer day, and ACIS files it under the date it *ends* on. So the low filed on date D is the early morning
+  of D (right as filed), but the high filed on D is the afternoon of D - 1. `prism_point` therefore takes each day's
+  low from its own ACIS date and its high from the next ACIS date (`weather_days`), which lines PRISM up with Daymet,
+  the model's own weather (2023-2025 daily highs: 0.6 C apart this way, 3.0 C as filed). A day's high is known only
+  once the next ACIS date is posted, so the newest weather day is one day behind PRISM's newest date.
+  Missing days come back as -999 and become NaN.
 - Open-Meteo: daily max/min over the local calendar date (timezone=auto).
 - Daymet: (year, yday) -> calendar date, yday 1 = 1 Jan; leap years keep 29 Feb and drop 31 Dec.
 """
@@ -39,9 +44,9 @@ def dates(start: dt.date, end: dt.date):
     return [start + dt.timedelta(days=i) for i in range((end - start).days + 1)]
 
 
-def prism_point(lat, lng, start: dt.date, end: dt.date):
-    """PRISM daily Tmin/Tmax (deg C, 2 decimals; ACIS rounds to whole degrees without "prec") at one point via ACIS:
-    (tmin, tmax) arrays over start..end, NaN = missing."""
+def prism_acis(lat, lng, start: dt.date, end: dt.date):
+    """PRISM daily Tmin/Tmax (deg C, 2 decimals; ACIS rounds to whole degrees without "prec") at one point via ACIS,
+    exactly as ACIS files them: (tmin, tmax) arrays over ACIS dates start..end, NaN = missing."""
     js = _request(ACIS, {"loc": f"{lng:.4f},{lat:.4f}", "sdate": start.isoformat(), "edate": end.isoformat(),
                          "grid": "21", "elems": [{"name": "maxt", "units": "degreeC", "prec": 2}, {"name": "mint", "units": "degreeC", "prec": 2}]})
     want = {d.isoformat(): i for i, d in enumerate(dates(start, end))}
@@ -56,6 +61,18 @@ def prism_point(lat, lng, start: dt.date, end: dt.date):
         if mn is not None and mn > -900:
             tmin[i] = mn
     return tmin, tmax
+
+
+def weather_days(tmin_acis, tmax_acis):
+    """ACIS-dated PRISM over start..end + 1 (last axis) -> weather days start..end: each day's low as filed, its high
+    from the next ACIS date (PRISM's day ends at 7 am, so the high filed on D + 1 happened on D)."""
+    return np.asarray(tmin_acis)[..., :-1], np.asarray(tmax_acis)[..., 1:]
+
+
+def prism_point(lat, lng, start: dt.date, end: dt.date):
+    """PRISM daily Tmin/Tmax at one point by weather day (the rule above): (tmin, tmax) over start..end, NaN = missing.
+    Fetches one ACIS date past `end`, so the newest day's high is NaN until PRISM posts the day after."""
+    return weather_days(*prism_acis(lat, lng, start, end + dt.timedelta(days=1)))
 
 
 def open_meteo(lats, lngs, start: dt.date, end: dt.date, chunk=100):

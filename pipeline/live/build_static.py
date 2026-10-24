@@ -3,11 +3,12 @@
 
 - effort_profile.json: typical within-season moth-recording effort per state (iNat histograms 2015-2025, the
   same background the P3 fit uses), so the live forecast predicts *sightings* exactly like the replay.
-- prism_offsets.json: per res-4 cell and calendar month, mean (Daymet - PRISM) Tmin and Tmax over 2015-2025.
+- prism_offsets.json: per res-4 cell and calendar month, mean (Daymet - PRISM) Tmin and Tmax over 2015-2025, with
+  PRISM read by weather day (its high moved back to the day it happened, sources.weather_days), as the live job reads it.
   The model was fitted on Daymet; live weather comes from PRISM, which runs a touch different by place. Adding
   the offset puts live weather on the model's scale (like converting a second thermometer to read like the first).
 
-Run once (needs network, ~10 min): python3 pipeline/live/build_static.py
+Run once (needs network, ~10 min): python3 pipeline/live/build_static.py   (--offsets-only skips the effort profile)
 """
 import datetime as dt
 import json
@@ -31,7 +32,7 @@ from live import sources  # noqa: E402
 Y0, Y1 = 2015, 2025
 REPLAY = ROOT / "src" / "data" / "luna-replay.json"
 CACHE = fdata.DATA / "daymet"
-PRISM_CACHE = fdata.DATA / "prism_hist"
+PRISM_CACHE = fdata.DATA / "prism_hist_acis"   # raw ACIS dates (the old prism_hist cache was filed as-is)
 
 
 def effort_profile():
@@ -42,15 +43,18 @@ def effort_profile():
 
 
 def _prism_hist(cell):
+    """PRISM by weather day (sources.weather_days, as the live job reads it) over Y0..Y1. The cache keeps the raw
+    ACIS dates (1 Jan Y0 .. 1 Jan Y1 + 1), so the weather-day rule is applied here, never baked into the cache."""
     f = PRISM_CACHE / f"{cell}.npz"
     if f.exists():
         z = np.load(f)
-        return z["tmin"], z["tmax"]
-    lat, lng = h3.cell_to_latlng(cell)
-    tmin, tmax = sources.prism_point(lat, lng, dt.date(Y0, 1, 1), dt.date(Y1, 12, 31))
-    PRISM_CACHE.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(f, tmin=tmin, tmax=tmax)
-    return tmin, tmax
+        tmin, tmax = z["tmin"], z["tmax"]
+    else:
+        lat, lng = h3.cell_to_latlng(cell)
+        tmin, tmax = sources.prism_acis(lat, lng, dt.date(Y0, 1, 1), dt.date(Y1 + 1, 1, 1))
+        PRISM_CACHE.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(f, tmin=tmin, tmax=tmax)
+    return sources.weather_days(tmin, tmax)
 
 
 def prism_offsets(cells):
@@ -79,16 +83,19 @@ def prism_offsets(cells):
     return out
 
 
-def main():
+def main(argv=None):
+    offsets_only = "--offsets-only" in (sys.argv[1:] if argv is None else argv)
     cells = json.loads(REPLAY.read_text())["cells"]
-    (HERE / "effort_profile.json").write_text(json.dumps(effort_profile()) + "\n")
-    print("wrote effort_profile.json", flush=True)
+    if not offsets_only:
+        (HERE / "effort_profile.json").write_text(json.dumps(effort_profile()) + "\n")
+        print("wrote effort_profile.json", flush=True)
     off = prism_offsets(cells)
     a = np.array(off)
     print(f"offsets (Daymet - PRISM) Tmin mean {a[..., 0].mean():+.2f} C, Tmax mean {a[..., 1].mean():+.2f} C; "
           f"|max| {np.abs(a).max():.2f}")
     (HERE / "prism_offsets.json").write_text(json.dumps(
-        {"what": "per cell, per calendar month 1..12: [Daymet-PRISM Tmin, Daymet-PRISM Tmax] deg C, mean 2015-2025",
+        {"what": "per cell, per calendar month 1..12: [Daymet-PRISM Tmin, Daymet-PRISM Tmax] deg C, mean 2015-2025; "
+                 "PRISM by weather day (high from the next ACIS date)",
          "cells": cells, "offsets": off}, separators=(",", ":")) + "\n")
     print("wrote prism_offsets.json")
 

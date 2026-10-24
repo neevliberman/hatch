@@ -596,3 +596,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #776a55; }
 .place-water { font: 600 17px/18px var(--font-note); color: #2c5873; }
 .place-park { font: 600 16px/18px var(--font-note); color: #24542e; }
+/* This season's live scorecard (ui/scorecard.ts), under the "How sure is it?" lines. */
+.sc-line { margin: 8px 0 4px; font-size: 13px; } .sc-line i { font: 600 16px var(--font-note); color: var(--ac); }
+.sc-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.sc-tab th, .sc-tab td { padding: 2px 4px; text-align: left; border-top: 1px solid var(--line); font-weight: 400; }
+.sc-tab thead th { color: var(--muted); border-top: 0; } .sc-tab tbody th { font-weight: 600; }

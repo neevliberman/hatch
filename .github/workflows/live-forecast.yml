@@ -82,7 +82,11 @@ jobs:
         with:
           path: notebooks/data/daymet
           key: daymet-r4-2015-2025-v1
+      # Also archives tonight's strip dates (live/archive/<season>/<issued>.json, ~1 KB) and rescores the season
+      # (live/scorecard.json, pipeline/live/scorecard.py). A scorecard failure never holds back the forecast: the
+      # forecast still publishes with the last scorecard, then the "Scorecard failed" step below fails the run (alarm).
       - name: Commit to live-data branch
+        id: commit
         if: steps.build.outputs.built == '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,6 +100,10 @@ jobs:
           cd ld
           mkdir -p live
           cp "$RUNNER_TEMP/live/latest.json" live/latest.json
+          SEASON=$(python3 -c 'import json;print(json.load(open("live/latest.json"))["season"])')
+          python3 "$GITHUB_WORKSPACE/pipeline/live/scorecard.py" --archive live/archive --season "$SEASON" \
+            --add live/latest.json --out live/scorecard.json \
+            || { echo "::error::scorecard failed; keeping the last one"; echo "score_failed=1" >> "$GITHUB_OUTPUT"; }
           git config user.name "hatch-live-bot"
           git config user.email "actions@users.noreply.github.com"
           git add live
@@ -107,6 +115,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run deploy-pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+      - name: Scorecard failed
+        if: steps.commit.outputs.score_failed == '1'
+        run: |
+          echo "The forecast published, but the scorecard did not update (see the commit step's log)."
+          exit 1
       - name: Failure alarm
         if: failure()
         env:

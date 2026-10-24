@@ -35,3 +35,16 @@ lean the daylength term was there to remove. As of 15 May P3.1 scored 4.7 to 7.0
 So the map and the live pipeline stay on P3. The first summary jumps when a strip's median switches hexes, so the
 other two are steadier.
 
+
+## Rebuilt 2026-10-24 for the scorecard
+`public/live/latest.json` was rebuilt as of 30 Sep with the model hash and strip dates the scorecard needs. PRISM
+had revised some 2026 days since the 23 Oct build (up to about 30 degree-days banked at a hex by 30 Sep), which moved
+about 1 in 5 hex dates, most by a day or two (at most 10). The tables above are from the 23 Oct build. The proper
+week-by-week score of this season is in `SCORECARD_2026.md`.
+
+## Rebuilt 2026-10-24 with the PRISM date fix
+PRISM's daily high is filed under the next day by RCC-ACIS; `sources.py` now moves it back, and `prism_offsets.json`
+was rebuilt the same way (spring Tmax offsets 0.1-0.3 °C smaller, lows unchanged). On the same weather download, the
+30 Sep file changed in 95 of 551 hexes, by −1 to +2 days (mean +0.01). Strip dates: 39-41 N peak 132 to 133, 41-43 N
+onset 111 to 110, the rest unchanged; the 15 May rerun moved 39-41 N peak +1 and 45-49 N onset and peak −1. The
+southern strip's forecast did not move (onset 94, peak 116). Why the south is early: `pipeline/fit/SOUTH_BIAS.md`.
