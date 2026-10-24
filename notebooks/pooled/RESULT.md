@@ -11,10 +11,13 @@ There have been two runs. Run 1 was the first full run. Run 2 is this one, after
 - **It does make data-poor curves sensible.** With 10 records, 62% of P3-fitter curves have their skew stuck at the limit. Pooled, none do. The dates just don't move.
 - **With all records, the heat model doesn't beat the calendar on average** for these moths.
   - P3's fitter used species by species is 1.0 day worse than each species' own calendar (7.1 vs 6.1 days off, CI 0.2 to 2.0 worse).
-  - Pooled, it is 0.6 days worse (6.7 d, CI 0.0 to 1.2 worse).
+  - Pooled, it is 0.6 days worse (6.7 d, CI about 0 to 1.2 worse).
   - Heat wins for 21 of the 50 scored species (22 pooled). Luna is one of them.
-- **Heat does win when records are few.** With 10 records it beats the best calendar from the same records by 2.3 days (8.3 vs 10.6, CI 1.6 to 3.1). By 25-50 records that gap is within noise.
-- **Species estimate:** **at most about 30 moth species** look likely to get an honest heat forecast from this approach. That is an upper bound; the derivation is below. It is well under the review's 150-250, and the review's +350-450 from pooling is not supported.
+- **One outlier drives the all-records numbers: *Argyrotaenia velutinana*.** P3's fitter misses that species' calendar by 17.85 days, and pooling cuts that by 17.0 days.
+  - Without it, pooling's all-records gain over P3's fitter shrinks from −0.39 d to −0.06 d. The top 3 species account for 103% of the gain, and only 34% of species do better pooled.
+  - Without it, P3's loss to the calendar shrinks from +0.96 d to +0.62 d. The pooled model's loss stays about the same: +0.57 d with it, +0.56 d without.
+- **Heat does win when records are few.** With 10 records it beats the best calendar from the same records by 2.3 days (8.3 vs 10.6, CI 1.6 to 3.1). By 25-50 records that gap is within noise. Even where heat wins at 25-50 records, it is still about 7.5-8 days off.
+- **Species estimate:** **at most about 30 among species with ≥ 400 records** look likely to get an honest heat forecast from this approach. That is an upper bound with a wide range (roughly 20-41); the derivation is below. Species with 200-400 records are untested. The review's 150-250 is not supported for the ≥ 400-record group, and the review's +350-450 from pooling is not supported.
 
 ![Error vs records per species, and the gain from pooling](figures/pooled_vs_n.png)
 
@@ -39,7 +42,7 @@ The best calendar is the latitude-slid one at 10, 25 and 50 records, and the per
 
 ## What it means, in plain words
 
-- **Think of each species as a bank account with a savings target.** Pooling assumes the targets of all moths come from one shared spread, so a new species' first few receipts get averaged with what is typical. That only helps if moths are alike, and they aren't very alike here. Among the 38 species whose fit isn't stuck at a bound, the median targets run about 240-580 degree-days in the middle half, roughly a factor of 2 either way (SD 0.69 on the log scale). Traits don't narrow that at all (SD 0.69). The curve's skew varies even more (SD 2.7).
+- **Think of each species as a bank account with a savings target.** Pooling assumes the targets of all moths come from one shared spread, so a new species' first few receipts get averaged with what is typical. That only helps if moths are alike, and they aren't very alike here. Among the 38 species whose fit isn't stuck at a bound, the median targets run about 240-580 degree-days in the middle half, a 2.4-fold spread from bottom to top quartile (one SD on the log scale is 0.69, a factor of 2 either way). Traits don't narrow that at all (SD 0.69). The curve's skew varies even more (SD 2.7).
 - **Ten records already pin a species' timing.** What they can't pin is the curve's *shape* (how long the tail of late moths is). Pooling fixes the shape. The forecast dates depend mostly on timing, so they don't improve. The synthetic test in `test_pooled.py` shows the same thing: pooling improves the planted curve's 10/50/90% targets but not its median.
 - **Many moths fit a flat curve.** For 14 of 52 species, a single heat curve fitted to all their records sits on a bound: the median target at 5 degree-days or the spread at 800. These are mostly long-flying or many-brooded moths with no clean first brood, such as *Hemaris thysbe*, *Microcrambus elegans*, *Dryocampa rubicunda* and *Darapsa myron*. A first-emergence warmth model is the wrong shape for them.
 - **Heat beats the calendar when data are thin**, because warmth carries information across years and latitudes that 10 dates can't. With all records the species' own calendar wins on average. Heat wins clearly for *Phalaenophana pyramusalis*, *Lymantria dispar*, *Trichodezia albovittata*, *Eubaphe mendica* and luna. It loses badly for *Argyrotaenia velutinana*, *Dryocampa rubicunda*, *Paonias excaecata* and *Automeris io*.
@@ -54,11 +57,18 @@ Census (`results/census.json`): Midwest moth species by research-grade, adult-an
 |---|---|---|---|---|---|
 | Moth species (of ~2,000) | ~693 | ~485 | ~275 | ~125 | ~41 |
 
-**The upper bound of about 30 species with an honest heat forecast** = 125 species with ≥ 400 cleaned records × 0.57 × 0.42.
+**At most about 30 species with ≥ 400 records would get an honest heat forecast** = 125 species with ≥ 400 cleaned records × 0.57 × 0.42.
 - **0.57 is the selection pass rate.** Of 91 candidates at that size, 15 were left out by name (migrants, adults that overwinter, indoor moths) and 24 failed the flight-season rules; 52 passed.
-- **0.42 is the share of scored species where heat beat the calendar:** 21 of 50.
+- **0.42 is the share of scored species where heat beat the calendar:** 21 of 50. That rate is soft:
+  - The 95% binomial range on 21/50 is about 0.28-0.57, which gives roughly 20-41 species.
+  - Four of the 21 wins are near-ties (0.13 d or less), and some winners are species whose fitted curve is stuck at a bound.
+  - Leaving out bound-stuck species gives 16/50 (about 23 species). Requiring a margin of ≥ 0.5 d gives 17/50.
 - **It is an upper bound** because picking species on one noisy leave-one-year-out win overstates how often they would win again (winner's curse).
-- **The 200-400-record group is untested.** It would score no better, since less data helps the calendar as much as the model.
+- **The 200-400-record group is untested, and it could do better.**
+  - Fewer records hurt the calendar more than the heat model. Heat minus the best calendar goes from +1.0 d with all records to −0.3 d (50 records), −0.6 d (25) and −2.3 d (10). The heat-win rate goes from 42% to 66% at 50 records and 82% at 10.
+  - So rarer species could have a higher heat-win rate.
+  - But those numbers come from subsampling data-rich species. The 200-400 group is made of genuinely rarer species, which may be spread more thinly or misidentified more often.
+  - Even where heat wins at 25-50 records, it is still about 7.5-8 days off.
 
 What adding a species would need:
 1. **A per-species gate.** Run this leave-one-year-out for every candidate, and keep only species that beat their own calendar. Ideally check them again on 2026, a season none of this has seen.
@@ -87,10 +97,10 @@ What adding a species would need:
 
   The prior never sees the target species or the held-out year. numpyro/PyMC weren't installed. A full Bayesian fit would mostly change the intervals, not these point forecasts.
 - **Revision after review.**
-  - In run 1, 10 species (18% of fold fits) sat at the 5-degree-day lower bound on the median. They fed the shared prior and made "moths aren't alike" look stronger than it is.
+  - In run 1, fits stuck at a bound fed the shared prior and made "moths aren't alike" look stronger than it is. On all years, 8 species sat on the median's 5-degree-day floor (14 counting the spread's 800 cap). Across folds it was 18% of fold fits and 16 distinct species.
   - Fits on the median's lower bound or the spread's upper bound are now flagged (`pooled.pinned`) and left out of the prior. They are still forecast and scored. That covers 14 of 52 species on all years and 29% of fold fits.
   - The prior is now tighter (log-median SD 0.69, not 1.4). The pooling result did not get better.
-  - One species sits just above the bound (5.01 DD) and isn't flagged by the 0.001 tolerance.
+  - The flag's tolerance (0.001 on the log scale) is tight, so some near-bound fits still feed the prior. Two species sit just above the floor on all years: *Leuconycta diphteroides* (5.008 DD) and *Paonias myops* (5.013 DD). 15 fold fits sit within 0.05 log of the bound. A 0.05 tolerance would flag about 32% of fold fits instead of 29%. It changes the prior, so it needs a refit, which hasn't been done.
 - **Speed.** The skew-normal CDF is tabulated once over (z, skew) and used by every arm, including P3's fitter. Its error is under 2e-4 (measured 1.4e-5), checked by `test_fast_cdf_matches_exact`.
 - **Tests** ([test_pooled.py](test_pooled.py)):
   - the table CDF matches the exact one;
