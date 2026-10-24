@@ -96,7 +96,7 @@ function start() {
   let speciesPending: string | null = null;
   const loaded = new Map<string, LunaLayer>([['luna', luna]]);
 
-  const time = new TimeAxis(registry.activeTime()!);
+  const time = new TimeAxis(registry.activeTime()!, clock);
   let spec: TimeSpec | null = registry.activeTime();
   // Playback slows to 8 days/s while the active layer says its season is in full swing and runs 18 days/s otherwise.
   // Reduced motion keeps one steady speed.
@@ -124,7 +124,8 @@ function start() {
     if (!px) return probeEl.style.removeProperty('transform');
     const { width: w, height: h } = probeEl.getBoundingClientRect();
     const x = Math.max(8, px[0] + 16 + w > window.innerWidth - 8 ? px[0] - 16 - w : px[0] + 16);
-    const y = Math.max(8, Math.min(px[1] - h / 2, window.innerHeight - h - 8));
+    // Its top sits a fixed step above the pointer, so pinning (which adds lines below) never moves the title.
+    const y = Math.max(8, Math.min(px[1] - 28, window.innerHeight - h - 8));
     probeEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   };
   // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
@@ -203,6 +204,7 @@ function start() {
     },
     onView: () => {
       if (pinned) placeProbe();
+      else if ($('drawer').classList.contains('open')) followSpot(time.cursor);
       placeNote();
       syncUrl(); // a shared link reopens the same place and zoom
     },
@@ -351,16 +353,18 @@ function start() {
   // beet"); the open menu still lists the counts (style.css).
   const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : modeLabel(picker.value));
   const fillPicker = () => {
-    const what = cur.words.plural;
     const keep = picker.value || initialMode;
     const live = liveFile && cur === luna ? [LIVE] : [];
-    picker.innerHTML = [...live, TYPICAL, ...[...years].reverse()]
-      // The count is the species' own (cur.words.countedAs, e.g. first-wave moths); "All years" goes without it so the closed menu fits a small phone.
-      .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} ${what})`}</option>`)
-      .join('');
+    // The counts are sightings (photos) of the species' own kind (cur.words.countedAs, e.g. first-wave moths), so the
+    // menu says "seen", not a number of animals. "All years" goes without one so the closed menu fits a small phone.
+    // This year's forecast is luna's alone so far: say so at the top of the list rather than drop it silently.
+    picker.innerHTML = (__BASEMAP__ && liveFile && cur !== luna ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
+      [...live, TYPICAL, ...[...years].reverse()]
+        .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
+        .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
     face();
-    picker.title = `Season to replay (${cur.words.countedAs} seen, in parentheses; ${cur.seasonCount(TYPICAL).toLocaleString()} in all years)`;
+    picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses; ${cur.seasonCount(TYPICAL).toLocaleString()} in all years)`;
   };
   fillPicker();
   // This season, live: "next real season ... days from now" would contradict the map.
@@ -474,7 +478,11 @@ function start() {
   setRibbon(ribbonNow());
   mountLayerList($('layers'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
-  followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t, pinned ? hit?.label : undefined);
+  // With nothing pinned, the panel's example is the area in view (once the map has left the whole-Midwest fit).
+  followSpot = (t) => {
+    const view = !pinned && map.moved() && $('drawer').classList.contains('open') ? map.center(padding())?.lngLat : undefined;
+    toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t, pinned ? hit?.label : undefined, view);
+  };
   // "why?" opens the About drawer at the part that says how sure the forecast is (marked data-why), and flashes it,
   // so the tap visibly lands even when the drawer is already open.
   let flashTimer = 0;
@@ -536,9 +544,26 @@ function start() {
   picker.addEventListener('change', syncUrl);
 
   const msg = $('action-msg');
+  const finderEl = $('finder'); // held on to: the town box can sit inside the About panel for a while
   let msgTimer = 0;
-  const say = (text: string) => {
+  // A status line beside the button it answers (above it in the time bar, to its left in a phone's button stack), or
+  // under the header when no button asked.
+  const say = (text: string, from?: Element | null) => {
     msg.textContent = text;
+    msg.classList.toggle('at', !!from);
+    const b = from?.getBoundingClientRect();
+    if (b?.width) {
+      const { width: w, height: h } = msg.getBoundingClientRect();
+      const column = getComputedStyle(from!.parentElement!).flexDirection === 'column';
+      const x = column ? b.left - 8 - w : b.right - w;
+      // In the time bar it clears the bar's own text line too, sitting just over the paper.
+      let y = column ? b.top + (b.height - h) / 2 : Math.min(b.top, from!.closest('#dock')?.getBoundingClientRect().top ?? b.top) - 6 - h;
+      // A card docked in that corner keeps its lines readable: the message goes above it.
+      const c = probeEl.hidden ? null : probeEl.getBoundingClientRect();
+      if (c && !column && x < c.right && x + w > c.left && y < c.bottom && y + h > c.top) y = c.top - 6 - h;
+      msg.style.left = `${Math.round(Math.max(8, x))}px`;
+      msg.style.top = `${Math.round(Math.max(8, y))}px`;
+    } else msg.style.left = msg.style.top = '';
     clearTimeout(msgTimer);
     msgTimer = window.setTimeout(() => (msg.textContent = ''), 6000);
   };
@@ -549,10 +574,10 @@ function start() {
       if (navigator.share) await navigator.share({ title: `Hatch: when ${cur.words.shareName} come out`, url });
       else {
         await navigator.clipboard.writeText(url);
-        say('Link copied');
+        say('Link copied', $('share'));
       }
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') say('Couldn\u2019t share. Copy the link from the address bar.');
+      if ((e as Error).name !== 'AbortError') say('Couldn\u2019t share. Copy the link from the address bar.', $('share'));
     }
   });
 
@@ -653,26 +678,27 @@ function start() {
     if (move) arrow(e.key as Arrow);
     else if (e.key === 'Enter' || e.key === ' ') pin();
   });
-  // The About panel's city menu: a way to read a place's season without pointing at the map.
-  $('drawer').addEventListener('change', (e) => {
-    const sel = (e.target as Element).closest<HTMLSelectElement>('select[data-place]');
-    if (!sel?.value) return;
-    const [lat, lng] = sel.value.split(',').map(Number) as [number, number];
-    const name = sel.selectedOptions[0]?.text ?? '';
-    sel.value = ''; // so picking the same city again (after the pin moved) still fires
-    // On a phone, drop the sheet to its middle stop first, so the place lands in the map above it.
-    if (phone.matches && !slim.matches) toggleDrawer(true);
-    if (!showPlace(lat, lng, name)) return say(`No forecast for ${name}`);
-  });
-
-  // Find a town: the same path as the city menu above.
-  mountFinder($('find'), $('finder'), (lat, lng, name) => {
-    if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`);
-  }, say);
+  // Find a town (needs the map's town names, so not in the one-file build). The About panel's "Find a town" opens the
+  // same box inside the panel: a way to read a place's season without pointing at the map.
+  if (__BASEMAP__) {
+    const finder = mountFinder($('find'), $('finder'), (lat, lng, name) => {
+      // On a phone, drop the About sheet to its middle stop first, so the place lands in the map above it.
+      if ($('drawer').classList.contains('open') && phone.matches && !slim.matches) toggleDrawer(true);
+      if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
+    }, say);
+    $('drawer').addEventListener('click', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('[data-find]');
+      if (!b) return;
+      // On a phone the sheet goes to its tall stop first, so the box shows above the keyboard.
+      if (phone.matches && !slim.matches) toggleDrawer(true, true);
+      finder.open(b);
+    });
+    toggleDrawer.onLeave(finder.leave);
+  } else $('find').hidden = true;
 
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
-    if (!navigator.geolocation) return say('Location is not available in this browser');
+    if (!navigator.geolocation) return say('Location is not available in this browser', $('locate'));
     const btn = $<HTMLButtonElement>('locate');
     btn.disabled = true;
     btn.setAttribute('aria-busy', 'true');
@@ -680,26 +706,27 @@ function start() {
       btn.disabled = false;
       btn.removeAttribute('aria-busy');
     };
-    say('Finding you…');
+    say('Finding you…', btn);
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         done();
         const at = showPlace(coords.latitude, coords.longitude, 'you');
         if (!at) {
           map.setMarker(null);
-          say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)');
+          say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)', btn);
           return;
         }
         map.setMarker([coords.longitude, coords.latitude]);
         // The marker is the accent brown; the pale yellow dots are moths.
-        say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest hexagon on land)');
+        say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest hexagon on land)', btn);
       },
       (err) => (
         done(),
         say(
           err.code === err.PERMISSION_DENIED
-            ? 'Location is off for this site. Pick a city in About (i) instead.'
-            : 'Could not get your location. Pick a city in About (i) instead.',
+            ? `Location is off for this site. ${__BASEMAP__ ? 'Find a town' : 'Tap the map'} instead.`
+            : `Could not get your location. ${__BASEMAP__ ? 'Find a town' : 'Tap the map'} instead.`,
+          btn,
         )
       ),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
@@ -790,19 +817,25 @@ function start() {
   new MutationObserver(() => {
     const d = $('drawer').classList;
     const now = `${d.contains('open')}${d.contains('full')}`;
-    if (now !== drawerState) (drawerState = now), refit(true, 0);
+    if (now !== drawerState) (drawerState = now), refit(true, 0), followSpot(time.cursor);
   }).observe($('drawer'), { attributes: true, attributeFilter: ['class'] });
 
   // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
   // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.
+  // A tap pins its card before the browser sends that tap's click, and a docked card (a phone on its side) can open
+  // right under the finger: a pointer click on the card counts only if the press started on the card. Keyboard and
+  // screen-reader activations (detail 0) always count.
+  let pressOnCard = false;
+  window.addEventListener('pointerdown', (e) => (pressOnCard = probeEl.contains(e.target as Node)), true);
   probeEl.addEventListener('click', (e) => {
+    if (e.detail > 0 && !pressOnCard) return void (e.preventDefault(), e.stopPropagation());
     if (!(e.target as Element).closest('.probe-close')) return;
     unpin();
     $('t-range').focus({ preventScroll: true });
   });
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !$('finder').hidden) return;
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !finderEl.hidden) return;
     const hadFocus = probeEl.contains(document.activeElement);
     unpin();
     if (hadFocus) $('t-range').focus({ preventScroll: true });

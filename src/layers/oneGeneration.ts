@@ -215,7 +215,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
 
   const busiest = `Busiest ${cfg.busyWhen}`;
   const HOME: [number, number] = [-88.0, 41.9];
-  const spotStory = (lngLat: [number, number] | null, t: number, name?: string): SpotStory | null => {
+  const spotStory = (lngLat: [number, number] | null, t: number, name?: string, example = false): SpotStory | null => {
     const hit = lookup(lngLat ?? HOME);
     if (!hit) return null;
     const [q05, q25, , q75, q95] = hit.q;
@@ -233,7 +233,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
     }[stageAt(hit.q, doy)];
     const end = q95 ?? 273;
     return {
-      title: lngLat ? (name ? `Near ${name}` : 'The spot you picked') : 'Example: the Chicago area',
+      title: !lngLat || example ? `Example: the ${place} area` : name ? `Near ${name}` : 'The spot you picked',
       sentence,
       span: [dayOfYear(Date.UTC(year, 3, 1)), dayOfYear(Date.UTC(year, 8, 30))],
       months: [3, 4, 5, 6, 7, 8].map((m) => {
@@ -432,10 +432,12 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
       const pk = data.interval?.peak;
       const likely = !!(pk && q50 != null && mode !== TYPICAL);
       if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      // In date order: the first ones, then the busiest stretch.
+      else if (q25 != null && q75 != null)
+        lines.push(`${q05 != null ? `First ${plural} about ${fmtDoy(year, q05)}. ` : ''}Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       if (!at.seen) lines.push(cfg.noneSeen);
-      if (q05 != null && q25 != null && q75 != null)
-        more.push(`First ${plural} about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
+      if (likely && q05 != null && q25 != null && q75 != null)
+        more.push(`First ${plural} about ${fmtDoy(year, q05)}. Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
@@ -512,10 +514,10 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
       // The simpler rule (warmth at past sightings alone, luna's first model), said as its numbers say it.
       const simpler = lm
         ? Math.abs(lm.p1 - lm.heat) < 0.5
-          ? `the warmth at past sightings alone did about as well: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
+          ? `A simpler rule, the warmth at past sightings alone, did about as well: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
           : lm.p1 < lm.heat
-            ? `the warmth at past sightings alone did better: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
-            : `the warmth at past sightings alone did worse: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
+            ? `A simpler rule, the warmth at past sightings alone, did better: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
+            : `A simpler rule, the warmth at past sightings alone, did worse: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
         : null;
       return {
         name: cfg.name,
@@ -525,22 +527,19 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
         hook: cfg.hook,
         steps: cfg.steps,
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
-        spot: (lngLat, t, name) => spotStory(lngLat, t, name),
+        spot: (lngLat, t, name, example) => spotStory(lngLat, t, name, example),
         score: {
           title: 'How sure is it?',
           points: [
-            [
-              'checked',
-              sc.n
-                ? `the dates of the first ${plural} and the peak, against people’s sightings, on ${mode === TYPICAL ? 'years' : mode} it never learned from (${cfg.checkedWhere}).`
-                : `${mode} had too few sightings to check, so this is all years together.`,
-            ],
-            ...(simpler ? [['simpler rule', simpler] as [string, string]] : []),
-            ...(windowCheck(data) ? [windowCheck(data)!] : []),
-            ['first try', 'not tested as carefully as the luna moth yet.'],
+            sc.n
+              ? `It was checked against real sightings: the dates of the first ${plural} and the peak, on ${mode === TYPICAL ? 'years' : mode} it never learned from (${cfg.checkedWhere}).`
+              : `${mode} had too few sightings to check, so these numbers are for all years together.`,
+            ...(simpler ? [simpler] : []),
+            ...[windowCheck(data)].filter((w): w is string => !!w),
+            'It is a first try, not tested as carefully as the luna moth yet.',
           ],
           bars: [
-            { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
+            { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
         },

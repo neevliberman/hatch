@@ -60,8 +60,9 @@
       </button>
       <form id="finder" role="search" hidden>
         <label for="find-q" class="sr">Town name</label>
-        <input id="find-q" type="search" list="find-list" placeholder="Town name" autocomplete="off" enterkeyhint="go">
-        <datalist id="find-list"></datalist>
+        <ul id="find-list" role="listbox" aria-label="Towns" hidden></ul>
+        <div class="find-row"><input id="find-q" type="text" role="combobox" aria-autocomplete="list" aria-controls="find-list" aria-expanded="false" placeholder="Town name" autocomplete="off" enterkeyhint="go">
+        <button type="button" class="find-x" aria-label="Close the town search">&times;</button></div>
       </form>
       <div id="dock">
         <p id="strip"><span id="honesty"><span class="dots">Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. </span>Colors: a forecast <em class="unconfirmed">still being tested</em>.</span>

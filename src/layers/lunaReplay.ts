@@ -119,7 +119,8 @@ export const modeLabel = (mode: Mode) =>
   mode === TYPICAL
     ? `all years, ${data.years[0]}-${data.years[data.years.length - 1]}`
     : mode === LIVE
-      ? `${live?.season ?? 'this year'} ${live?.backfill ? 'rerun' : 'live'}${live?.stub ? ' (sample data)' : ''}`
+      ? // A season rebuilt after the fact is just that year ("2026"); a nightly one is "2026 live".
+        `${live?.season ?? 'this year'}${live?.backfill ? '' : ' live'}${live?.stub ? ' (sample data)' : ''}`
       : mode;
 
 /**
@@ -160,7 +161,7 @@ function seasonCheck(): string | null {
   const ss = data.interval?.checked?.season;
   if (!ss) return null;
   const upTo = new Date(`${ss.as_of}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  return `Rerun on ${ss.year} with real weather only to ${upTo}, the window caught the real peak in ${ss.peak[0]} of ${ss.peak[1]} east-west bands of the map (some had already peaked by then).`;
+  return `Tried on ${ss.year} with real weather only up to ${upTo}, the window caught the real peak in ${ss.peak[0]} of ${ss.peak[1]} east-west bands of the map. Some bands had already peaked by then.`;
 }
 
 /** The live-mode card at the top of the About panel: how this year's map is made, in plain words. */
@@ -168,7 +169,7 @@ function liveNotice(L: Live): { title: string; bullets: string[] } {
   const f = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const src = (s: string) => (s ? ` (${s})` : '');
   return {
-    title: `${L.season} ${L.backfill ? 'rerun' : 'live'}: how this forecast is made`,
+    title: `${L.season}${L.backfill ? '' : ' live'}: how this forecast is made`,
     bullets: [
       ...(L.stub ? ['Sample data for testing the page, not a real forecast.'] : []),
       ...(L.backfill ? [`Rebuilt after the season${Number.isFinite(L.generated) ? `, on ${f(L.generated)},` : ''} the way the nightly forecast would have run. It is not being updated.`] : []),
@@ -421,7 +422,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
   // The default spot until a hex is tapped: Chicago's western suburbs (the city's own hex centre is in the lake).
   const HOME: [number, number] = [-88.0, 41.9];
-  const spotStory = (lngLat: [number, number] | null, t: number, name?: string): SpotStory | null => {
+  const spotStory = (lngLat: [number, number] | null, t: number, name?: string, example = false): SpotStory | null => {
     const at = lngLat ?? HOME;
     const hit = lookup(at);
     if (!hit) return null;
@@ -443,7 +444,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const end = q95 ?? 273;
     const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
     return {
-      title: lngLat ? (name ? `Near ${name}` : 'The spot you picked') : 'Example: the Chicago area',
+      title: !lngLat || example ? `Example: the ${place} area` : name ? `Near ${name}` : 'The spot you picked',
       sentence,
       // The slider's range, 1 Apr - 30 Sep, with a label on the first of each month (real days of year, so leap years line up).
       span: [dayOfYear(Date.UTC(year, 3, 1)), dayOfYear(Date.UTC(year, 8, 30))],
@@ -738,10 +739,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const pk = data.interval?.peak;
       const likely = !!(pk && q50 != null && mode !== TYPICAL);
       if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      else if (q25 != null && q75 != null) lines.push(`Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      // In date order: the first moths, then the busiest stretch.
+      else if (q25 != null && q75 != null)
+        lines.push(`${q05 != null ? `First moths about ${fmtDoy(year, q05)}. ` : ''}Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       if (!at.seen) lines.push('No lunas ever seen near here to check this against.');
-      if (q05 != null && q25 != null && q75 != null)
-        more.push(`First moths about ${fmtDoy(year, q05)}${likely ? `. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}` : ''}.`);
+      if (likely && q05 != null && q25 != null && q75 != null)
+        more.push(`First moths about ${fmtDoy(year, q05)}. Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
@@ -839,32 +842,26 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           { title: 'Warm spring, early moths', text: 'Once it has had enough warmth, out it comes. A warm spring gets there sooner.' },
         ],
         spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
-        spot: (lngLat, t, name) => spotStory(lngLat, t, name),
+        spot: (lngLat, t, name, example) => spotStory(lngLat, t, name, example),
         score: {
           title: 'How sure is it?',
+          // Plain sentences, each standing on its own.
           points: [
-            [
-              'checked',
-              !sc.n
-                ? `${mode} had too few sightings to check, so this is all years together.`
-                : `the dates of the first moths and the peak, against people\u2019s sightings, on ${mode === TYPICAL || mode === LIVE ? 'years' : mode} it never learned from` +
-                  (mode !== TYPICAL && sc.n < 3 ? ` (only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map had enough).` : '.'),
-            ],
+            !sc.n
+              ? `${mode} had too few sightings to check, so these numbers are for all years together.`
+              : `It was checked against real sightings: the dates of the first moths and the peak, on ${mode === TYPICAL || mode === LIVE ? 'years' : mode} it never learned from.` +
+                (mode !== TYPICAL && sc.n < 3 ? ` Only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map had enough sightings.` : ''),
             ...(isLive()
-              ? ([['this year', 'those checks knew the real weather; this forecast has to guess the weeks ahead, so expect it to be off by more early in spring.']] as [string, string][])
+              ? ['Those checks knew the real weather. This year\u2019s forecast has to guess the weeks ahead, so expect bigger misses early in spring.']
               : []),
-            ...((): [string, string][] => {
-              if (isLive()) return seasonCheck() ? [['window', `${seasonCheck()!.replace(/^R/, 'r')} One season is a rough check.`]] : [];
-              const w = windowCheck(data);
-              return w ? [w] : [];
-            })(),
+            ...(isLive() ? (seasonCheck() ? [`${seasonCheck()} One season is a rough check.`] : []) : [windowCheck(data)].filter((w): w is string => !!w)),
             holdoutPass
-              ? ['also', 'it did well on states it never saw (Wisconsin and Minnesota), but it was chosen after seeing that test.']
-              : ['weak spot', 'trained without Wisconsin and Minnesota, it did worse there than a guess from past years.'],
-            ['final test', 'the live check below is quick; the frozen test on 2026 waits for its final weather data, out in mid-2027.'],
+              ? 'It did well on two states it never learned from, Wisconsin and Minnesota. But this version was picked after seeing that test.'
+              : 'Its weak spot: taught without Wisconsin and Minnesota, it did worse there than a guess from past years.',
+            'The final test is the 2026 season. The live check below is quick; the frozen test waits for 2026\u2019s final weather data, out in mid-2027.',
           ],
           bars: [
-            { label: 'Heat forecast', days: all.heat, best: all.heat < all.calendar },
+            { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
         },

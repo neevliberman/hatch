@@ -219,7 +219,9 @@ for (const [engine, width, height] of screens) {
   const order = [];
   // Under 1000px the colour key can fold, so its fold button (or, folded, its "Key" chip) comes right after "Explore map with keys".
   const key = (await page.locator('#key-fold').isVisible()) ? 'key-fold' : (await page.locator('#key-chip').isVisible()) ? 'key-chip' : null;
-  const want = key ? [...TAB_ORDER.slice(0, 3), key, ...TAB_ORDER.slice(3)] : TAB_ORDER;
+  // Find a town needs the map's town names, so the one-file build leaves it out.
+  const tabs = (await page.locator('#find').isVisible()) ? TAB_ORDER : TAB_ORDER.filter((id) => id !== 'find');
+  const want = key ? [...tabs.slice(0, 3), key, ...tabs.slice(3)] : tabs;
   for (let i = 0; i < want.length + 3 && order.length < want.length; i++) {
     await page.keyboard.press('Tab');
     const f = await page.evaluate(() => {
@@ -452,7 +454,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const hasLive = opts[0]?.[0] === 'live';
       const wantOption = !['stub hidden', 'no file'].includes(label);
       if (wantOption !== hasLive) fail(hasLive ? 'offers live mode' : `no live option at the top of the season menu (${opts.slice(0, 2).join(' | ')})`);
-      if (hasLive && !new RegExp(`^${stub.season} (live|rerun)`).test(opts[0][1])) fail(`live option reads "${opts[0][1]}"`);
+      if (hasLive && !new RegExp(`^${stub.season}( live)?( \\(|$)`).test(opts[0][1])) fail(`live option reads "${opts[0][1]}"`);
       const wantLive = ['in-season default', 'late file', 'phone', 'small phone', 'early file', 'rerun', 'stub on request', 'file as built'].includes(label);
       if (wantLive !== (value === 'live')) fail(`season menu opened on ${value}`);
       if (label === 'shared link keeps its year' && value !== '2021') fail(`a ?year=2021 link opened on ${value}`);
@@ -488,6 +490,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const badge = page.locator('#t-asof');
       if (!(await badge.isVisible())) fail('no "as of" badge');
       const stale = (await badge.getAttribute('class')).includes('stale');
+      // Amber only when the nightly run is overdue; a frozen or rebuilt file shows its age without it.
       if (stale !== (label === 'late file')) fail(stale ? 'fresh data marked stale' : 'a late file is not marked stale');
       await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 3000 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
@@ -608,6 +611,90 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       }
       await page.waitForTimeout(600);
       await shotS('3-last');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  }
+
+  // Find a town (http only: it reads the map's town names), on a desktop and a phone: the box opens at its button, a
+  // name several towns share lists them (forecast states first, each with its state), and picking one pins its card.
+  // The About panel's "Or find a town" opens the same box in the panel. Share's "Link copied" shows by its button.
+  for (const [w, h, phone] of [[1366, 768, false], [390, 844, true]]) {
+    const tag = `find ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    if (!phone) await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const shotF = (step) => page.screenshot({ path: `${out}/find-${phone ? 'phone' : 'desktop'}-${step}.png` });
+    try {
+      await page.goto(origin + '/?noauto&today=2027-01-15');
+      await page.waitForTimeout(1500);
+      await page.locator('#find').click();
+      const [f, b] = await Promise.all(['#finder', '#find'].map((sel) => page.locator(sel).boundingBox()));
+      if (!f) fail('the name box did not open');
+      else if (Math.hypot(f.x + f.width / 2 - (b.x + b.width / 2), f.y + f.height - b.y) > (phone ? 260 : 200)) fail(`the name box opened far from its button (${Math.round(f.x)},${Math.round(f.y)})`);
+      await page.locator('#find-q').fill('Springfield');
+      await page.waitForTimeout(600);
+      await shotF('1-typing');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(300);
+      const opts = await page.locator('#find-list li').allTextContents();
+      if (!/^Springfield, IL/.test(opts[0] ?? '') || opts.length < 2) fail(`"Springfield" + Enter lists ${JSON.stringify(opts)}`);
+      if (opts.some((o) => /\(near /.test(o))) fail('a town is told apart by "(near ...)", not its state');
+      await page.locator('#find-list li').first().click();
+      await page.waitForTimeout(1200);
+      if (!/Springfield, IL/.test((await page.locator('#probe').textContent()) ?? '')) fail('picking Springfield, IL showed no card for it');
+      await shotF('2-picked');
+      await page.locator('#info-btn').click();
+      await page.waitForTimeout(500);
+      if (!(await page.locator('#drawer [data-find]').isVisible())) fail('the About panel has no "find a town" button');
+      else {
+        await page.locator('#drawer [data-find]').click();
+        if (!(await page.locator('#drawer #finder').isVisible())) fail('the About panel button did not open the name box in the panel');
+        await page.locator('#find-q').fill('Cincinnati');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(1200);
+        if (!/Cincinnati/.test((await page.locator('#drawer .spot-title').textContent()) ?? '')) fail('finding Cincinnati from About did not fill its season');
+        await shotF('3-about');
+        // A name that is not on the map: the message shows over the panel, by the box.
+        await page.locator('#drawer [data-find]').click();
+        await page.locator('#find-q').fill('Zzyzx');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(400);
+        const onTop = await page.evaluate(() => {
+          const m = document.getElementById('action-msg');
+          const r = m.getBoundingClientRect();
+          return !!r.width && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === m;
+        });
+        if (!onTop) fail('"No town named ..." from the About panel is hidden under it');
+        // Closing the panel with the box still open sends the box home, closed, and Escape then lets the card go.
+        await page.locator('#drawer-close').click();
+        await page.waitForTimeout(500);
+        const home = await page.evaluate(() => {
+          const f = document.getElementById('finder');
+          return !!f && f.hidden && f.parentElement?.id === 'bottom' && document.getElementById('find').getAttribute('aria-expanded') === 'false';
+        });
+        if (!home) fail('closing About left the town box open inside it');
+        if (await page.locator('#probe').isVisible()) {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(300);
+          if (await page.locator('#probe').isVisible()) fail('after About closed over the town box, Escape no longer lets the card go');
+        }
+      }
+      await page.keyboard.press('Escape');
+      if (!phone) {
+        await page.waitForTimeout(1000); // the About panel slides away
+        await page.locator('#share').click({ timeout: 60000 });
+        await page.waitForTimeout(300);
+        const [m, s] = await Promise.all(['#action-msg', '#share'].map((sel) => page.locator(sel).boundingBox()));
+        if (!m || !m.height) fail('Share said nothing');
+        // Just over the time bar, or over a card docked in that corner.
+        else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 300 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
+        await shotF('4-share');
+      }
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
