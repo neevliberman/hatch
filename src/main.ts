@@ -609,10 +609,13 @@ function start() {
   // region), Enter or Space pins where it starts, Escape lets go (the handler below). It starts at the last pinned hex,
   // or else the middle of the free map, and pans the map when the selection leaves the view.
   let col = 0; // the longitude of the column an up or down walk keeps to
-  let keyCell = ''; // the hexagon the keys last selected: pinned any other way, the walk starts afresh from there
+  let row = 0; // the latitude of the row a left or right walk keeps to
+  // The selection the keys last made. Pinned any other way since, the walk starts afresh from there. (The selection
+  // itself, not its hexagon: a zoom swaps the hexagon for one of the new size, and the walk and its count go on.)
+  let keyHit: ProbeHit | null = null;
   let steps = 0;
   let nudge = false; // alternates a trailing space, so a repeated message is announced again
-  resetKeys = () => ((keyCell = ''), (steps = 0));
+  resetKeys = () => ((keyHit = null), (steps = 0));
   const hasForecast = (p: [number, number]) => !!cur.probe?.(p, time.cursor);
   // The free area of the map, inside a margin: where a selected hexagon is in view.
   const inView = (lngLat: [number, number]) => {
@@ -635,7 +638,7 @@ function start() {
     const [la, ln] = cellToLatLng(cell);
     hit = { cell, lngLat: [ln, la] };
     hit.note = where(hit.lngLat, dir);
-    keyCell = cell;
+    keyHit = hit;
     pinned = true;
     // Off the free area (or near its edge): bring the hexagon to the middle of it, as the town finder does.
     if (!inView(hit.lngLat)) map.focus(hit.lngLat, map.zoom() ?? 0, padding(), true);
@@ -650,21 +653,26 @@ function start() {
     const at = [{ lngLat: from }, ...nearby(from[1], from[0], 4)].find((h) => inView(h.lngLat) && hasForecast(h.lngLat));
     return at ? cur.cellAt(at.lngLat) : null;
   };
-  const pin = () => {
-    if (pinned) return say('Already pinned. Arrow keys move it, Escape lets go.');
+  // Enter or Space. An arrow comes here too when the pinned card has no forecast hexagon under it (a sighting past
+  // the shore, land beyond the Midwest): the arrows can't move that one, so they start a walk from the nearest hexagon
+  // rather than say "Already pinned", which would be wrong.
+  const pin = (arrowed = false) => {
+    if (pinned && !arrowed) return say('Already pinned. Arrow keys move it, Escape lets go.');
     const c = startCell();
     if (!c) return say('No forecast in view');
     steps = 0;
-    col = cellToLatLng(c)[1];
+    [row, col] = cellToLatLng(c);
     selectCell(c);
   };
   const arrow = (a: Arrow) => {
     const from = pinned && hit ? cur.cellAt(hit.lngLat) : null;
-    if (!from) return pin();
-    if (from !== keyCell) (col = cellToLatLng(from)[1]), (steps = 0); // pinned by mouse or tap since: start afresh there
-    const next = stepCell(from, a, col, (c) => hasForecast(cellToLatLng(c).reverse() as [number, number]));
+    if (!from) return pin(true);
+    if (hit !== keyHit) ([row, col] = cellToLatLng(from)), (steps = 0); // pinned by mouse, tap or town since: start afresh there
+    const next = stepCell(from, a, col, row, (c) => hasForecast(cellToLatLng(c).reverse() as [number, number]));
     if (!next) return say(`No forecast to the ${WORD[a]}${(nudge = !nudge) ? '\u00a0' : ''}`);
-    if (a === 'ArrowLeft' || a === 'ArrowRight') col = cellToLatLng(next)[1]; // a new column; up and down keep theirs
+    // A new column (left and right) or row (up and down); the walk keeps the other.
+    if (a === 'ArrowLeft' || a === 'ArrowRight') col = cellToLatLng(next)[1];
+    else row = cellToLatLng(next)[0];
     steps++;
     selectCell(next, WORD[a]);
   };
