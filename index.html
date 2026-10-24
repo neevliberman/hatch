@@ -45,8 +45,9 @@
       <label class="season species"><span class="sr">Species</span><select id="species"><option value="luna">Luna moth</option><option value="firefly">Firefly</option></select></label>
       <label class="season"><span class="sr">Season to replay</span><select id="season"><option value="">All years</option></select></label>
       <button id="info-btn" class="icon-btn" aria-label="About this map" aria-expanded="false" aria-controls="drawer">i</button>
-      <button id="explore" type="button" class="sr explore icon-btn">Explore map with keys<span class="sr"> (arrows move, Esc lets go)</span></button>
-        </header>
+      <div id="explore" class="sr explore icon-btn" role="application" tabindex="0" aria-roledescription="map explorer" aria-label="Explore map with keys" aria-describedby="explore-help">Explore map with keys</div>
+      <span id="explore-help" class="sr">Arrow keys move from hexagon to hexagon and read out its forecast. Escape lets go.</span>
+    </header>
     <aside id="drawer" aria-hidden="true" aria-label="About this map"></aside>
     <div id="bottom" role="region" aria-label="Key and time controls">
       <section id="layers" aria-label="Layers" hidden></section>

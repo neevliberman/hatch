@@ -119,7 +119,9 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   padding: 6px 2px; flex: none; font-family: var(--font-display);
   text-shadow: 0 0 6px var(--panel-solid), 0 0 14px var(--panel-solid), 0 0 2px var(--panel-solid); }
 /* "Explore map with keys": a keyboard-only way into the map, out of sight until it has focus, then a small chip under the title. */
-.explore:focus-visible { clip: auto; overflow: visible; width: auto; padding: 0 12px; top: 100%; left: var(--gl); }
+.explore:focus { clip: auto; overflow: visible; width: auto; padding: 0 12px; top: calc(100% + 4px); left: var(--gl); z-index: 5; outline: 2px solid var(--accent); outline-offset: 2px; }
+/* While the explorer has focus its chip takes the toast's place: the toast moves under it. */
+body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top)); }
 .brand small { font-weight: 400; color: var(--muted); font-size: 12px; }
 /* Once the map moves, hexes slide under the title: a paper backing keeps it readable. */
 .brand.over-map { background: var(--panel); border-radius: var(--radius); padding: 6px 10px; margin-left: -8px; }

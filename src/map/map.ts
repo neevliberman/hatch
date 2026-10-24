@@ -19,6 +19,8 @@ export interface ProbeHit {
   px?: [number, number];
   /** A name for the place, when it came from the city menu or My area ("Madison, WI", "you"). */
   label?: string;
+  /** A line of words for where a keyboard walk has got to ("Step 3 north, near Madison"). */
+  note?: string;
 }
 
 export interface MapHandle {

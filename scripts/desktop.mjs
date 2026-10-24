@@ -267,16 +267,30 @@ for (const [engine, width, height] of screens) {
   if ((await page.locator('#probe').getAttribute('aria-live')) !== 'polite') fail('the hexagon card is not a polite live region');
   if (!(await page.locator('#probe .probe-title').count())) fail('the keyboard-pinned card has no title');
   const seen = new Set([k1]);
-  for (const key of ['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown']) {
+  for (const key of ['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowDown']) {
+    const card = await cardText();
     await page.keyboard.press(key);
     await page.waitForTimeout(250);
+    // Every step must read differently (a step count and direction lead the card), or a screen reader says nothing new.
+    if ((await cardText()) === card) fail(`${key} left the card's words unchanged`);
     const k = await pinnedAt();
     if (!k) fail(`${key} dropped the pinned hexagon`);
     else if (seen.has(k) && key !== 'ArrowLeft' && key !== 'ArrowDown') fail(`${key} did not move to a new hexagon`);
     seen.add(k);
   }
   if (seen.size < 4) fail(`arrow keys visited only ${seen.size} different hexagons`);
-  if (c1 === (await cardText()) && seen.size < 3) fail('the card did not change as the selection moved');
+  // Home and End belong to this widget while it has focus: they must not jump the time slider.
+  const d3 = await page.locator('#t-date').textContent();
+  await page.keyboard.press('End');
+  await page.keyboard.press('PageUp');
+  await page.waitForTimeout(200);
+  if ((await page.locator('#t-date').textContent()) !== d3) fail('End or Page Up on the map explorer moved the date');
+  // Enter while pinned says so, and keeps the pin.
+  const pinnedKey = await pinnedAt();
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  if (!/Already pinned/.test(await page.locator('#action-msg').innerText())) fail('Enter on a pinned hexagon did not say it is already pinned');
+  if ((await pinnedAt()) !== pinnedKey) fail('Enter on a pinned hexagon changed it');
   // Left, then right, comes back to the same hexagon.
   const before = await pinnedAt();
   await page.keyboard.press('ArrowLeft');
@@ -296,14 +310,20 @@ for (const [engine, width, height] of screens) {
   if ((await pinnedAt()) !== before) fail('Enter did not pin the last pinned hexagon again');
   // Zoomed in, walking off the edge of the view pans the map to follow.
   await page.keyboard.press('Escape');
-  await page.evaluate(() => window.__hatch.map.view([-89.4, 43.07], 7));
+  await page.evaluate(() => window.__hatch.map.view([-89.4, 43.07], 9));
   await page.waitForTimeout(600);
   await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
   const mid0 = await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding()).lngLat);
-  for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowRight');
-  await page.waitForTimeout(1500);
-  const mid1 = await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding()).lngLat);
+  // Finer hexagons at this zoom are small steps, and a big screen holds a lot of map: keep walking east until the view
+  // has moved (a few dozen presses at most), then let the glide settle.
+  let mid1 = mid0;
+  for (let i = 0; i < 40 && Math.abs(mid1[0] - mid0[0]) < 0.05; i++) {
+    for (let j = 0; j < 5; j++) await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(150);
+    mid1 = await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding()).lngLat);
+  }
+  await page.waitForTimeout(1200);
   if (Math.abs(mid1[0] - mid0[0]) < 0.05) fail('walking off the edge of the view did not pan the map');
   await shot('3d-explore-pan');
   await page.keyboard.press('Escape');
