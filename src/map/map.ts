@@ -117,10 +117,23 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     if (gap > 1 && p.rightFrom !== undefined && right > 12) {
       const wide = fit(12);
       const [n, s] = ys(wide);
-      if (s - n <= p.rightFrom - 12 - p.top * v) {
+      const room = p.rightFrom - 12 - p.top * v; // the height between the header and the stack
+      if (s - n <= room) {
         vp = wide;
         gap = n - p.top * v;
         clear = p.rightFrom - 12;
+      } else if (room > 40) {
+        // A little too tall for that (the open key lifts the stack on a first visit): fit it to the height above the
+        // stack, still the full width, when that comes out bigger than squeezing it in beside the stack. Otherwise the
+        // narrow fit leaves an empty band under the header until the key folds.
+        const above = new WebMercatorViewport({ width, height }).fitBounds(MIDWEST_BOUNDS, {
+          padding: { top: p.top * v, bottom: height - p.rightFrom + 12, left: 12 * h, right: 12 * h },
+        });
+        if (above.zoom > vp.zoom) {
+          vp = above;
+          gap = ys(above)[0] - p.top * v;
+          clear = p.rightFrom - 12;
+        }
       }
     }
     // Centred, short of the stack: the spare height is shared above and below, rather than one empty band under the
