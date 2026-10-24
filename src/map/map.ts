@@ -503,8 +503,10 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       // Accessors read the neighbour; constants pass through.
       const via = (f: unknown) => (typeof f === 'function' ? (p: { src: unknown }, i: unknown) => f(p.src, i) : f);
       const { getFillColor, getLineColor } = l.props as { getFillColor?: unknown; getLineColor?: unknown };
+      // Not the hovered hexagon's index either (refresh gives it to the forecast layer this copies): an index here
+      // would tint an unrelated shore hexagon, and give every pad layer a picking buffer.
       return [l.clone({ id: `${l.id}-pad`, data: pads, getFillColor: via(getFillColor), getLineColor: via(getLineColor),
-        pickable: false, autoHighlight: false } as never)];
+        pickable: false, autoHighlight: false, highlightedObjectIndex: null } as never)];
     });
 
   const refresh = () => {
