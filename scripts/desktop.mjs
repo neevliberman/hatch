@@ -534,6 +534,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         if (!/how this forecast is made/.test(about)) fail('the About panel has no live-mode card');
         if (!/Open-Meteo/.test(about)) fail('the credits do not name Open-Meteo');
         await shotL('3-about');
+        // The live scorecard (live/scorecard.json, lazy): a line and a strip table in "How sure is it?".
+        if (existsSync(join(distDir, 'live/scorecard.json'))) {
+          const sc = page.locator('#drawer [data-score] .sc-line');
+          await sc.waitFor({ timeout: 4000 }).catch(() => fail('no live scorecard line in "How sure is it?"'));
+          if ((await page.locator('#drawer .sc-tab tbody tr').count()) !== 5) fail('the scorecard table does not have 5 strips');
+          await sc.scrollIntoViewIfNeeded().catch(() => {});
+          await shotL('4-scorecard');
+        }
         await page.keyboard.press('Escape');
         // Fireflies have no live season: picking them from live mode lands on all years, and the menu drops live.
         if (await page.locator('#species').isVisible()) {

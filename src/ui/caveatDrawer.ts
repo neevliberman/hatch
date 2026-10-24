@@ -75,6 +75,8 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     drawer.querySelector('.drawer-grip')!.addEventListener('click', () => toggle(true, !full()));
     drawer.querySelectorAll<HTMLDetailsElement>('details[data-key]').forEach((d) => (d.open = opened.has(d.dataset.key)));
     fillSpots();
+    // This season's live scorecard, in its own lazy chunk. Not in the one-file build: no files beside it to fetch.
+    if (__BASEMAP__ && drawer.querySelector('[data-score]')) void import('./scorecard').then((m) => m.fillScores(drawer));
   };
 
   const toggle = (open: boolean, full = false) => {

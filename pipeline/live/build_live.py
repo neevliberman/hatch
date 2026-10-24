@@ -15,6 +15,7 @@ Run: python3 pipeline/live/build_live.py --season 2026 --as-of 2026-06-01 [--no-
 """
 import argparse
 import datetime as dt
+import hashlib
 import json
 import sys
 import time
@@ -47,11 +48,21 @@ MAX_DOY = 300
 FORECAST_DAYS = 7
 MIN_FORECAST_DAYS = 5           # fewer complete Open-Meteo days than this -> fail loudly
 SEASON = ((3, 2), (10, 7))      # --auto runs between these (month, day) dates; outside, the last file stands
+PRISM_LAG_DAYS = 3              # the morning job's newest full weather day is today - 3: ACIS has PRISM through about
+                                # today - 2 (its day ends at 7 am and posts later that day), and that date's high belongs
+                                # to the day before (sources.weather_days). Backtests use the same lag.
 MAX_BAD_CELLS = 0.02            # more cells than this with no observed weather -> fail loudly
 TAXON = 47916
 LICENCES = ("cc0", "cc-by", "cc-by-nc")
 SECOND_BROOD_FALLBACK = 240
 APPROX_ACCURACY_M = 5000
+BAND_Q = [0.10, 0.50]           # band onset / peak, the quantities P3 scores (FROZEN_P3.md) and scorecard.py grades
+
+
+def model_hash(path=FOLD_FITS):
+    """First 12 hex digits of the sha256 of the frozen fits file: the season's model version, written into every
+    forecast so the scorecard can refuse to grade a forecast made by a different model."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
 
 
 # ---------------------------------------------------------------- small pure helpers (tested)
@@ -71,6 +82,36 @@ def first_reach(cdf, quantiles=QUANTILES, max_doy=MAX_DOY):
 
 def band_index(lat):
     return np.clip(np.digitize(lat, BANDS[1:-1]), 0, len(BAND_LABELS) - 1)
+
+
+def band_weights(cells, sightings):
+    """[band, cell] weight: each cell's share of its band's past first-wave sightings (the replay's openly licensed
+    2015-2025 records, exact locations), as P3 weights a band's hexes by their share of its training records."""
+    at = {c: i for i, c in enumerate(cells)}
+    lat = np.array([h3.cell_to_latlng(c)[0] for c in cells])
+    w = np.zeros((len(BAND_LABELS), len(cells)))
+    for s in sightings:
+        if s[5] & 3:            # second wave or rough location
+            continue
+        i = at.get(h3.latlng_to_cell(s[3], s[4], 4))
+        if i is not None:
+            w[band_index(lat[i]), i] += 1
+    return w
+
+
+def band_reach(share, w, quantiles=BAND_Q):
+    """Band onset / peak doy: the weighted mix of each cell's cumulative sighting share (cells with no expected
+    sightings drop out), first reaching each quantile. share: [cell, day]; w: [band, cell]. -> [band, quantile]."""
+    has = share[:, -1] > 0
+    out = []
+    for wb in w:
+        wb = np.where(has, wb, 0.0)
+        if wb.sum() <= 0:
+            out.append([np.inf] * len(quantiles))
+            continue
+        mix = (wb[:, None] * share).sum(0) / wb.sum()
+        out.append([np.inf if v is None else v for v in first_reach(mix, quantiles)])
+    return out
 
 
 def fill_gaps(x):
@@ -214,6 +255,7 @@ def build(season, as_of, use_forecast, today, prev=None):
     cstate = [eff["states"].index(s) for s in fdata.state_of(clat, clng)]
     eprof = np.array(eff["profile"])[cstate]
     cband = [BAND_LABELS[i] for i in band_index(clat)]
+    bw = band_weights(cells, replay["sightings"])
 
     # 1. analog years (Daymet), the base every trajectory is written onto
     _, years, a_min, a_max = temperature_cube(cells, *ANALOG_YEARS, fdata.DATA / "daymet")
@@ -240,7 +282,7 @@ def build(season, as_of, use_forecast, today, prev=None):
     i2 = i1 + f_min.shape[1]
 
     # 4. 11 weather endings x 11 fits
-    members, out_now, dd_now = [], [], None
+    members, band_members, out_now, dd_now = [], [], [], None
     # past real-minus-forecast errors per scored band-year: onset errors for q05/q25, peak errors for q50 onward
     resid = [[s["obs_onset"] - s["heat_onset"]] * 2 + [s["obs_peak"] - s["heat_peak"]] * 3 for s in replay["scores"]]
     for yi in range(len(years)):
@@ -257,9 +299,14 @@ def build(season, as_of, use_forecast, today, prev=None):
             cut_idx = np.array([cut[b] - 1 for b in cband])
             share = M.cell_sighting_share(p, spec, inc, clat, cut_idx, eprof)
             members.append([[np.inf if v is None else v for v in first_reach(s)] for s in share])
+            band_members.append(band_reach(share, bw))
             out_now.append(share[:, i1 - 1] if i1 > i0 else np.zeros(len(cells)))
     days = np.array(members, float)
     median, lo, hi = ensemble_summary(days, resid)
+    b_med, b_lo, b_hi = ensemble_summary(np.array(band_members, float),
+                                         [[s["obs_onset"] - s["heat_onset"], s["obs_peak"] - s["heat_peak"]] for s in replay["scores"]])
+    bands = [{"band": b, "onset": b_med[i][0], "onset_lo": b_lo[i][0], "onset_hi": b_hi[i][0],
+              "peak": b_med[i][1], "peak_lo": b_lo[i][1], "peak_hi": b_hi[i][1]} for i, b in enumerate(BAND_LABELS)]
 
     sightings, sightings_ok = [], True
     try:   # an iNat outage should not cost the night's forecast: keep the previous file's dots and flag it
@@ -276,7 +323,7 @@ def build(season, as_of, use_forecast, today, prev=None):
         "as_of": as_of.isoformat(), "forecast_through": f_end.isoformat(),
         "backfill": as_of < today - dt.timedelta(days=4),
         "stale_after_hours": 36,
-        "model": {"id": replay["model"]["id"], "spec": ff["spec"],
+        "model": {"id": replay["model"]["id"], "spec": ff["spec"], "hash": model_hash(),
                   "ensemble": f"{len(folds)} leave-one-year-out fits x {len(years)} weather endings ({years[0]}-{years[-1]})",
                   "frozen": "one model for the whole season; never refit in-season"},
         "sources": {
@@ -288,6 +335,9 @@ def build(season, as_of, use_forecast, today, prev=None):
         "quantiles": QUANTILES,
         "cells": cells,
         "median": median, "lo": lo, "hi": hi,
+        # whole latitude strips: the day 10% / 50% of the strip's expected first-wave sightings have happened (the
+        # dates P3 scores), with the same honest range; scorecard.py grades these once the season's sightings settle
+        "bands": bands,
         "out_now": [int(round(100 * v)) for v in np.median(np.array(out_now), 0)],
         "dd": [int(round(v)) for v in dd_now],
         "sightings": sightings,
