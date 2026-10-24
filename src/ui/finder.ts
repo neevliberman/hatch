@@ -116,7 +116,9 @@ export function mountFinder(
     form.style.transform = hidden ? `translateY(${-hidden}px)` : '';
     // The suggestions stack above the box: keep them inside what the keyboard leaves showing, scrolling if need be.
     const row = form.querySelector('.find-row')!.getBoundingClientRect();
-    list.style.maxHeight = `${Math.max(64, row.top - (vv?.offsetTop ?? 0) - 24)}px`;
+    // and below the header (its menus stay usable): the list's top keeps 6 px clear of both.
+    const ceiling = Math.max(vv?.offsetTop ?? 0, document.getElementById('top')?.getBoundingClientRect().bottom ?? 0) + 6;
+    list.style.maxHeight = `${Math.max(36, row.top - 11 - ceiling)}px`; // 11: the list's gap to the box, the label's padding
   };
   const setActive = (i: number) => {
     active = i;
