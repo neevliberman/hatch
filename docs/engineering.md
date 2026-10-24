@@ -36,4 +36,12 @@ A layer loads its own data and returns deck.gl layers for time `t`. Its preferre
 - **Exact dependency versions plus a lockfile.** luma.gl once drifted between two patch versions underneath us; pinning means "works today" stays true next year.
 - **The screenshot test fails loudly.** The first version passed while the map was blank. Now any page error, external request, or a single-colour map centre fails the run: a smoke detector, not a decoration.
 - **Zoom is tracked from `onViewStateChange`.** deck.gl 9 builds its view manager asynchronously, so asking it for viewports right after creation throws. We listen instead of asking.
+- **Lean on purpose (2026-10-24).** deck.gl is built WebGL-only and code Hatch never runs is stubbed out at build time (`scripts/lean-deps.mjs`); the service worker no longer downloads every bundle a second time; fonts carry only the characters used; finer hexes are let go a minute after zooming out. Measured on a phone-sized Chromium, pixel-identical screenshots:
+
+  | | before | after |
+  |---|---|---|
+  | first visit, everything downloaded (gzip) | 1,150 KB | 505 KB |
+  | one-file build (gzip) | 509 KB | 429 KB |
+  | memory after load (JS heap + typed arrays) | 10 + 40 MB | 10 + 24 MB |
+  | memory a minute after zooming in and out | 17 + 47 MB | 14 + 30 MB |
 - **Forecast archive from day one.** NWS keeps no old forecasts; every night not saved is a future backtest lost.
