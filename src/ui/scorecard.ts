@@ -5,6 +5,9 @@
  * (layer id "luna-replay" -> "luna", "japanese-beetle-replay" -> "japanese-beetle"), so the words here never name a
  * species. A species with no entry in the file shows no line.
  */
+import type { RecordCheck } from '../core/layer';
+import { recordLine } from './explainer';
+
 interface Dates { real: number; forecast: number; calendar: number }
 interface Band { band: string; status: string; settles_on: string; peak?: Dates; miss?: number }
 interface Card {
@@ -49,17 +52,34 @@ function html(f: File, c: Card): string {
     <thead><tr><th scope="col">Strip</th><th scope="col">Peak seen</th><th scope="col">Forecast</th><th scope="col">Usual</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-/** Fill every [data-score] card in `root` (the drawer re-renders, so this runs after each render). */
+/** Fill every [data-score] card in `root` (the drawer re-renders, so this runs after each render), and add this season's
+ * check to every [data-record] line, then show it (with the layer's own checks only if the file is missing or has no
+ * scored strip for it). */
 export function fillScores(root: HTMLElement): void {
   file ??= fetch(new URL(`${import.meta.env.BASE_URL}live/scorecard.json`, document.baseURI), { cache: 'no-cache' })
     .then((r) => (r.ok ? (r.json() as Promise<File>) : null))
     .catch(() => null);
   void file.then((f) => {
-    if (!f || f.version !== 1 || f.kind !== 'scorecard') return;
+    const ok = !!f && f.version === 1 && f.kind === 'scorecard';
+    const card = (el: HTMLElement, attr: string) => (ok ? f!.layers?.[el.dataset[attr]!.replace(/-replay$/, '')] : undefined);
+    root.querySelectorAll<HTMLElement>('[data-record]').forEach((el) => {
+      let checks: RecordCheck[] = [];
+      try {
+        checks = JSON.parse(el.dataset.checks ?? '[]') as RecordCheck[];
+      } catch {
+        /* a bad attribute just means no line */
+      }
+      const s = card(el, 'record')?.summary;
+      if (s?.scored && s.miss != null && s.calendar_miss != null)
+        checks.push({ where: `in ${f!.season}`, days: s.miss, usual: s.calendar_miss, size: `one season, ${s.scored} strip${s.scored > 1 ? 's' : ''}` });
+      el.textContent = recordLine(checks);
+      el.hidden = !el.textContent;
+    });
+    if (!ok) return;
     root.querySelectorAll<HTMLElement>('[data-score]').forEach((el) => {
-      const c = f.layers?.[el.dataset.score!.replace(/-replay$/, '')];
+      const c = card(el, 'score');
       if (!c?.summary || !Array.isArray(c.bands)) return;
-      el.innerHTML = html(f, c);
+      el.innerHTML = html(f!, c);
       el.hidden = false;
     });
   });

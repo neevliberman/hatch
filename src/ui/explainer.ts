@@ -1,4 +1,4 @@
-import type { CaveatCard, Explainer, SpotStory } from '../core/layer';
+import type { CaveatCard, Explainer, RecordCheck, SpotStory } from '../core/layer';
 import { sketchStrip } from './sketch';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -49,11 +49,12 @@ export function spotHtml(s: SpotStory | null): string {
       .join('')}<span><i class="k-tick"></i>real sighting (${shown.length} here)</span><span><i class="k-today"></i>the date you picked</span></div>`;
 }
 
-/** The bold answer to "how sure is it?", from the forecast's days off and the plain guess's (each layer's own scores). */
-function scoreLead([f, base]: { label: string; days: number }[]): string {
+/** The bold answer to "how sure is it?", from the forecast's days off and the plain guess's (each layer's own scores),
+ * on what they were scored on (`scope`: "on past years"), so it never reads as a claim about every test. */
+function scoreLead([f, base]: { label: string; days: number }[], scope?: string): string {
   if (!f) return '';
   const n = (d: number) => `${Math.round(d)} day${Math.round(d) === 1 ? '' : 's'}`;
-  const lead = `Usually within about ${n(f.days)}.`;
+  const lead = `Usually within about ${n(f.days)}${scope ? ` ${scope}` : ''}.`;
   if (!base || !(f.days > 0)) return lead; // no ratio against a perfect (or missing) score
   const r = base.days / f.days;
   const vs = `guessing the ${base.label.toLowerCase()}`;
@@ -64,6 +65,29 @@ function scoreLead([f, base]: { label: string; days: number }[]): string {
     : r > 0.87 ? `About as close as ${vs}.`
     : `${vs[0]!.toUpperCase()}${vs.slice(1)} did better, at about ${n(base.days)}.`
   }`;
+}
+
+const and = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/** The species' whole record against the usual date in one plain line, from its own checks (past years, places it never
+ * learned from, this season's live scorecard): the wins named, any tie or loss with its numbers and how small a test
+ * it was. Species-neutral: every word comes from the checks. Empty when there are none. */
+export function recordLine(checks: RecordCheck[]): string {
+  const t = (d: number) => Math.round(d * 10); // compare as shown, to a tenth of a day
+  const won = checks.filter((c) => t(c.days) < t(c.usual));
+  const tied = checks.filter((c) => t(c.days) === t(c.usual));
+  const lost = checks.filter((c) => t(c.days) > t(c.usual));
+  if (!checks.length) return '';
+  const size = (c: RecordCheck) => (c.size ? `; ${c.size}` : '');
+  const parts = [
+    ...(won.length ? [`beat the usual date ${and(won.map((c) => c.where))}`] : []),
+    ...(tied.length
+      ? [`${won.length ? 'tied with it' : 'tied with the usual date'} ${and(tied.map((c) => `${c.where} (${c.days.toFixed(1)} days off each${size(c)})`))}`]
+      : []),
+  ];
+  const lostText = and(lost.map((c) => `${c.where} (${c.days.toFixed(1)} days off against ${c.usual.toFixed(1)}${size(c)})`));
+  if (lost.length) parts.push(parts.length ? `but not ${lostText}` : `did not beat the usual date ${lostText}`);
+  return `${won.length && lost.length ? 'Mixed record so far' : 'Record so far'}: ${parts.join(', ')}.`;
 }
 
 /** The whole species section of the drawer. Its spot card is filled separately, so it can follow the map. */
@@ -86,7 +110,13 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
     ${
       score
         ? `<div class="ex-score" data-why><div class="ex-h">${esc(score.title)}</div>
-        <p class="ex-lead">${esc(scoreLead(score.bars))}</p>
+        <p class="ex-lead">${esc(scoreLead(score.bars, score.scope))}</p>
+        ${
+          score.checks?.length
+            ? // Hidden until the scorecard file has added this season's check (or failed): never a record without it.
+              `<p class="ex-record" data-record="${esc(id)}" data-checks="${esc(JSON.stringify(score.checks))}"${__BASEMAP__ ? ' hidden' : ''}>${esc(recordLine(score.checks))}</p>`
+            : ''
+        }
         <div class="ex-sub">Days off, on average. Shorter is better.</div>
         ${score.bars
           .map(

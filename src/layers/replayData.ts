@@ -1,5 +1,6 @@
 import { latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
+import type { RecordCheck } from '../core/layer';
 import type { ReplayFile } from './lunaData';
 
 /** Bit flags on a sighting (the last field of each `sightings` row). */
@@ -50,6 +51,20 @@ export function replayData(data: ReplayFile) {
 }
 
 export type ReplayData = ReturnType<typeof replayData>;
+
+/** The checks against the usual date that a replay file holds, for the "How sure?" record line (ui/explainer.ts
+ * recordLine): every past year it was scored on (`past`, the shipped strip-years) and the two states it never learned
+ * from (model.holdout_mae). This season's live check joins them from the scorecard file. Species-neutral. */
+export function modelChecks(data: ReplayFile, past: { n: number; heat: number; calendar: number }): RecordCheck[] {
+  const h = data.model?.holdout_mae;
+  const nh = data.model?.holdout_band_years;
+  return [
+    ...(past.n ? [{ where: 'on past years', days: past.heat, usual: past.calendar, size: `${past.n} strip-years` }] : []),
+    ...(h && Number.isFinite(h.heat) && Number.isFinite(h.cal)
+      ? [{ where: 'in two states it never learned from', days: h.heat, usual: h.cal, ...(nh ? { size: `${nh} strip-years` } : {}) }]
+      : []),
+  ];
+}
 
 /** The "How sure?" point on a card's "likely" window, from the file's own check (interval.checked): how often the real
  * peak landed inside it on past years, each year's window sized without that year. Species-neutral; null if unchecked. */
