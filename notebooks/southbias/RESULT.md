@@ -114,7 +114,7 @@ map; this setup means the next one will be a real test.
   (5.6 vs 8.2 days there). The cap and the flag only use weather up to the issue date, so they can run live, but that
   was not rehearsed here.
 - 5 southern band-years in LOYO is very few. Two of them (2024, 2025) were slightly out of range on part of the strip
-  (A2 flagged 8% of their weight), none by anything like 2026's margin, so LOYO says little about how any rule
+  (A2 flagged about 16% and 15% of their record-weighted LOYO weight), none by anything like 2026's margin, so LOYO says little about how any rule
   handles a far out-of-range spring.
 - **Weather mismatch.** In 2026 the cap and flag compare PRISM banks against a Daymet envelope. In the south the margin
   is wide (strip average 254.5 degree-days by 15 April against 197 at the richest training place-year), but the
@@ -123,6 +123,9 @@ map; this setup means the next one will be a real test.
   everything north of it was never flagged on either source. The south was flagged on 14% / 6% of its weight in
   2024 / 2025 on Daymet and 1% / 17% on PRISM, and 0% in 2023 on both. So PRISM does not fire more often in
   general, but it moves which years fire; one year of 29% in the middle strip is not explained by it, nor ruled out.
+  These shares use the live strip weights, so they differ from the record-weighted LOYO shares above. The
+  Daymet-to-PRISM offsets are averages over 2015-2025, which includes 2023-2025, so this check is calibrated in-sample
+  and slightly optimistic.
 - The gate grid was limited to 11.5-14 hours; the mixture had one fixed form (normal calendar clock, linear in
   latitude). Other forms were not tried.
 
