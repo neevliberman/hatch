@@ -42,12 +42,18 @@ const ABBR: Record<string, string> = { MINNESOTA: 'MN', WISCONSIN: 'WI', MICHIGA
 type Box = [number, number, number, number];
 type Try = [number, number, boolean];
 
+/** A water label bigger than this many km (its size field) is one of the Great Lakes (the next biggest is 32). */
+const GREAT_LAKE_KM = 100;
+const isGreat = (l: Label) => l[4] === 'water' && l[5] > GREAT_LAKE_KM;
+/** Two boxes do not overlap. */
+const apart = (b: Box, p: Box) => b[0] > p[2] || b[2] < p[0] || b[1] > p[3] || b[3] < p[1];
+
 /** Places for a lake or state name: its own spot, then slid sideways inside its shape and (lakes) up or down. A Great
  * Lake tries up and down first, so it leaves the south end (Chicago) to the city. */
 function sideways(l: Label, left: number, y: number, slack: number, vslack: number): Try[] {
   const across = [0, -0.5, 0.5, -1, 1].map((k): Try => [left + k * slack, y, false]);
   const upDown = vslack ? [-0.5, -1, 0.5, 1].map((k): Try => [left, y + k * vslack, false]) : [];
-  return l[5] > 100 && l[4] === 'water' ? [...upDown, ...across] : [...across, ...upDown];
+  return isGreat(l) ? [...upDown, ...across] : [...across, ...upDown];
 }
 
 export function createLabels(container: HTMLElement) {
@@ -98,7 +104,7 @@ export function createLabels(container: HTMLElement) {
   return {
     /** New names arrived (the detail file loaded): re-sort the list. */
     setLabels(all: Label[]) {
-      const rank = (l: Label) => (l[4] === 'water' && l[5] > 100 ? -1 : KIND_ORDER[l[4]]); // the Great Lakes first of all
+      const rank = (l: Label) => (isGreat(l) ? -1 : KIND_ORDER[l[4]]); // the Great Lakes first of all
       sorted = [...all].sort((a, b) => rank(a) - rank(b) || b[5] - a[5]);
       widths.clear();
       last = '';
@@ -132,14 +138,14 @@ export function createLabels(container: HTMLElement) {
       }
       const next = new Set<HTMLSpanElement>();
       let cover = 0;
-      const apart = (b: Box) => (p: Box) => b[0] > p[2] || b[2] < p[0] || b[1] > p[3] || b[3] < p[1];
-      const clear = (b: Box, withDots: boolean) => placed.every(apart(b)) && (!withDots || dotBoxes.every(apart(b)));
+      const clear = (b: Box, withDots: boolean) => placed.every((p) => apart(b, p)) && (!withDots || dotBoxes.every((p) => apart(b, p)));
       for (const l of sorted) {
         const kind = l[4];
         if (l[3] > zoom || (kind === 'state' && zoom >= STATE_MAX_ZOOM)) continue;
         const [x, y] = vp.project([l[1], l[2]]) as [number, number];
         if (x < -50 || y < T - 20 || x > R + 50 || y > B + 20) continue;
-        const ext = kind === 'water' || kind === 'state' || (kind === 'park' && l[6] !== undefined);
+        const framed = kind === 'water' || kind === 'state'; // the frame of the map: no cover budget
+        const ext = framed || (kind === 'park' && l[6] !== undefined);
         let text = l[0];
         let w = width(l);
         let h = height(l);
@@ -161,7 +167,7 @@ export function createLabels(container: HTMLElement) {
             w = width(l, text);
             if (w <= cap) k = 1;
           }
-          if (k === undefined && kind === 'water' && l[5] > 100 && w * GREAT_SCALE <= room * GREAT_SPILL) k = GREAT_SCALE;
+          if (k === undefined && isGreat(l) && w * GREAT_SCALE <= room * GREAT_SPILL) k = GREAT_SCALE;
           if (k === undefined) continue; // too big for its lake, state or forest at this zoom: wait for a closer one
           scale = k;
           w *= k;
@@ -169,7 +175,7 @@ export function createLabels(container: HTMLElement) {
           slack = Math.max(0, (cap - w) / 2);
           if (kind === 'water' && tall < Infinity) vslack = Math.max(0, (tall * 0.9 - h) / 2);
         }
-        if (!ext && cover + w * h > MAX_COVER * (R * (B - T))) continue; // a shorter name may still fit (lakes and states are the frame: no budget)
+        if (!framed && cover + w * h > MAX_COVER * (R * (B - T))) continue; // a shorter name may still fit (lakes and states are the frame: no budget)
         const dotted = kind === 'town' || kind === 'city';
         const half = kind === 'city' ? 2.5 : 2; // the dot's centre sits on the place
         // A town's name sits right of its dot, or left of it when the right is taken. A lake or state name slides a
@@ -182,13 +188,13 @@ export function createLabels(container: HTMLElement) {
         const pad = ext ? PAD * scale : PAD; // a shrunk name keeps proportionally less air around it
         const gap = kind === 'town' ? TOWN_GAP : pad;
         // Pass 2 (states and the Great Lakes) is the last resort: on top of the dots.
-        const lastResort = kind === 'state' || (kind === 'water' && l[5] > 100);
+        const lastResort = kind === 'state' || isGreat(l);
         for (let pass = lastResort ? 2 : 1; pass > 0; pass--) {
           for (const [left, cy, flip] of tries) {
             const box: Box = [left - gap, cy - h / 2 - pad, left + w + (dotted ? DOT : 0) + gap, cy + h / 2 + pad];
             if (box[0] < 0 || box[2] > R || box[1] < T || box[3] > B || !clear(box, kind !== 'city' && (pass === 2 || !lastResort))) continue;
             placed.push(box);
-            if (!ext) cover += w * h;
+            if (!framed) cover += w * h;
             const n = node(l, text);
             n.classList.toggle('flip', flip);
             n.style.transform = `translate(${Math.round(left)}px, ${Math.round(cy - h / 2)}px)${scale < 1 ? ` scale(${scale})` : ''}`;

@@ -5,10 +5,14 @@ labels to [name, lng, lat, minZoom, kind, size, chordDeg, heightDeg]:
   chordDeg   the widest run of water (or state) in degrees of longitude, through the label's line of text
   heightDeg  the water straight above and below that point, in degrees of latitude (lakes only)
 The anchor also moves to the roomiest spot of its own lake/state part, so a name sits mid-lake, not on the shore.
-No dependencies beyond numpy.  Run: python3 pipeline/basemap/fit_labels.py
+The fit is a pure function of the polygon and the anchor recorded in label_anchors.json, so a rerun gives the same
+bytes. After build_basemap.py (fresh, unfitted labels): python3 pipeline/basemap/fit_labels.py --init, then
+python3 pipeline/basemap/fit_labels.py. Test: python3 -m pytest pipeline/basemap/test_fit_labels.py
+No dependencies beyond numpy.
 """
 import json
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -75,6 +79,8 @@ def fit(flat, x0, y0, rows, kind, reach=None):
             score -= 0.02 * math.hypot(x - x0, y - y0)  # stay near the first guess unless there is room to gain
             if best is None or score > best[0]:
                 best = (score, x, y, chord, vc)
+    if best is None:  # no room anywhere in the window: keep the anchor, with no room to claim
+        return x0, y0, 0.0, 0.0
     return best[1:]
 
 
@@ -87,62 +93,99 @@ SHORT = {
     'Big South Fork NRRA': 'Big South Fork NRA',
 }
 # Mark Twain NF is a dozen separate tracts: name the two biggest, or the others read as unlabelled outlines.
-EXTRA_SIZE = 100  # their size: below every real park, and how a rerun finds them again
+EXTRA_PARK_SIZE = 1  # their size field: no real park is this small, so it marks the generated tracts
 MORE_PARKS = [('Mark Twain NF', -91.21, 37.69, 6.5)]
+
+
+ANCHORS = ROOT / 'pipeline/basemap/label_anchors.json'
+FIT_KINDS = ('state', 'water', 'park')
+
+
+def key(lab):
+    """Which label this is. Names repeat (two Pelican Lakes), so the size tells them apart."""
+    return f'{lab[4]}|{lab[0]}|{lab[5]}'
+
+
+def load():
+    return {n: json.loads((OUT / f'{n}.json').read_text()) for n in ('overview', 'detail')}
+
+
+def save(files):
+    for n, d in files.items():
+        (OUT / f'{n}.json').write_text(json.dumps(d, separators=(',', ':'), ensure_ascii=False))
+
+
+def init_anchors():
+    """Record where build_basemap.py first put each lake, state and park name. Run once on fresh, unfitted output;
+    the fit always starts from these, never from where a name already sits, so a rerun changes nothing."""
+    files = load()
+    out = {}
+    for d in files.values():
+        for lab in d['labels']:
+            if lab[4] in FIT_KINDS:
+                if len(lab) > 6:
+                    raise SystemExit('labels are already fitted: run build_basemap.py first')
+                out[key([SHORT.get(lab[0], lab[0])] + lab[1:])] = [lab[1], lab[2]]
+    ANCHORS.write_text(json.dumps(out, indent=0, ensure_ascii=False, sort_keys=True) + '\n')
 
 
 def main():
     states = json.loads((ROOT / 'src/data/midwest-states.json').read_text())['features']
     state_polys = {f['properties']['name'].upper(): rings_of(f['geometry']) for f in states if f['properties']['core']}
-    files = {n: json.loads((OUT / f'{n}.json').read_text()) for n in ('overview', 'detail')}
+    anchors = json.loads(ANCHORS.read_text())
+    files = load()
     lakes = [p for d in files.values() for f in d['water']['features'] for p in rings_of(f['geometry'])]
     green = [p for d in files.values() for f in d['green']['features'] for p in rings_of(f['geometry'])]
     detail = files['detail']['labels']
-    detail[:] = [lab for lab in detail if not (lab[4] == 'park' and lab[5] == EXTRA_SIZE)]  # drop last run's extra tracts
+    # The extra tracts are generated: drop last run's, then add them again from MORE_PARKS.
+    detail[:] = [lab for lab in detail if not (lab[4] == 'park' and lab[5] == EXTRA_PARK_SIZE)]
     for name, x, y, z in MORE_PARKS:
         host = [q for q in green if run(q, y, x, 0) > 0]
         if host:
             x, y, _, _ = fit(max(host, key=lambda q: abs(area(q[0]))), x, y, 0, 'state')
-        detail.append([name, round(float(x), 3), round(float(y), 3), z, 'park', EXTRA_SIZE])
+        detail.append([name, round(float(x), 3), round(float(y), 3), z, 'park', EXTRA_PARK_SIZE])
     for lab in detail:
         lab[0] = SHORT.get(lab[0], lab[0])
     shares = []
     for d in files.values():
         for lab in d['labels']:
-            name, x, y, z, kind = lab[:5]
+            name, _, _, _, kind = lab[:5]
+            if kind == 'city' and lab[5] >= 2_000_000:
+                lab[3] = 0  # Chicago is named from the first view
+            if kind not in FIT_KINDS or (kind == 'park' and lab[5] == EXTRA_PARK_SIZE):
+                continue
+            del lab[6:]
+            lab[1], lab[2] = anchors[key(lab)]  # always from the recorded anchor
+            x, y = lab[1], lab[2]
             if kind == 'state':
                 rows = 0.35
                 cands = [p for p in state_polys.get(name, []) if run(p, y, x, 0) > 0]
             elif kind == 'water':
                 rows = 0
                 cands = [p for p in lakes if run(p, y, x, 0) > 0]
-            elif kind == 'park':
+            else:
                 rows = 0.08
                 cands = [p for p in green if run(p, y, x, 0) > 0]
-            elif kind == 'city' and lab[5] >= 2_000_000:
-                lab[3] = 0  # Chicago is named from the first view
-                continue
-            else:
-                continue
             if not cands:
                 print('no host for', name)
                 continue
             # The biggest shape holding the point (a lake's rings include its islands: even-odd handles them).
             host = max(cands, key=lambda p: abs(area(p[0])))
             nx, ny, chord, vc = fit(host, x, y, rows, 'water' if kind == 'water' else 'state', lab[5] / 111 * 0.75 + 0.05 if kind == 'water' else None)
-            del lab[6:]
-            if kind == "park" and chord < 0.03:
+            if kind == 'park' and chord < 0.03:
                 continue  # a thin or tiny park: named where it is, no room test
             lab[1], lab[2] = round(float(nx), 3), round(float(ny), 3)
             full = span(host, ny, nx, 0)
-            if kind != "park":
+            if kind != 'park':
                 shares.append((chord / (full[1] - full[0]), name))
             lab += [round(float(chord), 3)] + ([round(float(vc), 3)] if kind == 'water' else [])
     shares.sort()
-    print('worst usable share of the run at the anchor:', [(n, round(v, 2)) for v, n in shares[:6]])
-    for n, d in files.items():
-        (OUT / f'{n}.json').write_text(json.dumps(d, separators=(',', ':'), ensure_ascii=False))
+    print('worst usable share of the run at the anchor:', [(n, round(float(v), 2)) for v, n in shares[:6]])
+    save(files)
 
 
 if __name__ == '__main__':
-    main()
+    if '--init' in sys.argv:
+        init_anchors()
+    else:
+        main()
