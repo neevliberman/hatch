@@ -22,7 +22,7 @@ import {
   type Sighting,
 } from './lunaData';
 import { animating, hexFade, ripples } from './motion';
-import { fineDays, fineLevel, fineManifest, parentOf, RETRY_MS, type FineLevel } from './fineData';
+import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
 import { windowCheck } from './replayData';
@@ -362,9 +362,22 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         const fc = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
         shown5or6.set(res, { level, data: fc, unseen: fc.filter((c) => !c.seen) });
       }
-      fineDaysLoaded.set(key, days);
+      // A few seasons per level, never the season on screen.
+      remember(fineDaysLoaded, key, days, KEEP_SEASONS * fineLevels.length, (k) => k.endsWith(`/${mode}`));
       if (wantRes >= res) onData();
     });
+  };
+  // Zoomed back out: after RELEASE_MS at res 4, let the finer levels go (see RELEASE_MS).
+  let releaseTimer = 0;
+  const releaseLater = () => {
+    if (releaseTimer || !shown5or6.size) return;
+    releaseTimer = window.setTimeout(() => {
+      releaseTimer = 0;
+      if (shownRes > 4 || wantRes > 4) return;
+      shown5or6.clear();
+      fineDaysLoaded.clear();
+      forgetFine();
+    }, RELEASE_MS);
   };
   /** Finest level at or below the wanted one that can be drawn now, and the days to draw it with. */
   const pickRes = (want: number): { res: number; days: Uint8Array | null } => {
@@ -539,6 +552,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const d = anim ? doy + frac : doy;
       const { res, days } = pickRes(resForZoom(zoom));
       shownDays = days;
+      if (res === 4) releaseLater();
+      else if (releaseTimer) releaseTimer = (clearTimeout(releaseTimer), 0); // back in: the 60 s starts again next time
       if (res !== shownRes) {
         shownRes = res;
         queueMicrotask(onData); // the card and its outline follow the new level

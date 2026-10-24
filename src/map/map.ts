@@ -7,7 +7,7 @@ import { GRID_RES, MIDWEST_BOUNDS } from '../core/grid';
 import { isForecast, isHexes } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import type { TimeAxis } from '../core/timeAxis';
-import { basemapLabels, basemapLayers, loadBasemap, theme } from './basemap';
+import { basemapLabels, basemapLayers, loadBasemap, padsFor, theme } from './basemap';
 import { createLabels } from './labels';
 import { palette } from '../theme';
 
@@ -29,6 +29,8 @@ export interface MapHandle {
   /** Re-fit the Midwest into the free area between header and bottom bar (and beside an open side panel). `glide`
    * eases there in about a third of a second instead of cutting. */
   fit(padding: Padding, glide?: boolean): void;
+  /** After a resize that keeps the reader's view: the zoom-out limit follows the new whole-Midwest fit. */
+  rebound(padding: Padding): void;
   /** Whether a pan or zoom has left the fitted view (a re-fit on resize would throw that away). */
   moved(): boolean;
   /** Centre lngLat in the free area at a zoom level (the city menu, My area and shared links). `fly` flies there. */
@@ -51,8 +53,12 @@ export interface MapHandle {
 export interface Padding {
   top: number;
   bottom: number;
-  /** Width an open side panel takes on the right (desktop About drawer). */
+  /** Width an open side panel takes on the right (desktop About drawer), or the phone's button stack. */
   right?: number;
+  /** For the phone's button stack: the height (from the top of the map) where it starts. Above it, the right edge is free. */
+  rightFrom?: number;
+  /** On a phone, the bottom room for the time bar and the key even while the key is folded: where the card docks. */
+  dock?: number;
 }
 
 interface Opts {
@@ -83,7 +89,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     onFirstDraw?.();
-    return { refresh() {}, fit() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {} };
+    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {} };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   // The size the last fit was worked out for. Before layout (an in-app browser still sliding in) the map can be 0 x 0,
@@ -97,19 +103,41 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     const v = Math.min(1, Math.max(0, height - 40) / Math.max(1, p.top + p.bottom));
     const right = 12 + (p.right ?? 0);
     const h = Math.min(1, Math.max(0, width - 40) / (12 + right));
-    let vp = new WebMercatorViewport({ width, height }).fitBounds(MIDWEST_BOUNDS, {
-      padding: { top: p.top * v, bottom: p.bottom * v, left: 12 * h, right: right * h },
+    const fit = (r: number) => new WebMercatorViewport({ width, height }).fitBounds(MIDWEST_BOUNDS, {
+      padding: { top: p.top * v, bottom: p.bottom * v, left: 12 * h, right: r * h },
     });
-    // On a tall phone the width limits the fit, which would centre the Midwest and leave a gap above it. Pin its
-    // north edge under the header instead: the spare room goes to the bottom, where the hex card docks.
-    const gap = vp.project([MIDWEST_BOUNDS[0][0], MIDWEST_BOUNDS[1][1]])[1]! - p.top;
+    let vp = fit(right);
+    // fitBounds centres the Midwest in the free area; on a tall phone the width limits the fit, leaving `gap` spare
+    // above it and below it. ys: where its north and south edges land.
+    const ys = (w: WebMercatorViewport): [number, number] => [w.project([MIDWEST_BOUNDS[0][0], MIDWEST_BOUNDS[1][1]])[1]!, w.project(MIDWEST_BOUNDS[0])[1]!];
+    let gap = ys(vp)[0] - p.top * v;
+    // The button stack on a phone's right edge starts low down (rightFrom). When the whole Midwest fits above it, pinned
+    // under the header, use the full width instead: a bigger map, and the stack sits in the room left below it.
+    let clear = Infinity; // how far the Midwest may reach down
+    if (gap > 1 && p.rightFrom !== undefined && right > 12) {
+      const wide = fit(12);
+      const [n, s] = ys(wide);
+      if (s - n <= p.rightFrom - 12 - p.top * v) {
+        vp = wide;
+        gap = n - p.top * v;
+        clear = p.rightFrom - 12;
+      }
+    }
+    // Centred, short of the stack: the spare height is shared above and below, rather than one empty band under the
+    // map. Centred between the header and the dock (where the key and a docked card sit, which stays put whether the
+    // key is folded or a card is up, so a tap never moves the map). Moving the map up by `up` px.
     if (gap > 1) {
-      const [longitude, latitude] = vp.unproject([width / 2, height / 2 + gap]);
+      const [n, s] = ys(vp);
+      const dock = height - Math.max(p.bottom, p.dock ?? 0) * v;
+      let to = p.top * v + Math.max(0, (dock - p.top * v - (s - n)) / 2); // where the north edge goes
+      to -= Math.max(0, to + (s - n) - clear);
+      const up = n - Math.max(p.top * v, to);
+      const [longitude, latitude] = vp.unproject([width / 2, height / 2 + up]);
       vp = new WebMercatorViewport({ width, height, longitude, latitude, zoom: vp.zoom });
     }
-    // Zoom stops half a step out from the whole Midwest (not a speck in empty sea) and in at about town scale, where a
-    // finest hexagon (about 6 km) is still a few dozen pixels, rather than one blank hexagon filling the screen.
-    return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: Math.max(2, vp.zoom - 0.5), maxZoom: 9.5 };
+    // Zoom stops at the whole Midwest (zooming further out only shrinks it into a speck in empty sea) and in at about
+    // town scale, where a finest hexagon (about 6 km) is still a few dozen pixels, rather than one blank hexagon.
+    return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: Math.max(2, vp.zoom), maxZoom: 9.5 };
   };
   // A centre that puts lngLat in the middle of the free area (between the panels), not the middle of the screen.
   const focusState = (lngLat: [number, number], z: number, p: Padding) => {
@@ -421,14 +449,38 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         ]
       : [];
 
+  // Shore hexagons (see padsFor): each forecast or stripes layer gets a copy under it, over the hexagons just past the
+  // shores and state lines, in a forecast neighbour's colour; the basemap's mask over them trims them to the edge.
+  // Not pickable: a tap past the shore is not a forecast. Built once per level's data, so playback reuses them.
+  const padCache = new WeakMap<object, { id: string; src: unknown }[]>();
+  // (The one-file build has no basemap, so no mask to trim them: it leaves this out.)
+  const padLayers = (hexes: Layer[]): Layer[] => !__BASEMAP__ ? [] :
+    hexes.flatMap((l) => {
+      const res = /-r(\d)/.exec(l.id)?.[1];
+      const pairs = res ? padsFor(+res) : null;
+      const data = l.props.data as { id: string }[] | undefined;
+      if (!pairs || !Array.isArray(data)) return [];
+      let pads = padCache.get(data);
+      if (!pads) {
+        const byId = new Map(data.map((d) => [d.id, d]));
+        pads = pairs.flatMap(([id, src]) => (byId.has(src) ? [{ id, src: byId.get(src) }] : []));
+        padCache.set(data, pads);
+      }
+      // Accessors read the neighbour; constants pass through.
+      const via = (f: unknown) => (typeof f === 'function' ? (p: { src: unknown }, i: unknown) => f(p.src, i) : f);
+      const { getFillColor, getLineColor } = l.props as { getFillColor?: unknown; getLineColor?: unknown };
+      return [l.clone({ id: `${l.id}-pad`, data: pads, getFillColor: via(getFillColor), getLineColor: via(getLineColor),
+        pickable: false, autoHighlight: false } as never)];
+    });
+
   const refresh = () => {
-    const { under, mid, over } = basemapLayers(zoom);
+    const { under, mid } = basemapLayers(zoom);
     // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
     const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }));
-    // Lakes, rivers and roads go over the hexagons but under the sighting dots.
+    // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
-    deck.setProps({ layers: [...under, ...hexes, ...mid, ...rest, ...over, ...pickedBuilt, ...markerBuilt] });
+    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid, ...rest, ...pickedBuilt, ...markerBuilt] });
   };
 
   const handle: MapHandle = {
@@ -444,6 +496,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       deck.setProps({ initialViewState: { ...v, zoom: v.zoom + nudge, ...g } });
       refresh(); // the hexagon size follows zoom: zooming back out must swap the small hexagons for big ones
       if (onView) requestAnimationFrame(onView);
+    },
+    rebound(p) {
+      const was = fitted.minZoom;
+      fitted = fitState(p);
+      if (Math.abs(fitted.minZoom - was) < 1e-6) return;
+      const v = target ?? current; // mid-glide: land where it was going
+      land({ ...v, zoom: Math.max(fitted.minZoom, v.zoom) });
     },
     moved: () => moved,
     fitZoom: () => fitted.zoom,
