@@ -12,8 +12,12 @@ const keepable = (res) => res.status === 200 && res.type === 'basic';
 const store = (key, res) => caches.open(CACHE).then((c) => c.put(key, res)).catch(() => {});
 
 self.addEventListener('install', (e) => {
-  // cache: 'reload' skips the browser's HTTP cache, which may still hold the previous deploy's page for ~10 minutes.
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' })))));
+  // The bundles and fonts (assets/) are named after their contents, so the copies the page has just downloaded are the
+  // right ones: take them from the browser's HTTP cache rather than download all ~500 KB a second time. The rest (the
+  // page, manifest, tab icons) keep their names across deploys, and that cache may still hold the previous deploy's for
+  // ~10 minutes: 'no-cache' asks the server first, and an unchanged file comes back as a few bytes of "not modified".
+  const req = (u) => new Request(u, { cache: u.startsWith('assets/') ? 'default' : 'no-cache' });
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE.map(req))));
 });
 
 self.addEventListener('activate', (e) => {
