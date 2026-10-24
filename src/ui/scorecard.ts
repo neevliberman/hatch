@@ -2,7 +2,8 @@
  * This season's scorecard (pipeline/live/scorecard.py -> live/scorecard.json), in the About panel's "How sure is it?"
  * card: one line, then a small strip-by-strip table. Loaded lazily (its own chunk), and only when the drawer has a
  * card for it; anything wrong with the file just means no line. Each layer finds its own entry by species key
- * (layer id "luna-replay" -> "luna"), so the words here never name a species.
+ * (layer id "luna-replay" -> "luna", "japanese-beetle-replay" -> "japanese-beetle"), so the words here never name a
+ * species. A species with no entry in the file shows no line.
  */
 interface Dates { real: number; forecast: number; calendar: number }
 interface Band { band: string; status: string; settles_on: string; peak?: Dates; miss?: number }
@@ -56,7 +57,7 @@ export function fillScores(root: HTMLElement): void {
   void file.then((f) => {
     if (!f || f.version !== 1 || f.kind !== 'scorecard') return;
     root.querySelectorAll<HTMLElement>('[data-score]').forEach((el) => {
-      const c = f.layers?.[el.dataset.score!.split('-')[0]!];
+      const c = f.layers?.[el.dataset.score!.replace(/-replay$/, '')];
       if (!c?.summary || !Array.isArray(c.bands)) return;
       el.innerHTML = html(f, c);
       el.hidden = false;

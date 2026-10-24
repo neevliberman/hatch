@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Nightly live forecast: this season's luna moth first brood, per res-4 hex -> public/live/latest.json.
+"""Nightly live forecast: this season's first wave of every live species (luna moth, firefly, Japanese beetle, ...;
+registry.py), per res-4 hex -> public/live/latest.json (luna at the top level, the others under "species").
 
 How one night's forecast is put together (analogy: finishing a sentence someone has started):
 1. The words already said: real weather from 1 March to yesterday (PRISM, adjusted to the Daymet scale the model
    was fitted on, see build_static.py).
 2. The next few words, fairly sure: a 7-day weather forecast (Open-Meteo).
 3. The rest, unknown: each past year 2015-2025 of Daymet weather run forward from there, 11 possible endings.
-Each of the 11 weather endings is run through each of the 11 leave-one-year-out fits of the frozen P3 model
-(fold_fits.json, the same fits the replay uses), so 121 forecasts per hex. The median is the forecast; the spread,
+Each of the 11 weather endings is run through each of the 11 leave-one-year-out fits of the species' frozen model
+(luna: P3, fold_fits.json, the same fits the replay uses; the others: their own fits in result.json), so 121 forecasts
+per hex. The weather is fetched once and shared by every species. The median is the forecast; the spread,
 widened by how far past forecasts actually missed (the replay's scored band-years), is the "likely" range.
 
 Run: python3 pipeline/live/build_live.py --season 2026 --as-of 2026-06-01 [--no-forecast]
@@ -36,7 +38,7 @@ from hatch_p1.daymet import temperature_cube  # noqa: E402
 from hatch_p1.degree_days import double_sine  # noqa: E402
 from hatch_p1.prep import BANDS, BAND_LABELS  # noqa: E402
 
-from live import sources  # noqa: E402
+from live import registry, sources  # noqa: E402
 
 REPLAY = ROOT / "src" / "data" / "luna-replay.json"
 FOLD_FITS = ROOT / "pipeline" / "replay" / "fold_fits.json"
@@ -196,13 +198,14 @@ def check_temps(name, *arrs):
 
 
 # ---------------------------------------------------------------- sightings so far
-def season_sightings(season, as_of, cutoffs):
-    """This season's openly licensed luna sightings to date: [id, year, doy, lat, lng, flags].
-    flags: bit0 second brood, bit1 approximate location, bit2 not yet confirmed (iNat 'needs ID')."""
+def season_sightings(season, as_of, cutoffs, taxon=TAXON, last_doy=None):
+    """This season's openly licensed sightings of `taxon` to date (default luna): [id, year, doy, lat, lng, flags].
+    flags: bit0 second brood, bit1 approximate location, bit2 not yet confirmed (iNat 'needs ID'). A one-generation
+    species (last_doy set) keeps only days up to last_doy, as its replay does."""
     rows, last = [], 0
     while True:
         js = inat._get("observations", {
-            "taxon_id": TAXON, "place_id": ",".join(map(str, inat.MIDWEST_PLACES)),
+            "taxon_id": taxon, "place_id": ",".join(map(str, inat.MIDWEST_PLACES)),
             "d1": f"{season}-03-01", "d2": as_of.isoformat(), "quality_grade": "research,needs_id",
             "license": ",".join(LICENCES), "captive": "false",
             "per_page": 200, "order_by": "id", "order": "asc", "id_above": last})
@@ -223,7 +226,7 @@ def season_sightings(season, as_of, cutoffs):
         y, doy = fdata.iso_day(r["observed_on"])
         hexid = h3.latlng_to_cell(r["lat"], r["lng"], 4)
         key = (r["user_id"], hexid, r["observed_on"][:10])
-        if y != season or key in seen:
+        if y != season or key in seen or (last_doy is not None and doy > last_doy):
             continue
         seen.add(key)
         cut = cutoffs[band_index(r["lat"])]
@@ -236,26 +239,22 @@ def season_sightings(season, as_of, cutoffs):
 
 
 # ---------------------------------------------------------------- main
-def build(season, as_of, use_forecast, today, prev=None):
-    t0 = time.time()
-    replay = json.loads(REPLAY.read_text())
-    cells = replay["cells"]
-    ff = json.loads(FOLD_FITS.read_text())
-    spec = M.SPECS[ff["spec"]]
-    folds = [dict(f["params"], u=np.array([])) for f in ff["folds"].values()]
-    cuts = [f["cuts"] for f in ff["folds"].values()]
-    eff = json.loads((HERE / "effort_profile.json").read_text())
+def _paths(sp):
+    """A species' replay and fits files. Luna's are read through this module's REPLAY / FOLD_FITS, so a backtest that
+    points those at a subset (leadtime.py) still works."""
+    return (REPLAY, FOLD_FITS) if sp.key == "luna" else (sp.replay, sp.fits)
+
+
+def weather(season, as_of, use_forecast, cells):
+    """The season's weather at every cell, shared by every species: Daymet analog years with real PRISM written over
+    them from the model's first day to as_of, then the 7-day forecast. -> dict, with each analog year's daily
+    degree-days (`inc`, [year] of [cell, day]) and the degree-days banked by as_of (`dd_now`)."""
     off = json.loads((HERE / "prism_offsets.json").read_text())
     if off["cells"] != cells:
         raise SystemExit("prism_offsets.json was built for a different cell list; rerun build_static.py")
     offsets = np.array(off["offsets"])                          # [cell, month, (tmin, tmax)]
-
     clat = np.array([h3.cell_to_latlng(c)[0] for c in cells])
     clng = np.array([h3.cell_to_latlng(c)[1] for c in cells])
-    cstate = [eff["states"].index(s) for s in fdata.state_of(clat, clng)]
-    eprof = np.array(eff["profile"])[cstate]
-    cband = [BAND_LABELS[i] for i in band_index(clat)]
-    bw = band_weights(cells, replay["sightings"])
 
     # 1. analog years (Daymet), the base every trajectory is written onto
     _, years, a_min, a_max = temperature_cube(cells, *ANALOG_YEARS, fdata.DATA / "daymet")
@@ -281,10 +280,8 @@ def build(season, as_of, use_forecast, today, prev=None):
         check_temps("Open-Meteo", f_min, f_max)
     i2 = i1 + f_min.shape[1]
 
-    # 4. 11 weather endings x 11 fits
-    members, band_members, out_now, dd_now = [], [], [], None
-    # past real-minus-forecast errors per scored band-year: onset errors for q05/q25, peak errors for q50 onward
-    resid = [[s["obs_onset"] - s["heat_onset"]] * 2 + [s["obs_peak"] - s["heat_peak"]] * 3 for s in replay["scores"]]
+    # 4. one weather ending per analog year: daily degree-days
+    incs, dd_now = [], None
     for yi in range(len(years)):
         tmin, tmax = a_min[:, yi].astype(float), a_max[:, yi].astype(float)
         if i1 > i0:
@@ -295,6 +292,43 @@ def build(season, as_of, use_forecast, today, prev=None):
         inc[:, :START_DOY - 1] = 0
         if dd_now is None:
             dd_now = np.cumsum(inc, 1)[:, max(i1 - 1, 0)] if i1 > i0 else np.zeros(len(cells))
+        incs.append(inc)
+    return {"cells": cells, "clat": clat, "clng": clng, "years": years, "start": start, "i0": i0, "i1": i1,
+            "f_end": f_end, "forecast_days": int(f_min.shape[1]), "n_borrowed": n_borrowed, "incs": incs,
+            "dd_now": dd_now, "use_forecast": use_forecast}
+
+
+def forecast_species(sp, wx, season, as_of, today, prev=None):
+    """One species' forecast on the shared weather: its 11 frozen fits x the 11 weather endings, summarised as in
+    build() (the live file's layout). prev: that species' last published entry (its sightings if iNat is down)."""
+    t0 = time.time()
+    replay_path, fits_path = _paths(sp)
+    replay = json.loads(replay_path.read_text())
+    cells = replay["cells"]
+    if cells != wx["cells"]:
+        raise SystemExit(f"{sp.key}: its replay's cells differ from the weather's; the live job shares one cell list")
+    if sp.key == "luna":
+        ff = json.loads(fits_path.read_text())
+        spec_name = ff["spec"]
+        folds = [dict(f["params"], u=np.array([])) for f in ff["folds"].values()]
+        cuts = [f["cuts"] for f in ff["folds"].values()]
+        mhash = model_hash()
+    else:
+        spec_name, params, cuts = sp.folds()
+        folds = [dict(p, u=np.array([])) for p in params]
+        mhash = sp.model_hash()
+    spec = M.SPECS[spec_name]
+    eff = json.loads(sp.effort.read_text())
+    clat, years, i0, i1 = wx["clat"], wx["years"], wx["i0"], wx["i1"]
+    cstate = [eff["states"].index(s) for s in fdata.state_of(clat, wx["clng"])]
+    eprof = np.array(eff["profile"])[cstate]
+    cband = [BAND_LABELS[i] for i in band_index(clat)]
+    bw = band_weights(cells, replay["sightings"])
+
+    members, band_members, out_now = [], [], []
+    # past real-minus-forecast errors per scored band-year: onset errors for q05/q25, peak errors for q50 onward
+    resid = [[s["obs_onset"] - s["heat_onset"]] * 2 + [s["obs_peak"] - s["heat_peak"]] * 3 for s in replay["scores"]]
+    for inc in wx["incs"]:
         for p, cut in zip(folds, cuts):
             cut_idx = np.array([cut[b] - 1 for b in cband])
             share = M.cell_sighting_share(p, spec, inc, clat, cut_idx, eprof)
@@ -310,25 +344,27 @@ def build(season, as_of, use_forecast, today, prev=None):
 
     sightings, sightings_ok = [], True
     try:   # an iNat outage should not cost the night's forecast: keep the previous file's dots and flag it
-        sightings = season_sightings(season, min(today, dt.date(season, *SEASON[1])), [b["cutoff"] for b in replay["bands"]])
+        sightings = season_sightings(season, min(today, dt.date(season, *SEASON[1])), [b["cutoff"] for b in replay["bands"]],
+                                     sp.taxon, sp.last_doy)
     except Exception as e:  # noqa: BLE001
-        print(f"WARNING: iNat sightings failed ({e}); keeping the previous file's", flush=True)
+        print(f"WARNING: iNat {sp.key} sightings failed ({e}); keeping the previous file's", flush=True)
         sightings_ok = False
         if prev is not None and prev.get("season") == season:
             sightings = prev.get("sightings", [])
     now = dt.datetime.now(dt.timezone.utc)
+    use_forecast, f_end, start = wx["use_forecast"], wx["f_end"], wx["start"]
     out = {
         "version": 1, "kind": "live", "season": season,
         "generated": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "as_of": as_of.isoformat(), "forecast_through": f_end.isoformat(),
         "backfill": as_of < today - dt.timedelta(days=4),
         "stale_after_hours": 36,
-        "model": {"id": replay["model"]["id"], "spec": ff["spec"], "hash": model_hash(),
+        "model": {"id": replay["model"]["id"], "spec": spec_name, "hash": mhash,
                   "ensemble": f"{len(folds)} leave-one-year-out fits x {len(years)} weather endings ({years[0]}-{years[-1]})",
                   "frozen": "one model for the whole season; never refit in-season"},
         "sources": {
             "observed": "PRISM daily (via RCC-ACIS), adjusted to the Daymet scale the model was fitted on",
-            "forecast": (f"Open-Meteo {f_min.shape[1]}-day forecast (CC BY 4.0)" if use_forecast
+            "forecast": (f"Open-Meteo {wx['forecast_days']}-day forecast (CC BY 4.0)" if use_forecast
                          else "none (rebuilt after the fact: real weather up to the as-of date, then past years)"),
             "after": f"Daymet {years[0]}-{years[-1]}, each year's weather run forward",
             "sightings": "iNaturalist (CC0 / CC BY / CC BY-NC only; research grade and needs-ID)"},
@@ -339,13 +375,55 @@ def build(season, as_of, use_forecast, today, prev=None):
         # dates P3 scores), with the same honest range; scorecard.py grades these once the season's sightings settle
         "bands": bands,
         "out_now": [int(round(100 * v)) for v in np.median(np.array(out_now), 0)],
-        "dd": [int(round(v)) for v in dd_now],
+        "dd": [int(round(v)) for v in wx["dd_now"]],
         "sightings": sightings,
         "checks": {"cells": len(cells), "observed_days": max(0, (as_of - start).days + 1),
-                   "forecast_days": int(f_min.shape[1]), "members": int(days.shape[0]),
-                   "cells_borrowed_weather": n_borrowed, "sightings": len(sightings), "sightings_fresh": sightings_ok,
+                   "forecast_days": wx["forecast_days"], "members": int(days.shape[0]),
+                   "cells_borrowed_weather": wx["n_borrowed"], "sightings": len(sightings), "sightings_fresh": sightings_ok,
                    "seconds": round(time.time() - t0)},
     }
+    return out
+
+
+def build(season, as_of, use_forecast, today, prev=None):
+    """Luna's live file alone (what rehearse.py and leadtime.py rebuild)."""
+    t0 = time.time()
+    wx = weather(season, as_of, use_forecast, json.loads(REPLAY.read_text())["cells"])
+    out = forecast_species(registry.LUNA, wx, season, as_of, today, prev)
+    out["checks"]["seconds"] = round(time.time() - t0)
+    return out
+
+
+def build_all(season, as_of, use_forecast, today, prev=None, keys=None):
+    """The nightly file: luna's forecast at the top level, exactly as build() writes it, and every other species in
+    registry.SPECIES under "species" -> {key: an entry of the same layout, without the shared "cells"}. One weather
+    download serves them all. A species that fails keeps its previous entry (if from this season) and the run says so
+    loudly (checks.species_failed); luna failing fails the run, as before."""
+    t0 = time.time()
+    keys = keys or [s.key for s in registry.SPECIES]
+    wx = weather(season, as_of, use_forecast, json.loads(REPLAY.read_text())["cells"])
+    out = forecast_species(registry.LUNA, wx, season, as_of, today, prev)
+    prev_sp = (prev or {}).get("species") or {}
+    more, failed = {}, []
+    for key in keys:
+        if key == "luna":
+            continue
+        try:
+            e = forecast_species(registry.get(key), wx, season, as_of, today, prev_sp.get(key))
+        except Exception as err:  # noqa: BLE001 -- one species' failure must not cost luna's night
+            print(f"::error::live forecast for {key} failed: {err!r}", flush=True)
+            failed.append(key)
+            old = prev_sp.get(key)
+            if old and old.get("season") == season:
+                more[key] = old
+            continue
+        if e["cells"] == out["cells"]:
+            del e["cells"]                                      # the app reads the top-level cells
+        more[key] = e
+    out["species"] = more
+    out["checks"]["species"] = sorted(more)
+    out["checks"]["species_failed"] = failed
+    out["checks"]["seconds"] = round(time.time() - t0)
     return out
 
 
@@ -361,6 +439,8 @@ def main(argv=None):
     ap.add_argument("--auto", action="store_true", help="nightly mode: this season, newest data, skip off-season")
     ap.add_argument("--out", type=Path, default=OUT)
     ap.add_argument("--prev", type=Path, help="last published file (its sightings are reused if iNat is down)")
+    ap.add_argument("--species", nargs="+", choices=[s.key for s in registry.SPECIES],
+                    help="only these species besides luna (default: every species in registry.py)")
     a = ap.parse_args(argv)
     today = dt.datetime.now(dt.timezone.utc).date()
     season = a.season or today.year
@@ -382,12 +462,14 @@ def main(argv=None):
             prev = json.loads(a.prev.read_text())
         except ValueError:
             prev = None
-    out = build(season, as_of, use_forecast, today, prev)
+    out = build_all(season, as_of, use_forecast, today, prev, a.species)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
     tmp.write_text(json.dumps(out, separators=(",", ":")))
     tmp.replace(a.out)
     print(f"wrote {a.out} ({a.out.stat().st_size / 1024:.0f} KB): {json.dumps(out['checks'])}")
+    for k, e in out["species"].items():
+        print(f"  {k}: {json.dumps(e['checks'])}")
     return 0
 
 

@@ -1,9 +1,12 @@
-import { data, setLiveSightings, toSighting, type ReplayFile } from './lunaData';
+import { data, toSighting, type ReplayFile, type Sighting } from './lunaData';
 
 /**
  * This season's forecast, rebuilt every night by pipeline/live into public/live/latest.json. Fetched after the first
  * paint; anything wrong with it (missing, bad JSON, another version) just means no live option. Only over http(s):
  * the one-file build opened from disk has no files beside it, so it never offers live mode.
+ *
+ * One file for every species: luna's forecast at the top level, every other species' under `species` (same layout,
+ * the cells shared from the top level). A species missing from it, or broken in it, just has no live option.
  */
 
 type Q = (number | null)[] | null;
@@ -31,6 +34,8 @@ interface LiveFile {
   out_now?: (number | null)[];
   dd?: (number | null)[];
   sightings?: ReplayFile['sightings'];
+  /** Every other species' forecast, by species key (src/species.ts), same layout; `cells` may be left to the top level. */
+  species?: Record<string, Partial<LiveFile>>;
 }
 
 export interface Live {
@@ -53,6 +58,8 @@ export interface Live {
   outNow: (number | null)[];
   /** Degree-days banked since 1 March, by as_of. */
   dd: (number | null)[];
+  /** This season's sightings so far (openly licensed iNaturalist records, flag bit 2 = not yet confirmed). */
+  sightings: Sighting[];
 }
 
 const DAY = 86_400_000;
@@ -73,27 +80,27 @@ export const isStale = (live: Live, now: number) =>
   ((Number.isFinite(live.generated) && now - live.generated > live.staleAfterHours * 3_600_000) ||
     Math.floor((now - live.asOf) / DAY) > 3);
 
-/** Turn the file into per-replay-cell arrays. Null when anything needed is missing or the wrong shape. */
-export function parseLive(f: LiveFile): Live | null {
+/** Turn one species' part of the file into per-replay-cell arrays, lined up with `cells` (that species' replay
+ * cells; luna's by default). Null when anything needed is missing or the wrong shape. */
+export function parseLive(f: LiveFile, cells: string[] = data.cells): Live | null {
   if (!f || f.version !== 1 || f.kind !== 'live' || !Number.isInteger(f.season)) return null;
   const asOf = day(f.as_of);
   const n = f.cells?.length;
   if (!Number.isFinite(asOf) || !n || !Array.isArray(f.median) || f.median.length !== n) return null;
   const okLen = (a: unknown[] | undefined) => Array.isArray(a) && a.length === n;
   // Same cell order as the replay file is the deal; if the pipeline ever drifts, line the cells up by id instead.
-  const same = n === data.cells.length && f.cells.every((c, i) => c === data.cells[i]);
+  const same = n === cells.length && f.cells.every((c, i) => c === cells[i]);
   const at = same ? null : new Map(f.cells.map((c, i) => [c, i] as const));
   const align = <T>(a: T[] | undefined, empty: T): T[] => {
-    if (!okLen(a)) return data.cells.map(() => empty);
+    if (!okLen(a)) return cells.map(() => empty);
     if (same) return a!;
-    return data.cells.map((c) => {
+    return cells.map((c) => {
       const i = at!.get(c);
       return i === undefined ? empty : (a![i] ?? empty);
     });
   };
   const median = align<Q>(f.median, null);
   if (!median.some((q) => q && q[0] != null)) return null; // nothing to colour
-  setLiveSightings((Array.isArray(f.sightings) ? f.sightings : []).filter((r) => Array.isArray(r) && r.length >= 6).map(toSighting));
   return {
     season: f.season,
     stub: f.stub === true,
@@ -109,21 +116,36 @@ export function parseLive(f: LiveFile): Live | null {
     hi: align<Q>(f.hi, null),
     outNow: align<number | null>(f.out_now, null),
     dd: align<number | null>(f.dd, null),
+    sightings: (Array.isArray(f.sightings) ? f.sightings : []).filter((r) => Array.isArray(r) && r.length >= 6).map(toSighting),
   };
 }
 
-let loaded: Promise<Live | null> | null = null;
+let loaded: Promise<LiveFile | null> | null = null;
 
-/** The live file, fetched once (never cached stale by the browser: a new one lands every night). */
-export function loadLive(): Promise<Live | null> {
+/** The live file as sent, fetched once for every species (never cached stale by the browser: a new one lands every night). */
+function liveFile(): Promise<LiveFile | null> {
   if (!liveAvailable()) return Promise.resolve(null);
-  loaded ??= (async () => {
-    try {
-      const r = await fetch(new URL(`${import.meta.env.BASE_URL}live/latest.json`, document.baseURI), { cache: 'no-cache' });
-      return r.ok ? parseLive((await r.json()) as LiveFile) : null;
-    } catch {
-      return null;
-    }
-  })();
+  loaded ??= fetch(new URL(`${import.meta.env.BASE_URL}live/latest.json`, document.baseURI), { cache: 'no-cache' })
+    .then((r) => (r.ok ? (r.json() as Promise<LiveFile>) : null))
+    .catch(() => null);
   return loaded;
 }
+
+/** One species' part of the file, whole: its own fields over the shared cells. */
+export const entryFor = (f: LiveFile | null, key: string): LiveFile | null => {
+  if (!f || key === 'luna') return f;
+  const e = f.species?.[key];
+  return e && typeof e === 'object' ? ({ cells: f.cells, ...e } as LiveFile) : null;
+};
+
+/** This season's forecast for one species (`key` from src/species.ts), lined up with its replay's `cells`; null when
+ * the file or its part for that species is missing or broken. */
+export const loadLive = (key = 'luna', cells: string[] = data.cells): Promise<Live | null> =>
+  liveFile().then((f) => {
+    const e = entryFor(f, key);
+    try {
+      return e ? parseLive(e, cells) : null;
+    } catch {
+      return null; // a broken part for one species costs only that species its live option
+    }
+  });

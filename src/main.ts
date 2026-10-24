@@ -36,7 +36,7 @@ function activeDays(p: SeasonProfile): [number, number] | null {
 /**
  * Each species' slider spans its own season, not one fixed April to September for all: the whole months around the
  * days its ribbon has anything in (src/ui/scrubber.ts), so a summer beetle's ribbon isn't 40% empty paper. `s` is the
- * layer's full replay range, which the ribbon's day 0 is; live mode (luna only) keeps its full range.
+ * layer's full replay range, which the ribbon's day 0 is; live mode keeps its full range.
  */
 function fitSeason(layer: HatchLayer, s: TimeSpec): TimeSpec {
   const p = s.asOf ? undefined : layer.profile?.();
@@ -345,22 +345,26 @@ function start() {
 
   // Season picker: switching keeps the cursor on the same calendar day.
   const picker = $<HTMLSelectElement>('season');
-  // This year's live forecast (luna only), once its file has loaded.
+  // This year's live forecast for luna, once its file has loaded. Every species has its own (cur.live()).
   let liveFile: Live | null = null;
   // A ?season=live link opens on the default view until the file arrives: keep "season=live" in the address bar meanwhile.
   let livePending = asked === LIVE;
   // A narrow phone's closed menu shows just the season ("2024"), not its count, which would be cut off ("2024 (1,498
   // beet"); the open menu still lists the counts (style.css).
-  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : modeLabel(picker.value));
+  /** The season menu's words for a mode, with the species on screen's own live forecast. */
+  const label = (m: Mode) => modeLabel(m, cur.live());
+  /** A layer's slider for a mode (live mode: from that layer's own live forecast). */
+  const timeFor = (l: LunaLayer, m: Mode, mo?: number, d?: number) => replayTimeSpec(m, mo, d, clock, l.live());
+  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : label(picker.value));
   const fillPicker = () => {
     const keep = picker.value || initialMode;
-    const live = liveFile && cur === luna ? [LIVE] : [];
+    const live = cur.live() ? [LIVE] : [];
     // The counts are sightings (photos) of the species' own kind (cur.words.countedAs, e.g. first-wave moths), so the
     // menu says "seen", not a number of animals. "All years" goes without one so the closed menu fits a small phone.
-    // This year's forecast is luna's alone so far: say so at the top of the list rather than drop it silently.
-    picker.innerHTML = (__BASEMAP__ && liveFile && cur !== luna ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
+    // A species the nightly file has no forecast for (yet): say so at the top of the list rather than drop it silently.
+    picker.innerHTML = (__BASEMAP__ && liveFile && !cur.live() ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
       [...live, TYPICAL, ...[...years].reverse()]
-        .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
+        .map((m) => `<option value="${m}">${m === LIVE ? label(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
         .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
     face();
@@ -368,7 +372,10 @@ function start() {
   };
   fillPicker();
   // This season, live: "next real season ... days from now" would contradict the map.
-  const syncCountdown = () => ($('countdown').hidden = picker.value === LIVE && !!liveFile && inSeason(liveFile, clock));
+  const syncCountdown = () => {
+    const L = cur.live();
+    $('countdown').hidden = picker.value === LIVE && !!L && inSeason(L, clock);
+  };
   // Live mode opens on its last day of observed weather (or the day a link asks for); the others keep the calendar day.
   const switchMode = (m: Mode, at?: [number, number]) => {
     cur.setMode(m);
@@ -376,10 +383,10 @@ function start() {
     pinned = false;
     resetKeys();
     map.setMarker(null);
-    $('season-name').textContent = modeLabel(m);
+    $('season-name').textContent = label(m);
     face();
     at ??= m === LIVE ? undefined : wantDay;
-    asSwitch(() => registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(m, at?.[0], at?.[1], clock))));
+    asSwitch(() => registry.setTime(cur.id, fitSeason(cur, timeFor(cur, m, at?.[0], at?.[1]))));
     if (!at) wantDay = dayOf(time.cursor); // live opens on its own last observed day: that becomes the day asked for
     updateProbe(); // a card pinned in the old season describes that season: it went with the switch
     syncCountdown();
@@ -411,14 +418,14 @@ function start() {
         return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
       }
       loaded.set(entry.key, layer);
-      registry.register(layer, fitSeason(layer, replayTimeSpec(mode0, 5, 10)), false);
+      registry.register(layer, fitSeason(layer, timeFor(layer, mode0, 5, 10)), false);
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
     speciesSel.value = entry.key;
     if (next === cur) return;
-    // Only luna has a live season: switching to another species from live mode goes to all years, on the same day.
-    if (next !== luna && picker.value === LIVE) {
+    // A species with no live season: switching to it from live mode goes to all years, on the same day.
+    if (!next.live() && picker.value === LIVE) {
       picker.value = TYPICAL;
       $('season-name').textContent = modeLabel(TYPICAL);
     }
@@ -431,6 +438,8 @@ function start() {
     cur = next;
     curKey = entry.key;
     fillPicker();
+    $('season-name').textContent = label(picker.value);
+    face();
     $('tagline').textContent = cur.words.tagline;
     ($('mark') as HTMLImageElement).src = cur.words.mark;
     showMark();
@@ -439,12 +448,19 @@ function start() {
     syncCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur.words.sightingsOf} sightings over hexagons colored by the forecast`);
     asSwitch(() => {
-      registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(picker.value, wantDay[0], wantDay[1])));
+      // Live mode keeps the calendar day too: each species' live forecast can run to its own as-of day.
+      registry.setTime(cur.id, fitSeason(cur, timeFor(cur, picker.value, wantDay[0], wantDay[1])));
       // Old one off first, so the two never draw together for a frame.
       registry.setActive(prev.id, false);
       registry.setActive(cur.id, true);
     });
     syncUrl();
+    // A ?season=live&species=<key> link: that species' live season, once it has loaded with one.
+    if (speciesPending === entry.key && asked === LIVE && cur.live() && picker.value !== LIVE) {
+      picker.value = LIVE;
+      switchMode(LIVE, md ? [month, day] : undefined);
+      syncUrl();
+    }
   };
   // The one-file preview has no species files next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
@@ -465,7 +481,7 @@ function start() {
   // The ribbon covers the layer's full replay range; the slider may span less of it (fitSeason).
   const ribbonNow = () => {
     const p = registry.activeLayers().find((l) => l.profile)?.profile?.();
-    const off = Math.round((time.start - replayTimeSpec(picker.value).start) / TimeAxis.DAY);
+    const off = Math.round((time.start - timeFor(cur, picker.value).start) / TimeAxis.DAY);
     return p && off >= 0 ? cutProfile(p, off, time.steps + 1) : p;
   };
   let ribbonFrame = 0;
@@ -851,7 +867,7 @@ function start() {
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };
 
   // This year's nightly forecast, fetched after the first paint (none in the one-file build, or if the file is missing
-  // or broken). It goes at the top of the season menu (luna only), and becomes the default during its season
+  // or broken). It goes at the top of the season menu (each species finds its own part), and becomes the default during its season
   // (1 Mar - 30 Sep) when the link names no season, day or species, so shared links still open what they showed.
   const cursor0 = time.cursor;
   void loadLive().then((live) => {
@@ -861,7 +877,7 @@ function start() {
     setLive(live);
     liveFile = live;
     fillPicker();
-    if (cur !== luna || speciesPending) return syncUrl(); // only luna has a live season
+    if (cur !== luna || speciesPending) return syncUrl(); // the default switch is luna's first view only
     if (picker.value !== initialMode || time.cursor !== cursor0) return syncUrl(); // the user got there first: leave their choice
     const explicit = params.has('season') || params.has('year') || params.has('date') || params.has('species');
     if (asked !== LIVE && (explicit || !inSeason(live, clock))) return syncUrl();

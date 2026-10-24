@@ -1,5 +1,6 @@
 import type { LunaLayer } from './layers/lunaReplay';
 import type { Mode } from './layers/replayData';
+import { loadLive } from './layers/liveData';
 
 /**
  * Every species Hatch can show, in menu order: the one list the species menu, the ?species= link and the loading
@@ -7,7 +8,8 @@ import type { Mode } from './layers/replayData';
  * parallel) the first time someone picks it, so the first load never grows with the list.
  *
  * Adding a species: its data (pipeline/species, which writes public/species/<key>/), a config with its words and
- * sketch (src/species/<key>.ts, a SpeciesConfig), and one entry here.
+ * sketch (src/species/<key>.ts, a SpeciesConfig), and one entry here. Its live season comes with it once the nightly
+ * job forecasts it (pipeline/live/registry.py): the loader picks its part of public/live/latest.json by `key`.
  */
 export interface SpeciesEntry {
   /** The ?species= value; layer ids start with it. */
@@ -21,14 +23,17 @@ export interface SpeciesEntry {
 }
 
 // The one-file build has no species files beside it and offers luna only, so the loaders (and the species code
-// they pull in) are left out of it.
+// they pull in) are left out of it. The live file is the one luna already fetches (fetched once for every species).
 const lazy = (config: () => Promise<{ config: import('./layers/oneGeneration').SpeciesConfig }>, file: string): SpeciesEntry['load'] =>
   __BASEMAP__
     ? async (mode, onData) => {
         const url = `${import.meta.env.BASE_URL}${file}`;
+        void loadLive(); // the live file on its way alongside (one fetch for every species)
         const json = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const [{ config: cfg }, gen, data] = await Promise.all([config(), import('./layers/oneGeneration'), json]);
-        return gen.isReplay(data) ? gen.createOneGenerationLayer(cfg, data, mode, onData) : null;
+        if (!gen.isReplay(data)) return null;
+        const live = await loadLive(cfg.key, data.cells);
+        return gen.createOneGenerationLayer(cfg, data, mode, onData, live);
       }
     : undefined;
 

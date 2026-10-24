@@ -70,7 +70,7 @@ export const { sightings, bandOf } = luna;
 
 /** Live sightings only: not yet confirmed by other iNaturalist users (needs ID). Drawn a little fainter. */
 export const UNCONFIRMED = 4;
-/** This season, forecast every night from the weather so far (public/live/latest.json). Luna only. */
+/** This season, forecast every night from the weather so far (public/live/latest.json): every species with a part in it. */
 export const LIVE: Mode = 'live';
 
 /** This season so far, from public/live/latest.json (src/layers/liveData.ts); empty until that file arrives. */
