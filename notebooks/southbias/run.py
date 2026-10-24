@@ -3,7 +3,7 @@
 
     python3 notebooks/southbias/run.py [--workers 4]
 
-Stage 1 refits P4 (gate) and the two-clock mixture in every fold (about 40 min on 4 cores; cached in
+Stage 1 refits P4 (gate) and the two-clock mixture in every fold (about 1.5-2 h on 4 cores; cached in
 notebooks/data/southbias_cache/, gitignored). P3 itself is never refitted: its stored fold fits are used.
 Stage 2 predicts and scores everything and writes results/. Inputs as pipeline/fit/south_bias.py (cached data only).
 """
