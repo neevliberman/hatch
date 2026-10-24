@@ -48,6 +48,9 @@ MAX_DOY = 300
 FORECAST_DAYS = 7
 MIN_FORECAST_DAYS = 5           # fewer complete Open-Meteo days than this -> fail loudly
 SEASON = ((3, 2), (10, 7))      # --auto runs between these (month, day) dates; outside, the last file stands
+PRISM_LAG_DAYS = 3              # the morning job's newest full weather day is today - 3: ACIS has PRISM through about
+                                # today - 2 (its day ends at 7 am and posts later that day), and that date's high belongs
+                                # to the day before (sources.weather_days). Backtests use the same lag.
 MAX_BAD_CELLS = 0.02            # more cells than this with no observed weather -> fail loudly
 TAXON = 47916
 LICENCES = ("cc0", "cc-by", "cc-by-nc")

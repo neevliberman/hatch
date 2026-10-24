@@ -133,6 +133,31 @@ def test_scorecard_summary_counts():
     assert s["miss"] is not None and s["calendar_miss"] is not None
 
 
+def test_scored_strip_is_frozen_against_late_uploads():
+    replay = {"bands": [{"label": "37-39", "cutoff": 177}],
+              "scores": [{"band": "37-39", "obs_onset": 100, "obs_peak": 120}]}
+    df = raw(30, 125)
+    df["observed_on"] = [S.doy_date(SEASON, 110 + i).isoformat() for i in range(30)]
+    df["created_at"] = df["observed_on"]
+    es = [entry("2027-03-20", 112, 125)]
+    first = S.scorecard(SEASON, df, es, dt.date(2027, 8, 2), replay)
+    row = first["layers"]["luna"]["bands"][0]
+    assert row["status"] == "scored" and row["scored_on"] == "2027-08-02"
+    # a week later, 30 late uploads of early-June records would move the real peak, but the published row stays
+    late = raw(30, 160)
+    late["id"] = late["user_id"] = range(100, 130)
+    late["created_at"] = "2027-08-05"
+    more = pd.concat([df, late], ignore_index=True)
+    assert S.scorecard(SEASON, more, es, dt.date(2027, 8, 9), replay)["layers"]["luna"]["bands"][0]["peak"]["real"] > 140
+    nxt = S.scorecard(SEASON, more, es, dt.date(2027, 8, 9), replay, prev=first)
+    assert nxt["layers"]["luna"]["bands"][0] == row and nxt["score_date"] == "2027-08-09"
+    assert nxt["layers"]["luna"]["summary"]["miss"] == first["layers"]["luna"]["summary"]["miss"]
+    # nothing is frozen from another season, another model, or a later week's file
+    assert S.frozen_rows({**first, "season": SEASON + 1}, SEASON, "luna", MODEL, dt.date(2027, 8, 9)) == {}
+    assert S.frozen_rows(first, SEASON, "luna", {"id": "x", "hash": "y"}, dt.date(2027, 8, 9)) == {}
+    assert S.frozen_rows(first, SEASON, "luna", MODEL, dt.date(2027, 7, 26)) == {}
+
+
 def test_archive_entry_keeps_model_and_bands(tmp_path):
     live = {"season": SEASON, "generated": "2027-05-02T13:40:00Z", "as_of": "2027-05-01",
             "model": {"id": "p3-v1", "spec": "p3_photo", "hash": "abc"}, "bands": entry("x", 1, 2)["bands"]}

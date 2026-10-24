@@ -4,37 +4,41 @@
    "issue": "04-01",
    "strips": 17,
    "analogs": 5.0,
-   "gfs": 4.8,
-   "perfect": 4.7,
+   "gfs": 4.7,
+   "perfect": 4.8,
    "calendar": 6.2,
-   "beat_calendar": 11
+   "beat_calendar": 12,
+   "beat_calendar_variant": "gfs"
   },
   {
    "issue": "04-15",
    "strips": 13,
    "analogs": 4.5,
-   "gfs": 4.5,
-   "perfect": 4.3,
+   "gfs": 4.4,
+   "perfect": 4.2,
    "calendar": 5.3,
-   "beat_calendar": 9
+   "beat_calendar": 9,
+   "beat_calendar_variant": "gfs"
   },
   {
    "issue": "05-01",
    "strips": 7,
    "analogs": 3.1,
-   "gfs": 3.3,
-   "perfect": 3.1,
+   "gfs": 3.4,
+   "perfect": 3.4,
    "calendar": 3.8,
-   "beat_calendar": 4
+   "beat_calendar": 4,
+   "beat_calendar_variant": "gfs"
   },
   {
    "issue": "05-15",
    "strips": 4,
-   "analogs": 3.9,
-   "gfs": 3.5,
-   "perfect": 4.2,
+   "analogs": 3.2,
+   "gfs": 3.9,
+   "perfect": 4.1,
    "calendar": 2.3,
-   "beat_calendar": 1
+   "beat_calendar": 1,
+   "beat_calendar_variant": "gfs"
   }
  ],
  "by_lead": [
@@ -44,9 +48,9 @@
     14
    ],
    "dates": 7,
-   "analogs": 2.9,
-   "gfs": 3.3,
-   "perfect": 2.7,
+   "analogs": 3.7,
+   "gfs": 3.7,
+   "perfect": 3.0,
    "calendar": 8.9
   },
   {
@@ -55,9 +59,9 @@
     28
    ],
    "dates": 16,
-   "analogs": 6.8,
-   "gfs": 6.4,
-   "perfect": 6.1,
+   "analogs": 6.2,
+   "gfs": 6.3,
+   "perfect": 6.4,
    "calendar": 6.8
   },
   {
@@ -66,9 +70,9 @@
     42
    ],
    "dates": 23,
-   "analogs": 5.3,
-   "gfs": 5.3,
-   "perfect": 5.4,
+   "analogs": 5.4,
+   "gfs": 5.2,
+   "perfect": 5.2,
    "calendar": 6.0
   },
   {
@@ -77,9 +81,9 @@
     63
    ],
    "dates": 22,
-   "analogs": 3.3,
-   "gfs": 3.4,
-   "perfect": 3.5,
+   "analogs": 3.4,
+   "gfs": 3.3,
+   "perfect": 3.4,
    "calendar": 3.8
   },
   {
@@ -88,9 +92,9 @@
     200
    ],
    "dates": 14,
-   "analogs": 2.5,
+   "analogs": 2.4,
    "gfs": 2.4,
-   "perfect": 2.3,
+   "perfect": 2.4,
    "calendar": 2.1
   }
  ],
@@ -101,10 +105,10 @@
    "variant": "analogs",
    "band": "37-39",
    "status": "scored",
-   "miss": 1.6,
+   "miss": 1.1,
    "calendar_miss": 5.0,
    "peak_error": -1.0,
-   "onset_error": 2.2
+   "onset_error": 1.2
   },
   {
    "season": 2023,
@@ -156,10 +160,10 @@
    "variant": "gfs",
    "band": "37-39",
    "status": "scored",
-   "miss": 1.1,
+   "miss": 0.6,
    "calendar_miss": 5.0,
    "peak_error": -1.0,
-   "onset_error": 1.2
+   "onset_error": 0.2
   },
   {
    "season": 2023,
@@ -178,10 +182,10 @@
    "variant": "gfs",
    "band": "41-43",
    "status": "scored",
-   "miss": 2.0,
+   "miss": 1.5,
    "calendar_miss": 5.0,
    "peak_error": -3.0,
-   "onset_error": 1.0
+   "onset_error": 0.0
   },
   {
    "season": 2023,
@@ -211,10 +215,10 @@
    "variant": "perfect",
    "band": "37-39",
    "status": "scored",
-   "miss": 1.9,
+   "miss": 2.9,
    "calendar_miss": 5.0,
-   "peak_error": -3.0,
-   "onset_error": -0.8
+   "peak_error": -2.0,
+   "onset_error": -3.8
   },
   {
    "season": 2023,
@@ -288,10 +292,10 @@
    "variant": "analogs",
    "band": "41-43",
    "status": "scored",
-   "miss": 4.0,
+   "miss": 3.0,
    "calendar_miss": 5.0,
    "peak_error": -4.0,
-   "onset_error": -4.0
+   "onset_error": -2.0
   },
   {
    "season": 2023,
@@ -332,9 +336,9 @@
    "variant": "gfs",
    "band": "39-41",
    "status": "scored",
-   "miss": 1.0,
+   "miss": 1.5,
    "calendar_miss": 3.3,
-   "peak_error": 0.0,
+   "peak_error": 1.0,
    "onset_error": 2.0
   },
   {
@@ -387,9 +391,9 @@
    "variant": "perfect",
    "band": "39-41",
    "status": "scored",
-   "miss": 1.0,
+   "miss": 0.5,
    "calendar_miss": 3.3,
-   "peak_error": -1.0,
+   "peak_error": 0.0,
    "onset_error": 1.0
   },
   {
@@ -398,9 +402,9 @@
    "variant": "perfect",
    "band": "41-43",
    "status": "scored",
-   "miss": 5.0,
+   "miss": 4.5,
    "calendar_miss": 5.0,
-   "peak_error": -6.0,
+   "peak_error": -5.0,
    "onset_error": -4.0
   },
   {
@@ -420,10 +424,10 @@
    "variant": "perfect",
    "band": "45-49",
    "status": "scored",
-   "miss": 5.7,
+   "miss": 5.2,
    "calendar_miss": 3.1,
    "peak_error": 4.0,
-   "onset_error": -7.4
+   "onset_error": -6.4
   },
   {
    "season": 2023,
@@ -563,9 +567,9 @@
    "variant": "perfect",
    "band": "41-43",
    "status": "scored",
-   "miss": 2.5,
+   "miss": 2.0,
    "calendar_miss": 5.0,
-   "peak_error": -4.0,
+   "peak_error": -3.0,
    "onset_error": 1.0
   },
   {
@@ -640,10 +644,10 @@
    "variant": "analogs",
    "band": "45-49",
    "status": "scored",
-   "miss": 5.2,
+   "miss": 4.7,
    "calendar_miss": 3.1,
    "peak_error": 4.0,
-   "onset_error": -6.4
+   "onset_error": -5.4
   },
   {
    "season": 2023,
@@ -695,9 +699,9 @@
    "variant": "gfs",
    "band": "45-49",
    "status": "scored",
-   "miss": 6.2,
+   "miss": 5.7,
    "calendar_miss": 3.1,
-   "peak_error": 5.0,
+   "peak_error": 4.0,
    "onset_error": -7.4
   },
   {
@@ -750,9 +754,9 @@
    "variant": "perfect",
    "band": "45-49",
    "status": "scored",
-   "miss": 6.2,
+   "miss": 5.7,
    "calendar_miss": 3.1,
-   "peak_error": 5.0,
+   "peak_error": 4.0,
    "onset_error": -7.4
   },
   {
@@ -937,10 +941,10 @@
    "variant": "analogs",
    "band": "39-41",
    "status": "scored",
-   "miss": 11.0,
+   "miss": 11.5,
    "calendar_miss": 14.0,
    "peak_error": 13.0,
-   "onset_error": 9.0
+   "onset_error": 10.0
   },
   {
    "season": 2024,
@@ -992,10 +996,10 @@
    "variant": "gfs",
    "band": "39-41",
    "status": "scored",
-   "miss": 10.5,
+   "miss": 11.0,
    "calendar_miss": 14.0,
    "peak_error": 12.0,
-   "onset_error": 9.0
+   "onset_error": 10.0
   },
   {
    "season": 2024,
@@ -1124,10 +1128,10 @@
    "variant": "analogs",
    "band": "43-45",
    "status": "scored",
-   "miss": 6.7,
+   "miss": 6.2,
    "calendar_miss": 7.1,
    "peak_error": 6.0,
-   "onset_error": 7.4
+   "onset_error": 6.4
   },
   {
    "season": 2024,
@@ -1168,10 +1172,10 @@
    "variant": "gfs",
    "band": "41-43",
    "status": "scored",
-   "miss": 10.0,
+   "miss": 9.0,
    "calendar_miss": 9.1,
    "peak_error": 10.0,
-   "onset_error": 10.0
+   "onset_error": 8.0
   },
   {
    "season": 2024,
@@ -1190,10 +1194,10 @@
    "variant": "gfs",
    "band": "45-49",
    "status": "scored",
-   "miss": 0.5,
+   "miss": 1.0,
    "calendar_miss": 3.7,
    "peak_error": 0.0,
-   "onset_error": -1.0
+   "onset_error": -2.0
   },
   {
    "season": 2024,
@@ -1223,10 +1227,10 @@
    "variant": "perfect",
    "band": "41-43",
    "status": "scored",
-   "miss": 8.5,
+   "miss": 8.0,
    "calendar_miss": 9.1,
    "peak_error": 10.0,
-   "onset_error": 7.0
+   "onset_error": 6.0
   },
   {
    "season": 2024,
@@ -1344,10 +1348,10 @@
    "variant": "gfs",
    "band": "43-45",
    "status": "scored",
-   "miss": 4.7,
+   "miss": 5.7,
    "calendar_miss": 7.1,
-   "peak_error": 4.0,
-   "onset_error": 5.4
+   "peak_error": 5.0,
+   "onset_error": 6.4
   },
   {
    "season": 2024,
@@ -1355,9 +1359,9 @@
    "variant": "gfs",
    "band": "45-49",
    "status": "scored",
-   "miss": 1.0,
+   "miss": 0.5,
    "calendar_miss": 3.7,
-   "peak_error": -1.0,
+   "peak_error": 0.0,
    "onset_error": -1.0
   },
   {
@@ -1399,10 +1403,10 @@
    "variant": "perfect",
    "band": "43-45",
    "status": "scored",
-   "miss": 4.2,
+   "miss": 5.2,
    "calendar_miss": 7.1,
-   "peak_error": 4.0,
-   "onset_error": 4.4
+   "peak_error": 5.0,
+   "onset_error": 5.4
   },
   {
    "season": 2024,
@@ -1465,10 +1469,10 @@
    "variant": "analogs",
    "band": "45-49",
    "status": "scored",
-   "miss": 1.0,
+   "miss": 0.5,
    "calendar_miss": 3.7,
    "peak_error": 0.0,
-   "onset_error": -2.0
+   "onset_error": -1.0
   },
   {
    "season": 2024,
@@ -1522,8 +1526,8 @@
    "status": "scored",
    "miss": 1.0,
    "calendar_miss": 3.7,
-   "peak_error": -2.0,
-   "onset_error": 0.0
+   "peak_error": -1.0,
+   "onset_error": -1.0
   },
   {
    "season": 2024,
@@ -1577,8 +1581,8 @@
    "status": "scored",
    "miss": 1.5,
    "calendar_miss": 3.7,
-   "peak_error": -2.0,
-   "onset_error": -1.0
+   "peak_error": -1.0,
+   "onset_error": -2.0
   },
   {
    "season": 2024,
@@ -1751,10 +1755,10 @@
    "variant": "analogs",
    "band": "37-39",
    "status": "scored",
-   "miss": 4.4,
+   "miss": 3.9,
    "calendar_miss": 1.9,
    "peak_error": -1.0,
-   "onset_error": -7.8
+   "onset_error": -6.8
   },
   {
    "season": 2025,
@@ -1762,10 +1766,10 @@
    "variant": "analogs",
    "band": "39-41",
    "status": "scored",
-   "miss": 7.0,
+   "miss": 6.0,
    "calendar_miss": 6.7,
    "peak_error": 7.0,
-   "onset_error": -7.0
+   "onset_error": -5.0
   },
   {
    "season": 2025,
@@ -1773,10 +1777,10 @@
    "variant": "analogs",
    "band": "41-43",
    "status": "scored",
-   "miss": 6.0,
+   "miss": 6.5,
    "calendar_miss": 8.7,
    "peak_error": 8.0,
-   "onset_error": 4.0
+   "onset_error": 5.0
   },
   {
    "season": 2025,
@@ -1795,9 +1799,9 @@
    "variant": "analogs",
    "band": "45-49",
    "status": "scored",
-   "miss": 3.0,
+   "miss": 2.5,
    "calendar_miss": 1.9,
-   "peak_error": 1.0,
+   "peak_error": 0.0,
    "onset_error": -5.0
   },
   {
@@ -1806,10 +1810,10 @@
    "variant": "gfs",
    "band": "37-39",
    "status": "scored",
-   "miss": 3.9,
+   "miss": 4.9,
    "calendar_miss": 1.9,
    "peak_error": -2.0,
-   "onset_error": -5.8
+   "onset_error": -7.8
   },
   {
    "season": 2025,
@@ -1828,10 +1832,10 @@
    "variant": "gfs",
    "band": "41-43",
    "status": "scored",
-   "miss": 7.0,
+   "miss": 6.5,
    "calendar_miss": 8.7,
    "peak_error": 8.0,
-   "onset_error": 6.0
+   "onset_error": 5.0
   },
   {
    "season": 2025,
@@ -1839,10 +1843,10 @@
    "variant": "gfs",
    "band": "43-45",
    "status": "scored",
-   "miss": 2.3,
+   "miss": 3.3,
    "calendar_miss": 5.4,
-   "peak_error": 0.0,
-   "onset_error": 4.6
+   "peak_error": -1.0,
+   "onset_error": 5.6
   },
   {
    "season": 2025,
@@ -1863,8 +1867,8 @@
    "status": "scored",
    "miss": 4.4,
    "calendar_miss": 1.9,
-   "peak_error": -3.0,
-   "onset_error": -5.8
+   "peak_error": -2.0,
+   "onset_error": -6.8
   },
   {
    "season": 2025,
@@ -1883,10 +1887,10 @@
    "variant": "perfect",
    "band": "41-43",
    "status": "scored",
-   "miss": 7.0,
+   "miss": 6.5,
    "calendar_miss": 8.7,
    "peak_error": 8.0,
-   "onset_error": 6.0
+   "onset_error": 5.0
   },
   {
    "season": 2025,
@@ -1894,9 +1898,9 @@
    "variant": "perfect",
    "band": "43-45",
    "status": "scored",
-   "miss": 2.8,
+   "miss": 3.3,
    "calendar_miss": 5.4,
-   "peak_error": 0.0,
+   "peak_error": -1.0,
    "onset_error": 5.6
   },
   {
@@ -1930,7 +1934,7 @@
    "miss": 4.0,
    "calendar_miss": 6.7,
    "peak_error": 7.0,
-   "onset_error": 1.0
+   "onset_error": -1.0
   },
   {
    "season": 2025,
@@ -1938,10 +1942,10 @@
    "variant": "analogs",
    "band": "41-43",
    "status": "scored",
-   "miss": 8.0,
+   "miss": 9.0,
    "calendar_miss": 8.7,
    "peak_error": 9.0,
-   "onset_error": 7.0
+   "onset_error": 9.0
   },
   {
    "season": 2025,
@@ -1949,10 +1953,10 @@
    "variant": "analogs",
    "band": "43-45",
    "status": "scored",
-   "miss": 3.8,
+   "miss": 2.8,
    "calendar_miss": 5.4,
    "peak_error": 0.0,
-   "onset_error": 7.6
+   "onset_error": 5.6
   },
   {
    "season": 2025,
@@ -1982,10 +1986,10 @@
    "variant": "gfs",
    "band": "39-41",
    "status": "scored",
-   "miss": 5.5,
+   "miss": 4.5,
    "calendar_miss": 6.7,
-   "peak_error": 9.0,
-   "onset_error": 2.0
+   "peak_error": 8.0,
+   "onset_error": 1.0
   },
   {
    "season": 2025,
@@ -1993,10 +1997,10 @@
    "variant": "gfs",
    "band": "41-43",
    "status": "scored",
-   "miss": 10.0,
+   "miss": 9.5,
    "calendar_miss": 8.7,
    "peak_error": 10.0,
-   "onset_error": 10.0
+   "onset_error": 9.0
   },
   {
    "season": 2025,
@@ -2037,10 +2041,10 @@
    "variant": "perfect",
    "band": "39-41",
    "status": "scored",
-   "miss": 4.5,
+   "miss": 4.0,
    "calendar_miss": 6.7,
    "peak_error": 8.0,
-   "onset_error": -1.0
+   "onset_error": 0.0
   },
   {
    "season": 2025,
@@ -2048,10 +2052,10 @@
    "variant": "perfect",
    "band": "41-43",
    "status": "scored",
-   "miss": 9.0,
+   "miss": 9.5,
    "calendar_miss": 8.7,
    "peak_error": 10.0,
-   "onset_error": 8.0
+   "onset_error": 9.0
   },
   {
    "season": 2025,
@@ -2171,8 +2175,8 @@
    "status": "scored",
    "miss": 4.3,
    "calendar_miss": 5.4,
-   "peak_error": -1.0,
-   "onset_error": 7.6
+   "peak_error": 0.0,
+   "onset_error": 8.6
   },
   {
    "season": 2025,
@@ -2226,8 +2230,8 @@
    "status": "scored",
    "miss": 3.8,
    "calendar_miss": 5.4,
-   "peak_error": -1.0,
-   "onset_error": 6.6
+   "peak_error": 0.0,
+   "onset_error": 7.6
   },
   {
    "season": 2025,
@@ -2235,9 +2239,9 @@
    "variant": "perfect",
    "band": "45-49",
    "status": "scored",
-   "miss": 2.5,
+   "miss": 3.0,
    "calendar_miss": 1.9,
-   "peak_error": 0.0,
+   "peak_error": 1.0,
    "onset_error": -5.0
   },
   {
@@ -2290,6 +2294,116 @@
    "variant": "analogs",
    "band": "45-49",
    "status": "scored",
+   "miss": 5.0,
+   "calendar_miss": 1.9,
+   "peak_error": -2.0,
+   "onset_error": -8.0
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "gfs",
+   "band": "37-39",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "gfs",
+   "band": "39-41",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "gfs",
+   "band": "41-43",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "gfs",
+   "band": "43-45",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "gfs",
+   "band": "45-49",
+   "status": "scored",
+   "miss": 6.0,
+   "calendar_miss": 1.9,
+   "peak_error": -3.0,
+   "onset_error": -9.0
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "perfect",
+   "band": "37-39",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "perfect",
+   "band": "39-41",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "perfect",
+   "band": "41-43",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "perfect",
+   "band": "43-45",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2025,
+   "issue": "05-15",
+   "variant": "perfect",
+   "band": "45-49",
+   "status": "scored",
    "miss": 6.5,
    "calendar_miss": 1.9,
    "peak_error": -3.0,
@@ -2297,116 +2411,6 @@
   },
   {
    "season": 2025,
-   "issue": "05-15",
-   "variant": "gfs",
-   "band": "37-39",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "gfs",
-   "band": "39-41",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "gfs",
-   "band": "41-43",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "gfs",
-   "band": "43-45",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "gfs",
-   "band": "45-49",
-   "status": "scored",
-   "miss": 4.5,
-   "calendar_miss": 1.9,
-   "peak_error": -2.0,
-   "onset_error": -7.0
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "perfect",
-   "band": "37-39",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "perfect",
-   "band": "39-41",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "perfect",
-   "band": "41-43",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "perfect",
-   "band": "43-45",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2025,
-   "issue": "05-15",
-   "variant": "perfect",
-   "band": "45-49",
-   "status": "scored",
-   "miss": 6.5,
-   "calendar_miss": 1.9,
-   "peak_error": -4.0,
-   "onset_error": -9.0
-  },
-  {
-   "season": 2025,
    "issue": "06-01",
    "variant": "analogs",
    "band": "37-39",
@@ -2587,10 +2591,10 @@
    "variant": "analogs",
    "band": "39-41",
    "status": "scored",
-   "miss": 7.5,
+   "miss": 8.5,
    "calendar_miss": 15.5,
    "peak_error": 11.0,
-   "onset_error": 4.0
+   "onset_error": 6.0
   },
   {
    "season": 2026,
@@ -2598,69 +2602,69 @@
    "variant": "analogs",
    "band": "41-43",
    "status": "scored",
-   "miss": 6.1,
+   "miss": 6.6,
    "calendar_miss": 8.9,
    "peak_error": 2.0,
-   "onset_error": 10.2
-  },
-  {
-   "season": 2026,
-   "issue": "04-01",
-   "variant": "analogs",
-   "band": "43-45",
-   "status": "scored",
-   "miss": 5.5,
-   "calendar_miss": 6.1,
-   "peak_error": -0.5,
-   "onset_error": 10.6
-  },
-  {
-   "season": 2026,
-   "issue": "04-01",
-   "variant": "analogs",
-   "band": "45-49",
-   "status": "scored",
-   "miss": 3.8,
-   "calendar_miss": 0.4,
-   "peak_error": 0.5,
-   "onset_error": -7.0
-  },
-  {
-   "season": 2026,
-   "issue": "04-01",
-   "variant": "gfs",
-   "band": "37-39",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2026,
-   "issue": "04-01",
-   "variant": "gfs",
-   "band": "39-41",
-   "status": "scored",
-   "miss": 6.5,
-   "calendar_miss": 15.5,
-   "peak_error": 9.0,
-   "onset_error": 4.0
-  },
-  {
-   "season": 2026,
-   "issue": "04-01",
-   "variant": "gfs",
-   "band": "41-43",
-   "status": "scored",
-   "miss": 6.1,
-   "calendar_miss": 8.9,
-   "peak_error": 1.0,
    "onset_error": 11.2
   },
   {
    "season": 2026,
    "issue": "04-01",
+   "variant": "analogs",
+   "band": "43-45",
+   "status": "scored",
+   "miss": 6.0,
+   "calendar_miss": 6.1,
+   "peak_error": 0.5,
+   "onset_error": 11.6
+  },
+  {
+   "season": 2026,
+   "issue": "04-01",
+   "variant": "analogs",
+   "band": "45-49",
+   "status": "scored",
+   "miss": 3.8,
+   "calendar_miss": 0.4,
+   "peak_error": 0.5,
+   "onset_error": -7.0
+  },
+  {
+   "season": 2026,
+   "issue": "04-01",
+   "variant": "gfs",
+   "band": "37-39",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2026,
+   "issue": "04-01",
+   "variant": "gfs",
+   "band": "39-41",
+   "status": "scored",
+   "miss": 6.0,
+   "calendar_miss": 15.5,
+   "peak_error": 9.0,
+   "onset_error": 3.0
+  },
+  {
+   "season": 2026,
+   "issue": "04-01",
+   "variant": "gfs",
+   "band": "41-43",
+   "status": "scored",
+   "miss": 4.6,
+   "calendar_miss": 8.9,
+   "peak_error": 1.0,
+   "onset_error": 8.2
+  },
+  {
+   "season": 2026,
+   "issue": "04-01",
    "variant": "gfs",
    "band": "43-45",
    "status": "scored",
@@ -2697,76 +2701,76 @@
    "variant": "perfect",
    "band": "39-41",
    "status": "scored",
-   "miss": 5.0,
+   "miss": 6.0,
    "calendar_miss": 15.5,
-   "peak_error": 8.0,
-   "onset_error": 2.0
+   "peak_error": 9.0,
+   "onset_error": 3.0
   },
   {
    "season": 2026,
    "issue": "04-01",
    "variant": "perfect",
+   "band": "41-43",
+   "status": "scored",
+   "miss": 5.1,
+   "calendar_miss": 8.9,
+   "peak_error": 1.0,
+   "onset_error": 9.2
+  },
+  {
+   "season": 2026,
+   "issue": "04-01",
+   "variant": "perfect",
+   "band": "43-45",
+   "status": "scored",
+   "miss": 5.5,
+   "calendar_miss": 6.1,
+   "peak_error": 0.5,
+   "onset_error": 10.6
+  },
+  {
+   "season": 2026,
+   "issue": "04-01",
+   "variant": "perfect",
+   "band": "45-49",
+   "status": "scored",
+   "miss": 3.2,
+   "calendar_miss": 0.4,
+   "peak_error": 0.5,
+   "onset_error": -6.0
+  },
+  {
+   "season": 2026,
+   "issue": "04-15",
+   "variant": "analogs",
+   "band": "37-39",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2026,
+   "issue": "04-15",
+   "variant": "analogs",
+   "band": "39-41",
+   "status": "no_forecast",
+   "miss": null,
+   "calendar_miss": null,
+   "peak_error": null,
+   "onset_error": null
+  },
+  {
+   "season": 2026,
+   "issue": "04-15",
+   "variant": "analogs",
    "band": "41-43",
    "status": "scored",
    "miss": 5.6,
    "calendar_miss": 8.9,
-   "peak_error": 1.0,
-   "onset_error": 10.2
-  },
-  {
-   "season": 2026,
-   "issue": "04-01",
-   "variant": "perfect",
-   "band": "43-45",
-   "status": "scored",
-   "miss": 5.5,
-   "calendar_miss": 6.1,
-   "peak_error": 0.5,
-   "onset_error": 10.6
-  },
-  {
-   "season": 2026,
-   "issue": "04-01",
-   "variant": "perfect",
-   "band": "45-49",
-   "status": "scored",
-   "miss": 3.2,
-   "calendar_miss": 0.4,
-   "peak_error": 0.5,
-   "onset_error": -6.0
-  },
-  {
-   "season": 2026,
-   "issue": "04-15",
-   "variant": "analogs",
-   "band": "37-39",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2026,
-   "issue": "04-15",
-   "variant": "analogs",
-   "band": "39-41",
-   "status": "no_forecast",
-   "miss": null,
-   "calendar_miss": null,
-   "peak_error": null,
-   "onset_error": null
-  },
-  {
-   "season": 2026,
-   "issue": "04-15",
-   "variant": "analogs",
-   "band": "41-43",
-   "status": "scored",
-   "miss": 3.1,
-   "calendar_miss": 8.9,
-   "peak_error": 1.0,
-   "onset_error": 5.2
+   "peak_error": 2.0,
+   "onset_error": 9.2
   },
   {
    "season": 2026,
@@ -2785,9 +2789,9 @@
    "variant": "analogs",
    "band": "45-49",
    "status": "scored",
-   "miss": 3.8,
+   "miss": 3.2,
    "calendar_miss": 0.4,
-   "peak_error": 1.5,
+   "peak_error": 0.5,
    "onset_error": -6.0
   },
   {
@@ -2818,10 +2822,10 @@
    "variant": "gfs",
    "band": "41-43",
    "status": "scored",
-   "miss": 0.6,
+   "miss": 1.4,
    "calendar_miss": 8.9,
-   "peak_error": 1.0,
-   "onset_error": 0.2
+   "peak_error": 0.0,
+   "onset_error": -2.8
   },
   {
    "season": 2026,
@@ -2829,10 +2833,10 @@
    "variant": "gfs",
    "band": "43-45",
    "status": "scored",
-   "miss": 5.5,
+   "miss": 5.0,
    "calendar_miss": 6.1,
    "peak_error": -1.5,
-   "onset_error": 9.6
+   "onset_error": 8.6
   },
   {
    "season": 2026,
@@ -2952,7 +2956,7 @@
    "status": "scored",
    "miss": 3.8,
    "calendar_miss": 0.4,
-   "peak_error": -0.5,
+   "peak_error": 0.5,
    "onset_error": -7.0
   },
   {
@@ -3060,10 +3064,10 @@
    "variant": "perfect",
    "band": "45-49",
    "status": "scored",
-   "miss": 3.2,
+   "miss": 3.8,
    "calendar_miss": 0.4,
    "peak_error": 0.5,
-   "onset_error": -6.0
+   "onset_error": -7.0
   },
   {
    "season": 2026,
@@ -3170,10 +3174,10 @@
    "variant": "gfs",
    "band": "45-49",
    "status": "scored",
-   "miss": 2.2,
+   "miss": 2.8,
    "calendar_miss": 0.4,
    "peak_error": 2.5,
-   "onset_error": -2.0
+   "onset_error": -3.0
   },
   {
    "season": 2026,

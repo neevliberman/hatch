@@ -3,11 +3,13 @@
 archive it, then score the season week by week as the nightly job would have.
 
 Each rebuilt forecast is a backfill run (build_live.py with --as-of, no 7-day forecast: none was archived for that
-spring), filed as issued the day after its last day of real weather. PRISM is fetched once for the whole season and
-sliced per as-of date, so the weeks share one download.
+spring), issued on a Monday with real weather through PRISM_LAG_DAYS before it, the newest day the morning job really
+has (build_live.PRISM_LAG_DAYS). PRISM is fetched once for the whole season and sliced per as-of date, so the weeks
+share one download. The season is then scored week by week from May, each week starting from the last one's file, so
+a strip's row is frozen the week it is first scored, exactly as the nightly job publishes it.
 
-Run: python3 pipeline/live/rehearse.py --season 2026 --first 2026-03-08 --last 2026-09-27 \
-         --records notebooks/data/luna_2026_inat.parquet --today 2026-10-19
+Run: python3 pipeline/live/rehearse.py --season 2026 --first 2026-03-09 --last 2026-09-28 \
+         --records notebooks/data/luna_2026_rg.parquet --today 2026-10-24
 """
 import argparse
 import datetime as dt
@@ -28,14 +30,15 @@ import h3  # noqa: E402
 CACHE = L.ROOT / "notebooks" / "data"
 
 
-def cached_prism(season, cells):
+def cached_prism(season, cells, through=None):
     """Whole-season PRISM at every hex centre as ACIS dates it (sources.prism_acis), one download, kept in
-    notebooks/data (gitignored). It runs to 1 October, so a 30 September weather day still has its high."""
+    notebooks/data (gitignored). It runs to 1 October, so a 30 September weather day still has its high. A cache that
+    already reaches `through` (default 1 October) is used as it is."""
     path = CACHE / f"prism_{season}.npz"
     start, end = dt.date(season, 1, 1) + dt.timedelta(days=L.START_DOY - 1), dt.date(season, 10, 1)
     if path.exists():
         z = np.load(path)
-        if z["tmin"].shape[1] >= (end - start).days + 1:
+        if z["tmin"].shape[1] >= ((through or end) - start).days + 1:
             return start, z["tmin"], z["tmax"]
     ll = [h3.cell_to_latlng(c) for c in cells]
     with ThreadPoolExecutor(6) as ex:
@@ -46,11 +49,22 @@ def cached_prism(season, cells):
     return start, tmin, tmax
 
 
+def season_weeks(season, raw, entries, today, first=None):
+    """The scorecard as published each Monday from `first` (default 4 May) to today, each week built on the last
+    (so scored strips stay frozen, as in the nightly job). Returns the list; the last is today's."""
+    weeks, prev, d = [], None, S.week_start(first or dt.date(season, 5, 4))
+    while d <= S.week_start(today):
+        prev = S.scorecard(season, raw, entries, d, prev=prev)
+        weeks.append(prev)
+        d += dt.timedelta(days=7)
+    return weeks
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--season", type=int, default=2026)
-    ap.add_argument("--first", type=dt.date.fromisoformat, default=dt.date(2026, 3, 8))
-    ap.add_argument("--last", type=dt.date.fromisoformat, default=dt.date(2026, 9, 27))
+    ap.add_argument("--first", type=dt.date.fromisoformat, default=dt.date(2026, 3, 9), help="first issue day")
+    ap.add_argument("--last", type=dt.date.fromisoformat, default=dt.date(2026, 9, 28), help="last issue day")
     ap.add_argument("--every", type=int, default=7, help="days between rebuilt forecasts")
     ap.add_argument("--archive", type=Path, default=HERE / "archive")
     ap.add_argument("--records", type=Path, help="season records parquet (default: fetch from iNaturalist)")
@@ -70,24 +84,20 @@ def main(argv=None):
             return tmin[i, a0:a0 + (e - s).days + 1].copy(), tmax[i, a0:a0 + (e - s).days + 1].copy()
         sources.prism_acis = prism_acis           # sources.prism_point still applies the weather-day rule
         L.season_sightings = lambda *_: []        # the archive keeps strip dates only; the dots are not needed
-        d = a.first
-        while d <= a.last:
-            live = L.build(a.season, d, False, a.today)
-            print(f"archived {S.add_to_archive(a.archive, live, (d + dt.timedelta(days=1)).isoformat(), rehearsal=True)}",
-                  flush=True)
-            d += dt.timedelta(days=a.every)
+        issue = a.first
+        while issue <= a.last:
+            live = L.build(a.season, issue - dt.timedelta(days=L.PRISM_LAG_DAYS), False, a.today)
+            print(f"archived {S.add_to_archive(a.archive, live, issue.isoformat(), rehearsal=True)}", flush=True)
+            issue += dt.timedelta(days=a.every)
 
     entries = S.load_archive(a.archive, a.season)
     raw = pd.read_parquet(a.records) if a.records else S.fetch_records(a.season, a.today)
-    out = S.scorecard(a.season, raw, entries, a.today)
+    weeks = season_weeks(a.season, raw, entries, a.today)
+    out = weeks[-1]
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(out, separators=(",", ":")))
     print(f"wrote {a.out}: {json.dumps(out['layers']['luna']['summary'])}")
     if a.weeks:
-        weeks, d = [], S.week_start(dt.date(a.season, 5, 4))
-        while d <= a.today:
-            weeks.append(S.scorecard(a.season, raw, entries, d))
-            d += dt.timedelta(days=7)
         a.weeks.write_text(json.dumps(weeks, indent=1))
     return 0
 

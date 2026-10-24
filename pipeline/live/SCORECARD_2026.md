@@ -1,9 +1,11 @@
-# Live scorecard, rehearsed on 2026 (built 2026-10-24, rebuilt the same day with the PRISM date fix)
+# Live scorecard, rehearsed on 2026 (built 2026-10-24; rebuilt the same day with the live job's real weather lag)
 
 The scorecard the nightly job will keep from 2027 (`scorecard.py`), run on the 2026 season as if the live pipeline
-had been running then. `rehearse.py` rebuilt the forecast as it would have stood every Sunday from 8 March to
-27 September (real PRISM weather up to that day, then past years' weather; no 7-day forecast, since none was archived
-that spring), filed each one as issued the next day (`archive/2026/`, 30 files), then scored the season week by week.
+had been running then. `rehearse.py` rebuilt the forecast as it would have stood every Monday morning from 9 March to
+28 September, filed as issued that Monday (`archive/2026/`, 30 files), then published the scorecard week by week from
+May, each week starting from the last one's file. Each forecast has real PRISM weather through the Friday before
+(3 days back, the newest day the morning job really has: ACIS posts PRISM through about two days ago, and that day's
+high belongs to the day before), then past years' weather; no 7-day forecast, since none was archived that spring.
 Model: P3 (`p3-v1`, fits hash `7dc3c4c0887b`), frozen; it never saw a 2026 moth. Sightings: 2026 research-grade
 iNaturalist luna records, pulled 24 Oct 2026, same filters as the fit (wild, exact location, adult, one per observer,
 hex and day), first wave only.
@@ -16,57 +18,61 @@ hex and day), first wave only.
   and only from the season's model (the model id and hash of its first forecast).
 - The comparison is the calendar: each strip's mean onset and peak over 2015-2025.
 - The miss for a strip is the mean of its onset miss and peak miss, in days. Scores update once a week (Mondays).
+- **A strip's score is frozen the week it is first given** (`scored_on`): later weeks copy it from the last published
+  file, so late uploads never move a published score.
 
 ## Result, as of Monday 19 October 2026: all 5 strips scored
 
-**The forecast missed by 5.0 days on average, against 7.8 for the calendar.** 8 of the 10 dates fell inside the
+**The forecast missed by 5.6 days on average, against 8.2 for the calendar.** 6 of the 10 dates fell inside the
 forecast's "likely" range.
 
-| Strip | Records | Onset: real / forecast / calendar | Peak: real / forecast / calendar | Miss | Calendar miss |
-|---|---|---|---|---|---|
-| 37-39 N | 65 | 5 Apr / 11 Apr / 17 Apr | 10 May / 25 Apr / 15 May | 10.3 | 8.2 |
-| 39-41 N | 222 | 11 Apr / 17 Apr / 28 Apr | 9 May / 7 May / 23 May | 4.0 | 15.5 |
-| 41-43 N | 139 | 24 Apr / 3 May / 10 May | 29 May / 28 May / 30 May | 5.1 | 8.9 |
-| 43-45 N | 54 | 5 May / 12 May / 17 May | 8 Jun / 7 Jun / 7 Jun | 3.5 | 6.1 |
-| 45-49 N | 126 | 7 Jun / 5 Jun / 7 Jun | 22 Jun / 19 Jun / 21 Jun | 2.2 | 0.4 |
+| Strip | Scored on | Records | Onset: real / forecast / calendar | Peak: real / forecast / calendar | Miss | Calendar miss |
+|---|---|---|---|---|---|---|
+| 37-39 N | 13 Jul | 65 | 5 Apr / 13 Apr / 17 Apr | 10 May / 25 Apr / 15 May | 11.3 | 8.2 |
+| 39-41 N | 13 Jul | 208 | 12 Apr / 17 Apr / 28 Apr | 9 May / 8 May / 23 May | 3.1 | 15.1 |
+| 41-43 N | 13 Jul | 128 | 23 Apr / 3 May / 10 May | 28 May / 29 May / 30 May | 5.5 | 9.8 |
+| 43-45 N | 27 Jul | 50 | 3 May / 14 May / 17 May | 7 Jun / 7 Jun / 7 Jun | 6.0 | 7.5 |
+| 45-49 N | 14 Sep | 124 | 7 Jun / 4 Jun / 7 Jun | 21 Jun / 20 Jun / 21 Jun | 2.2 | 0.4 |
 
 In plain words:
 - **It beat the calendar overall and in three of five strips**, most clearly in central Illinois, Indiana and Ohio
   (39-41 N), where 2026 ran about two weeks ahead of a usual year and the forecast saw that coming.
 - **The far south is the big miss again.** It called the 37-39 N peak for 25 April; the real peak was 10 May, two
-  weeks later, and the calendar did better there. The 2026 dry run found the same miss with a different summary. Why: `pipeline/fit/SOUTH_BIAS.md` (a spring far warmer than any
-  the model was fitted on).
-- **First moths came earlier than forecast in four strips** (by about 6 to 10 days), even where the peak was right. The
+  weeks later, and the calendar did better there. The 2026 dry run found the same miss with a different summary. Why:
+  `pipeline/fit/SOUTH_BIAS.md` (a spring far warmer than any the model was fitted on).
+- **First moths came earlier than forecast in four strips** (by about 5 to 11 days), even where the peak was right. The
   forecast's spread is shaped well around the peak but starts too late.
 - **In the north the calendar was as good or better** (45-49 N: 0.4 days). 2026 was an ordinary year up there, which
   is exactly when the usual date is hard to beat.
 
-**PRISM date fix (rebuilt 2026-10-24).** PRISM's daily high, as RCC-ACIS files it, belongs to the day before (PRISM's
-day ends at 7 am), so the first build banked each afternoon's warmth a day late. `sources.py` now takes each day's high
-from the next ACIS date, and `prism_offsets.json` was rebuilt the same way. Same weather download, same records: 74 of
-the 300 archived strip dates moved by one day (41 a day earlier, 33 a day later). The season's average miss stays
-5.0 days (39-41 N 4.5 to 4.0, 45-49 N 1.8 to 2.2), and the southern onset now falls just inside its range (7 to 8 of
-10 inside). The southern peak is unchanged: the fix is not the far-south miss (`pipeline/fit/SOUTH_BIAS.md`).
+**What changed in the rebuild (2026-10-24), on the same weather download and records:**
+- *PRISM date fix.* PRISM's daily high, as RCC-ACIS files it, belongs to the day before (PRISM's day ends at 7 am), so
+  the first build banked each afternoon's warmth a day late. `sources.py` now takes each day's high from the next ACIS
+  date, and `prism_offsets.json` was rebuilt the same way. Alone, it moved 74 of the 300 archived strip dates by one day
+  and left the average at 5.0 against 7.8.
+- *Real weather lag.* The first build gave each forecast real weather through the day before it was issued; the
+  morning job only has it through 3 days before. With that lag: 5.1 against 7.8, 6 of 10 inside (was 8).
+- *Frozen scores.* Scoring each strip once, the week it settles, instead of rescoring every week with every record
+  posted since: 5.6 against 8.2. The calendar misses grow too, because the early real dates are what was knowable then.
 
 ## How it would have read during the season
 
 | Monday | Scored | Pending | Forecast miss | Calendar miss |
 |---|---|---|---|---|
 | 4 May to 6 Jul | 0 | 5 | - | - |
-| 13 Jul | 3 | 2 | 6.3 | 11.0 |
-| 27 Jul | 4 | 1 | 6.4 | 10.2 |
-| 14 Sep | 5 | 0 | 4.9 | 7.9 |
-| 19 Oct | 5 | 0 | 5.0 | 7.8 |
+| 13 Jul | 3 | 2 | 6.6 | 11.0 |
+| 27 Jul | 4 | 1 | 6.5 | 10.1 |
+| 14 Sep to 19 Oct | 5 | 0 | 5.6 | 8.2 |
 
 The first strips settle in mid-July (the "July scorecard" of plan v2), 43-45 N at the end of July, and the far north
-only in mid-September because it has no second wave and keeps the fallback window to day 240. Numbers drift a little
-after scoring as late posts arrive (records with a later upload date are left out of each week's score, so each row
-is what was knowable that Monday, apart from records confirmed since).
+only in mid-September because it has no second wave and keeps the fallback window to day 240. Once scored, a strip's
+row does not move: each row is what was knowable the Monday it was scored (records with a later upload date are left
+out), apart from records confirmed since.
 
 ## Caveats
-- One season, five strips: 10 dates. 5.0 vs 7.8 days is encouraging, not proof.
+- One season, five strips: 10 dates. 5.6 vs 8.2 days is encouraging, not proof.
 - Rebuilt forecasts are weekly here; the live job archives one every night, so each date is graded on a forecast
-  1 to 7 days fresher than this rehearsal could use. No 7-day weather forecast was in any rehearsal run.
+  up to 6 days fresher than this rehearsal could use. No 7-day weather forecast was in any rehearsal run.
 - The model is scored on Daymet-like weather built from PRISM (offsets in `prism_offsets.json`); 2026 Daymet is not out yet.
 - Strip forecasts weight each hex by its share of the replay's openly licensed first-wave sightings (about 2 in 3 of
   the fit's records), not the full fit set.

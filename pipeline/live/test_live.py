@@ -102,3 +102,17 @@ def test_newest_weather_day_waits_for_the_next_prism_date(monkeypatch):
     assert L.last_prism_day(dt.date(2026, 5, 22)) == dt.date(2026, 5, 19)
     tmin, tmax = sources.prism_point(40.0, -88.0, dt.date(2026, 5, 18), posted)
     assert not np.isnan(tmin).any() and np.isnan(tmax[-1]) and not np.isnan(tmax[:-1]).any()
+
+
+def test_backtest_lag_matches_the_live_job(monkeypatch):
+    """On a morning when ACIS has PRISM through two days ago (24 Oct 2026, 08:35Z: data through 22 Oct), the newest
+    weather day the live job can use is PRISM_LAG_DAYS back; rehearse.py and leadtime.py use the same lag."""
+    from live import sources
+    today = dt.date(2026, 10, 24)
+
+    def acis(lat, lng, s, e):
+        n = (e - s).days + 1
+        ok = np.array([s + dt.timedelta(days=i) <= today - dt.timedelta(days=2) for i in range(n)])
+        return np.where(ok, 10.0, np.nan), np.where(ok, 20.0, np.nan)
+    monkeypatch.setattr(sources, "prism_acis", acis)
+    assert L.last_prism_day(today) == today - dt.timedelta(days=L.PRISM_LAG_DAYS)

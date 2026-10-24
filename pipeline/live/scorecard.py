@@ -12,6 +12,8 @@ Analogy: marking a weather forecast after the week is over, using only forecasts
    happened, and only one from the season's frozen model (the model id + hash of the season's first forecast).
 5. Each strip's real onset / peak = 10th percentile / median day of its first-wave records (>= 20 records), and the
    comparison is the calendar: the strip's mean onset / peak over 2015-2025 (the P3 calendar baseline).
+6. A strip's score is frozen the week it is first given: later weeks copy that row from the last published scorecard
+   (`scored_on` says when), so late uploads never move a published score.
 
 Run: python3 pipeline/live/scorecard.py --archive live/archive --season 2027 --add live/latest.json --out live/scorecard.json
      (rehearse.py runs it on 2026 with rebuilt as-of forecasts)
@@ -177,7 +179,19 @@ def score_band(band, recs, season, cut, score_date, entries, model, cal):
     return out
 
 
-def scorecard(season, raw, entries, today: dt.date, replay=None, layer="luna"):
+def frozen_rows(prev, season, layer, model, score_date):
+    """Scored rows of the last published scorecard that stay as they are: same season and model, published on or
+    before this week. Anything else (another season, another model, a file from a later week) freezes nothing."""
+    if not prev or prev.get("season") != season or str(prev.get("score_date")) > score_date.isoformat():
+        return {}
+    pl = (prev.get("layers") or {}).get(layer) or {}
+    if pl.get("model") != model:
+        return {}
+    return {r["band"]: r for r in pl.get("bands", []) if r.get("status") == "scored"}
+
+
+def scorecard(season, raw, entries, today: dt.date, replay=None, layer="luna", prev=None):
+    """This week's scorecard. prev: the last published one; its scored strips are kept as they were (frozen)."""
     replay = replay or json.loads(REPLAY.read_text())
     score_date = week_start(today)
     cuts = {b["label"]: int(b["cutoff"] or FALLBACK_CUT) for b in replay["bands"]}
@@ -185,7 +199,16 @@ def scorecard(season, raw, entries, today: dt.date, replay=None, layer="luna"):
     rec = first_wave(raw, season, cuts, score_date)
     model = frozen_model(entries)
     cal = calendar(replay)
-    rows = [score_band(b, rec[rec.band == b], season, cuts[b], score_date, entries, model, cal) for b in cuts]
+    keep = frozen_rows(prev, season, layer, model, score_date)
+    rows = []
+    for b in cuts:
+        if b in keep:
+            rows.append(keep[b])
+            continue
+        r = score_band(b, rec[rec.band == b], season, cuts[b], score_date, entries, model, cal)
+        if r["status"] == "scored":
+            r["scored_on"] = score_date.isoformat()
+        rows.append(r)
     done = [r for r in rows if r["status"] == "scored"]
     summary = {"scored": len(done), "pending": sum(r["status"] == "pending" for r in rows),
                "too_few": sum(r["status"] == "too_few" for r in rows),
@@ -200,6 +223,7 @@ def scorecard(season, raw, entries, today: dt.date, replay=None, layer="luna"):
         "score_date": score_date.isoformat(),
         "rehearsal": any(e.get("rehearsal") for e in entries),
         "rules": {"settle_days": SETTLE_DAYS, "lead_days": LEAD_DAYS, "min_records": MIN_N,
+                  "frozen": "a strip's score is kept as first given (scored_on); later uploads do not change it",
                   "real": "10th percentile (onset) and median (peak) day of the strip's first-wave research-grade records",
                   "calendar": "the strip's mean onset / peak over 2015-2025",
                   "forecast": f"the newest archived forecast from the season's model issued at least {LEAD_DAYS} days before each real date"},
@@ -227,7 +251,13 @@ def main(argv=None):
             print(f"archived {add_to_archive(a.archive, live)}")
     entries = load_archive(a.archive, season)
     raw = pd.read_parquet(a.records) if a.records else fetch_records(season, a.today)
-    out = scorecard(season, raw, entries, a.today)
+    prev = None
+    if a.out.exists():                       # the last published file: its scored strips stay frozen
+        try:
+            prev = json.loads(a.out.read_text())
+        except ValueError:
+            prev = None
+    out = scorecard(season, raw, entries, a.today, prev=prev)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
     tmp.write_text(json.dumps(out, separators=(",", ":")))

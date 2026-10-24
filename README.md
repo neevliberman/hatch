@@ -12,7 +12,7 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 
 **Live season (new).** From 2 March 2027 a nightly GitHub Action (`.github/workflows/live-forecast.yml`) rebuilds this season's forecast from real weather so far + a 7-day forecast + past years' weather run forward, and the map's **live** season shows it with a mark on the last day of real weather, this year's sightings and an "as of" badge that turns amber if the data goes stale. Until then the live season shows a 2026 dry run (`pipeline/live/DRYRUN_2026.md`). How it works: `pipeline/live/README.md`.
 
-**Live scorecard.** Each night's forecast is archived and graded strip by strip once that strip's first wave is over and its sightings have settled for 14 days, against the usual calendar date (`pipeline/live/scorecard.py`). Rehearsed on 2026 with forecasts rebuilt as they would have stood each week: **5.0 days off on average against 7.8 for the calendar**, over 5 strips, with the far south the big miss ([SCORECARD_2026.md](pipeline/live/SCORECARD_2026.md)). The app shows it in "How sure?".
+**Live scorecard.** Each night's forecast is archived and graded strip by strip once that strip's first wave is over and its sightings have settled for 14 days, against the usual calendar date (`pipeline/live/scorecard.py`). Rehearsed on 2026 with forecasts rebuilt as they would have stood each Monday morning: **5.6 days off on average against 8.2 for the calendar**, over 5 strips, with the far south the big miss ([SCORECARD_2026.md](pipeline/live/SCORECARD_2026.md)). The app shows it in "How sure?".
 
 ## What you can do with it
 

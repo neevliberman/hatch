@@ -7,7 +7,7 @@
 interface Dates { real: number; forecast: number; calendar: number }
 interface Band { band: string; status: string; settles_on: string; peak?: Dates; miss?: number }
 interface Card {
-  summary: { scored: number; pending: number; miss: number | null; calendar_miss: number | null };
+  summary: { scored: number; pending: number; too_few?: number; no_forecast?: number; miss: number | null; calendar_miss: number | null };
   bands: Band[];
 }
 interface File { version: number; kind: string; season: number; rehearsal?: boolean; layers?: Record<string, Card> }
@@ -24,7 +24,11 @@ function html(f: File, c: Card): string {
   const line =
     s.scored && s.miss != null && s.calendar_miss != null
       ? `${when}: the forecast missed by ${days(s.miss)} on average, the usual date by ${days(s.calendar_miss)}. ${s.scored} strip${s.scored > 1 ? 's' : ''} scored, ${s.pending || 'none'} pending.`
-      : `${when}: nothing scored yet, ${s.pending} strip${s.pending === 1 ? '' : 's'} pending. A strip is checked once its first wave is over and its sightings are 2 weeks old.`;
+      : !s.scored && !s.pending
+        ? (s.no_forecast ?? 0) > 0
+          ? `${when}: no strip could be scored: too few sightings, or no forecast made early enough.`
+          : `${when}: not enough sightings to score this season.`
+        : `${when}: nothing scored yet, ${s.pending} strip${s.pending === 1 ? '' : 's'} pending. A strip is checked once its first wave is over and its sightings are 2 weeks old.`;
   const rows = c.bands
     .map((b) => {
       const p = b.peak;

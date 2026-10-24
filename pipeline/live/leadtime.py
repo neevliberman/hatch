@@ -3,10 +3,13 @@
 
 For each season 2023-2026 and each issue date (1 Apr, 15 Apr, 1 May, 15 May, 1 Jun) the live forecast is rebuilt as
 it would have stood that morning (build_live.build, frozen P3 fits, no refit), three ways:
-- analogs:  real weather to the day before, then past years' weather (what a backfill does);
-- gfs:      the same plus the 7-day forecast as it was really issued that night (GFS 00Z run of the issue day, NOAA's
-            AWS archive), standing in for Open-Meteo's 7-day forecast, which keeps no archive;
-- perfect:  the same plus the next 7 days of *real* weather (PRISM): the most a 7-day forecast could ever add.
+- analogs:  real weather through the newest day the morning job really has (issue day minus build_live.PRISM_LAG_DAYS,
+            3 days), then past years' weather (what a backfill does);
+- gfs:      the same plus 7 forecast days from there, as the live job asks Open-Meteo for: the 2 days between the last
+            PRISM day and the issue day (Open-Meteo serves those from its own recent analysis; real PRISM stands in),
+            then days 1-5 of the GFS 00Z run of the issue day (NOAA's AWS archive), standing in for Open-Meteo's
+            forecast, which keeps no archive;
+- perfect:  the same 7 days as real weather (PRISM): the most a 7-day forecast could ever add.
 Each forecast is graded strip by strip against that season's research-grade first-wave records with scorecard.py's
 own code (score_band: real onset / peak = 10th percentile / median day, >= 20 records, graded only if issued at
 least 7 days before the real date), against the calendar.
@@ -167,7 +170,7 @@ class Patched:
 
     def __init__(self, season, cells):
         self.season, self.cells = season, cells
-        self.start, self.tmin, self.tmax = R.cached_prism(season, cells)
+        self.start, self.tmin, self.tmax = R.cached_prism(season, cells, through=dt.date(season, 6, 30))
         self.index = {(round(a, 6), round(b, 6)): i for i, (a, b) in enumerate(h3.cell_to_latlng(c) for c in cells)}
         self.orig = (L.REPLAY, L.FOLD_FITS, L.temperature_cube, sources.prism_acis, sources.open_meteo,
                      L.season_sightings)
@@ -210,12 +213,15 @@ class Patched:
 
 
 def forecast(p: Patched, issue: dt.date, variant):
-    """One rebuilt forecast, filed as issued on `issue` with real weather through the day before."""
-    as_of = issue - dt.timedelta(days=1)
+    """One rebuilt forecast, filed as issued on `issue` with real weather through the newest day the morning job has."""
+    as_of = issue - dt.timedelta(days=L.PRISM_LAG_DAYS)
+    f0, f1 = as_of + dt.timedelta(days=1), as_of + dt.timedelta(days=L.FORECAST_DAYS)
     if variant == "gfs":
-        p.forecast = gfs_week(issue, p.cells)
+        gap = p.prism_cube(f0, issue - dt.timedelta(days=1))          # days before the issue day: near-real
+        g = gfs_week(issue, p.cells)
+        p.forecast = tuple(np.concatenate([a, b], 1)[:, :L.FORECAST_DAYS] for a, b in zip(gap, g))
     elif variant == "perfect":
-        p.forecast = p.prism_cube(issue, issue + dt.timedelta(days=L.FORECAST_DAYS - 1))
+        p.forecast = p.prism_cube(f0, f1)
     live = L.build(p.season, as_of, variant != "analogs", SCORE_TODAY)
     return S.archive_entry(live, issued=issue.isoformat())
 
@@ -260,10 +266,11 @@ def summarise(rows, variants=VARIANTS):
         n = len(got[variants[0]])
         if not n:
             continue
+        won = "gfs" if "gfs" in got else variants[0]      # "won" counts the forecast as the live job makes it
         by_issue.append({"issue": md, "strips": n,
                          **{v: round(float(np.mean([r["miss"] for r in got[v]])), 1) for v in variants},
                          "calendar": round(float(np.mean([r["calendar_miss"] for r in got[variants[0]]])), 1),
-                         "beat_calendar": sum(r["miss"] < r["calendar_miss"] for r in got[variants[0]])})
+                         "beat_calendar": sum(r["miss"] < r["calendar_miss"] for r in got[won]), "beat_calendar_variant": won})
     keyed = {}
     for x in rows:
         for k, lead, fc, cal in x["dates"]:

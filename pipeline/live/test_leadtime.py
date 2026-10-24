@@ -54,3 +54,12 @@ def test_by_lead_bins_and_skips_empty():
     errs = [(10, {"a": 2.0}, 4.0), (12, {"a": 4.0}, 6.0), (50, {"a": 9.0}, 3.0)]
     got = T.by_lead(errs, bins=((7, 14), (14, 28), (42, 63)))
     assert got == [(7, 14, 2, {"a": 3.0}, 5.0), (42, 63, 1, {"a": 9.0}, 3.0)]
+
+
+def test_won_counts_the_forecast_with_the_7_day_weather():
+    """'Strips where the forecast won' is the gfs column (the forecast as the live job makes it), not the first one."""
+    def row(v, miss):
+        return {"season": 2026, "issue": "04-01", "variant": v, "band": "37-39", "dates": [],
+                "row": {"status": "scored", "miss": miss, "calendar_miss": 5.0}}
+    by_issue, _ = T.summarise([row("analogs", 6.0), row("gfs", 4.0), row("perfect", 6.0)])
+    assert by_issue[0]["beat_calendar"] == 1 and by_issue[0]["beat_calendar_variant"] == "gfs"
