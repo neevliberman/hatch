@@ -3,7 +3,9 @@
 All public domain: Natural Earth 10m (lakes, rivers, roads, National Park Service areas), the US Forest Service's
 national forest boundaries, and the Census Bureau's 2024 place gazetteer (locations) with its 2023 city population
 estimates (which towns to name first), and the USGS National Land Cover Database 2021 (where the woods are, woods.json).
-Run from the repo root: `pip install shapely pyshp numpy scipy matplotlib pillow`, then
+Around the Midwest: the other US states (Census, from node_modules/us-atlas, so run `npm ci` first) and Natural Earth's
+countries, as quiet land, plus the mask and shore hexagons that trim the forecast to the coasts and state lines.
+Run from the repo root: `pip install shapely pyshp numpy scipy matplotlib pillow "h3>=4,<5"`, then
 `python3 pipeline/basemap/build_basemap.py`. Downloads go to notebooks/data/basemap/ (git-ignored); reruns are offline.
 
 Every feature carries `z`, the zoom it shows from (the app's zoom: the whole Midwest is about 4.5 on a phone and 5.5 on
@@ -38,7 +40,11 @@ SOURCES = {
     'ne_10m_parks_and_protected_lands': NE + 'cultural/ne_10m_parks_and_protected_lands.zip',
     'usfs': 'https://data.fs.usda.gov/geodata/edw/edw_resources/shp/S_USA.AdministrativeForest.zip',
     'gaz': 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_Gaz_place_national.zip',
+    'ne_10m_admin_0_countries_lakes': NE + 'cultural/ne_10m_admin_0_countries_lakes.zip',
 }
+# Quiet land around the Midwest (the other US states, Canada, Mexico), so the widest and tallest screens show
+# Pittsburgh on land rather than in water. It reaches past the whole-Midwest view on any screen shape.
+CONTEXT_BOX = box(-118.0, 23.0, -60.0, 57.0)
 POP_URL = 'https://www2.census.gov/programs-surveys/popest/datasets/2020-2023/cities/totals/sub-est2023.csv'
 # Census state codes: the seven forecast states get their towns named; neighbours only their bigger cities.
 CORE = {'17': 'IL', '18': 'IN', '19': 'IA', '26': 'MI', '27': 'MN', '39': 'OH', '55': 'WI'}
@@ -73,16 +79,16 @@ def land():
     return _land
 
 
-def read(name, stem=None):
-    """(geometry, record) for each shape in the download that touches the Midwest, clipped to it."""
+def read(name, stem=None, within=BBOX):
+    """(geometry, record) for each shape in the download that touches the Midwest (or `within`), clipped to it."""
     d = fetch(name, SOURCES[name])
     shp = next(d.glob(f'{stem or "*"}.shp'))
     for sr in shapefile.Reader(str(shp)).iterShapeRecords():
         if sr.shape.shapeType == 0:
             continue
         g = shape(sr.shape.__geo_interface__)
-        if g.intersects(BBOX):
-            yield g.intersection(BBOX), sr.record.as_dict()
+        if g.intersects(within):
+            yield g.intersection(within), sr.record.as_dict()
 
 
 def rounded(geom, tol):
@@ -140,13 +146,69 @@ def lakes():
     return feats, labels
 
 
+_borders = None
+
+
+def borders():
+    """The state lines the app draws (src/data/midwest-states.json), as lines."""
+    global _borders
+    if _borders is None:
+        data = json.loads((ROOT / 'src/data/midwest-states.json').read_text())
+        _borders = unary_union([shape(f['geometry']).boundary for f in data['features']])
+    return _borders
+
+
+def merge(g):
+    from shapely.ops import linemerge
+    return linemerge(g) if g.geom_type == 'MultiLineString' else g
+
+
+SNAP_DEG = 0.025   # a river this close to a state line (~2.5 km) is taken to be the line
+SNAP_RUN = 0.1     # ... if it follows it for at least ~10 km (a crossing is not a border river)
+
+
+def snap_to_borders(g):
+    """A border river (the Ohio, the Mississippi, the Wabash, the St. Croix) drawn on the state line itself.
+
+    The state lines (Census 1:10m) and the rivers (Natural Earth) trace the same water a kilometre or two apart, so
+    zoomed in they read as two lines side by side. Where a river runs along a state line, the river takes the line's
+    path, with a short jog where it joins and leaves it."""
+    from shapely.geometry import LineString, MultiLineString
+    from shapely.ops import nearest_points
+    if g.is_empty:
+        return g
+    along = borders().intersection(g.buffer(SNAP_DEG))
+    pieces = [along] if along.geom_type == 'LineString' else [p for p in getattr(along, 'geoms', []) if p.geom_type == 'LineString']
+    if not pieces:
+        return g
+    merged = merge(unary_union(pieces))
+    runs = [r for r in getattr(merged, 'geoms', [merged]) if r.geom_type == 'LineString' and r.length >= SNAP_RUN]
+    if not runs:
+        return g
+    run = MultiLineString(runs)
+    rest = g.difference(run.buffer(SNAP_DEG * 1.2))
+    out = [rest] if not rest.is_empty else []
+    # Join each loose end of what is left to the state line it now follows.
+    ends = []
+    for line in getattr(rest, 'geoms', [rest]):
+        if line.geom_type == 'LineString' and not line.is_empty:
+            ends += [line.coords[0], line.coords[-1]]
+    from shapely.geometry import Point
+    for e in ends:
+        pt = Point(e)
+        if pt.distance(run) <= SNAP_DEG * 1.3:
+            out.append(LineString([e, nearest_points(run, pt)[0].coords[0]]))
+    out.append(run)
+    return merge(unary_union(out))
+
+
 def rivers():
     feats = []
     for name in ('ne_10m_rivers_lake_centerlines', 'ne_10m_rivers_north_america'):
         for g, rec in read(name):
             if g.is_empty or rec.get('featurecla') == 'Lake Centerline':
                 continue
-            g = g.intersection(land())
+            g = snap_to_borders(g.intersection(land()))
             rank = rec['scalerank']
             # The big rivers (Mississippi, Ohio, Missouri) from the start; the North America extras as you zoom.
             z = max(0.0, float(rec['min_zoom']) - 0.5)
@@ -324,10 +386,159 @@ def woods():
     return [f] if f else []
 
 
+def us_atlas():
+    """Every US state from us-atlas (the Census 1:10m outlines src/data/midwest-states.json is cut from, so shared
+    borders match it): ({fips: [polygon as lists of arc ids]}, decoded arcs). Needs `npm ci` (node_modules)."""
+    topo = json.loads((ROOT / 'node_modules/us-atlas/states-10m.json').read_text())
+    (sx, sy), (tx, ty) = topo['transform']['scale'], topo['transform']['translate']
+    arcs = []
+    for arc in topo['arcs']:
+        x = y = 0
+        pts = []
+        for dx, dy in arc:
+            x += dx
+            y += dy
+            pts.append((round(x * sx + tx, 3), round(y * sy + ty, 3)))
+        arcs.append(pts)
+    states = {}
+    for g in topo['objects']['states']['geometries']:
+        states[str(g['id']).zfill(2)] = g['arcs'] if g['type'] == 'MultiPolygon' else [g['arcs']]
+    return states, arcs
+
+
+def ring(arc_ids, arcs):
+    pts = []
+    for i in arc_ids:
+        a = arcs[i] if i >= 0 else arcs[~i][::-1]
+        pts += a if not pts else a[1:]
+    return pts
+
+
+# The states src/data/midwest-states.json already has (scripts/build-geo.mjs), by Census FIPS code.
+DRAWN = ('55', '17', '27', '19', '26', '18', '39', '29', '38', '46', '31', '21')
+
+
+def context():
+    """The quiet land around the forecast states, and a mask for the app: (outside features, far Great Lakes).
+
+    `outside` is drawn over the hexagons: the sea (kind 0) and the land beyond the seven forecast states (kind 1) cover
+    everything but those states, so a hexagon poking out over a shore or a state line is cut off there, as the lakes cut
+    the shore hexagons. Kind 2 are the faint lines of the US states the app does not outline already."""
+    from shapely.geometry import LineString, MultiLineString, Polygon
+    data = json.loads((ROOT / 'src/data/midwest-states.json').read_text())
+    core = unary_union([shape(f['geometry']) for f in data['features'] if f['properties']['core']])
+    states, arcs = us_atlas()
+    drawn = {i if i >= 0 else ~i for fips in DRAWN for poly in states[fips] for r in poly for i in r}
+    # Simplify each arc once, so shared borders stay shared; never the arcs of the states the app already draws.
+    simple = []
+    for k, a in enumerate(arcs):
+        pts = a
+        if k not in drawn and len(a) > 2:
+            sl = [(round(x, 3), round(y, 3)) for x, y in LineString(a).simplify(0.02).coords]
+            pts = sl if len(sl) >= (4 if a[0] == a[-1] else 2) else a
+        simple.append(pts)
+    polys, lines = [], {}
+    for fips, ps in states.items():
+        if fips in DRAWN:
+            continue
+        for poly in ps:
+            rings = [ring(r, simple) for r in poly]
+            if len(rings[0]) < 4:
+                continue
+            g = Polygon(rings[0], [r for r in rings[1:] if len(r) >= 4]).buffer(0)
+            if g.intersects(CONTEXT_BOX):
+                polys.append(g)
+                for i in {i if i >= 0 else ~i for r in poly for i in r}:
+                    lines[i] = lines.get(i, 0) + 1
+    neighbours = [shape(f['geometry']) for f in data['features'] if not f['properties']['core']]
+    us = unary_union(polys + neighbours + [core])
+    # Canada, Mexico and the islands: Natural Earth (big lakes cut out), coarsely: it is only context. The two sources
+    # draw the border a little apart, so these are widened ~300 m and the US taken out: no hairline of sea opens along
+    # the land border, while the Detroit and St. Clair rivers (about a kilometre wide) stay open.
+    abroad = []
+    for g, rec in read('ne_10m_admin_0_countries_lakes', within=CONTEXT_BOX):
+        if rec.get('ADM0_A3') != 'USA' and not g.is_empty:
+            # Coarse, but full detail within ~30 km of the forecast states (the river shores along Michigan).
+            near = core.buffer(0.3, quad_segs=2)
+            g = unary_union([g.simplify(0.02, preserve_topology=True).difference(near), g.intersection(near)])
+            g = big_parts(g, min_km2=200)
+            if g is not None:
+                abroad.append(g.buffer(0.003, quad_segs=1))
+    # The other states are widened ~300 m too: rounding can leave a 100 m crack against the forecast states.
+    land_ctx = unary_union([unary_union(polys).buffer(0.003, quad_segs=1), unary_union(abroad).difference(us),
+                            *neighbours])
+    # Coarse away from the forecast states, exact against them.
+    land_ctx = land_ctx.intersection(CONTEXT_BOX)
+    near = core.buffer(0.08, quad_segs=2)
+    land_ctx = unary_union([land_ctx.simplify(0.02).difference(near), land_ctx.intersection(near)])
+    land_ctx = land_ctx.difference(core)
+    # The sea only matters near the forecast states (where hexagons poke out): beyond, the page's own water shows.
+    sea = CONTEXT_BOX.difference(core).difference(land_ctx).intersection(core.buffer(0.7, quad_segs=2))
+    # Only the borders between two states (an arc of one state alone is a coast or the border with Canada or Mexico,
+    # which the land colour already shows or need not).
+    shared = sorted(i for i, n in lines.items() if n > 1 and i not in drawn)
+    outline = MultiLineString([simple[i] for i in shared]).intersection(box(-106.0, 24.0, -66.0, 50.0))
+    feats = [f for f in (exact_feature(sea, z=0, kind=0), exact_feature(land_ctx, z=0, kind=1),
+                         exact_feature(outline, z=0, kind=2)) if f]
+    for f in feats:
+        print('outside kind', f['properties']['kind'], f'{len(json.dumps(f)) / 1024:.0f} KB')
+    # The Great Lakes past the detail box (the east end of Erie, Lake Ontario): there is land around them now.
+    far = []
+    for g, rec in read('ne_10m_lakes', within=CONTEXT_BOX):
+        if rec.get('scalerank') != 0:
+            continue
+        g = g.difference(BBOX)
+        if not g.is_empty and g.geom_type in ('Polygon', 'MultiPolygon'):
+            f = feature(g, 0.004, z=0, great=1)
+            if f:
+                far.append(f)
+    return feats, far
+
+
+def exact_feature(geom, **props):
+    """Like feature(), without simplifying: these shapes must meet the state outlines exactly."""
+    if geom.geom_type == 'GeometryCollection':
+        geom = unary_union([p for p in geom.geoms if p.geom_type != 'Point'])
+    if geom.is_empty:
+        return None
+
+    def r(c):
+        if isinstance(c, (list, tuple)) and c and isinstance(c[0], (int, float)):
+            return [round(c[0], 3), round(c[1], 3)]
+        return [r(x) for x in c]
+
+    m = mapping(geom)
+    return {'type': 'Feature', 'geometry': {'type': m['type'], 'coordinates': r(m['coordinates'])}, 'properties': props}
+
+
+def pads(res):
+    """Hexagons just outside the forecast ones, each paired with a forecast neighbour whose colour it takes.
+
+    A forecast hexagon is one whose centre is in a forecast state, so up to half a hexagon of bare paper is left along
+    every shore and state line, which reads as missing data. The app draws these under the forecast hexagons in their
+    neighbour's colour, and the lakes and the `outside` mask cut them off at the shore and the state line. Only the
+    ones reaching into a forecast state are kept. [[pad, neighbour], ...]"""
+    import h3
+    from shapely.geometry import Polygon
+    data = json.loads((ROOT / 'src/data/midwest-states.json').read_text())
+    cells = set()
+    for f in data['features']:
+        if f['properties']['core']:
+            cells.update(h3.geo_to_cells(f['geometry'], res))
+    core = unary_union([shape(f['geometry']) for f in data['features'] if f['properties']['core']])
+    out = {}
+    for c in sorted(cells):
+        for n in sorted(h3.grid_disk(c, 1)):
+            if n not in cells and n not in out and Polygon([(x, y) for y, x in h3.cell_to_boundary(n)]).intersects(core):
+                out[n] = c
+    return sorted([p, c] for p, c in out.items())
+
+
 def main():
     water, water_labels = lakes()
     green, green_labels = forests()
-    layers = {'water': water, 'rivers': rivers(), 'roads': roads(), 'green': green}
+    outside, far_lakes = context()
+    layers = {'water': water + far_lakes, 'rivers': rivers(), 'roads': roads(), 'green': green, 'outside': outside}
     labels = states() + water_labels + green_labels + towns()
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / 'woods.json'
@@ -340,10 +551,13 @@ def main():
         for k, feats in layers.items():
             out[k] = {'type': 'FeatureCollection', 'features': [f for f in feats if keep(f['properties']['z'])]}
         out['labels'] = [lab for lab in labels if keep(lab[3])]
+        # The extra shore hexagons (see pads): the whole-Midwest level at start, the finer levels once zoomed in.
+        out['pads'] = {str(r): pads(r) for r in ((5, 6) if near else (4,))}
         path = OUT / f'{part}.json'
         path.write_text(json.dumps(out, separators=(',', ':'), ensure_ascii=False))
         print(path, f'{path.stat().st_size / 1024:.0f} KB,',
-              {k: len(v['features']) for k, v in out.items() if isinstance(v, dict)}, len(out['labels']), 'labels')
+              {k: len(v['features']) for k, v in out.items() if k != 'pads' and isinstance(v, dict)},
+              len(out['labels']), 'labels', {r: len(v) for r, v in out['pads'].items()}, 'pads')
 
 
 if __name__ == '__main__':
