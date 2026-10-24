@@ -860,6 +860,67 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   }
+  // Switching replays: one open, then the other from About, then ×: back to the whole Midwest, not to the first radar.
+  // And two clicked at once (before either loads): only the last opens, and nothing of the other is left on the map.
+  {
+    const tag = 'radar switch';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+    const page = await ctx.newPage();
+    page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const about = async () => {
+      await page.locator('#info-btn').click();
+      await page.waitForFunction(() => getComputedStyle(document.getElementById('drawer')).transform === 'none', null, { timeout: 30000, polling: 250 });
+    };
+    const at = (id) => page.waitForFunction(([id, [lng, lat]]) => {
+      const c = window.__hatch.map.center(window.__hatch.padding());
+      return new URL(location.href).searchParams.get('radar') === id && window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 &&
+        Math.abs(c.lngLat[0] - lng) < 0.5 && Math.abs(c.lngLat[1] - lat) < 0.6;
+    }, [id, RADARS[id].at], { timeout: 30000, polling: 250 }).then(() => true, () => false);
+    const home = () => page.waitForFunction(() => window.__hatch.map.moved() === false && Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05,
+      null, { timeout: 30000, polling: 250 }).then(() => true, () => false);
+    try {
+      await page.goto(origin + '/?noauto&today=2027-01-15');
+      await page.waitForTimeout(2000);
+      await about();
+      await page.locator('#drawer .ex-radar[data-radar="karx-2014-07-20"]').click();
+      if (!(await at('karx-2014-07-20'))) fail('the first replay did not open at La Crosse');
+      await about();
+      await page.locator(`#drawer .ex-radar[data-radar="${ERIE}"]`).click();
+      if (!(await at(ERIE))) fail('switching did not go to Lake Erie');
+      if ((await page.locator('#radar').count()) !== 1) fail('more than one replay card after switching');
+      if (!/EDT/.test(await page.locator('#radar .rd-cap').innerText())) fail('the card after switching is not Lake Erie\'s');
+      await page.waitForTimeout(800);
+      await page.locator('#radar .rd-x').click();
+      if (!(await home())) fail(`× after a switch did not bring the Midwest back: zoom ${await page.evaluate(() => window.__hatch.map.zoom())}, fit ${await page.evaluate(() => window.__hatch.map.fitZoom())}`);
+      if (await page.locator('#dock').isHidden()) fail('the time bar did not come back after a switch');
+      // Both at once: the drawer's buttons stay in the page while it closes, so a second click still lands.
+      await about();
+      await page.evaluate((ids) => ids.forEach((id) => document.querySelector(`#drawer .ex-radar[data-radar="${id}"]`).click()), ['karx-2014-07-20', ERIE]);
+      if (!(await at(ERIE))) fail('of two quick clicks, the last did not open');
+      await page.waitForTimeout(2500);
+      if ((await page.locator('#radar').count()) !== 1 || !/EDT/.test(await page.locator('#radar .rd-cap').innerText())) fail('of two quick clicks, the wrong card is left');
+      if (!(await page.evaluate(() => document.getElementById('app').classList.contains('radar-on')))) fail('of two quick clicks, the time bar came back over the replay');
+      if (!(await at(ERIE))) fail('of two quick clicks, the first one moved the map after the last opened');
+      const png = await page.screenshot({ path: `${out}/radar-switch-race.png` });
+      const sheet = await page.evaluate(async ([b64, lngLat]) => {
+        const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
+        const c = new OffscreenCanvas(bmp.width, bmp.height);
+        const g = c.getContext('2d');
+        g.drawImage(bmp, 0, 0);
+        const [x, y] = window.__hatch.map.project(lngLat);
+        return [...g.getImageData(Math.round(x), Math.round(y), 1, 1).data.slice(0, 3)];
+      }, [png.toString('base64'), RADARS[ERIE].sheet]);
+      if (!(sheet[0] > 225 && sheet[1] > 220 && sheet[2] > 200)) fail(`of two quick clicks, the replay's sheet is gone from the map (${sheet})`);
+      await page.locator('#radar .rd-x').click();
+      if (!(await home())) fail('× after two quick clicks did not bring the Midwest back');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  }
   await browser.close();
   server.close();
 } else if (engines.includes('chromium')) problems.push(`live mode not checked: no ${join(distDir, 'live/latest.json')} (run npm run build first)`);

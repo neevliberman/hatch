@@ -56,7 +56,7 @@ EVENTS = {
         # Evening of Wednesday 26 June 2019, EDT (UTC-4): 9:45 pm to 1 am. Sunset at Cleveland 9:06 pm.
         "from": "2019-06-27T01:45:00Z",
         "to": "2019-06-27T05:00:00Z",
-        # The plume rises over the islands at about 10:35 pm; the replay opens on the scan just before.
+        # The plume starts to rise over the islands at 10:28 pm: the replay opens on that scan (README: 10:21 pm is quiet).
         "start": "2019-06-27T02:28:00Z",
         # The swarm leaves the western basin 60 to 120 km from the radar, so this one keeps 120 km (1.5 km cells).
         "reach_km": 120,

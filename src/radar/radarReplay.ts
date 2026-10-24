@@ -27,11 +27,21 @@ export interface RadarHost {
   mount: HTMLElement;
   /** Called once the replay has closed (its × or Escape, or close()). */
   onClose(): void;
+  /** Where × goes back to, when this replay takes over from another (that one's own `before`): null is the whole
+   * Midwest. Left out, it is wherever the map is now. */
+  before?: View | null;
+  /** True once the reader has asked for something else while this one loaded: it then opens nothing and returns null. */
+  stale?(): boolean;
 }
+
+/** A place on the map to go back to (MapHandle.center's answer). */
+export type View = NonNullable<ReturnType<MapHandle['center']>>;
 
 export interface Radar {
   id: string;
-  /** Close it; `back` (the default) returns the map to where it was before. */
+  /** Where × goes back to: a place the reader had panned to, or null for the whole Midwest. */
+  before: View | null;
+  /** Close it; `back` (the default) returns the map to `before`. */
   close(back?: boolean): void;
 }
 
@@ -159,6 +169,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   } catch {
     return null;
   }
+  if (host.stale?.()) return null;
   const { map } = host;
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   const pal = ramp(meta.levels.count);
@@ -277,7 +288,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
 
   // Glide to the radar: its whole reach (80 km, or 120 for an event that keeps more) in the free map between the header
   // and the card.
-  const before = map.moved() ? map.center(host.padding()) : null;
+  const before: View | null = host.before !== undefined ? host.before : map.moved() ? map.center(host.padding()) : null;
   // On a wide screen the card sits in a corner, so the radar only keeps clear of its closed height; on a phone it spans
   // the width, so the radar sits above all of it.
   // A phone on its side has no height to spare: with "How we know" open the radar moves to the right of the card.
@@ -385,7 +396,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   label(idx, 0);
   setPlaying(playing);
   // After the card is laid out, so the glide knows how much room it takes.
-  requestAnimationFrame(() => look(true));
+  requestAnimationFrame(() => open && look(true));
   let resizeTimer = 0;
   const onResize = () => {
     clearTimeout(resizeTimer);
@@ -438,5 +449,5 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   window.addEventListener('keydown', onKey, true);
   q<HTMLButtonElement>('.rd-x').addEventListener('click', () => close());
   playBtn.focus({ preventScroll: true });
-  return { id, close };
+  return { id, before, close };
 }

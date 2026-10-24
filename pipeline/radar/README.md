@@ -72,22 +72,23 @@ pass this check, by its numbers in `meta.json` and by eye, before it ships.
 at Cleveland 9:06 pm). Up to 10:21 pm the lake is quiet. At 10:28 pm (the replay's first frame) thin bands rise over the
 islands of the western basin, 60 to 110 km west-northwest of the radar; by 11:10 pm they have merged into one plume that
 drifts east-southeast toward the Cleveland shore, peaks around midnight and is still over the lake off Cleveland at 1 am.
-That is the "ascent and downwind drift" of the tweet, and the "moving inland to Cleveland, Sandusky" of the NWS post.
+That is the "ascent and downwind drift" of the tweet. (These scans end over the water: they don't show it reaching
+land, so they neither confirm nor contradict the NWS post's "inland".)
 
-The insect test on the raw (polar) gates of 20 dBZ or more, 8 to 80 km out, checked by hand alongside the gridded check
-above:
+The insect test on the raw (polar) gates of 20 dBZ or more, 8 to 120 km out (the replay's whole reach), checked by hand
+alongside the gridded check above:
 
 | UTC (EDT) | Gates of 20 dBZ+ | CC, median | ZDR, median | Depolarisation ratio, median | Rain-like (CC 0.95+, ZDR under 3) |
 |---|---|---|---|---|---|
-| 02:21 (10:21 pm), before | 473 | 0.82 | 3.4 dB | -7.5 dB | 9% |
-| 03:03 (11:03 pm) | 4,031 | 0.92 | 6.5 dB | -7.7 dB | 1% |
-| 03:30 (11:30 pm) | 10,463 | 0.82 | 7.2 dB | -6.2 dB | 1% |
-| 04:05 (12:05 am), peak | 13,556 | 0.77 | 7.9 dB | -5.3 dB | 1% |
-| 04:35 (12:35 am) | 6,927 | 0.79 | 7.7 dB | -5.6 dB | 1% |
-| Rain, 29 June 2019 11:51 UTC | 12,868 | 1.00 | 0.5 dB | none (CC at 1: rain) | 94% |
+| 02:21 (10:21 pm), before | 509 | 0.83 | 3.3 dB | -7.8 dB | 14% |
+| 03:03 (11:03 pm) | 4,077 | 0.92 | 6.5 dB | -7.7 dB | 1% |
+| 03:30 (11:30 pm) | 10,852 | 0.83 | 7.1 dB | -6.2 dB | 1% |
+| 04:05 (12:05 am), peak | 13,656 | 0.77 | 7.9 dB | -5.4 dB | 1% |
+| 04:35 (12:35 am) | 7,108 | 0.79 | 7.6 dB | -5.6 dB | 3% |
+| Rain, 29 June 2019 11:51 UTC | 16,407 | 1.00 | 0.6 dB | none (CC at 1: rain) | 95% |
 
-The CC runs higher than at La Crosse while the swarm is young and dense (0.92 to 0.94 for the half hour from 10:35 pm),
-then settles at 0.76 to 0.82 for the hour around midnight; ZDR stays at 6.5 dB to the 7.9 dB ceiling throughout, and the
+The CC runs higher than at La Crosse while the swarm is young and dense (0.93 to 0.94 from 10:35 to 10:56 pm, 0.92 at
+11:03 pm), then settles at 0.77 to 0.83 for the hour around midnight; ZDR stays at 6.5 dB to the 7.9 dB ceiling throughout, and the
 depolarisation ratio never comes near rain's. So: insects, not rain.
 
 **How special was the night.** Insect-like gates (20 dBZ or more, CC under 0.9, ZDR over 4 dB, 8 to 120 km) in the scan
@@ -102,9 +103,9 @@ band near Sandusky with a CC of 0.85 to 0.94, smaller and less clear-cut than 20
 ## Honest limits
 
 - Each is a replay of one evening, not a count and not live. Echo strength stands for how much is in the air, roughly.
-- The first scans (7:36 to 8:45 pm CDT) are near empty or clutter, so the replay starts at 8:55 pm.
-- News reports put the first detection at about 8:45 pm; in these scans the echo is barely there then and clear by
-  9:05 pm. The app quotes no detection time.
+- La Crosse: the first scans (7:36 to 8:45 pm CDT) are near empty or clutter, so the replay starts at 8:55 pm.
+- La Crosse: news reports put the first detection at about 8:45 pm; in these scans the echo is barely there then and
+  clear by 9:05 pm. The app quotes no detection time.
 - Birds and bats were not tested separately. The 0.5 degree beam climbs with range, which is why the view stops at 80 km
   (La Crosse) or 120 km (Lake Erie, where the beam is about 2 km up at the far edge: the swarm's start over the islands
   is seen from above).
