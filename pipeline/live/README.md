@@ -67,3 +67,8 @@ have happened, with the "likely" range and the model id + hash) and rewrites `li
 
 Rehearsed on 2026 with weekly rebuilt forecasts (`rehearse.py`, archive in `archive/2026/`): see `SCORECARD_2026.md`.
 `public/live/scorecard.json` on `main` is that rehearsal, shown until the first 2027 night replaces it.
+
+## Lead time (how far ahead it helps)
+`leadtime.py` rebuilds the forecast as issued on 1 Apr, 15 Apr, 1 May, 15 May and 1 Jun of 2023-2026 (GFS as the
+7-day forecast) and grades it with the scorecard's code: about 0.5 to 1.5 days better than the usual date from
+1 April, and the 7-day forecast adds almost nothing. See `LEADTIME.md`.
