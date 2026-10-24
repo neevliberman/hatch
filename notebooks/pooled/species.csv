@@ -1,0 +1,83 @@
+taxon_id,name,common,family,excluded,n_clean,n_window,share_window,median_doy,n_years,n_observers,dropped_because,selected
+47916,Actias luna,North American Luna Moth,Saturniidae,,2600,2540,0.977,179.0,11,1926,,True
+47919,Antheraea polyphemus,Polyphemus Moth,Saturniidae,,2565,2516,0.981,174.0,11,2105,,True
+82379,Hemaris thysbe,Hummingbird Clearwing,Sphingidae,,2594,2391,0.922,205.0,11,1563,,True
+358549,Hemaris diffinis,Snowberry Clearwing,Sphingidae,,2359,2264,0.96,201.0,11,1372,,True
+81680,Scopula limboundata,Large Lace-border Moth,Geometridae,,2453,2192,0.894,190.0,11,756,,True
+119013,Ctenucha virginica,Virginia Ctenucha Moth,Erebidae,,2191,2182,0.996,175.0,11,1455,,True
+52904,Microcrambus elegans,Elegant Grass-veneer,Crambidae,,2148,1864,0.868,205.0,11,582,,True
+118501,Mellilla xanthometata,Orange Wing,Geometridae,,1879,1830,0.974,200.0,11,816,,True
+736797,Macaria pustularia,Lesser Maple Spanworm Moth,Geometridae,,1800,1792,0.996,191.5,11,713,,True
+81681,Campaea perlata,Pale Beauty,Geometridae,,2428,1714,0.706,195.0,11,1001,,True
+84950,Alypia octomaculata,Eight-spotted Forester Moth,Noctuidae,,1390,1377,0.991,173.0,11,1111,,True
+119953,Hypoprepia fucosa,Painted Lichen Moth,Erebidae,,1439,1374,0.955,200.0,11,627,,True
+59675,Pyrrharctia isabella,Isabella Tiger Moth,Erebidae,,1452,1356,0.934,177.0,11,702,,True
+143005,Costaconvexa centrostrigaria,Bent-lined Carpet,Geometridae,,1545,1347,0.872,188.0,11,404,,True
+84038,Haploa lecontei,Leconte's Haploa Moth,Erebidae,,1210,1209,0.999,172.5,11,744,,True
+143118,Pseudeustrotia carneola,Pink-barred Pseudeustrotia Moth,Noctuidae,,1372,1205,0.878,205.0,11,407,,True
+143024,Eusarca confusaria,Confused Eusarca Moth,Geometridae,,1487,1150,0.773,191.0,11,512,,True
+47802,Lymantria dispar,Spongy Moth,Erebidae,,1181,1150,0.974,204.0,11,717,,True
+63028,Hypercompe scribonia,Giant Leopard Moth,Erebidae,,1157,1136,0.982,175.0,11,878,,True
+81590,Eacles imperialis,Imperial Moth,Saturniidae,,1088,1081,0.994,201.0,11,847,,True
+82204,Nadata gibbosa,White-dotted Prominent,Notodontidae,,1082,1067,0.986,189.0,11,499,,True
+48094,Dryocampa rubicunda,Rosy Maple Moth,Saturniidae,,1024,1021,0.997,169.0,11,689,,True
+143274,Gluphisia septentrionis,Common Gluphisia Moth,Notodontidae,,1006,1003,0.997,192.0,11,303,,True
+126106,Haploa clymene,Clymene Moth,Erebidae,,965,962,0.997,199.0,11,650,,True
+118503,Darapsa myron,Virginia Creeper Sphinx,Sphingidae,,957,945,0.987,195.0,11,600,,True
+205197,Eutrapela clemataria,Curved-toothed Geometer Moth,Geometridae,,929,918,0.988,162.0,11,395,,True
+228855,Protodeltote muscosula,Large Mossy Glyph,Noctuidae,,910,868,0.954,202.0,11,230,,True
+52943,Trichodezia albovittata,White-striped Black,Geometridae,,876,857,0.978,173.0,11,557,,True
+205235,Leuconycta diphteroides,Green Leuconycta Moth,Noctuidae,,838,838,1.0,180.5,11,325,,True
+83090,Epimecis hortaria,Tulip-tree Beauty,Geometridae,,816,795,0.974,183.5,11,374,,True
+133447,Crambus agitatellus,Double-banded Grass-veneer,Crambidae,,795,793,0.997,195.0,11,276,,True
+84333,Eudryas grata,Beautiful Wood-nymph,Noctuidae,,765,755,0.987,193.0,11,447,,True
+81582,Hyalophora cecropia,Cecropia Moth,Saturniidae,,755,744,0.985,169.0,11,711,,True
+49716,Paonias excaecata,Blinded Sphinx,Sphingidae,,749,744,0.993,190.0,11,551,,True
+143446,Paonias myops,Small-eyed Sphinx,Sphingidae,,729,727,0.997,184.0,11,451,,True
+82279,Automeris io,Io Moth,Saturniidae,,717,715,0.997,174.0,11,454,,True
+1410301,Eichlinia cucurbitae,Squash Vine Borer,Sesiidae,,719,712,0.99,188.0,11,599,,True
+118531,Parallelia bistriaris,Maple Looper Moth,Erebidae,,808,709,0.877,205.0,11,386,,True
+82201,Hypena baltimoralis,Baltimore Snout,Erebidae,,811,697,0.859,195.0,11,281,,True
+126153,Amphion floridensis,Nessus Sphinx,Sphingidae,,693,693,1.0,162.0,11,583,,True
+143445,Pachysphinx modesta,Modest Sphinx,Sphingidae,,678,677,0.999,178.0,11,522,,True
+143015,Eubaphe mendica,Beggar Moth,Geometridae,,707,656,0.928,178.0,11,339,,True
+81656,Nematocampa resistaria,Horned Spanworm Moth,Geometridae,,644,639,0.992,184.0,11,282,,True
+143009,Ectropis crepuscularia,Small Engrailed,Geometridae,,652,623,0.956,177.0,11,177,,True
+129222,Heterophleps triguttaria,Three-spotted Fillip,Geometridae,,628,622,0.99,174.0,11,288,,True
+178403,Phalaenophana pyramusalis,Dark-banded Owlet,Erebidae,,682,619,0.908,191.0,11,229,,True
+143728,Choristoneura rosaceana,Oblique-banded Leafroller Moth,Tortricidae,,697,618,0.887,189.0,11,261,,True
+211012,Maliattha synochitis,Black-dotted Glyph,Noctuidae,,610,610,1.0,169.0,11,227,,True
+143125,Hypena madefactalis,Gray-edged Snout,Erebidae,,597,579,0.97,197.0,11,187,,True
+215754,Callima argenticinctella,Orange-headed Callima Moth,Oecophoridae,,581,577,0.993,190.0,11,212,,True
+208118,Argyrotaenia velutinana,Red-banded Leafroller Moth,Tortricidae,,610,552,0.905,184.0,11,168,,True
+146750,Lascoria ambigualis,Ambiguous Moth,Erebidae,,632,495,0.783,204.0,11,173,,True
+116681,Atteva aurea,Ailanthus Webworm Moth,Attevidae,,5943,4306,0.725,224.0,11,2652,median day outside 130-205,False
+118490,Haematopis grataria,Chickweed Geometer Moth,Geometridae,,4004,2457,0.614,231.0,11,1318,median day outside 130-205,False
+118513,Hypena scabra,Green Cloverworm Moth,Erebidae,adult overwinters,4069,2342,0.576,233.0,11,778,adult overwinters,False
+60839,Spilosoma virginica,Virginian Tiger Moth,Erebidae,,2081,1795,0.863,208.0,11,1073,median day outside 130-205,False
+119789,Cisseps fulvicollis,Yellow-collared Scape Moth,Erebidae,,2861,1445,0.505,240.0,11,851,median day outside 130-205,False
+143518,Prochoerodes lineola,Large Maple Spanworm Moth,Geometridae,,2141,1128,0.527,238.0,11,570,median day outside 130-205,False
+81657,Lacinipolia renigera,Bristly Cutworm Moth,Noctuidae,,1636,1073,0.656,215.5,11,341,median day outside 130-205,False
+128242,Palthis angulalis,Dark-spotted Palthis Moth,Erebidae,,1187,978,0.824,207.0,11,387,median day outside 130-205,False
+143043,Cycnia tenera,Delicate Cycnia Moth,Erebidae,,970,934,0.963,207.5,11,466,median day outside 130-205,False
+81674,Rivula propinqualis,Spotted Grass Moth,Erebidae,,1263,898,0.711,218.0,11,385,median day outside 130-205,False
+63750,Anavitrinella pampinaria,North American Common Gray,Geometridae,,1042,829,0.796,210.0,11,236,median day outside 130-205,False
+143105,Pleuroprucha insulsaria,Common Tan Wave,Geometridae,,1112,807,0.726,216.0,11,268,median day outside 130-205,False
+118927,Acrolophus popeanella,Clemens' Grass Tubeworm Moth,Tineidae,,831,805,0.969,211.0,11,332,median day outside 130-205,False
+127460,Idia aemula,Common Idia Moth,Erebidae,,1195,787,0.659,218.0,11,256,median day outside 130-205,False
+52902,Palthis asopialis,Faint-spotted Palthis Moth,Erebidae,,1298,781,0.602,229.0,11,300,median day outside 130-205,False
+132736,Urola nivalis,Snowy Urola Moth,Crambidae,,881,770,0.874,211.0,11,321,median day outside 130-205,False
+143119,Galgula partita,Wedgling Moth,Noctuidae,,1024,768,0.75,207.0,11,279,median day outside 130-205,False
+62424,Sitochroa palealis,Carrot Seed Moth,Crambidae,,781,766,0.981,207.0,11,374,median day outside 130-205,False
+127457,Idia americalis,American Idia Moth,Erebidae,,1033,743,0.719,217.0,11,283,median day outside 130-205,False
+126204,Synchlora aerata,Wavy-lined Emerald,Geometridae,,928,663,0.714,223.0,11,283,median day outside 130-205,False
+119340,Amphipyra pyramidoides,American Copper Underwing,Noctuidae,,1082,651,0.602,231.0,11,389,median day outside 130-205,False
+335071,Elophila obliteralis,Waterlily Leafcutter Moth,Crambidae,,774,646,0.835,208.5,11,174,median day outside 130-205,False
+143867,Protoboarmia porcelaria,Porcelain Gray,Geometridae,,740,639,0.864,210.0,11,241,median day outside 130-205,False
+127431,Emmelina monodactyla,Morning-glory Plume Moth,Pterophoridae,adult overwinters,798,535,0.67,220.0,11,321,adult overwinters,False
+147309,Feltia herilis,Master's Dart,Noctuidae,,864,490,0.567,237.0,11,216,median day outside 130-205,False
+121612,Estigmene acrea,Salt Marsh Moth,Erebidae,,633,489,0.773,220.0,11,346,median day outside 130-205,False
+143196,Schinia arcigera,Arcigera Flower Moth,Noctuidae,,822,349,0.425,244.0,11,199,too few records,False
+119550,Feltia jaculifera,Dingy Cutworm Moth,Noctuidae,,787,102,0.13,255.0,10,65,too few records,False
+153076,Nephelodes minians,Bronzed Cutworm Moth,Noctuidae,,703,35,0.05,258.0,9,23,too few records,False
+154353,Sunira bicolorago,Bicolored Sallow,Noctuidae,,895,2,0.002,286.0,2,2,too few records,False
