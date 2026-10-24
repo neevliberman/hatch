@@ -608,7 +608,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.waitForTimeout(300);
         const [m, s] = await Promise.all(['#action-msg', '#share'].map((sel) => page.locator(sel).boundingBox()));
         if (!m || !m.height) fail('Share said nothing');
-        else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 80 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
+        // Just over the time bar, or over a card docked in that corner.
+        else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 300 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
         await shotF('4-share');
       }
     } catch (e) {
