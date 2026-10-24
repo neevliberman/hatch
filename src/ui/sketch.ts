@@ -135,6 +135,7 @@ interface Art {
  * with its wings half open. Other species bring their own drawing (src/species/). */
 export const MOTH_ART: Creature = {
   winters: 'litter',
+  months: ['May', 'June'],
   shell: true,
   sleeper: (cx, cy, k, seed) => ({
     wash: blob(loop(cx + 1.5, cy + 1.5, 11 * k, 5 * k, -0.35, 1)),
@@ -229,9 +230,10 @@ function wake(kind: Creature, moving: boolean): Art {
   };
 }
 
-/** Panel 3: the payoff. Two springs side by side: in a warm one the adult is out in May; in a cool one it is still
- * asleep in May and comes out in June. */
+/** Panel 3: the payoff. Two springs side by side: in a warm one the adult is out in its warm month (luna: May); in a
+ * cool one it is still asleep then and comes out in the next (June). The months are the species' own (kind.months). */
 function race(kind: Creature, moving: boolean): Art {
+  const [warmMonth, coolMonth] = kind.months;
   const early = kind.adult(54, 17, 0.42, 100);
   const late = kind.adult(84, 56, 0.42, 130);
   const still = kind.sleeper(50, 64, 0.55, 160);
@@ -252,10 +254,10 @@ function race(kind: Creature, moving: boolean): Art {
       (kind.shell ? shell : '') + early.body + late.body + still.ink,
     extra: `<text class="note small" x="4" y="36" transform="rotate(-4 4 36)">warm</text>
       <text class="note small" x="4" y="78" transform="rotate(-4 4 78)">cool</text>
-      <text class="note small" x="47" y="40" transform="rotate(-3 47 40)">May</text>
-      <text class="note small" x="44" y="78" transform="rotate(-3 44 78)">May</text>
+      <text class="note small" x="47" y="40" transform="rotate(-3 47 40)">${warmMonth}</text>
+      <text class="note small" x="44" y="78" transform="rotate(-3 44 78)">${warmMonth}</text>
       <text class="note small" x="55" y="57" transform="rotate(-8 55 57)">zz</text>
-      <text class="note small" x="76" y="79" transform="rotate(-3 76 79)">June</text>
+      <text class="note small" x="76" y="79" transform="rotate(-3 76 79)">${coolMonth}</text>
       ${flap(early, 54, 17)}${flap(late, 84, 56)}`,
   };
 }

@@ -72,6 +72,9 @@ export interface Creature {
   glow?: boolean;
   /** Leaves an empty cocoon behind once out. */
   shell?: boolean;
+  /** The sketch strip's warm-vs-cool panel: the month a warm spring's adult is out (a cool spring's is still asleep
+   * then), and the month the cool spring's comes out. From the species' own typical onset: luna May/June. */
+  months: [warm: string, cool: string];
 }
 
 /**

@@ -7,6 +7,8 @@ import mark from '../marks/japanese-beetle.svg';
  * above, its wing covers parted (they lift as it takes off), six legs and clubbed feelers. */
 const art: Creature = {
   winters: 'soil',
+  // Typical first beetles around the end of June (most of the map mid June to mid July): a warm spring's are out in June.
+  months: ['June', 'July'],
   sleeper: (cx, cy, k, seed) => {
     const arc = (rx: number, ry: number, a0: number, a1: number): P[] =>
       Array.from({ length: 9 }, (_, i) => {

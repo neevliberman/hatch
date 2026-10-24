@@ -7,6 +7,8 @@ import mark from '../marks/firefly.svg';
 /** The firefly as the About panel draws it: a grub in damp soil, and a flier with its lit tail glowing. */
 const art: Creature = {
   winters: 'soil',
+  // Typical first fireflies around Jun 18 (most of the map Jun 5 to Jul 6): a warm spring's are out in June.
+  months: ['June', 'July'],
   glow: true,
   sleeper: (cx, cy, k, seed) => ({
     wash: blob(loop(cx, cy, 16 * k, 4.5 * k, 0, 1)),
