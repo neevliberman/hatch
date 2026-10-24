@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """C8 (FROZEN_P4.md): do averages of the models beat each model? Scored on the cached Midwest LOYO folds.
 
-The member list is fixed here, not chosen by score: P3 refit (m0j), P1's empirical-DD dates (p1), and the Midwest-only
-winter-term model (m6, the best single Midwest-only candidate). Bootstrap over years gives a 95% interval on each
+Members: P3 refit (m0j), P1's empirical-DD dates (p1), and the Midwest-only winter-term model (m6). These were chosen
+after seeing scores (P1 from the free look in FROZEN_P4.md, m6 as the best Midwest-only candidate), so the intervals are optimistic. Bootstrap over years gives a 95% interval on each
 difference to P3.
 """
 import pickle

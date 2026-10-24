@@ -212,8 +212,7 @@ def fold(args):
     if cand.region == "mw":
         train = train[train.region == "mw"]
     elif cand.minlat:
-        train = train[(train.region == "mw") | (train.hex_lat_ >= cand.minlat)] if "hex_lat_" in train else \
-            train[(train.region == "mw") | (D.hex_lat[train.h.to_numpy()] >= cand.minlat)]
+        train = train[(train.region == "mw") | (D.hex_lat[train.h.to_numpy()] >= cand.minlat)]
     t0 = time.time()
     # profile the degree-day inputs by training likelihood
     grid = dd_grid(cand)

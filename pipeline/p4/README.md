@@ -13,3 +13,5 @@ python3 pipeline/p4/fetch_2026.py && python3 pipeline/p4/score_2026.py --cands m
 python3 -m pytest pipeline/p4
 ```
 `jaxlik.py` is P3's likelihood with exact gradients (JAX), about 7× faster; `tests/` checks it against `pipeline/fit`.
+
+Note: fold caches are keyed by candidate and year only. Delete `notebooks/data/p4_cache/` after changing code, or results will be stale.

@@ -17,7 +17,7 @@ idea can gain is about 0.85 day, and gains of 0.1 to 0.3 day are smaller than th
 | Calendar (usual date) | 7.31 | baseline |
 | P1 (older heat model) | 4.06 | |
 | **P3 refit here (control)** | **3.86** | the map's model; reproduces P3's 3.85 |
-| Winter-warmth term (mild winter shifts the target) | 3.81 | tiny gain, inside noise (fitted effect: 4 degree-days per °C) |
+| Winter-warmth term (mild winter shifts the target) | 3.81 | tiny gain, inside noise (fitted effect: about 2 to 7 degree-days per °C) |
 | Latitude slide on the target | 3.94 | no help |
 | Daylength gate (clock starts only once days are long) | 3.90 | no help (gate not used) |
 | Fitted base/upper temperatures (6-12 °C, 24-33 °C) | 3.90 | picked 6/24, scores the same |
@@ -29,7 +29,7 @@ idea can gain is about 0.85 day, and gains of 0.1 to 0.3 day are smaller than th
 | Averages: P3 + P1 / P3 + winter / all three | 3.73 / 3.78 / 3.68 | -0.13, -0.07, -0.18 vs P3; 95% CIs all include 0 |
 
 **Average of models:** the three-way average is 0.18 day better, short of the 0.2-day bar we set, and its interval
-(-0.70 to +0.25) includes zero. Not shipped, but it is the only direction that kept looking positive.
+(-0.70 to +0.25) includes zero. Not shipped. The members were picked after seeing scores (P1 from the free look in FROZEN_P4.md, the winter model as the best Midwest-only candidate), so this figure is optimistic. On 2026 the P3+P1 average was worse than P3 alone (5.48 vs 4.78).
 
 ## "Ten times more data" did not help
 We pulled 67,000 luna records from all of eastern North America (31-49 °N, 60-100 °W; the Midwest has 3,800 usable
@@ -60,7 +60,7 @@ calendar 7.80. So 2026 agrees: P3 holds up on a fresh season (the southern-strip
 [../fit/SOUTH_BIAS.md](../fit/SOUTH_BIAS.md)).
 
 ## Decision
-Under the rule, no candidate beat P3 by 0.2 day on the headline test, so **no model change**. Honest limits:
+Under the rule, no candidate beat P3 by 0.2 day on the headline test (rule 1), so **no model change**. Rules 2 to 4 (spatial holdout, warm-spring stress test, full 2026 comparison) were not run for any candidate: they only matter for a candidate that passes rule 1, and none did. The wide-model rows above are shown both unbounded and with P3.1's bounds (the version the rule applies to; worse on both). Honest limits:
 - 31 band-years cannot separate models that differ by less than about half a day (see the intervals).
 - The leaf-litter, two-clock and flight-life results show a trap: they improve how well the model explains sightings but
   worsen the dates. Judge by held-out dates, not by fit.
@@ -73,4 +73,4 @@ Under the rule, no candidate beat P3 by 0.2 day on the headline test, so **no mo
    3 band-years; two more seasons will make 0.2-day differences visible.
 3. **Per-region models** (Southeast, Northeast) each trained on its own region, in place of one big curve. The trees'
    East result hints regional models can beat a calendar there; that is the road to new regions, not to a better Midwest.
-4. **Averaging with P1** is the one idea whose sign stayed positive in every cut. Re-test it on 2027 in advance.
+4. **Averaging with P1** helped a little on past Midwest years and hurt on 2026, so it is a hint only. If we want it, write the rule down before the 2027 season and let the scorecard decide.
