@@ -108,9 +108,9 @@ def main(argv=None):
         key, _, path = r.rpartition("=")
         records[key or "luna"] = pd.read_parquet(path)
     weeks = season_weeks(a.season, records, a.archive, a.today, keys=keys)
-    out = weeks[-1]
+    out = S.with_seasons(weeks[-1], S.read_card(a.out))   # keep the other seasons the file already holds
     a.out.parent.mkdir(parents=True, exist_ok=True)
-    a.out.write_text(json.dumps(out, separators=(",", ":")))
+    a.out.write_text(json.dumps(out, separators=(",", ":"), allow_nan=False))
     for k, layer in out["layers"].items():
         print(f"wrote {a.out} [{k}]: {json.dumps(layer['summary'])}")
     if a.weeks:

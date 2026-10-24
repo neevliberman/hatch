@@ -94,6 +94,10 @@ on its own archive, against its own sightings and its own calendar. The app show
   only (the id + hash of the season's first archived forecast; anything else is counted, never graded).
 - The baseline is the calendar: each strip's mean onset and peak over 2015-2025. Scores move once a week (Mondays).
 - If the scorecard fails, the forecast still publishes and the run then fails, so the alarm issue opens.
+- Past seasons are kept: `seasons` lists every other season's last published summary per species (oldest first),
+  carried from the file on `live-data` and from `main`'s `public/live/scorecard.json` (`--past`), so the first 2027
+  night starts from the 2026 rehearsal and each new season moves the last one into the list. The app's record line
+  lists every season the file holds, seasons with the same outcome pooled in one clause ("in 2026 and 2027").
 
 Rehearsed on 2026 with weekly rebuilt forecasts for all three species (`rehearse.py`, archive in `archive/2026/`,
 `archive/firefly/2026/`, `archive/japanese-beetle/2026/`): see `SCORECARD_2026.md`.
