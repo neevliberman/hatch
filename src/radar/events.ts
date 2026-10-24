@@ -2,6 +2,7 @@
 // when someone opens one; the About panel's links come from the short list in ./index.ts (same ids).
 // Adding an event: an entry in pipeline/radar/build_radar.py (radar, UTC window), run it to write
 // public/radar/<id>/, then an entry here and one in ./index.ts. Check its insect test (meta.json) before it ships.
+// The evidence for each one (news of the night, the radar's own numbers) is in pipeline/radar/README.md.
 
 export interface RadarEvent {
   id: string;
@@ -28,6 +29,23 @@ export const EVENTS: Record<string, RadarEvent> = {
     numbers: {
       lead: 'Weather radars like this one show mayflies declining (Stepanian et al. 2020):',
       items: ['Upper Mississippi: down 52% from 2012 to 2019', 'Western Lake Erie: down 84% from 2015 to 2019'],
+    },
+    credits: [
+      { text: 'Stepanian et al. 2020, PNAS 117(6): 2987–2992', href: 'https://doi.org/10.1073/pnas.1913598117' },
+      { text: 'NOAA NEXRAD data (public domain)', href: 'https://www.ncei.noaa.gov/products/radar/next-generation-weather-radar' },
+    ],
+  },
+  'kcle-2019-06-26': {
+    id: 'kcle-2019-06-26',
+    caption: 'Mayflies rising off Lake Erie',
+    tz: { name: 'EDT', offset: -4 },
+    more: [
+      'A replay of one evening on the National Weather Service radar at Cleveland, Ohio, one sweep about every 7 minutes. After dark the cloud rises over the lake’s western islands and drifts east. Darker means a stronger echo; the blank centre is left out.',
+      'How we know it’s insects: radar can tell raindrops (round, all alike) from insects (long, all different), and this cloud reads as insects, not rain.',
+    ],
+    numbers: {
+      lead: 'Weather radars like this one show mayflies declining (Stepanian et al. 2020):',
+      items: ['Western Lake Erie: down 84% from 2015 to 2019', 'Upper Mississippi: down 52% from 2012 to 2019'],
     },
     credits: [
       { text: 'Stepanian et al. 2020, PNAS 117(6): 2987–2992', href: 'https://doi.org/10.1073/pnas.1913598117' },
