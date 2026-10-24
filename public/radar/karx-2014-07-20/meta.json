@@ -1,0 +1,72 @@
+{
+ "event": "karx-2014-07-20",
+ "site": "KARX",
+ "lat": 43.8228,
+ "lon": -91.1911,
+ "times": [
+  "2014-07-21T00:36:35Z",
+  "2014-07-21T00:46:24Z",
+  "2014-07-21T00:56:14Z",
+  "2014-07-21T01:06:04Z",
+  "2014-07-21T01:15:53Z",
+  "2014-07-21T01:25:42Z",
+  "2014-07-21T01:35:31Z",
+  "2014-07-21T01:45:20Z",
+  "2014-07-21T01:55:10Z",
+  "2014-07-21T02:05:00Z",
+  "2014-07-21T02:14:51Z",
+  "2014-07-21T02:24:40Z",
+  "2014-07-21T02:34:30Z",
+  "2014-07-21T02:44:20Z",
+  "2014-07-21T02:54:09Z",
+  "2014-07-21T03:03:58Z",
+  "2014-07-21T03:13:47Z",
+  "2014-07-21T03:23:36Z",
+  "2014-07-21T03:33:26Z",
+  "2014-07-21T03:43:16Z",
+  "2014-07-21T03:53:05Z",
+  "2014-07-21T04:02:55Z",
+  "2014-07-21T04:12:45Z",
+  "2014-07-21T04:22:35Z",
+  "2014-07-21T04:32:23Z",
+  "2014-07-21T04:42:13Z",
+  "2014-07-21T04:52:02Z",
+  "2014-07-21T05:01:51Z"
+ ],
+ "start": 8,
+ "grid": {
+  "n": 160,
+  "half_m": 80000.0,
+  "spacing_m": 1006.289,
+  "rows": "south to north",
+  "packing": "4 bits, high nibble first",
+  "projection": "azimuthal equidistant on a sphere, R 6370997 m, centred on the radar (Py-ART grid_from_radars)"
+ },
+ "levels": {
+  "none": 0,
+  "dbz_min": 10.0,
+  "dbz_step": 2.5,
+  "count": 15
+ },
+ "kept": {
+  "range_km": [
+   8.0,
+   80.0
+  ],
+  "rain_dropped": "20 dBZ or more with CC 0.95 or more"
+ },
+ "insect_check": {
+  "what": "cells of 25 dBZ or more, 8 to 80 km out, in scans with 100 or more of them",
+  "scans": 10,
+  "cc_median": [
+   0.7,
+   0.78
+  ],
+  "zdr_median_db": [
+   7.7,
+   7.9
+  ],
+  "rain_like_cells": 1
+ },
+ "source": "NOAA NEXRAD Level II, KARX, via https://unidata-nexrad-level2.s3.amazonaws.com"
+}

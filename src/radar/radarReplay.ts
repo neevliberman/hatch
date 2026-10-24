@@ -1,0 +1,430 @@
+// The radar replay: one evening of a weather radar's scans, drawn at their true place on the map, on a loop.
+// Loaded only when someone opens a radar event (main.ts), with its frames (public/radar/<id>/, from
+// pipeline/radar/build_radar.py). Nothing here ships in the page.
+import { BitmapLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer } from '@deck.gl/layers';
+import type { Layer } from '@deck.gl/core';
+import type { MapHandle, Padding } from '../map/map';
+import { palette } from '../theme';
+import { CROSS, PAUSE, PLAY } from '../ui/icons';
+import { EVENTS, type RadarEvent } from './events';
+import './radar.css';
+
+interface Meta {
+  site: string;
+  lat: number;
+  lon: number;
+  times: string[];
+  start: number;
+  grid: { n: number; half_m: number; spacing_m: number };
+  levels: { dbz_min: number; dbz_step: number; count: number };
+  kept: { range_km: [number, number] };
+}
+
+export interface RadarHost {
+  map: MapHandle;
+  padding(): Padding;
+  /** Where the card goes (the floating row over the time bar). */
+  mount: HTMLElement;
+  /** Called once the replay has closed (its × or Escape, or close()). */
+  onClose(): void;
+}
+
+export interface Radar {
+  id: string;
+  close(): void;
+}
+
+type RGBA = [number, number, number, number];
+// Py-ART grids on a sphere of this radius (its azimuthal equidistant projection); the frames' cells are on that grid.
+const R = 6370997;
+const RAD = Math.PI / 180;
+
+// Echo strength ramp, light to dark, in the map's own colours (theme.ts): the pale "not yet" sage, the leaf greens,
+// the ochre of "winding down", the page's terracotta warning colour (style.css --warn), then ink. The pale end is
+// see-through like the map's washes.
+const ANCHORS: RGBA[] = [palette.stages['not yet'], palette.stages.starting, palette.stages.peak, palette.stages['winding down'], [166, 63, 25, 235], palette.stripes];
+function ramp(n: number): RGBA[] {
+  return Array.from({ length: n }, (_, i) => {
+    const p = (i / (n - 1)) * (ANCHORS.length - 1);
+    const k = Math.min(Math.floor(p), ANCHORS.length - 2);
+    const f = p - k;
+    return ANCHORS[k]!.map((v, j) => Math.round(v * (1 - f) + ANCHORS[k + 1]![j]! * f)) as RGBA;
+  });
+}
+
+/** lng/lat of the point `d` metres from (lat0, lon0) along bearing `az` (radians from north), on Py-ART's sphere. */
+function fromRadar(lat0: number, lon0: number, az: number, d: number): [number, number] {
+  const c = d / R;
+  const p0 = lat0 * RAD;
+  const lat = Math.asin(Math.sin(p0) * Math.cos(c) + Math.cos(p0) * Math.sin(c) * Math.cos(az));
+  const lon = lon0 * RAD + Math.atan2(Math.sin(az) * Math.sin(c) * Math.cos(p0), Math.cos(c) - Math.sin(p0) * Math.sin(lat));
+  return [lon / RAD, lat / RAD];
+}
+const circle = (m: Meta, d: number) => Array.from({ length: 145 }, (_, i) => fromRadar(m.lat, m.lon, (i / 144) * 2 * Math.PI, d));
+const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2));
+const unMercY = (y: number) => (2 * Math.atan(Math.exp(y)) - Math.PI / 2) / RAD;
+
+/**
+ * Where each texture pixel samples the radar grid. The frames are cells in the radar's own flat (azimuthal
+ * equidistant) frame, which is not the map's: on a Web Mercator map their square is a little bent and its north is
+ * not quite the map's north away from the radar's meridian. So the image is drawn on a lng/lat box (which is a true
+ * rectangle on the map), and every pixel of it is mapped back to its exact spot on the radar grid.
+ */
+function sampler(m: Meta) {
+  const { n, half_m: half, spacing_m: sp } = m.grid;
+  const reach = m.kept.range_km[1] * 1000 + sp; // the outermost kept cell's edge, and a little
+  const ring = circle(m, reach);
+  const west = Math.min(...ring.map((p) => p[0]));
+  const east = Math.max(...ring.map((p) => p[0]));
+  const south = Math.min(...ring.map((p) => p[1]));
+  const north = Math.max(...ring.map((p) => p[1]));
+  // About two texture pixels to a radar cell: smooth once the GPU filters it, and still small to rebuild mid-fade.
+  const w = Math.round((2 * reach) / (sp / 2));
+  const yN = mercY(north);
+  const yS = mercY(south);
+  const h = Math.round((w * (yN - yS)) / ((east - west) * RAD));
+  const at = new Int32Array(w * h).fill(-1);
+  const fx = new Float32Array(w * h);
+  const fy = new Float32Array(w * h);
+  const p0 = m.lat * RAD;
+  for (let j = 0; j < h; j++) {
+    const lat = unMercY(yN - ((j + 0.5) / h) * (yN - yS)) * RAD; // row 0 is the north edge
+    for (let i = 0; i < w; i++) {
+      const dl = (west + ((i + 0.5) / w) * (east - west) - m.lon) * RAD;
+      // Forward azimuthal equidistant (Snyder 25-2..25-5): metres east (x) and north (y) of the radar.
+      const cc = Math.sin(p0) * Math.sin(lat) + Math.cos(p0) * Math.cos(lat) * Math.cos(dl);
+      const c = Math.acos(Math.min(1, Math.max(-1, cc)));
+      const k = c < 1e-12 ? 1 : c / Math.sin(c);
+      const x = R * k * Math.cos(lat) * Math.sin(dl);
+      const y = R * k * (Math.cos(p0) * Math.sin(lat) - Math.sin(p0) * Math.cos(lat) * Math.cos(dl));
+      // Grid coordinates: cell centres sit at -half, -half + sp, ... +half; rows run south to north.
+      const gx = (x + half) / sp;
+      const gy = (y + half) / sp;
+      if (gx < 0 || gy < 0 || gx >= n - 1 || gy >= n - 1) continue;
+      const q = j * w + i;
+      at[q] = Math.floor(gy) * n + Math.floor(gx);
+      fx[q] = gx - Math.floor(gx);
+      fy[q] = gy - Math.floor(gy);
+    }
+  }
+  return { w, h, at, fx, fy, n, bounds: [west, south, east, north] as [number, number, number, number] };
+}
+
+/** The frames' levels, one byte a cell, from the 4-bit pack (high nibble first). */
+function unpack(bytes: Uint8Array, n: number, count: number): Uint8Array[] {
+  const per = (n * n) / 2;
+  if (bytes.length !== per * count) throw new Error(`radar pack: ${bytes.length} bytes, expected ${per * count}`);
+  return Array.from({ length: count }, (_, f) => {
+    const out = new Uint8Array(n * n);
+    for (let i = 0; i < per; i++) {
+      const b = bytes[f * per + i]!;
+      out[2 * i] = b >> 4;
+      out[2 * i + 1] = b & 15;
+    }
+    return out;
+  });
+}
+
+async function gunzip(res: Response): Promise<Uint8Array> {
+  const buf = new Uint8Array(await res.arrayBuffer());
+  // Some servers send a .gz with Content-Encoding: gzip, and the browser has already unpacked it.
+  if (buf[0] !== 0x1f || buf[1] !== 0x8b) return buf;
+  const out = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(out).arrayBuffer());
+}
+
+/** "9:24 pm" and "Sun 20 July 2014" in the event's local time. */
+function local(iso: string, tz: RadarEvent['tz']): [string, string] {
+  const d = new Date(Date.parse(iso) + tz.offset * 3600_000);
+  const h = d.getUTCHours();
+  const time = `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+  const day = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).replace(',', '');
+  return [time, day];
+}
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+export async function openRadar(id: string, host: RadarHost): Promise<Radar | null> {
+  const ev = EVENTS[id];
+  if (!ev) return null;
+  const base = `${import.meta.env.BASE_URL}radar/${id}/`;
+  let meta: Meta;
+  let frames: Uint8Array[];
+  try {
+    const [m, f] = await Promise.all([fetch(`${base}meta.json`), fetch(`${base}frames.bin.gz`)]);
+    if (!m.ok || !f.ok) return null;
+    meta = (await m.json()) as Meta;
+    frames = unpack(await gunzip(f), meta.grid.n, meta.times.length);
+  } catch {
+    return null;
+  }
+  const { map } = host;
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  const pal = ramp(meta.levels.count);
+  // Premultiplied colour per level (0 = nothing), so blending neighbours never drags in a dark fringe.
+  const PR = new Float32Array(16);
+  const PG = new Float32Array(16);
+  const PB = new Float32Array(16);
+  const PA = new Float32Array(16);
+  pal.forEach(([r, g, b, a], i) => ((PR[i + 1] = (r * a) / 255), (PG[i + 1] = (g * a) / 255), (PB[i + 1] = (b * a) / 255), (PA[i + 1] = a)));
+  const S = sampler(meta);
+  const [r0, g0, b0] = pal[0]!;
+
+  /** Frame `a` blended `f` of the way to frame `b`, bilinear on the radar grid, as a texture-ready image. */
+  const paint = (a: number, b: number, f: number): ImageData => {
+    const img = new ImageData(S.w, S.h);
+    const px = img.data;
+    const A = frames[a]!;
+    const B = frames[b]!;
+    const n = S.n;
+    for (let q = 0; q < S.at.length; q++) {
+      const o = q * 4;
+      px[o] = r0;
+      px[o + 1] = g0;
+      px[o + 2] = b0;
+      const i = S.at[q]!;
+      if (i < 0) continue;
+      const x = S.fx[q]!;
+      const y = S.fy[q]!;
+      const w00 = (1 - x) * (1 - y);
+      const w10 = x * (1 - y);
+      const w01 = (1 - x) * y;
+      const w11 = x * y;
+      let r = 0, g = 0, bl = 0, al = 0;
+      for (const [L, wt] of [[A, 1 - f], [B, f]] as const) {
+        if (!wt) continue;
+        const l00 = L[i]!, l10 = L[i + 1]!, l01 = L[i + n]!, l11 = L[i + n + 1]!;
+        if (!(l00 | l10 | l01 | l11)) continue;
+        r += wt * (w00 * PR[l00]! + w10 * PR[l10]! + w01 * PR[l01]! + w11 * PR[l11]!);
+        g += wt * (w00 * PG[l00]! + w10 * PG[l10]! + w01 * PG[l01]! + w11 * PG[l11]!);
+        bl += wt * (w00 * PB[l00]! + w10 * PB[l10]! + w01 * PB[l01]! + w11 * PB[l11]!);
+        al += wt * (w00 * PA[l00]! + w10 * PA[l10]! + w01 * PA[l01]! + w11 * PA[l11]!);
+      }
+      if (al < 1) continue;
+      px[o] = (r * 255) / al;
+      px[o + 1] = (g * 255) / al;
+      px[o + 2] = (bl * 255) / al;
+      px[o + 3] = al;
+    }
+    return img;
+  };
+
+  // A sheet of paper under the radar's reach, so the forecast hexagons don't read as part of it; the rivers and state
+  // lines still draw on top. Range rings at 40 and 80 km, and the radar itself as an ink dot.
+  const reach = meta.kept.range_km[1] * 1000;
+  const sheet = new SolidPolygonLayer<{ ring: [number, number][] }>({
+    id: 'radar-sheet',
+    data: [{ ring: circle(meta, reach + meta.grid.spacing_m) }],
+    getPolygon: (d) => d.ring,
+    getFillColor: [...palette.land.slice(0, 3), 235] as RGBA,
+  });
+  const rings = new PathLayer<{ path: [number, number][] }>({
+    id: 'radar-rings',
+    data: [{ path: circle(meta, reach / 2) }, { path: circle(meta, reach) }],
+    getPath: (d) => d.path,
+    getColor: palette.neighbourLine,
+    getWidth: 1,
+    widthUnits: 'pixels',
+  });
+  const site = new ScatterplotLayer<[number, number]>({
+    id: 'radar-site',
+    data: [[meta.lon, meta.lat]],
+    getPosition: (d) => d,
+    getRadius: 3.5,
+    radiusUnits: 'pixels',
+    getFillColor: palette.stripes,
+  });
+  let drawn = '';
+  const draw = (a: number, b: number, f: number) => {
+    const key = `${a}:${b}:${f.toFixed(2)}`;
+    if (key === drawn) return;
+    drawn = key;
+    const image = new BitmapLayer({ id: 'radar-frame', bounds: S.bounds, image: paint(a, b, f), pickable: false });
+    map.setOverlay([sheet, image, rings, site] as Layer[]);
+  };
+
+  // The card: play or pause, the time and a one-line caption, "How we know" behind an i, and a close button.
+  const card = document.createElement('section');
+  card.id = 'radar';
+  card.setAttribute('aria-label', 'Radar replay');
+  const step = meta.levels;
+  const keyStops = pal.map((c) => `rgba(${c[0]},${c[1]},${c[2]},${(c[3] / 255).toFixed(2)})`).join(',');
+  card.innerHTML = `<div class="rd-head">
+      <button type="button" class="icon-btn rd-play" aria-label="Pause the replay">${PAUSE}</button>
+      <p class="rd-cap"><span class="rd-when"><b class="rd-time"></b> ${esc(ev.tz.name)}, <span class="rd-day"></span></span>
+        <span class="rd-what">${esc(ev.caption)}</span></p>
+      <button type="button" class="rd-i" aria-expanded="false" aria-controls="radar-more" aria-label="How we know it’s insects" title="How we know">i</button>
+      <button type="button" class="rd-x" aria-label="Close the radar replay" title="Close">${CROSS}</button>
+    </div>
+    <div class="rd-prog" aria-hidden="true"><i></i></div>
+    <div id="radar-more" class="rd-more" hidden>
+      ${ev.more.map((p) => `<p>${esc(p)}</p>`).join('')}
+      <div class="rd-key" aria-hidden="true"><i style="background:linear-gradient(90deg,${keyStops})"></i>
+        <span>weak echo, ${step.dbz_min} dBZ</span><span>strong, ${step.dbz_min + step.dbz_step * (step.count - 1)}+</span></div>
+      <p>${esc(ev.numbers.lead)}</p>
+      <ul>${ev.numbers.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      <p class="rd-credits">${ev.credits.map((c) => `<a href="${esc(c.href)}" target="_blank" rel="noopener noreferrer">${esc(c.text)}<span class="sr"> (opens in a new tab)</span></a>`).join('')}</p>
+    </div>`;
+  host.mount.prepend(card);
+  const q = <T extends HTMLElement>(s: string) => card.querySelector(s) as T;
+  const playBtn = q<HTMLButtonElement>('.rd-play');
+  const more = q<HTMLElement>('.rd-more');
+  const info = q<HTMLButtonElement>('.rd-i');
+
+  // Glide to the radar: its whole 80 km reach in the free map between the header and the card.
+  const before = map.moved() ? map.center(host.padding()) : null;
+  // On a wide screen the card sits in a corner, so the radar only keeps clear of its closed height; on a phone it spans
+  // the width, so the radar sits above all of it.
+  const wide = () => card.offsetWidth < window.innerWidth * 0.6;
+  const room = (): Padding => {
+    const p = host.padding();
+    const r = card.getBoundingClientRect();
+    const top = wide() && !more.hidden ? r.top + more.offsetHeight + 7 : r.top;
+    return { ...p, bottom: Math.max(8, window.innerHeight - top + 8), rightFrom: undefined };
+  };
+  const frame = () => {
+    const p = room();
+    const w = window.innerWidth - (p.right ?? 0) - 24;
+    const h = window.innerHeight - p.top - p.bottom - 16;
+    const metresPerPx = (2 * (reach + meta.grid.spacing_m)) / Math.max(120, Math.min(w, h));
+    // Web Mercator, 512 px tiles: metres per pixel = 40075016 cos(lat) / (512 2^zoom).
+    const zoom = Math.log2((40075016 * Math.cos(meta.lat * RAD)) / (512 * metresPerPx));
+    return { p, zoom };
+  };
+  const look = (fly: boolean) => {
+    const { p, zoom } = frame();
+    map.focus([meta.lon, meta.lat], zoom, p, fly);
+  };
+  // "How we know" makes the card taller: keep the radar clear of it while the map above still has room for it.
+  info.addEventListener('click', () => {
+    more.hidden = !more.hidden;
+    info.setAttribute('aria-expanded', String(!more.hidden));
+    info.classList.toggle('on', !more.hidden);
+    if (!wide() && window.innerHeight - room().top - room().bottom >= 200) look(true);
+  });
+
+  // Playback: each scan holds, then fades into the next; the last one rests a little longer before the loop starts
+  // over. Reduced motion: no fade, a slower step, and it opens paused on the scan with the most strong echo.
+  const first = Math.min(meta.start, frames.length - 1);
+  const last = frames.length - 1;
+  const HOLD = 700;
+  const FADE = 500;
+  const REST = 1800;
+  let idx = first;
+  let playing = !still.matches;
+  if (!playing) {
+    // Strong: 25 dBZ or more, where the plume is thickest over the river.
+    const strong = Math.ceil((25 - meta.levels.dbz_min) / meta.levels.dbz_step) + 1;
+    let most = -1;
+    for (let i = first; i <= last; i++) {
+      const c = frames[i]!.reduce((s, v) => s + (v >= strong ? 1 : 0), 0);
+      if (c > most) (most = c), (idx = i);
+    }
+  }
+  let t0 = performance.now();
+  let raf = 0;
+  let shown = -1;
+  const timeEl = q<HTMLElement>('.rd-time');
+  const dayEl = q<HTMLElement>('.rd-day');
+  const bar = q<HTMLElement>('.rd-prog i');
+  const label = (i: number, f: number) => {
+    const at = f >= 0.5 ? (i === last ? first : i + 1) : i;
+    if (at !== shown) {
+      shown = at;
+      const [t, d] = local(meta.times[at]!, ev.tz);
+      timeEl.textContent = t;
+      dayEl.textContent = d;
+    }
+    bar.style.width = `${(((i - first + (i === last ? 0 : f)) / (last - first)) * 100).toFixed(1)}%`;
+  };
+  const tick = (now: number) => {
+    raf = 0;
+    if (!playing) return;
+    const hold = idx === last ? REST : still.matches ? 1600 : HOLD;
+    const fade = still.matches ? 0 : FADE;
+    let e = now - t0;
+    if (e >= hold + fade) {
+      idx = idx === last ? first : idx + 1;
+      t0 = now;
+      e = 0;
+    }
+    const f = e > hold && fade ? Math.min(1, (e - hold) / fade) : 0;
+    const eased = f * f * (3 - 2 * f);
+    const next = idx === last ? first : idx + 1;
+    // Mid-fade the image is rebuilt about 25 times a second, not every frame: a slow fade looks the same.
+    draw(idx, next, f ? Math.round(eased * 12) / 12 : 0);
+    label(idx, eased);
+    raf = requestAnimationFrame(tick);
+  };
+  const setPlaying = (on: boolean) => {
+    playing = on;
+    playBtn.innerHTML = on ? PAUSE : PLAY;
+    playBtn.setAttribute('aria-label', on ? 'Pause the replay' : 'Play the replay');
+    cancelAnimationFrame(raf);
+    raf = 0;
+    if (on) {
+      t0 = performance.now();
+      raf = requestAnimationFrame(tick);
+    } else {
+      draw(idx, idx, 0); // settle on the scan in view, not half-way into the next
+      label(idx, 0);
+    }
+  };
+  playBtn.addEventListener('click', () => setPlaying(!playing));
+  draw(idx, idx, 0);
+  label(idx, 0);
+  setPlaying(playing);
+  // After the card is laid out, so the glide knows how much room it takes.
+  requestAnimationFrame(() => look(true));
+  let resizeTimer = 0;
+  const onResize = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => look(false), 150);
+  };
+  window.addEventListener('resize', onResize);
+
+  let open = true;
+  const close = () => {
+    if (!open) return;
+    open = false;
+    cancelAnimationFrame(raf);
+    clearTimeout(resizeTimer);
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('keydown', onKey, true);
+    const hadFocus = card.contains(document.activeElement);
+    card.remove();
+    map.setOverlay([]);
+    host.onClose();
+    // Back to where the reader was: the whole Midwest, or the place they had panned to. After the time bar is back.
+    requestAnimationFrame(() => {
+      if (before) map.focus(before.lngLat, before.zoom, host.padding(), true);
+      else map.fit(host.padding(), true);
+    });
+    if (hadFocus) document.getElementById('info-btn')?.focus({ preventScroll: true });
+  };
+  // Step one scan back or on (and pause), for the arrow keys.
+  const stepBy = (d: number) => {
+    setPlaying(false);
+    idx = idx + d > last ? first : idx + d < first ? last : idx + d;
+    draw(idx, idx, 0);
+    label(idx, 0);
+  };
+  // While it is open the keys drive the replay, not the hidden season slider: arrows step a scan, Space plays or
+  // pauses, Escape closes. Not while something on top (the About panel, the town box) has them.
+  const onKey = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || document.getElementById('drawer')?.classList.contains('open')) return;
+    if (!document.getElementById('finder')?.hidden) return;
+    const t = e.target as HTMLElement;
+    if (e.key === 'Escape') close();
+    else if (t.closest?.('input, select, textarea, [contenteditable]')) return;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') stepBy(e.key === 'ArrowLeft' ? -1 : 1);
+    else if (e.key === ' ' && !(t instanceof HTMLButtonElement)) setPlaying(!playing);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  window.addEventListener('keydown', onKey, true);
+  q<HTMLButtonElement>('.rd-x').addEventListener('click', close);
+  playBtn.focus({ preventScroll: true });
+  return { id, close };
+}
