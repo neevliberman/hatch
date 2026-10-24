@@ -12,6 +12,23 @@ import { cellToChildren, cellToParent, splitLongToH3Index } from 'h3-js';
  */
 export const RETRY_MS = 15_000;
 export const FINE_PARENT_RES = 4;
+/** Seasons of finer days kept in memory per level (up to ~140 KB each at res 6). Older ones are dropped, oldest first:
+ * a season switched back to comes from the browser's cache, not the network. Like a desk: the last few open, the rest
+ * back on the shelf. */
+export const KEEP_SEASONS = 3;
+/** Back at the big hexagons this long, a layer lets go of its finer ones (res 6 alone is ~27,000 cells, several MB on a
+ * phone). Zooming in again reloads them from the browser's cache: a moment of big hexagons, no download. */
+export const RELEASE_MS = 60_000;
+
+/** Set key in a cache, then drop its oldest entries beyond `max` (never `keep`, the one on screen). */
+export function remember<K, V>(cache: Map<K, V>, key: K, value: V, max: number, keep: (k: K) => boolean = (k) => k === key): void {
+  cache.delete(key); // re-inserted last: newest
+  cache.set(key, value);
+  for (const k of cache.keys()) {
+    if (cache.size <= max) break;
+    if (!keep(k)) cache.delete(k);
+  }
+}
 
 interface Manifest {
   version: number;
@@ -98,7 +115,8 @@ export function fineSource(dir: string) {
         const b = await get(`r${res}/${mode}.bin`);
         return b ? new Uint8Array(b) : null;
       });
-      modes.set(key, p);
+      // Only seasons on their way or just loaded need deduplicating here; the layers keep what they draw.
+      remember(modes, key, p, KEEP_SEASONS * 2);
       const mine = p;
       void p.then((d) => {
         if (!d && modes.get(key) === mine) modes.delete(key);
@@ -107,10 +125,16 @@ export function fineSource(dir: string) {
     return p;
   }
 
-  return { fineManifest, fineLevel, fineDays };
+  /** Let go of every loaded level and season (zoomed back out for a while); the next zoom in loads them again. */
+  function forget() {
+    levels.clear();
+    modes.clear();
+  }
+
+  return { fineManifest, fineLevel, fineDays, forget };
 }
 
-export const { fineManifest, fineLevel, fineDays } = fineSource('fine/');
+export const { fineManifest, fineLevel, fineDays, forget: forgetFine } = fineSource('fine/');
 
 /** Decode cells.bin (format in build_fine.py): parents, child masks, seen bits. */
 export function decodeCells(buf: ArrayBuffer): FineLevel {
