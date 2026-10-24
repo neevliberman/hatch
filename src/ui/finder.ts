@@ -112,8 +112,10 @@ export function mountFinder(
     // In the time bar it sits on the bar's top edge, clear of its text line.
     const top = Math.min(b.top, btn.closest('#dock')?.getBoundingClientRect().top ?? b.top);
     form.style.bottom = `${column ? box.bottom - b.bottom : box.bottom - top + 6}px`;
-    const hidden = vv ? Math.max(0, innerHeight - vv.height - vv.offsetTop) : 0;
-    form.style.transform = hidden ? `translateY(${-hidden}px)` : '';
+    // Lifted just enough to clear what a phone keyboard covers (the visual viewport's bottom), no further.
+    form.style.transform = '';
+    const lift = vv ? Math.max(0, form.getBoundingClientRect().bottom - (vv.offsetTop + vv.height) + 6) : 0;
+    form.style.transform = lift ? `translateY(${-lift}px)` : '';
     // The suggestions stack above the box: keep them inside what the keyboard leaves showing, scrolling if need be.
     const row = form.querySelector('.find-row')!.getBoundingClientRect();
     // and below the header (its menus stay usable): the list's top keeps 6 px clear of both.
