@@ -10,7 +10,7 @@ import { restingSketch } from '../ui/sketch';
 import { doyToMs, type ReplayFile } from './lunaData';
 import { APPROXIMATE, replayData, TYPICAL, windowCheck, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
-import { fineQ, fineSource, parentOf, RETRY_MS, type FineLevel } from './fineData';
+import { fineQ, fineSource, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import mark from '../marks/firefly.svg';
@@ -107,9 +107,21 @@ export function createFireflyLayer(
         const data = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
         fineLevel = { level, data, unseen: data.filter((c) => !c.seen) };
       }
-      fineDays.set(m, days);
+      remember(fineDays, m, days, KEEP_SEASONS, (k) => k === mode || k === m);
       if (wantFine && m === mode) onData();
     });
+  };
+  // Zoomed back out: after RELEASE_MS at res 4, let the res-5 hexes go (see RELEASE_MS).
+  let releaseTimer = 0;
+  const releaseLater = () => {
+    if (releaseTimer || !fineLevel) return;
+    releaseTimer = window.setTimeout(() => {
+      releaseTimer = 0;
+      if (shownRes !== GRID_RES || wantFine) return;
+      fineLevel = null;
+      fineDays.clear();
+      fine.forget();
+    }, RELEASE_MS);
   };
   /** Res 5 from FINE_ZOOM[5]; back to res 4 a little further out, so a zoom resting on the line doesn't flicker. */
   /** The level to draw and its days: res 5 only once the zoom has rested there (SETTLE_MS), not mid fly-to. */
@@ -248,6 +260,7 @@ export function createFireflyLayer(
       const d = anim ? doy + frac : doy; // the in-between day while playing, like luna's dots
       const { res, days } = resFor(zoom);
       shownDays = days;
+      if (res === GRID_RES) releaseLater();
       if (res !== shownRes) {
         shownRes = res;
         queueMicrotask(onData); // the card and its outline follow the new level

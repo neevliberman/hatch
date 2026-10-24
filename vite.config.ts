@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import packReplay from './scripts/pack-replay.mjs';
+import leanDeps from './scripts/lean-deps.mjs';
 import { loaderHtml } from './src/ui/loader';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -7,7 +8,8 @@ import { join, relative, resolve, sep } from 'node:path';
 
 // Writes dist/sw.js (the offline service worker, src/sw.js) once everything else is built. Its version is a hash of
 // every file in dist/ and of the template, so any change at all, code or data, rolls out a fresh cache. The precache list is the app
-// shell: the page, its bundles and fonts, the manifest and icons. The finer hexagons (~2 MB) are cached as viewed.
+// shell: the page, its bundles and fonts, the manifest and the tab icons. The finer hexagons (~2 MB) are cached as viewed. The
+// home-screen icons (icons/, ~57 KB) are left out: a phone fetches them once, when it installs the app, and keeps its own copy.
 function serviceWorker(): Plugin {
   let outDir = 'dist';
   let template = 'src/sw.js';
@@ -26,7 +28,7 @@ function serviceWorker(): Plugin {
       const hash = createHash('sha256').update(src);
       // Not the nightly live forecast: the worker fetches it network-first, so a new night needn't replace the whole cache.
       for (const f of files.filter((f) => !f.startsWith('live/'))) hash.update(f).update(readFileSync(join(outDir, f)));
-      const shell = files.filter((f) => /^(assets\/|icons\/)|^(index\.html|manifest\.webmanifest|favicon[^/]*)$/.test(f));
+      const shell = files.filter((f) => /^assets\/|^(index\.html|manifest\.webmanifest|favicon[^/]*)$/.test(f));
       const sw = src
         .replace('__VERSION__', hash.digest('hex').slice(0, 12))
         .replace('__PRECACHE__', JSON.stringify(['./', ...shell.filter((f) => f !== 'index.html')]));
@@ -56,7 +58,7 @@ export const loader = (): Plugin => ({ name: 'hatch-loader', transformIndexHtml:
 // Normal multi-file build -> dist/. Relative base so it works under any sub-path (GitHub Pages etc.).
 export default defineConfig({
   base: './',
-  plugins: [packReplay(), serviceWorker(), loader()],
+  plugins: [leanDeps(), packReplay(), serviceWorker(), loader()],
   build: {
     outDir: 'dist',
     target: 'es2022',
