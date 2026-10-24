@@ -22,9 +22,9 @@ def rings_of(geom):
     return [[np.array(r) for r in p] for p in polys]
 
 
-def run(rings, fixed, at, axis):
-    """Length of the inside run along `axis` (0 = west-east) through `at`, on the line where the other coordinate is
-    `fixed`; even-odd over all rings. 0 when `at` is outside."""
+def span(rings, fixed, at, axis):
+    """The inside run along `axis` (0 = west-east) through `at`, on the line where the other coordinate is `fixed`
+    (even-odd over all rings), as (low, high); None when `at` is outside."""
     xs = []
     o = 1 - axis
     for r in rings:
@@ -36,18 +36,27 @@ def run(rings, fixed, at, axis):
     xs.sort()
     for i in range(0, len(xs) - 1, 2):
         if xs[i] <= at <= xs[i + 1]:
-            return xs[i + 1] - xs[i]
-    return 0.0
+            return xs[i], xs[i + 1]
+    return None
+
+
+def run(rings, fixed, at, axis):
+    """Usable length of the run: twice the distance to the nearer shore, because a name is drawn centred on its anchor.
+    0 when `at` is outside."""
+    r = span(rings, fixed, at, axis)
+    return 2 * min(at - r[0], r[1] - at) if r else 0.0
 
 
 def area(r):
     return float((r[:-1, 0] * r[1:, 1] - r[1:, 0] * r[:-1, 1]).sum())
 
 
-def fit(flat, x0, y0, rows, kind):
+def fit(flat, x0, y0, rows, kind, reach=None):
     """Search the part's bounding box for the roomiest point (near the first guess); return x, y, chord, height."""
     allp = np.concatenate(flat)
     (x1, y1), (x2, y2) = allp.min(0), allp.max(0)
+    if reach:  # a bay or arm named inside a bigger lake shape stays where it is named
+        x1, x2, y1, y2 = max(x1, x0 - reach), min(x2, x0 + reach), max(y1, y0 - reach), min(y2, y0 + reach)
     n = 40
     best = None
     for x in np.linspace(x1, x2, n):
@@ -63,7 +72,7 @@ def fit(flat, x0, y0, rows, kind):
                 dv = min(vc / 2, 0.1 * cos * chord)
             chord = min(chord, run(flat, y - dv, x, 0), run(flat, y + dv, x, 0))
             score = min(chord, 5 * vc / cos) if kind == 'water' else chord
-            score -= 0.1 * math.hypot(x - x0, y - y0)  # stay near the first guess unless there is room to gain
+            score -= 0.02 * math.hypot(x - x0, y - y0)  # stay near the first guess unless there is room to gain
             if best is None or score > best[0]:
                 best = (score, x, y, chord, vc)
     return best[1:]
@@ -77,8 +86,9 @@ SHORT = {
     'Midewin National Tallgrass Prairie': 'Midewin NTP',
     'Big South Fork NRRA': 'Big South Fork NRA',
 }
-# Mark Twain NF is a dozen separate tracts: name the three biggest, or the others read as unlabelled outlines.
-MORE_PARKS = [('Mark Twain NF', -91.21, 37.69, 6.5), ('Mark Twain NF', -92.13, 37.65, 6.5), ('Mark Twain NF', -90.39, 36.88, 7.0)]
+# Mark Twain NF is a dozen separate tracts: name the two biggest, or the others read as unlabelled outlines.
+EXTRA_SIZE = 100  # their size: below every real park, and how a rerun finds them again
+MORE_PARKS = [('Mark Twain NF', -91.21, 37.69, 6.5)]
 
 
 def main():
@@ -88,14 +98,15 @@ def main():
     lakes = [p for d in files.values() for f in d['water']['features'] for p in rings_of(f['geometry'])]
     green = [p for d in files.values() for f in d['green']['features'] for p in rings_of(f['geometry'])]
     detail = files['detail']['labels']
-    detail[:] = [lab for lab in detail if not (lab[4] == 'park' and lab[0] == 'Mark Twain NF' and lab[1] != -91.171)]
+    detail[:] = [lab for lab in detail if not (lab[4] == 'park' and lab[5] == EXTRA_SIZE)]  # drop last run's extra tracts
     for name, x, y, z in MORE_PARKS:
         host = [q for q in green if run(q, y, x, 0) > 0]
         if host:
             x, y, _, _ = fit(max(host, key=lambda q: abs(area(q[0]))), x, y, 0, 'state')
-        detail.append([name, round(float(x), 3), round(float(y), 3), z, 'park', 100])
+        detail.append([name, round(float(x), 3), round(float(y), 3), z, 'park', EXTRA_SIZE])
     for lab in detail:
         lab[0] = SHORT.get(lab[0], lab[0])
+    shares = []
     for d in files.values():
         for lab in d['labels']:
             name, x, y, z, kind = lab[:5]
@@ -105,6 +116,12 @@ def main():
             elif kind == 'water':
                 rows = 0
                 cands = [p for p in lakes if run(p, y, x, 0) > 0]
+            elif kind == 'park':
+                rows = 0.08
+                cands = [p for p in green if run(p, y, x, 0) > 0]
+            elif kind == 'city' and lab[5] >= 2_000_000:
+                lab[3] = 0  # Chicago is named from the first view
+                continue
             else:
                 continue
             if not cands:
@@ -112,10 +129,17 @@ def main():
                 continue
             # The biggest shape holding the point (a lake's rings include its islands: even-odd handles them).
             host = max(cands, key=lambda p: abs(area(p[0])))
-            nx, ny, chord, vc = fit(host, x, y, rows, kind)
+            nx, ny, chord, vc = fit(host, x, y, rows, 'water' if kind == 'water' else 'state', lab[5] / 111 * 0.75 + 0.05 if kind == 'water' else None)
             del lab[6:]
+            if kind == "park" and chord < 0.03:
+                continue  # a thin or tiny park: named where it is, no room test
             lab[1], lab[2] = round(float(nx), 3), round(float(ny), 3)
-            lab += [round(float(chord), 2)] + ([round(float(vc), 2)] if kind == 'water' else [])
+            full = span(host, ny, nx, 0)
+            if kind != "park":
+                shares.append((chord / (full[1] - full[0]), name))
+            lab += [round(float(chord), 3)] + ([round(float(vc), 3)] if kind == 'water' else [])
+    shares.sort()
+    print('worst usable share of the run at the anchor:', [(n, round(v, 2)) for v, n in shares[:6]])
     for n, d in files.items():
         (OUT / f'{n}.json').write_text(json.dumps(d, separators=(',', ':'), ensure_ascii=False))
 
