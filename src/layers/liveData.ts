@@ -121,10 +121,15 @@ export function parseLive(f: LiveFile, cells: string[] = data.cells): Live | nul
 }
 
 let loaded: Promise<LiveFile | null> | null = null;
+let requested: () => void = () => {};
+/** Resolves once something has asked for the live file (main.ts decides when: see wantLive there). */
+const asked = new Promise<void>((r) => (requested = r));
 
-/** The live file as sent, fetched once for every species (never cached stale by the browser: a new one lands every night). */
+/** The live file as sent, fetched once for every species (never cached stale by the browser: a new one lands every
+ * night). Nothing fetches it until live mode is wanted: it is the biggest file a visit could load. */
 function liveFile(): Promise<LiveFile | null> {
   if (!liveAvailable()) return Promise.resolve(null);
+  requested();
   loaded ??= fetch(new URL(`${import.meta.env.BASE_URL}live/latest.json`, document.baseURI), { cache: 'no-cache' })
     .then((r) => (r.ok ? (r.json() as Promise<LiveFile>) : null))
     .catch(() => null);
@@ -138,14 +143,21 @@ export const entryFor = (f: LiveFile | null, key: string): LiveFile | null => {
   return e && typeof e === 'object' ? ({ cells: f.cells, ...e } as LiveFile) : null;
 };
 
+const parsed = (f: LiveFile | null, key: string, cells: string[]): Live | null => {
+  const e = entryFor(f, key);
+  try {
+    return e ? parseLive(e, cells) : null;
+  } catch {
+    return null; // a broken part for one species costs only that species its live option
+  }
+};
+
 /** This season's forecast for one species (`key` from src/species.ts), lined up with its replay's `cells`; null when
- * the file or its part for that species is missing or broken. */
+ * the file or its part for that species is missing or broken. Fetches the file (once) if nothing has yet. */
 export const loadLive = (key = 'luna', cells: string[] = data.cells): Promise<Live | null> =>
-  liveFile().then((f) => {
-    const e = entryFor(f, key);
-    try {
-      return e ? parseLive(e, cells) : null;
-    } catch {
-      return null; // a broken part for one species costs only that species its live option
-    }
-  });
+  liveFile().then((f) => parsed(f, key, cells));
+
+/** The same, but never the one to start the fetch: resolves once someone else has asked for the file and it has
+ * arrived (a species picked off-season does not pull the file in; it gets its part if live mode is wanted later). */
+export const whenLive = (key: string, cells: string[]): Promise<Live | null> =>
+  liveAvailable() ? asked.then(() => loaded!).then((f) => parsed(f, key, cells)) : Promise.resolve(null);

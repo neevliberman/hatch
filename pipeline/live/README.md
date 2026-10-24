@@ -16,13 +16,16 @@ fit used) and its own iNaturalist taxon. The weather (steps 1-3 below) is fetche
 entry point loops over the species, and `scorecard.py` archives and scores each one from the same file. A species
 that fails keeps last night's entry (the app's "as of" badge then turns amber), is listed in
 `checks.species_failed`, and makes the scorecard step exit 1 after publishing, so the run fails and the alarm
-issue opens; luna failing still stops the run before writing, as before.
+issue opens (its log says the scorecard was written and which species failed); luna failing still stops the run
+before writing, as before. A backfilled entry, or one carried over from an earlier night, is never archived.
 
 Adding a species: an entry in `registry.py`, then `python3 pipeline/live/build_static.py --effort <key>` (its effort
 profile, from the records its fetch script cached). The app finds the species' part of the file by its key
-(`src/species.ts`), so nothing else changes. One file for all species is fine for a handful (2026 dry run, three
-species: 336 KB, 94 KB gzipped, mostly the beetle's sightings); well past that, split it into one file per species,
-which needs `deploy-pages.yml` to copy the whole `live/` folder.
+(`src/species.ts`), so nothing else changes. The app fetches the file only when live mode is wanted (a link asks
+for it, the live season is on, or the reader reaches for the season menu), so an off-season visit never loads it.
+One file for all species is fine for a handful (2026 dry run, three species: 336 KB, 94 KB gzipped, mostly the
+beetle's sightings), but an in-season luna visitor still downloads every species; the fix is one file per species,
+which needs `deploy-pages.yml` to copy a `live/species/` folder (waiting on a workflow change).
 
 ## One night, step by step (per species from step 4)
 Analogy: finishing a sentence someone has started.

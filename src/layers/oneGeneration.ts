@@ -90,8 +90,9 @@ export function createOneGenerationLayer(
   file: ReplayFile,
   initial: Mode = TYPICAL,
   onData: () => void = () => {},
-  live: Live | null = null,
+  liveIn: Live | null = null,
 ): LunaLayer {
+  let live = liveIn;
   const { key, one, words } = cfg;
   const plural = words.plural;
   const GLOW = cfg.glow;
@@ -298,6 +299,11 @@ export function createOneGenerationLayer(
     id: `${key}-replay`,
     title: cfg.name,
     live: () => live,
+    setLive(l) {
+      live = l;
+      profiles.delete(LIVE);
+      if (mode === LIVE) shown = sightingsFor(mode);
+    },
     words,
     mode: () => mode,
     setMode(m) {

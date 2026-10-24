@@ -1,6 +1,6 @@
 import type { LunaLayer } from './layers/lunaReplay';
 import type { Mode } from './layers/replayData';
-import { loadLive } from './layers/liveData';
+import { whenLive } from './layers/liveData';
 
 /**
  * Every species Hatch can show, in menu order: the one list the species menu, the ?species= link and the loading
@@ -18,22 +18,24 @@ export interface SpeciesEntry {
   label: string;
   /** The menu's group once the list is long enough to need them ("Moths", "Beetles"). */
   group: string;
-  /** Loads the layer (code and data); resolves null when its data can't be fetched. Absent for the built-in luna. */
-  load?: (mode: Mode, onData: () => void) => Promise<LunaLayer | null>;
+  /** Loads the layer (code and data); resolves null when its data can't be fetched. Absent for the built-in luna.
+   * The layer comes without waiting for the live file; onLive runs once its live forecast is attached. */
+  load?: (mode: Mode, onData: () => void, onLive?: () => void) => Promise<LunaLayer | null>;
 }
 
 // The one-file build has no species files beside it and offers luna only, so the loaders (and the species code
-// they pull in) are left out of it. The live file is the one luna already fetches (fetched once for every species).
+// they pull in) are left out of it. The live file is shared (fetched once for every species, and only when wanted).
 const lazy = (config: () => Promise<{ config: import('./layers/oneGeneration').SpeciesConfig }>, file: string): SpeciesEntry['load'] =>
   __BASEMAP__
-    ? async (mode, onData) => {
+    ? async (mode, onData, onLive) => {
         const url = `${import.meta.env.BASE_URL}${file}`;
-        void loadLive(); // the live file on its way alongside (one fetch for every species)
         const json = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const [{ config: cfg }, gen, data] = await Promise.all([config(), import('./layers/oneGeneration'), json]);
         if (!gen.isReplay(data)) return null;
-        const live = await loadLive(cfg.key, data.cells);
-        return gen.createOneGenerationLayer(cfg, data, mode, onData, live);
+        const layer = gen.createOneGenerationLayer(cfg, data, mode, onData);
+        // Its live forecast, whenever the live file is wanted and arrives (never holds up the species menu).
+        void whenLive(cfg.key, data.cells).then((live) => live && (layer.setLive?.(live), onLive?.()));
+        return layer;
       }
     : undefined;
 

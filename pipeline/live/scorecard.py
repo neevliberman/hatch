@@ -241,7 +241,12 @@ def add_all(archive: Path, live, issued=None, rehearsal=False):
     under "species" into its own folder (<key>/<season>/, registry.LiveSpecies.archive). -> paths written."""
     from live import registry
     out = [add_to_archive(archive, live, issued, rehearsal)] if "bands" in live else []
+    tonight = str(live.get("generated", ""))[:10]
     for key, e in (live.get("species") or {}).items():
+        # never a backfill (its weather is older than its issue date), nor an entry carried over from an earlier night
+        # because that species failed tonight (it was archived on its own night)
+        if e.get("backfill") or str(e.get("generated", ""))[:10] != tonight:
+            continue
         if "bands" in e and e.get("season") == live["season"]:
             folder = registry.BY_KEY[key].archive(archive) if key in registry.BY_KEY else archive / key
             out.append(add_to_archive(folder, e, issued, rehearsal))
@@ -259,10 +264,10 @@ def scorecard_all(season, today: dt.date, archive: Path, records=None, prev=None
     for sp in registry.SPECIES:
         if keys and sp.key not in keys:
             continue
-        entries = load_archive(sp.archive(archive), season)
-        if sp.key != "luna" and not entries:
-            continue
         try:
+            entries = load_archive(sp.archive(archive), season)
+            if sp.key != "luna" and not entries:
+                continue
             raw = records[sp.key] if sp.key in records else fetch_records(season, today, sp.taxon)
             card = scorecard(season, raw, entries, today, replay=json.loads(sp.replay.read_text()), layer=sp.key, prev=prev)
         except Exception as err:  # noqa: BLE001 -- one species' scorecard must not cost the others'
@@ -323,7 +328,10 @@ def main(argv=None):
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
     # failed" step). This is also how a species whose forecast failed in build_live.py gets noticed.
     if failed or live_failed:
-        print(f"::error::failed tonight: scorecard {failed or 'ok'}, forecast {live_failed or 'ok'}", flush=True)
+        why = "; ".join([*(f"the {k} forecast failed in build_live.py (its last good entry was kept)" for k in live_failed),
+                         *(f"the {k} scorecard failed (its last layer was kept)" for k in failed)])
+        print(f"::error::{why}. {a.out} WAS written and published with every other species; "
+              "this exit code only raises the alarm.", flush=True)
         return 1
     return 0
 

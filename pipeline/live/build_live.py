@@ -306,7 +306,7 @@ def forecast_species(sp, wx, season, as_of, today, prev=None):
     replay = json.loads(replay_path.read_text())
     cells = replay["cells"]
     if cells != wx["cells"]:
-        raise SystemExit(f"{sp.key}: its replay's cells differ from the weather's; the live job shares one cell list")
+        raise ValueError(f"{sp.key}: its replay's cells differ from the weather's; the live job shares one cell list")
     if sp.key == "luna":
         ff = json.loads(fits_path.read_text())
         spec_name = ff["spec"]
@@ -410,7 +410,7 @@ def build_all(season, as_of, use_forecast, today, prev=None, keys=None):
             continue
         try:
             e = forecast_species(registry.get(key), wx, season, as_of, today, prev_sp.get(key))
-        except Exception as err:  # noqa: BLE001 -- one species' failure must not cost luna's night
+        except (Exception, SystemExit) as err:  # noqa: BLE001 -- one species' failure must not cost luna's night
             print(f"::error::live forecast for {key} failed: {err!r}", flush=True)
             failed.append(key)
             old = prev_sp.get(key)

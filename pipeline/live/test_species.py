@@ -63,8 +63,15 @@ def fake_weather(season, as_of, use_forecast, cells):
 
 @pytest.fixture
 def offline(monkeypatch):
+    """No network: made-up weather, and a sightings stub that records which taxon and window each call asked for."""
+    asked = []
+
+    def sightings(season, as_of, cutoffs, taxon=L.TAXON, last_doy=None):
+        asked.append((taxon, last_doy))
+        return [[1, 2027, 150, 40.0, -88.0, 0]]
     monkeypatch.setattr(L, "weather", fake_weather)
-    monkeypatch.setattr(L, "season_sightings", lambda *a: [[1, 2027, 150, 40.0, -88.0, 0]])
+    monkeypatch.setattr(L, "season_sightings", sightings)
+    return asked
 
 
 def strip(d):
@@ -76,6 +83,8 @@ def test_nightly_file_is_luna_on_top_and_the_rest_under_species(offline):
     alone = L.build(2027, as_of, False, today)
     out = L.build_all(2027, as_of, False, today)
     assert strip(out) == strip(alone)                      # luna's part is exactly the luna-only build
+    # each species' sightings are its own taxon and window: luna, then (build_all) luna, firefly, beetle
+    assert offline == [(47916, None), (47916, None), (129350, 240), (67760, 240)]
     assert sorted(out["species"]) == sorted(s.key for s in registry.SPECIES if s.key != "luna")
     assert out["checks"]["species_failed"] == []
     for key, e in out["species"].items():
@@ -104,6 +113,24 @@ def test_one_species_failing_keeps_its_last_entry(offline, monkeypatch):
     last_year = {"season": 2026, "species": {"firefly": {**prev["species"]["firefly"], "season": 2026}}}
     stale = L.build_all(2027, dt.date(2027, 5, 31), False, dt.date(2027, 6, 3), last_year)
     assert "firefly" not in stale["species"]                       # never last season's
+
+
+def test_a_species_raising_systemexit_does_not_stop_luna(offline, monkeypatch):
+    real = L.forecast_species
+
+    def exits(sp, *a, **k):
+        if sp.key == "japanese-beetle":
+            raise SystemExit("bad cell list")
+        return real(sp, *a, **k)
+    monkeypatch.setattr(L, "forecast_species", exits)
+    out = L.build_all(2027, dt.date(2027, 5, 31), False, dt.date(2027, 6, 3))
+    assert out["checks"]["species_failed"] == ["japanese-beetle"] and "firefly" in out["species"] and out["median"]
+
+
+def test_cell_mismatch_is_an_ordinary_error(offline):
+    wx = fake_weather(2027, dt.date(2027, 5, 31), False, LUNA_CELLS[:-1])
+    with pytest.raises(ValueError):
+        L.forecast_species(registry.get("firefly"), wx, 2027, dt.date(2027, 5, 31), dt.date(2027, 6, 3))
 
 
 def bands(onset, peak, labels=("37-39", "39-41", "41-43", "43-45", "45-49")):
@@ -148,3 +175,39 @@ def test_archive_and_scorecard_per_species(tmp_path):
     finally:
         S.fetch_records = orig
     assert failed == ["japanese-beetle"] and again["layers"]["japanese-beetle"] == out["layers"]["japanese-beetle"]
+
+
+def live_file(generated="2027-04-01T13:00:00Z", **species):
+    return {"season": 2027, "generated": generated, "as_of": "2027-03-29", "model": {"id": "p3-v1", "hash": "a"},
+            "bands": bands(110, 130), "checks": {"species_failed": []},
+            "species": {k: {"season": 2027, "generated": generated, "as_of": "2027-03-29",
+                            "model": {"id": f"{k}-v0", "hash": k}, "bands": bands(170, 190), **v} for k, v in species.items()}}
+
+
+def test_archive_skips_backfills_and_carried_entries(tmp_path):
+    live = live_file(firefly={"backfill": True}, **{"japanese-beetle": {"generated": "2027-03-31T13:00:00Z"}})
+    assert S.add_all(tmp_path, live) == [tmp_path / "2027" / "2027-04-01.json"]
+
+
+def test_a_corrupt_species_archive_does_not_block_luna(tmp_path):
+    S.add_all(tmp_path, live_file(firefly={}))
+    (tmp_path / "firefly" / "2027" / "2027-04-01.json").write_text("{not json")
+    out, failed = S.scorecard_all(2027, dt.date(2027, 10, 1), tmp_path, {"luna": pd.DataFrame(), "firefly": pd.DataFrame()})
+    assert failed == ["firefly"] and "luna" in out["layers"] and "firefly" not in out["layers"]
+
+
+def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_path, capsys):
+    live = live_file(firefly={})
+    live["checks"]["species_failed"] = ["japanese-beetle"]
+    (tmp_path / "latest.json").write_text(json.dumps(live))
+    pd.DataFrame().to_parquet(tmp_path / "empty.parquet")
+    args = ["--archive", str(tmp_path / "archive"), "--season", "2027", "--add", str(tmp_path / "latest.json"),
+            "--today", "2027-10-01", "--out", str(tmp_path / "scorecard.json"),
+            "--records", str(tmp_path / "empty.parquet"), f"firefly={tmp_path / 'empty.parquet'}"]
+    assert S.main(args) == 1
+    assert sorted(json.loads((tmp_path / "scorecard.json").read_text())["layers"]) == ["firefly", "luna"]   # written
+    err = capsys.readouterr().out
+    assert "japanese-beetle forecast failed" in err and "WAS written" in err
+    live["checks"]["species_failed"] = []
+    (tmp_path / "latest.json").write_text(json.dumps(live))
+    assert S.main(args) == 0

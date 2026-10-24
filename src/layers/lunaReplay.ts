@@ -294,6 +294,8 @@ export interface LunaLayer extends HatchLayer {
   countdown(now: number): [string, string];
   /** This season's live forecast for the species, once loaded (null: no live mode for it). */
   live(): Live | null;
+  /** Attach the live forecast once it arrives (species loaded before the live file). */
+  setLive?(live: Live): void;
 }
 
 interface FineCell {

@@ -4,7 +4,7 @@ import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { GROUP_AFTER, SPECIES } from './species';
 import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
-import { inSeason, loadLive, type Live } from './layers/liveData';
+import { inSeason, liveAvailable, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { basemapLabels, theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
@@ -391,7 +391,16 @@ function start() {
     updateProbe(); // a card pinned in the old season describes that season: it went with the switch
     syncCountdown();
   };
-  picker.addEventListener('change', () => switchMode(picker.value));
+  picker.addEventListener('change', () => ((wantLiveFor = null), switchMode(picker.value)));
+  /** A species that should open on live mode once its live forecast is attached (see setSpecies). */
+  let wantLiveFor: string | null = null;
+  const goLiveIfWanted = () => {
+    if (wantLiveFor !== curKey || !cur.live() || picker.value === LIVE) return;
+    wantLiveFor = null;
+    picker.value = LIVE;
+    switchMode(LIVE, speciesPending ? (md ? [month, day] : undefined) : wantDay); // a link opens on its as-of day
+    syncUrl();
+  };
   $('season-name').textContent = modeLabel(initialMode);
 
   // Species menu, from the one species list (src/species.ts): a native menu stays small in the header however long the
@@ -411,7 +420,12 @@ function start() {
       if (!entry.load) return;
       speciesSel.disabled = true;
       const mode0 = picker.value === LIVE ? TYPICAL : picker.value;
-      const layer = await entry.load(mode0, () => onLunaData());
+      // Its live forecast can arrive after the layer (src/species.ts): refill the menu, and go live if that was wanted.
+      const layer = await entry.load(mode0, () => onLunaData(), () => {
+        if (loaded.get(entry.key) !== cur) return;
+        fillPicker();
+        goLiveIfWanted();
+      });
       speciesSel.disabled = false;
       if (!layer) {
         if (ticket === asking) speciesSel.value = curKey;
@@ -424,7 +438,10 @@ function start() {
     const next = loaded.get(entry.key)!;
     speciesSel.value = entry.key;
     if (next === cur) return;
-    // A species with no live season: switching to it from live mode goes to all years, on the same day.
+    // Live was wanted for it (picked from live mode, or a ?season=live&species= link): goes live as soon as its live
+    // forecast is there, now or when the file arrives.
+    wantLiveFor = picker.value === LIVE || (speciesPending === entry.key && asked === LIVE) ? entry.key : null;
+    // A species with no live season (yet): switching to it from live mode goes to all years, on the same day.
     if (!next.live() && picker.value === LIVE) {
       picker.value = TYPICAL;
       $('season-name').textContent = modeLabel(TYPICAL);
@@ -455,12 +472,7 @@ function start() {
       registry.setActive(cur.id, true);
     });
     syncUrl();
-    // A ?season=live&species=<key> link: that species' live season, once it has loaded with one.
-    if (speciesPending === entry.key && asked === LIVE && cur.live() && picker.value !== LIVE) {
-      picker.value = LIVE;
-      switchMode(LIVE, md ? [month, day] : undefined);
-      syncUrl();
-    }
+    goLiveIfWanted();
   };
   // The one-file preview has no species files next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
@@ -869,8 +881,16 @@ function start() {
   // This year's nightly forecast, fetched after the first paint (none in the one-file build, or if the file is missing
   // or broken). It goes at the top of the season menu (each species finds its own part), and becomes the default during its season
   // (1 Mar - 30 Sep) when the link names no season, day or species, so shared links still open what they showed.
+  // Fetched only when live mode is wanted: a link asks for it, the live season is on now (its in-season default), or
+  // the reader reaches for the season menu (hover, focus, touch), so an off-season first visit never downloads it.
   const cursor0 = time.cursor;
-  void loadLive().then((live) => {
+  let liveStarted = false;
+  const startLive = () => {
+    if (liveStarted) return;
+    liveStarted = true;
+    void loadLive().then(onLive);
+  };
+  const onLive = (live: Live | null) => {
     livePending = false;
     // A placeholder file (written before the pipeline's first real run) only shows when a link asks for it.
     if (!live || (live.stub && asked !== LIVE)) return syncUrl();
@@ -884,7 +904,11 @@ function start() {
     picker.value = LIVE;
     switchMode(LIVE, md ? [month, day] : undefined);
     syncUrl();
-  });
+  };
+  if (asked === LIVE || inSeason({ season: new Date(clock).getUTCFullYear() }, clock)) startLive();
+  else if (liveAvailable()) {
+    for (const ev of ['pointerenter', 'pointerdown', 'focus', 'keydown'] as const) picker.addEventListener(ev, startLive, { once: true });
+  }
 }
 
 start();

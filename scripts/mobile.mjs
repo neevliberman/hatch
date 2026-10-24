@@ -157,15 +157,23 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     if (await page.locator('#probe .probe-close').isVisible()) await tap('#probe .probe-close');
     if (sheet && (await tap('#why'))) {
       // Slow CI frames: wait for the sheet to finish rising, or the tap aimed above it lands on it.
-      await page.waitForFunction(() => { const r = document.querySelector('#drawer')?.getBoundingClientRect();
-        return !!r && r.top < innerHeight * 0.15 && getComputedStyle(document.querySelector('#drawer')).transform === 'none'; }, null, { timeout: 4000 }).catch(() => {});
+      // A ~2fps CI frame can take seconds to finish the rise: until it has, a tap "above" the sheet lands on the sheet.
+      const risen = await page.waitForFunction(() => { const r = document.querySelector('#drawer')?.getBoundingClientRect();
+        return !!r && r.top < innerHeight * 0.15 && getComputedStyle(document.querySelector('#drawer')).transform === 'none'; }, null, { timeout: 10000 })
+        .then(() => true, () => false);
+      if (!risen) fail('the tall sheet never finished rising');
       await page.waitForTimeout(300);
       const tall = await page.locator('#drawer').boundingBox();
       if (!(await page.locator('#drawer.open.full').count())) fail('"How sure?" did not open the sheet at its tall stop');
       // Above the sheet at the far left: the header's middle is the season menu, which a tap would open instead.
       await page.touchscreen.tap(12, Math.max(4, tall.y / 2));
       await page.waitForTimeout(400);
-      if (await page.locator('#drawer.open').count()) fail('tapping outside the tall sheet did not close it');
+      if (await page.locator('#drawer.open').count()) {
+        fail(`tapping outside the tall sheet did not close it (sheet top ${Math.round(tall.y)}px)`);
+        // Recorded; now close it, so one failure does not cover every control the later checks tap.
+        await tap('#drawer-close');
+        await page.waitForTimeout(600);
+      }
       if (await page.locator('#probe').isVisible()) fail('the tap that closed the drawer also opened a card');
     }
 

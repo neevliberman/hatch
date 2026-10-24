@@ -8,11 +8,18 @@ Analogy: one weather report read out to several gardeners, each with their own n
 """
 import hashlib
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / "notebooks"))
+sys.path.insert(0, str(ROOT / "pipeline"))
+
+# Taxon ids and windows come from where each species' fit defines them, never copied here.
+import species as _species  # noqa: E402
+from firefly import build_firefly as _ff, fetch as _ff_fetch  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -45,14 +52,16 @@ class LiveSpecies:
         return root if self.key == "luna" else root / self.key
 
 
+# Luna's taxon, as its replay file records it (pipeline/replay/build_replay.py).
+LUNA_REPLAY_TAXON = json.loads((ROOT / "src" / "data" / "luna-replay.json").read_text())["species"]["inat_taxon"]
+
 SPECIES = [
-    LiveSpecies("luna", "Luna moth", 47916, ROOT / "src" / "data" / "luna-replay.json",
+    LiveSpecies("luna", "Luna moth", LUNA_REPLAY_TAXON, ROOT / "src" / "data" / "luna-replay.json",
                 ROOT / "pipeline" / "replay" / "fold_fits.json", HERE / "effort_profile.json"),
-    LiveSpecies("firefly", "Common eastern firefly", 129350, ROOT / "public" / "firefly-replay.json",
-                ROOT / "pipeline" / "firefly" / "result.json", HERE / "effort" / "firefly.json", last_doy=240),
-    LiveSpecies("japanese-beetle", "Japanese beetle", 67760, ROOT / "public" / "species" / "japanese-beetle" / "replay.json",
-                ROOT / "pipeline" / "species" / "japanese-beetle.result.json", HERE / "effort" / "japanese-beetle.json",
-                last_doy=240),
+    LiveSpecies("firefly", "Common eastern firefly", _ff_fetch.TAXON, ROOT / "public" / "firefly-replay.json",
+                ROOT / "pipeline" / "firefly" / "result.json", HERE / "effort" / "firefly.json", last_doy=_ff.LAST_DOY),
+    *[LiveSpecies(sp.key, sp.name, sp.taxon, sp.replay, sp.result, HERE / "effort" / f"{sp.key}.json", last_doy=sp.last_doy)
+      for sp in (_species.get(k) for k in ("japanese-beetle",))],
 ]
 BY_KEY = {s.key: s for s in SPECIES}
 LUNA = BY_KEY["luna"]
