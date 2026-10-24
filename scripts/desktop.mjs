@@ -206,9 +206,10 @@ for (const [engine, width, height] of screens) {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.locator('#drawer').evaluate((d) => d.scrollTo(0, 0));
     await page.mouse.wheel(0, 400);
-    await page.waitForTimeout(400);
+    // Waits for the scroll to land (a slow software-GL frame can take well over 400 ms) instead of a fixed sleep.
     const scrollable = await page.locator('#drawer').evaluate((d) => d.scrollHeight > d.clientHeight);
-    if (scrollable && !(await page.locator('#drawer').evaluate((d) => d.scrollTop))) fail('the wheel did not scroll the drawer');
+    if (scrollable && !(await page.waitForFunction(() => document.getElementById('drawer').scrollTop > 0, null, { timeout: 4000, polling: 100 }).then(() => true, () => false)))
+      fail('the wheel did not scroll the drawer');
     await page.locator('#drawer-close').click();
     await page.waitForTimeout(400);
     if (await drawerOpen(page)) fail('the close button did not close the drawer');

@@ -85,6 +85,9 @@ def signflip(x):
     return round(float((np.abs((pats * x).mean(1)) >= abs(x.mean()) - 1e-9).mean()), 3)
 
 
+# The record bootstrap above resamples sightings within strips only: weather and the strips are held fixed.
+# The 10-date test treats each strip's onset and peak as independent (they are not). With 5 strips the sign-flip
+# p can't go below 2/32 = 0.0625, so the strip test is kept for the record but is not evidence (RESULT.md).
 out["boot_dates"] = {"diffs": d10.round(1).tolist(), "mean": round(float(d10.mean()), 2), "ci95": boot(d10), "p_signflip": signflip(d10)}
 out["boot_strips"] = {"diffs": d5.round(2).tolist(), "mean": round(float(d5.mean()), 2), "ci95": boot(d5), "p_signflip": signflip(d5)}
 

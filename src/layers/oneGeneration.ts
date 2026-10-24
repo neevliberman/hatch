@@ -571,13 +571,15 @@ export function createOneGenerationLayer(
       const all = sc.n ? sc : scoreSummary();
       const past = scoreSummary();
       const lm = data.model?.loyo_mae;
-      // The simpler rule (warmth at past sightings alone, luna's first model), said as its numbers say it. The
-      // forecast's own number is the bars' (the shipped strip-years), so the card never shows two for one score.
-      const vs = lm ? `${lm.p1.toFixed(1)} days off against ${past.heat.toFixed(1)}` : '';
-      const simpler = lm
-        ? Math.abs(lm.p1 - lm.heat) < 0.5
+      // The simpler rule (warmth at past sightings alone, luna's first model), said as its numbers say it, on the same
+      // strip-years as the bars (all years, or the one year picked), so the card never shows two numbers for one score.
+      const p1 = all.rows.filter((r) => r.p1_onset != null && r.p1_peak != null);
+      const p1Days = p1.reduce((a, r) => a + (Math.abs(r.p1_onset! - r.obs_onset) + Math.abs(r.p1_peak! - r.obs_peak)) / 2, 0) / Math.max(1, p1.length);
+      const vs = `${p1Days.toFixed(1)} days off against ${all.heat.toFixed(1)}`;
+      const simpler = lm && p1.length === all.rows.length
+        ? Math.abs(p1Days - all.heat) < 0.5
           ? `A simpler rule, the warmth at past sightings alone, did about as well: ${vs}.`
-          : lm.p1 < lm.heat
+          : p1Days < all.heat
             ? `A simpler rule, the warmth at past sightings alone, did better: ${vs}.`
             : `A simpler rule, the warmth at past sightings alone, did worse: ${vs}.`
         : null;
@@ -608,7 +610,8 @@ export function createOneGenerationLayer(
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
           scope: sc.n && mode !== TYPICAL && !isLive() ? `in ${mode}` : 'on past years',
-          checks: modelChecks(data, past),
+          checks: modelChecks(data, past, cfg.holdoutYears),
+          checksThrough: data.years[data.years.length - 1],
         },
         finePrintLabel: 'Limits and fine print',
         notice: isLive() ? liveNotice(live!) : undefined,

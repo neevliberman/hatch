@@ -82,7 +82,7 @@ export interface Creature {
  * falls back to its caveats() list. The fine print is always caveats(), so the honesty lives in one place.
  */
 /** One test of the forecast against the usual date: where ("on past years", "in 2026"), mean days off for each, and
- * how big a test it was ("one season, 5 strips"), said only when the forecast did not win. */
+ * how big a test it was ("44 strip-years"). */
 export interface RecordCheck {
   where: string;
   days: number;
@@ -115,6 +115,8 @@ export interface Explainer {
     /** Every check of the model against the usual date that this layer's data holds (ui/explainer.ts recordLine);
      * this season's live check is added from the scorecard file when it loads. */
     checks?: RecordCheck[];
+    /** The last season `checks` cover (the replay's last year), said when no live season joins them. */
+    checksThrough?: number;
   };
   /** A short card near the top for a special mode (this year's live forecast): what it is, in plain words. */
   notice?: { title: string; bullets: string[] };

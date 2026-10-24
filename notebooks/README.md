@@ -6,7 +6,7 @@ Python side of Hatch: research notebooks that decide what the map is allowed to 
 - `hatch_p1/`: the code the notebook calls (iNat + Daymet fetchers, degree-days, brood split, baselines, simulate-and-recover).
 - **Pooled moths (exploratory, season-two idea):** [pooled/RESULT.md](pooled/RESULT.md): a model pooled across 52 Midwest moths, tested on data-poor species. Code and small derived tables in `pooled/`.
 - **Far-south 2026 miss, candidate fixes (exploratory):** [southbias/RESULT.md](southbias/RESULT.md): an out-of-range cap and flag, a daylength gate (P4) and a two-clock mixture, scored leave-one-year-out, on the WI/MN holdout and on 2026. No map change.
-- **Japanese beetle 2026 loss (exploratory):** [beetle2026/RESULT.md](beetle2026/RESULT.md): why the beetle forecast lost to the usual date in 2026 (an early lean, mostly the far south), and a bootstrap showing the 1.1-day gap is within noise. No refit.
+- **Japanese beetle 2026 loss (exploratory):** [beetle2026/RESULT.md](beetle2026/RESULT.md): why the beetle forecast lost to the usual date in 2026 (an early lean, mostly the far south), and a bootstrap over sightings within strips (weather and strips held fixed) that cannot tell the 1.1-day gap from sampling noise. No refit.
 - `build_notebook.py` writes the notebook from plain Python, so diffs stay readable.
 
 ## Run it (from this `notebooks/` folder, Python 3.13)

@@ -53,15 +53,19 @@ export function replayData(data: ReplayFile) {
 export type ReplayData = ReturnType<typeof replayData>;
 
 /** The checks against the usual date that a replay file holds, for the "How sure?" record line (ui/explainer.ts
- * recordLine): every past year it was scored on (`past`, the shipped strip-years) and the two states it never learned
- * from (model.holdout_mae). This season's live check joins them from the scorecard file. Species-neutral. */
-export function modelChecks(data: ReplayFile, past: { n: number; heat: number; calendar: number }): RecordCheck[] {
+ * recordLine): every past year it was scored on (`past`, the shipped strip-years) and the holdout (model.holdout_mae),
+ * each with its strip-years. This season's live check joins them from the scorecard file. Species-neutral.
+ * "Two states it never learned from" holds while every species' holdout is the shared split (fit on Illinois, Indiana
+ * and Ohio, scored on Wisconsin and Minnesota: pipeline/fit/run_p3.py, pipeline/firefly, pipeline/species); a species
+ * with another split needs its own words here. `holdoutYears`: for files that predate model.holdout_band_years. */
+export function modelChecks(data: ReplayFile, past: { n: number; heat: number; calendar: number }, holdoutYears?: number): RecordCheck[] {
   const h = data.model?.holdout_mae;
-  const nh = data.model?.holdout_band_years;
+  const nh = data.model?.holdout_band_years || holdoutYears;
+  const sy = (n: number) => `${n} strip-year${n === 1 ? '' : 's'}`;
   return [
-    ...(past.n ? [{ where: 'on past years', days: past.heat, usual: past.calendar, size: `${past.n} strip-years` }] : []),
+    ...(past.n ? [{ where: 'on past years', days: past.heat, usual: past.calendar, size: sy(past.n) }] : []),
     ...(h && Number.isFinite(h.heat) && Number.isFinite(h.cal)
-      ? [{ where: 'in two states it never learned from', days: h.heat, usual: h.cal, ...(nh ? { size: `${nh} strip-years` } : {}) }]
+      ? [{ where: 'in two states it never learned from', days: h.heat, usual: h.cal, ...(nh ? { size: sy(nh) } : {}) }]
       : []),
   ];
 }

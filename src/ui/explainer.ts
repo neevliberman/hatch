@@ -70,24 +70,27 @@ function scoreLead([f, base]: { label: string; days: number }[], scope?: string)
 const and = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
 /** The species' whole record against the usual date in one plain line, from its own checks (past years, places it never
- * learned from, this season's live scorecard): the wins named, any tie or loss with its numbers and how small a test
- * it was. Species-neutral: every word comes from the checks. Empty when there are none. */
-export function recordLine(checks: RecordCheck[]): string {
-  const t = (d: number) => Math.round(d * 10); // compare as shown, to a tenth of a day
-  const won = checks.filter((c) => t(c.days) < t(c.usual));
-  const tied = checks.filter((c) => t(c.days) === t(c.usual));
-  const lost = checks.filter((c) => t(c.days) > t(c.usual));
+ * learned from, this season's live scorecard): what it beat, tied and lost to, each with how big a test it was, and
+ * the numbers for any tie or loss. `through`: the last season the checks cover when this season's live check is not
+ * among them ("Record through 2025"), so the line never passes for the whole record. Species-neutral: every word comes
+ * from the checks. Empty when there are none. */
+export function recordLine(checks: RecordCheck[], through?: number): string {
   if (!checks.length) return '';
-  const size = (c: RecordCheck) => (c.size ? `; ${c.size}` : '');
-  const parts = [
-    ...(won.length ? [`beat the usual date ${and(won.map((c) => c.where))}`] : []),
-    ...(tied.length
-      ? [`${won.length ? 'tied with it' : 'tied with the usual date'} ${and(tied.map((c) => `${c.where} (${c.days.toFixed(1)} days off each${size(c)})`))}`]
-      : []),
+  const t = (d: number) => Math.round(d * 10); // compare as shown, to a tenth of a day
+  const size = (c: RecordCheck, more = '') => (c.size || more ? ` (${[c.size, more].filter(Boolean).join(': ')})` : '');
+  const groups: [string, RecordCheck[], (c: RecordCheck) => string][] = [
+    ['beat', checks.filter((c) => t(c.days) < t(c.usual)), (c) => size(c)],
+    ['tied with', checks.filter((c) => t(c.days) === t(c.usual)), (c) => size(c, `${c.days.toFixed(1)} days off each`)],
+    ['lost to', checks.filter((c) => t(c.days) > t(c.usual)), (c) => size(c, `${c.days.toFixed(1)} days off against ${c.usual.toFixed(1)}`)],
   ];
-  const lostText = and(lost.map((c) => `${c.where} (${c.days.toFixed(1)} days off against ${c.usual.toFixed(1)}${size(c)})`));
-  if (lost.length) parts.push(parts.length ? `but not ${lostText}` : `did not beat the usual date ${lostText}`);
-  return `${won.length && lost.length ? 'Mixed record so far' : 'Record so far'}: ${parts.join(', ')}.`;
+  const clauses = groups
+    .filter(([, cs]) => cs.length)
+    .map(([verb, cs, tail], i) => `${verb} ${i ? 'it' : 'the usual date'} ${and(cs.map((c) => c.where + tail(c)))}`);
+  const lost = groups[2]![1].length > 0;
+  const body =
+    clauses.length < 2 ? clauses[0]!
+    : `${clauses.slice(0, -1).join(', ')}${lost ? ', but ' : ' and '}${clauses[clauses.length - 1]}`;
+  return `${clauses.length > 1 ? 'Mixed record' : 'Record'} ${through ? `through ${through}` : 'so far'}: ${body}.`;
 }
 
 /** The whole species section of the drawer. Its spot card is filled separately, so it can follow the map. */
@@ -113,8 +116,12 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
         <p class="ex-lead">${esc(scoreLead(score.bars, score.scope))}</p>
         ${
           score.checks?.length
-            ? // Hidden until the scorecard file has added this season's check (or failed): never a record without it.
-              `<p class="ex-record" data-record="${esc(id)}" data-checks="${esc(JSON.stringify(score.checks))}"${__BASEMAP__ ? ' hidden' : ''}>${esc(recordLine(score.checks))}</p>`
+            ? // With files beside the page, hidden until the scorecard file adds this season's check (ui/scorecard.ts),
+              // and kept hidden if it fails to load: never a record that silently leaves a season out. The one-file
+              // build has no scorecard, so it shows the past and holdout checks only, named "Record through <year>".
+              `<p class="ex-record" data-record="${esc(id)}" data-checks="${esc(JSON.stringify(score.checks))}" data-through="${score.checksThrough ?? ''}"${
+                __BASEMAP__ ? ' hidden' : ''
+              }>${esc(recordLine(score.checks, score.checksThrough))}</p>`
             : ''
         }
         <div class="ex-sub">Days off, on average. Shorter is better.</div>
