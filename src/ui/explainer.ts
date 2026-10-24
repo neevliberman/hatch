@@ -3,7 +3,7 @@ import { sketchStrip } from './sketch';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-/** Cities for the spot picker, so keyboard and screen-reader users can choose a place without the map. South to north. */
+/** Big cities: the town finder's list when the map's own names can't load, and the About example's nearest city. South to north. */
 export const CITIES = [
   { name: 'Carbondale, IL', lat: 37.73, lng: -89.22 },
   { name: 'Cincinnati, OH', lat: 39.1, lng: -84.51 },
@@ -81,9 +81,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
     }
     <figure class="ex-fig">${sketchStrip(id, ex, ex.steps.map((x) => `<b>${esc(x.title)}</b>${esc(x.text)}`))}</figure>
     <div class="ex-spot"><p class="ex-intro">${esc(ex.spotIntro)}</p>
-      <label class="ex-place">Or pick a city <select data-place><option value="">Choose…</option>${CITIES.map(
-        (c) => `<option value="${c.lat},${c.lng}">${esc(c.name)}</option>`,
-      ).join('')}</select></label>
+      ${__BASEMAP__ ? `<button type="button" class="ex-find" data-find aria-controls="finder"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>Or find a town</button>` : ''}
       <div data-spot="${esc(id)}"></div></div>
     ${
       score
@@ -96,7 +94,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
             <b>${x.days.toFixed(1)} days</b></div>`,
           )
           .join('')}
-        <ul class="ex-pts">${score.points.map(([tag, x]) => `<li><i>${esc(tag)}</i> ${esc(x)}</li>`).join('')}</ul></div>`
+        <ul class="ex-pts">${score.points.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`
         : ''
     }
     <details class="ex-fine" data-key="fine-${esc(id)}"><summary>${esc(ex.finePrintLabel)}</summary>

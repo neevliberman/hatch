@@ -158,12 +158,22 @@ export function mountScrubber(
     fcEl.hidden = !a || a.at >= time.end;
     root.style.setProperty('--fc', String(af ?? 0));
     asOfEl.hidden = !a;
-    asOfEl.classList.toggle('stale', !!a?.stale);
+    // Fresh data says how fresh ("as of yesterday", not the date the pill already shows); data more than 3 days old
+    // (a past season's file, a pipeline that stopped) says its age in amber, like a late nightly run.
+    const days = a ? Math.floor((time.now - a.at) / 86_400_000) : 0;
+    const old = !!a && (a.stale || days > 3);
+    asOfEl.classList.toggle('stale', old);
     if (a) {
-      asOfEl.innerHTML = `as of ${md(a.at)}${a.stale ? '<span class="long"> · data may be stale</span><span class="phone-only"> · stale?</span>' : ''}`;
-      asOfEl.title = a.stale
-        ? `Weather observed up to ${md(a.at)}. Tonight's update looks late, so this may be out of date. Later days are forecast.`
-        : `Weather observed up to ${md(a.at)}. Later days are forecast.`;
+      asOfEl.innerHTML =
+        days > 3
+          ? `data ${days} days old`
+          : `as of ${days === 0 ? 'today' : days === 1 ? 'yesterday' : md(a.at)}${a.stale ? '<span class="long"> · data may be stale</span><span class="phone-only"> · stale?</span>' : ''}`;
+      asOfEl.title =
+        days > 3
+          ? `Real weather ends ${md(a.at)}, ${days} days ago. Later days are forecast.`
+          : a.stale
+            ? `Weather observed up to ${md(a.at)}. Tonight's update looks late, so this may be out of date. Later days are forecast.`
+            : `Weather observed up to ${md(a.at)}. Later days are forecast.`;
     }
     if (af !== null) {
       parts.push(`<span class="now asof-flag" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>as of</b></span>`);
