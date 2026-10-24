@@ -80,3 +80,48 @@ out), apart from records confirmed since.
 
 Reproduce: `python3 pipeline/live/rehearse.py --records <2026 research-grade parquet> --today 2026-10-24`
 (`--skip-build` to rescore the committed archive only).
+
+## Firefly and Japanese beetle (added 2026-10-24)
+
+The same rehearsal, run once for all three species (`rehearse.py`, the forecasts sharing one weather download): each
+species on its own frozen fits (firefly `firefly-v0`, fits hash `e3b74ab96a0a`; Japanese beetle
+`japanese-beetle-v0`, `8c8449d6de38`), its own effort background and its own 2026 research-grade records (pulled
+24 Oct 2026), archived in `archive/firefly/2026/` and `archive/japanese-beetle/2026/`. Neither model saw a 2026
+record. Luna's archive and scorecard layer came out byte for byte the same as before. One generation a year, so every
+strip's window runs to day 240 (28 Aug) and nothing is scored before Monday 14 September.
+
+| Species | Strips scored | Forecast miss | Calendar miss | Dates inside "likely" |
+|---|---|---|---|---|
+| Firefly | 3 of 5 (the far south and far north had under 20 records) | **3.2 days** | 4.8 | 5 of 6 |
+| Japanese beetle | 5 of 5 | **3.5 days** | **2.4** | 8 of 10 |
+
+Firefly (onset and peak: real / forecast / calendar):
+
+| Strip | Records | Onset | Peak | Miss | Calendar miss |
+|---|---|---|---|---|---|
+| 39-41 N | 201 | 12 Jun / 2 Jun / 12 Jun | 24 Jun / 22 Jun / 29 Jun | 6.0 | 2.9 |
+| 41-43 N | 287 | 13 Jun / 15 Jun / 21 Jun | 5 Jul / 4 Jul / 8 Jul | 1.5 | 6.0 |
+| 43-45 N | 68 | 17 Jun / 21 Jun / 25 Jun | 9 Jul / 10 Jul / 12 Jul | 2.2 | 5.6 |
+
+Japanese beetle:
+
+| Strip | Records | Onset | Peak | Miss | Calendar miss |
+|---|---|---|---|---|---|
+| 37-39 N | 63 | 16 Jun / 4 Jun / 20 Jun | 2 Jul / 27 Jun / 5 Jul | 8.5 | 4.1 |
+| 39-41 N | 470 | 19 Jun / 14 Jun / 23 Jun | 5 Jul / 4 Jul / 8 Jul | 3.0 | 3.7 |
+| 41-43 N | 1,147 | 27 Jun / 22 Jun / 29 Jun | 15 Jul / 12 Jul / 16 Jul | 4.0 | 1.8 |
+| 43-45 N | 665 | 2 Jul / 1 Jul / 3 Jul | 21 Jul / 19 Jul / 23 Jul | 1.5 | 2.0 |
+| 45-49 N | 401 | 7 Jul / 6 Jul / 7 Jul | 25 Jul / 25 Jul / 24 Jul | 0.5 | 0.4 |
+
+In plain words:
+- **The firefly beat the calendar** (3.2 against 4.8 days), clearly in central Illinois to southern Wisconsin, though
+  only three strips had enough records.
+- **The Japanese beetle lost to the calendar** (3.5 against 2.4). Its forecast ran early everywhere, most in the far
+  south (first beetles called for 4 June, real 16 June), the strip its replay already flagged as its weak spot. The
+  north was close for both. 2026 was an ordinary year for the beetle up north, when the usual date is hard to beat.
+- **All three species ran early at their southernmost scored strip** (luna's peak by two weeks, the beetle's first
+  ones by 12 days, the firefly's first ones at 39-41 N by 10 days): the same warm-spring lean as
+  `pipeline/fit/SOUTH_BIAS.md`, now seen in models fitted separately, so it looks like the shared weather recipe
+  (degree-days from 1 March on 2026's very warm spring), not one species' fit.
+- Same caveats as above, plus: both models are exploratory ("first try" in the app), and one season of three
+  (firefly) or five (beetle) strips is a hint, not a score.

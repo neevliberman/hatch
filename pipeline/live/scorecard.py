@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Live scorecard (plan v2, P5): how this season's forecast did, latitude strip by latitude strip, once the moths are in.
+One layer per live species (registry.py), each graded on its own archive, its own sightings and its own calendar.
 
 Analogy: marking a weather forecast after the week is over, using only forecasts that were written down beforehand.
 1. Every night's forecast is archived (`--add`): just its strip dates, the day 10% (onset) and 50% (peak) of each
@@ -31,6 +32,7 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "notebooks"))
+sys.path.insert(0, str(ROOT / "pipeline"))
 
 REPLAY = ROOT / "src" / "data" / "luna-replay.json"
 SETTLE_DAYS = 14        # a record counts once it is this old; a strip is scored once its whole window is
@@ -91,13 +93,14 @@ def pick_forecast(entries, model, latest_issue: dt.date):
 
 
 # ---------------------------------------------------------------- sightings
-def fetch_records(season, until: dt.date):
-    """This season's research-grade luna records in the 7 states (all licences, as the fit), observed up to `until`."""
+def fetch_records(season, until: dt.date, taxon=TAXON):
+    """This season's research-grade records of `taxon` (default luna) in the 7 states (all licences, as the fit),
+    observed up to `until`."""
     from hatch_p1 import inat
     rows, last = [], 0
     while True:
         js = inat._get("observations", {
-            "taxon_id": TAXON, "place_id": ",".join(map(str, inat.MIDWEST_PLACES)), "quality_grade": "research",
+            "taxon_id": taxon, "place_id": ",".join(map(str, inat.MIDWEST_PLACES)), "quality_grade": "research",
             "d1": f"{season}-01-01", "d2": until.isoformat(), "per_page": 200, "order_by": "id", "order": "asc",
             "id_above": last})
         res = js["results"]
@@ -233,38 +236,104 @@ def scorecard(season, raw, entries, today: dt.date, replay=None, layer="luna", p
     }
 
 
+def add_all(archive: Path, live, issued=None, rehearsal=False):
+    """Archive every species in a nightly file: luna at the top level into the archive root (<season>/), each entry
+    under "species" into its own folder (<key>/<season>/, registry.LiveSpecies.archive). -> paths written."""
+    from live import registry
+    out = [add_to_archive(archive, live, issued, rehearsal)] if "bands" in live else []
+    tonight = str(live.get("generated", ""))[:10]
+    for key, e in (live.get("species") or {}).items():
+        # never a backfill (its weather is older than its issue date), nor an entry carried over from an earlier night
+        # because that species failed tonight (it was archived on its own night)
+        if e.get("backfill") or str(e.get("generated", ""))[:10] != tonight:
+            continue
+        if "bands" in e and e.get("season") == live["season"]:
+            folder = registry.BY_KEY[key].archive(archive) if key in registry.BY_KEY else archive / key
+            out.append(add_to_archive(folder, e, issued, rehearsal))
+    return out
+
+
+def scorecard_all(season, today: dt.date, archive: Path, records=None, prev=None, keys=None):
+    """This week's scorecard for every live species (registry.py), one layer each, each against its own sightings,
+    its own calendar and its own frozen model. Luna's layer is exactly scorecard()'s; another species gets a layer
+    once it has archived forecasts this season. records: {key: season records} (missing ones are fetched).
+    A species that fails keeps its layer from `prev` (same season) and is named in the returned list."""
+    from live import registry
+    records = records or {}
+    out, failed = None, []
+    for sp in registry.SPECIES:
+        if keys and sp.key not in keys:
+            continue
+        try:
+            entries = load_archive(sp.archive(archive), season)
+            if sp.key != "luna" and not entries:
+                continue
+            raw = records[sp.key] if sp.key in records else fetch_records(season, today, sp.taxon)
+            card = scorecard(season, raw, entries, today, replay=json.loads(sp.replay.read_text()), layer=sp.key, prev=prev)
+        except Exception as err:  # noqa: BLE001 -- one species' scorecard must not cost the others'
+            print(f"::error::scorecard for {sp.key} failed: {err!r}", flush=True)
+            failed.append(sp.key)
+            old = ((prev or {}).get("layers") or {}).get(sp.key) if (prev or {}).get("season") == season else None
+            if out is not None and old:
+                out["layers"][sp.key] = old
+            continue
+        if out is None:
+            out = card
+        else:
+            out["layers"].update(card["layers"])
+            out["rehearsal"] = out["rehearsal"] or card["rehearsal"]
+    return out, failed
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--archive", type=Path, required=True, help="archive folder (holds <season>/<issued>.json)")
+    ap.add_argument("--archive", type=Path, required=True,
+                    help="archive folder (holds <season>/<issued>.json for luna, <key>/<season>/ for the others)")
     ap.add_argument("--season", type=int)
     ap.add_argument("--add", type=Path, help="a live latest.json to archive first (skipped for a backfill)")
-    ap.add_argument("--records", type=Path, help="season records parquet (default: fetch from iNaturalist)")
+    ap.add_argument("--records", nargs="+", default=[],
+                    help="season records parquet: PATH (luna) or KEY=PATH per species (default: fetch from iNaturalist)")
     ap.add_argument("--today", type=dt.date.fromisoformat, default=dt.datetime.now(dt.timezone.utc).date())
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     season = a.season or a.today.year
+    live_failed = []
     if a.add:
         live = json.loads(a.add.read_text())
+        live_failed = (live.get("checks") or {}).get("species_failed") or []
         if live.get("backfill"):
             print("not archiving a backfill: its weather is older than its issue date")
         elif "bands" in live and live["season"] == season:
-            print(f"archived {add_to_archive(a.archive, live)}")
-    entries = load_archive(a.archive, season)
-    raw = pd.read_parquet(a.records) if a.records else fetch_records(season, a.today)
+            for p in add_all(a.archive, live):
+                print(f"archived {p}")
+    records = {}
+    for r in a.records:
+        key, _, path = r.rpartition("=")
+        records[key or "luna"] = pd.read_parquet(path)
     prev = None
     if a.out.exists():                       # the last published file: its scored strips stay frozen
         try:
             prev = json.loads(a.out.read_text())
         except ValueError:
             prev = None
-    out = scorecard(season, raw, entries, a.today, prev=prev)
+    out, failed = scorecard_all(season, a.today, a.archive, records, prev)
+    if out is None or "luna" in failed:
+        raise SystemExit("scorecard: luna's layer failed; keeping the last file")
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
     tmp.write_text(json.dumps(out, separators=(",", ":")))
     tmp.replace(a.out)
-    print(f"wrote {a.out}: {json.dumps(out['layers']['luna']['summary'])}")
+    for k, layer in out["layers"].items():
+        print(f"wrote {a.out} [{k}]: {json.dumps(layer['summary'])}")
+    # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
+    # failed" step). This is also how a species whose forecast failed in build_live.py gets noticed.
+    if failed or live_failed:
+        why = "; ".join([*(f"the {k} forecast failed in build_live.py (its last good entry was kept)" for k in live_failed),
+                         *(f"the {k} scorecard failed (its last layer was kept)" for k in failed)])
+        print(f"::error::{why}. {a.out} WAS written and published with every other species; "
+              "this exit code only raises the alarm.", flush=True)
+        return 1
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -8,11 +8,12 @@ import { dayOfYear } from '../core/timeAxis';
 import type { CaveatCard, Creature, Explainer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpeciesWords, SpotStory } from '../core/layer';
 import { restingSketch } from '../ui/sketch';
 import { countdownParts, type SeasonWords } from '../ui/countdown';
-import { doyToMs, type ReplayFile } from './lunaData';
+import { doyToMs, LIVE, UNCONFIRMED, type ReplayFile } from './lunaData';
+import type { Live } from './liveData';
 import { APPROXIMATE, replayData, TYPICAL, windowCheck, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
-import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
+import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, liveNotice, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 
 type RGBA = [number, number, number, number];
@@ -79,21 +80,35 @@ export const isReplay = (js: unknown): js is ReplayFile => {
   return !!f && Array.isArray(f.cells) && !!f.forecast?.[TYPICAL];
 };
 
-/** onData: called when the finer hexes arrive or the level on screen changes (the map should redraw). */
-export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, initial: Mode = TYPICAL, onData: () => void = () => {}): LunaLayer {
+/**
+ * onData: called when the finer hexes arrive or the level on screen changes (the map should redraw).
+ * live: this season's nightly forecast for the species (public/live/latest.json, src/layers/liveData.ts), or null:
+ * with one, the season menu offers it (LIVE), drawn like luna's: big hexagons, this season's sightings so far.
+ */
+export function createOneGenerationLayer(
+  cfg: SpeciesConfig,
+  file: ReplayFile,
+  initial: Mode = TYPICAL,
+  onData: () => void = () => {},
+  liveIn: Live | null = null,
+): LunaLayer {
+  let live = liveIn;
   const { key, one, words } = cfg;
   const plural = words.plural;
   const GLOW = cfg.glow;
-  const { data, sightingsFor, bandOf } = replayData(file);
-  let mode = initial;
+  const { data, sightingsFor: pastSightings, bandOf } = replayData(file);
+  /** Sightings in a mode: past years from the replay file, this season's from the live file. */
+  const sightingsFor = (m: Mode): Sighting[] => (m === LIVE ? (live?.sightings ?? []) : pastSightings(m));
+  let mode = initial === LIVE && !live ? TYPICAL : initial;
   let shown = sightingsFor(mode);
   const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
   const washed = washer(data.cells);
   const unseen = cells.filter((c) => !c.seen);
-  const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : Number(mode));
-  const forecast = () => data.forecast[mode] ?? data.forecast[TYPICAL]!;
+  const isLive = () => mode === LIVE && live !== null;
+  const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : isLive() ? live!.season : Number(mode));
+  const forecast = () => (isLive() ? live!.median : (data.forecast[mode] ?? data.forecast[TYPICAL]!)) as ((number | null)[] | null)[];
   const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
   const rings = ripples<Sighting>(`${key}-ripples`, (s) => [s.lng, s.lat], palette.dotRim);
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
@@ -172,6 +187,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
   /** Res 5 from FINE_ZOOM[5]; back to res 4 a little further out, so a zoom resting on the line doesn't flicker. */
   /** The level to draw and its days: res 5 only once the zoom has rested there (SETTLE_MS), not mid fly-to. */
   const resFor = (zoom: number): { res: number; days: Uint8Array | null } => {
+    if (isLive()) return { res: GRID_RES, days: null }; // live has no finer files: big hexagons at every zoom
     if (fine && !hasFine && zoom >= FINE_ZOOM[5]! && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
     const want = hasFine && zoom >= FINE_ZOOM[5]! - (wantFine ? 0.3 : 0);
     if (want !== wantFine) {
@@ -252,10 +268,42 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
     };
   };
 
+  /** Live hex card, as luna's: the stage first, the likely peak, the detail behind "More". Any number may be missing. */
+  const liveProbe = (cell: string, q: (number | null)[], seen: boolean, doy: number): ProbeCard => {
+    const L = live!;
+    const y = L.season;
+    const i = cellIndex.get(cell);
+    const f = (d: number) => fmtDoy(y, d);
+    const asOf = f(dayOfYear(L.asOf));
+    const stage = stageAt(q, doy);
+    const label = stage === 'over' ? 'over' : STAGE_LABEL[stage];
+    const lines: string[] = [];
+    const more: string[] = [];
+    const lo = i === undefined ? null : L.lo[i]?.[2];
+    const hi = i === undefined ? null : L.hi[i]?.[2];
+    if (lo != null && hi != null) lines.push(lo === hi ? `Busiest day likely ${f(lo)}.` : `Busiest day likely ${f(lo)} to ${f(hi)}.`);
+    else if (q[2] != null) lines.push(`Busiest day likely about ${f(q[2])}.`);
+    if (!seen) lines.push(cfg.noneSeen);
+    const out = i === undefined ? null : L.outNow[i];
+    if (out != null && out > 0) more.push(`${Math.round(out)}% of the season\u2019s ${plural} out by ${asOf}.`);
+    const dd = i === undefined ? null : L.dd[i];
+    if (dd != null && dd > 0) more.push(`${Math.round(dd).toLocaleString()} degree-days banked since Mar 1.`);
+    const n = shown.filter((s) => s.cell === cell).length;
+    if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
+    more.push(`${modeLabel(LIVE, L)}: real weather to ${asOf}, then forecast.`);
+    return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more };
+  };
+
   const isDot = (id: string) => id === `${key}-glow` || id === `${key}-dots`;
   return {
     id: `${key}-replay`,
     title: cfg.name,
+    live: () => live,
+    setLive(l) {
+      live = l;
+      profiles.delete(LIVE);
+      if (mode === LIVE) shown = sightingsFor(mode);
+    },
     words,
     mode: () => mode,
     setMode(m) {
@@ -292,14 +340,15 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
       const n = stageCounts(forecast(), doy);
       const lit = shown.filter((s) => day(s) <= doy && day(s) > doy - GLOW_DAYS).length;
       const parts = STAGES.filter((s) => n[s]).map((s) => `${s} in ${n[s]}`);
-      return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode)}. ${one} forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
+      const asOf = isLive() ? ` Weather observed up to ${fmtDoy(yearOf(), dayOfYear(live!.asOf))}, forecast after.` : '';
+      return `${fmtDoy(yearOf(), doy)}, ${modeLabel(mode, live)}.${asOf} ${one} forecast across ${forecast().length} map hexagons: ${parts.join(', ')}. ` +
         `${lit} ${lit === 1 ? cfg.oneLower : plural} seen in the last ${GLOW_DAYS} days.`;
     },
 
     // One wave a summer, so the ribbon's line needs no notes.
     profile() {
       let p = profiles.get(mode);
-      if (!p) profiles.set(mode, (p = seasonProfile(forecast(), shown, day, yearOf(), [])));
+      if (!p) profiles.set(mode, (p = seasonProfile(forecast().map((q) => q ?? []), shown, day, yearOf(), [])));
       return p;
     },
 
@@ -393,7 +442,10 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
           id: `${key}-dots`,
           data: shown,
           getPosition: (s) => [s.lng, s.lat],
-          getFillColor: (s) => (s.flags & APPROXIMATE ? GREY : GLOW),
+          getFillColor: (s) => {
+            const c = s.flags & APPROXIMATE ? GREY : GLOW;
+            return s.flags & UNCONFIRMED ? [c[0], c[1], c[2], 150] : c; // live: not yet confirmed, a little fainter
+          },
           stroked: true,
           getLineColor: palette.dotRim,
           lineWidthUnits: 'pixels',
@@ -423,6 +475,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
       }
       const at = lookup(lngLat);
       if (!at) return null;
+      if (isLive()) return liveProbe(at.cell, at.q, at.seen, doy);
       const [q05, q25, q50, q75] = at.q;
       // Same shape as the luna card: one answer up front, the detail behind "More".
       const stage = stageAt(at.q, doy);
@@ -461,15 +514,19 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
     },
 
     caveats(): CaveatCard {
-      const yr = mode === TYPICAL ? null : scoreSummary(Number(mode));
+      const yr = mode === TYPICAL || isLive() ? null : scoreSummary(Number(mode));
       const c = data.counts;
       const m = data.model;
       const pk = data.interval?.peak ?? [0, 0];
       const nHold = m?.holdout_band_years ?? cfg.holdoutYears;
       const bullets = [
         `This is a first try. It is the luna moth’s recipe refit on ${plural}, with nothing tuned for ${plural} yet. The luna moth’s rules were written down before it was scored. These were not.`,
-        'This is a look back. It uses the temperatures that actually happened. A forecast made during spring would have to guess the weather ahead.',
-        `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of ${cfg.adults} (${data.species.sci}) that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days.`,
+        isLive()
+          ? `This is ${live!.season}\u2019s forecast: real weather so far, then guesses for the weeks ahead. Its misses on past years (below) knew the real weather, so expect bigger misses early in the season.`
+          : 'This is a look back. It uses the temperatures that actually happened. A forecast made during spring would have to guess the weather ahead.',
+        isLive()
+          ? `The dots are this season\u2019s photos of ${cfg.adults} (${data.species.sci}) posted to iNaturalist (${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}). Fainter ones are not confirmed yet. Each dot stays lit for ${GLOW_DAYS} days.`
+          : `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of ${cfg.adults} (${data.species.sci}) that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days.`,
         cfg.idNote,
         cfg.seasonNote,
         ...(m?.median_dd_at_lat?.['42']
@@ -478,7 +535,9 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
         cfg.effortNote,
         'Gray dots mean the photo’s location was blurred or rough, so the dot may sit off its true spot.',
         `Striped hexagons have no sightings of ${cfg.thisOne} nearby, ever. There is nothing to check the forecast against there.`,
-        ...(hasFine
+        ...(isLive()
+          ? ['This year\u2019s forecast has big hexagons only, at every zoom.']
+          : hasFine
           ? ['Zoom in and the hexagons get smaller, about 17 km wide. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale. So a small hexagon’s date is no surer than a big one’s. Its card counts the sightings in the big hexagon around it.']
           : [`There are no small hexagons for ${plural} here. Zooming in keeps the big ones.`]),
         `For a single year, a hexagon’s card gives a "peak here likely" window. In the ${data.scores.length} strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast.` +
@@ -508,7 +567,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
     },
 
     explainer(): Explainer {
-      const sc = mode === TYPICAL ? scoreSummary() : scoreSummary(Number(mode));
+      const sc = mode === TYPICAL || isLive() ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
       const lm = data.model?.loyo_mae;
       // The simpler rule (warmth at past sightings alone, luna's first model), said as its numbers say it.
@@ -532,8 +591,11 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
           title: 'How sure is it?',
           points: [
             sc.n
-              ? `It was checked against real sightings: the dates of the first ${plural} and the peak, on ${mode === TYPICAL ? 'years' : mode} it never learned from (${cfg.checkedWhere}).`
+              ? `It was checked against real sightings: the dates of the first ${plural} and the peak, on ${mode === TYPICAL || isLive() ? 'years' : mode} it never learned from (${cfg.checkedWhere}).`
               : `${mode} had too few sightings to check, so these numbers are for all years together.`,
+            ...(isLive()
+              ? ['Those checks knew the real weather. This year\u2019s forecast has to guess the weeks ahead, so expect bigger misses early in the season.']
+              : []),
             ...(simpler ? [simpler] : []),
             ...[windowCheck(data)].filter((w): w is string => !!w),
             'It is a first try, not tested as carefully as the luna moth yet.',
@@ -544,6 +606,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
           ],
         },
         finePrintLabel: 'Limits and fine print',
+        notice: isLive() ? liveNotice(live!) : undefined,
       };
     },
 
@@ -560,7 +623,14 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
     },
 
     credits() {
+      const weather = isLive()
+        ? [
+            { text: 'Observed weather this season: PRISM Climate Group, Oregon State University, via RCC-ACIS.', href: 'https://www.rcc-acis.org/' },
+            { text: 'Weather forecast: Open-Meteo.com (CC BY 4.0).', href: 'https://open-meteo.com/' },
+          ]
+        : [];
       return [
+        ...weather,
         { text: `${one} sightings: iNaturalist observers (CC0, CC BY and CC BY-NC records only). Photos are linked, never copied.`, href: `https://www.inaturalist.org/taxa/${data.species.inat_taxon}` },
         { text: 'Temperatures: Daymet v4 daily 1 km, Thornton et al., ORNL DAAC.', href: 'https://daymet.ornl.gov/' },
         { text: 'State outlines: US Census Bureau, via us-atlas.', href: 'https://github.com/topojson/us-atlas' },

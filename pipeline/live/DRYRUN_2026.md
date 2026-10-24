@@ -48,3 +48,9 @@ was rebuilt the same way (spring Tmax offsets 0.1-0.3 °C smaller, lows unchange
 30 Sep file changed in 95 of 551 hexes, by −1 to +2 days (mean +0.01). Strip dates: 39-41 N peak 132 to 133, 41-43 N
 onset 111 to 110, the rest unchanged; the 15 May rerun moved 39-41 N peak +1 and 45-49 N onset and peak −1. The
 southern strip's forecast did not move (onset 94, peak 116). Why the south is early: `pipeline/fit/SOUTH_BIAS.md`.
+
+## Firefly and Japanese beetle added (2026-10-24)
+`public/live/latest.json` now also carries the firefly and the Japanese beetle under `species`, built by the same
+nightly code as of 30 Sep on the same weather, each with its own frozen fits and its own 2026 sightings (1,961 and
+2,562 openly licensed records, research grade and needs-ID). Luna's part of the file is unchanged (its forecast was
+rebuilt on a fresh PRISM download and matched the committed file exactly). How the three did: `SCORECARD_2026.md`.

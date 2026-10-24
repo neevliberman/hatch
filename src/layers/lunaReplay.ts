@@ -17,6 +17,7 @@ import {
   firstBroodCount,
   LIVE,
   SECOND_BROOD,
+  setLiveSightings,
   sightingsFor,
   UNCONFIRMED,
   TYPICAL,
@@ -111,16 +112,21 @@ const dotColor = (s: Sighting): RGBA => {
 const fmtDoy = (year: number, doy: number) =>
   new Date(doyToMs(year, Math.round(doy))).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-/** This season's nightly forecast, once public/live/latest.json has loaded (null: no live mode). */
+/** Luna's nightly forecast, once public/live/latest.json has loaded (null: no live mode). Every other species keeps its
+ * own (src/layers/oneGeneration.ts) and passes it to modeLabel / replayTimeSpec. */
 let live: Live | null = null;
-export const setLive = (l: Live | null) => void (live = l);
+export const setLive = (l: Live | null) => {
+  live = l;
+  setLiveSightings(l?.sightings ?? []);
+};
 
-export const modeLabel = (mode: Mode) =>
+/** The season menu's words for a mode; `L`: the species' live forecast (luna's by default). */
+export const modeLabel = (mode: Mode, L: Live | null = live) =>
   mode === TYPICAL
     ? `all years, ${data.years[0]}-${data.years[data.years.length - 1]}`
     : mode === LIVE
       ? // A season rebuilt after the fact is just that year ("2026"); a nightly one is "2026 live".
-        `${live?.season ?? 'this year'}${live?.backfill ? '' : ' live'}${live?.stub ? ' (sample data)' : ''}`
+        `${L?.season ?? 'this year'}${L?.backfill ? '' : ' live'}${L?.stub ? ' (sample data)' : ''}`
       : mode;
 
 /**
@@ -128,7 +134,8 @@ export const modeLabel = (mode: Mode) =>
  * Live mode starts on the last day of observed weather unless a day is given, and marks it on the scrubber;
  * `now` decides whether the nightly file looks late.
  */
-export function replayTimeSpec(mode: Mode, month?: number, day?: number, now = Date.now()): TimeSpec {
+export function replayTimeSpec(mode: Mode, month?: number, day?: number, now = Date.now(), L: Live | null = live): TimeSpec {
+  const live = L;
   if (mode === LIVE && live) {
     const y = live.season;
     return {
@@ -165,7 +172,7 @@ function seasonCheck(): string | null {
 }
 
 /** The live-mode card at the top of the About panel: how this year's map is made, in plain words. */
-function liveNotice(L: Live): { title: string; bullets: string[] } {
+export function liveNotice(L: Live): { title: string; bullets: string[] } {
   const f = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const src = (s: string) => (s ? ` (${s})` : '');
   return {
@@ -285,6 +292,10 @@ export interface LunaLayer extends HatchLayer {
   seasonCount(mode: Mode): number;
   /** The real calendar's next season, or that it is on now (ui/countdown.ts). */
   countdown(now: number): [string, string];
+  /** This season's live forecast for the species, once loaded (null: no live mode for it). */
+  live(): Live | null;
+  /** Attach the live forecast once it arrives (species loaded before the live file). */
+  setLive?(live: Live): void;
 }
 
 interface FineCell {
@@ -498,6 +509,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   return {
     id: 'luna-replay',
     title: 'Luna moth',
+    live: () => live,
     words: { tagline: 'when luna moths fly', plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths', mark },
     mode: () => mode,
     seasonCount: firstBroodCount,

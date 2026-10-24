@@ -3,12 +3,15 @@
 
 - effort_profile.json: typical within-season moth-recording effort per state (iNat histograms 2015-2025, the
   same background the P3 fit uses), so the live forecast predicts *sightings* exactly like the replay.
+- effort/<key>.json: the same for every other live species (registry.py), from the background its own fit used
+  (beetles minus fireflies, beetles minus Japanese beetles, ...): `--effort <key>`.
 - prism_offsets.json: per res-4 cell and calendar month, mean (Daymet - PRISM) Tmin and Tmax over 2015-2025, with
   PRISM read by weather day (its high moved back to the day it happened, sources.weather_days), as the live job reads it.
   The model was fitted on Daymet; live weather comes from PRISM, which runs a touch different by place. Adding
   the offset puts live weather on the model's scale (like converting a second thermometer to read like the first).
 
 Run once (needs network, ~10 min): python3 pipeline/live/build_static.py   (--offsets-only skips the effort profile)
+     python3 pipeline/live/build_static.py --effort firefly japanese-beetle   (only those species' effort profiles)
 """
 import datetime as dt
 import json
@@ -35,8 +38,18 @@ CACHE = fdata.DATA / "daymet"
 PRISM_CACHE = fdata.DATA / "prism_hist_acis"   # raw ACIS dates (the old prism_hist cache was filed as-is)
 
 
-def effort_profile():
-    E = fdata.effort_matrix(fdata.fetch_effort(), np.arange(Y0, Y1 + 1))
+def species_effort(key):
+    """The effort records a species' own fit used (cached in notebooks/data by its fetch script)."""
+    if key == "firefly":
+        from firefly.fetch import fetch_effort
+        return fetch_effort()
+    from species import get
+    from species.fetch import fetch_effort
+    return fetch_effort(get(key))
+
+
+def effort_profile(effort=None):
+    E = fdata.effort_matrix(fdata.fetch_effort() if effort is None else effort, np.arange(Y0, Y1 + 1))
     prof = EV.effort_profile(E, list(range(Y1 - Y0 + 1)))     # [state, 365]
     return {"states": fdata.STATES, "years": [Y0, Y1],
             "profile": [[float(f"{v:.4g}") for v in row] for row in prof]}
@@ -84,7 +97,16 @@ def prism_offsets(cells):
 
 
 def main(argv=None):
-    offsets_only = "--offsets-only" in (sys.argv[1:] if argv is None else argv)
+    argv = sys.argv[1:] if argv is None else argv
+    if "--effort" in argv:
+        from live import registry
+        for key in argv[argv.index("--effort") + 1:]:
+            sp = registry.get(key)
+            sp.effort.parent.mkdir(parents=True, exist_ok=True)
+            sp.effort.write_text(json.dumps(effort_profile(species_effort(key))) + "\n")
+            print(f"wrote {sp.effort.relative_to(ROOT)}", flush=True)
+        return
+    offsets_only = "--offsets-only" in argv
     cells = json.loads(REPLAY.read_text())["cells"]
     if not offsets_only:
         (HERE / "effort_profile.json").write_text(json.dumps(effort_profile()) + "\n")

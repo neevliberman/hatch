@@ -415,13 +415,15 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const early = { ...real, as_of: `${stub.season}-02-28`, generated: `${stub.season}-03-02T06:00:00Z` };
   const rerun = { ...late, backfill: true }; // rebuilt after the fact: old, but never "stale"
   const inSeason = `${stub.season}-06-11T12:00:00Z`;
+  // Every species with a part in the file gets live mode; one without (here the beetle) does not.
+  const someSpecies = { ...real, species: Object.fromEntries(Object.entries(real.species ?? {}).filter(([k]) => k !== 'japanese-beetle')) };
   const browser = await pw.chromium.launch({
     executablePath: process.env.CHROMIUM || undefined,
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
   });
   // [label, query, served file (null = the stub as built, 404 = none), width, height, phone]
   const cases = [
-    ['in-season default', `?noauto&today=${inSeason}`, real, 1440, 900, false],
+    ['in-season default', `?noauto&today=${inSeason}`, someSpecies, 1440, 900, false],
     ['off-season pick', '?noauto&today=2027-01-15', real, 1440, 900, false],
     ['shared link keeps its year', `?year=2021&noauto&today=${inSeason}`, real, 1440, 900, false],
     ['late file', `?noauto&today=${inSeason}`, late, 1440, 900, false],
@@ -445,10 +447,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     // The missing file's 404 is logged by the browser itself; nothing else may be.
     page.on('console', (m) => m.type() === 'error' && !(served === 404 && /404/.test(m.text())) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    let liveFetched = false;
+    page.on('request', (r) => /\/live\/latest\.json/.test(r.url()) && (liveFetched = true));
     const shotL = (step) => page.screenshot({ path: `${out}/live-${label.replace(/\W+/g, '-')}-${step}.png` });
     try {
       await page.goto(origin + '/' + query);
       await page.waitForTimeout(1500);
+      if (label === 'off-season pick') {
+        // Off-season, the live file (the biggest a visit could load) waits until the reader reaches for the season menu.
+        if (liveFetched) fail('an off-season first visit downloaded the live file');
+        await page.locator('#season').hover();
+        await page.waitForTimeout(800);
+        if (!liveFetched) fail('reaching for the season menu did not fetch the live file');
+      }
       const opts = await page.locator('#season option').evaluateAll((os) => os.map((o) => [o.value, o.textContent]));
       const value = await page.locator('#season').inputValue();
       const hasLive = opts[0]?.[0] === 'live';
@@ -492,7 +503,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const stale = (await badge.getAttribute('class')).includes('stale');
       // Amber only when the nightly run is overdue; a frozen or rebuilt file shows its age without it.
       if (stale !== (label === 'late file')) fail(stale ? 'fresh data marked stale' : 'a late file is not marked stale');
-      await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 3000 })
+      // The address bar follows the view on a throttle; a software-GL page can take seconds per frame, so wait for it.
+      await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 10000 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
       await page.mouse.move(2, height / 2);
       await shotL('1-map');
@@ -546,13 +558,26 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           await shotL('4-scorecard');
         }
         await page.keyboard.press('Escape');
-        // Fireflies have no live season: picking them from live mode lands on all years, and the menu drops live.
+        // The firefly has a part in the served file: picking it from live mode stays live, and its menu offers live.
+        // The beetle has none: it lands on all years, its menu has no live option, and says why at the top.
         if (await page.locator('#species').isVisible()) {
           await page.locator('#species').selectOption('firefly');
-          await page.waitForFunction(() => window.__hatch.current().id !== 'luna-replay', null, { timeout: 8000 }).catch(() => fail('the firefly never loaded'));
-          await page.waitForTimeout(500);
-          if ((await page.locator('#season').inputValue()) !== 'typical') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
-          if (await page.locator('#season option[value=live]').count()) fail('the firefly season menu offers live mode');
+          await page.waitForFunction(() => window.__hatch.current().id === 'firefly-replay', null, { timeout: 8000 }).catch(() => fail('the firefly never loaded'));
+          await page.waitForTimeout(800);
+          if ((await page.locator('#season').inputValue()) !== 'live') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
+          if (!(await page.locator('#season option[value=live]').count())) fail('the firefly season menu does not offer live mode');
+          // Entering live mode lands on the species' own as-of day (its part of the file can run to another day than luna's).
+          const ffAsOf = someSpecies.species?.firefly?.as_of;
+          const ffDate = ffAsOf && new Date(Date.parse(ffAsOf)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+          if (ffDate && (await page.locator('#t-date').textContent()) !== ffDate)
+            fail(`firefly live mode opened on ${await page.locator('#t-date').textContent()}, not its as-of day ${ffDate}`);
+          await page.locator('#species').selectOption('japanese-beetle');
+          await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 8000 }).catch(() => fail('the beetle never loaded'));
+          await page.waitForTimeout(800);
+          if ((await page.locator('#season').inputValue()) !== 'typical') fail(`the beetle (no live entry) from live mode opened on ${await page.locator('#season').inputValue()}`);
+          if (await page.locator('#season option[value=live]').count()) fail('the beetle season menu offers live mode without a live entry');
+          if (!/not for .* yet/.test((await page.locator('#season option[disabled]').first().textContent().catch(() => '')) ?? ''))
+            fail('the beetle season menu does not say live mode is not there for it yet');
           await page.locator('#species').selectOption('luna');
           await page.waitForTimeout(500);
           if (!(await page.locator('#season option[value=live]').count())) fail('back on luna, the live option is gone');
