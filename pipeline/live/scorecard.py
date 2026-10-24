@@ -15,6 +15,9 @@ Analogy: marking a weather forecast after the week is over, using only forecasts
    comparison is the calendar: the strip's mean onset / peak over 2015-2025 (the P3 calendar baseline).
 6. A strip's score is frozen the week it is first given: later weeks copy that row from the last published scorecard
    (`scored_on` says when), so late uploads never move a published score.
+7. Past seasons are carried forward: `seasons` lists every other season's last published summary per species
+   (with_seasons), taken from the last published file (`--out` as it stands) and from main's bundled copy
+   (`--past`, default public/live/scorecard.json: the 2026 rehearsal), so a new season never drops an old one.
 
 Run: python3 pipeline/live/scorecard.py --archive live/archive --season 2027 --add live/latest.json --out live/scorecard.json
      (rehearse.py runs it on 2026 with rebuilt as-of forecasts)
@@ -35,6 +38,7 @@ sys.path.insert(0, str(ROOT / "notebooks"))
 sys.path.insert(0, str(ROOT / "pipeline"))
 
 REPLAY = ROOT / "src" / "data" / "luna-replay.json"
+PAST = ROOT / "public" / "live" / "scorecard.json"   # main's bundled scorecard: seeds `seasons` before live-data has one
 SETTLE_DAYS = 14        # a record counts once it is this old; a strip is scored once its whole window is
 LEAD_DAYS = 7           # grade the forecast issued at least a week before the real date
 MIN_N = 20              # as P3: a strip needs >= 20 first-wave records to be scored
@@ -237,6 +241,61 @@ def scorecard(season, raw, entries, today: dt.date, replay=None, layer="luna", p
     }
 
 
+def season_summaries(card):
+    """Every season a scorecard file speaks for, as {season: entry}: its own (top-level layers, summaries only) and
+    the past ones it carries (`seasons`). A file that is not a v1 scorecard speaks for nothing."""
+    if not isinstance(card, dict) or card.get("kind") != "scorecard" or card.get("version") != 1:
+        return {}
+    out = {}
+    for e in card.get("seasons") or []:
+        if isinstance(e, dict) and isinstance(e.get("season"), int) and isinstance(e.get("layers"), dict):
+            out[e["season"]] = e
+    if isinstance(card.get("season"), int) and isinstance(card.get("layers"), dict):
+        e = {"season": card["season"], "score_date": card.get("score_date"),
+             "layers": {k: {"model": l.get("model"), "summary": l["summary"]}
+                        for k, l in card["layers"].items() if isinstance(l, dict) and isinstance(l.get("summary"), dict)}}
+        if card.get("rehearsal"):
+            e["rehearsal"] = True
+        out[card["season"]] = e
+    return out
+
+
+def with_seasons(card, *olds):
+    """`card` plus `seasons`: every season other than its own that any of `olds` speaks for, oldest first, each with
+    its species' last published summaries. Per season and species the entry with the latest score_date wins (the
+    earlier source on a tie), so a finished season keeps its final week and nothing is lost when a new season
+    starts. A source may be None (no file yet)."""
+    merged = {}
+    for old in olds:
+        for y, e in season_summaries(old).items():
+            if y == card["season"]:
+                continue
+            m = merged.setdefault(y, {"season": y, "score_date": None, "layers": {}, "_on": {}})
+            on = str(e.get("score_date") or "")
+            for k, l in e["layers"].items():
+                if k not in m["layers"] or on > m["_on"][k]:
+                    m["layers"][k], m["_on"][k] = l, on
+            if on > str(m["score_date"] or ""):
+                m["score_date"] = e.get("score_date")
+            if e.get("rehearsal"):
+                m["rehearsal"] = True
+    seasons = []
+    for y in sorted(merged):
+        m = merged[y]
+        del m["_on"]
+        if m["layers"]:
+            seasons.append(m)
+    return {**card, "seasons": seasons}
+
+
+def read_card(path: Path):
+    """A scorecard file, or None if it is missing or not JSON."""
+    try:
+        return json.loads(path.read_text()) if path and path.exists() else None
+    except ValueError:
+        return None
+
+
 def add_all(archive: Path, live, issued=None, rehearsal=False):
     """Archive every species in a nightly file: luna at the top level into the archive root (<season>/), each entry
     under "species" into its own folder (<key>/<season>/, registry.LiveSpecies.archive). -> paths written."""
@@ -296,6 +355,8 @@ def main(argv=None):
                     help="season records parquet: PATH (luna) or KEY=PATH per species (default: fetch from iNaturalist)")
     ap.add_argument("--today", type=dt.date.fromisoformat, default=dt.datetime.now(dt.timezone.utc).date())
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--past", type=Path, default=PAST,
+                    help="another scorecard whose seasons are carried forward too (default: main's public/live copy)")
     a = ap.parse_args(argv)
     season = a.season or a.today.year
     live_failed = []
@@ -311,21 +372,20 @@ def main(argv=None):
     for r in a.records:
         key, _, path = r.rpartition("=")
         records[key or "luna"] = pd.read_parquet(path)
-    prev = None
-    if a.out.exists():                       # the last published file: its scored strips stay frozen
-        try:
-            prev = json.loads(a.out.read_text())
-        except ValueError:
-            prev = None
+    prev = read_card(a.out)                  # the last published file: its scored strips stay frozen
     out, failed = scorecard_all(season, a.today, a.archive, records, prev)
     if out is None or "luna" in failed:
         raise SystemExit("scorecard: luna's layer failed; keeping the last file")
+    # past seasons: the last published file first, then main's copy (for the night live-data has no scorecard yet)
+    out = with_seasons(out, prev, None if a.past.resolve() == a.out.resolve() else read_card(a.past))
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
     tmp.write_text(json.dumps(out, separators=(",", ":")))
     tmp.replace(a.out)
     for k, layer in out["layers"].items():
         print(f"wrote {a.out} [{k}]: {json.dumps(layer['summary'])}")
+    for e in out["seasons"]:
+        print(f"kept season {e['season']}: {', '.join(e['layers'])}")
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
     # failed" step). This is also how a species whose forecast failed in build_live.py gets noticed.
     if failed or live_failed:

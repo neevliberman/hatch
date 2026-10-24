@@ -1,6 +1,7 @@
 """Offline tests for the live scorecard: settle / pending rules, which forecast gets graded, strip scoring.
 python3 -m pytest pipeline/live"""
 import datetime as dt
+import json
 import sys
 from pathlib import Path
 
@@ -178,3 +179,59 @@ def test_band_reach_mixes_cells_by_weight():
 
 def test_model_hash_is_stable():
     assert L.model_hash() == L.model_hash() and len(L.model_hash()) == 12
+
+
+def card(season, score_date, **summaries):
+    """A scorecard file as main() writes it, one layer per keyword (key with _ for -), summary {"scored", "miss"}."""
+    return {"version": 1, "kind": "scorecard", "season": season, "score_date": score_date, "rehearsal": False,
+            "layers": {k.replace("_", "-"): {"model": MODEL, "summary": {"scored": n, "miss": m, "calendar_miss": c},
+                                             "bands": []} for k, (n, m, c) in summaries.items()}}
+
+
+def test_past_seasons_are_carried_forward():
+    y26 = card(2026, "2026-10-19", luna=(5, 5.6, 8.2), japanese_beetle=(5, 3.5, 2.4))
+    y27 = card(2027, "2027-03-01", luna=(0, None, None))
+    got = S.with_seasons(y27, None, y26)                       # first 2027 night: live-data has no file yet
+    assert got["layers"] == y27["layers"] and [e["season"] for e in got["seasons"]] == [2026]
+    beetle = got["seasons"][0]["layers"]["japanese-beetle"]
+    assert beetle["summary"]["miss"] == 3.5 and "bands" not in beetle   # summaries only
+    # the next night starts from that file; main's copy still says 2026; the old season stays exactly once
+    y27b = card(2027, "2027-08-02", luna=(2, 4.0, 6.0), japanese_beetle=(1, 1.0, 2.0))
+    again = S.with_seasons(y27b, got, y26)
+    assert again["seasons"] == got["seasons"]
+    # a new season moves 2027 (its last week) into the list, oldest first, and keeps 2026
+    y28 = S.with_seasons(card(2028, "2028-03-06", luna=(0, None, None)), again, y26)
+    assert [e["season"] for e in y28["seasons"]] == [2026, 2027]
+    assert y28["seasons"][1]["layers"]["japanese-beetle"]["summary"]["miss"] == 1.0
+    # per season and species the newest week wins, whichever source has it; an unreadable source adds nothing
+    old27 = card(2027, "2027-07-05", japanese_beetle=(1, 9.0, 9.0), firefly=(3, 2.0, 3.0))
+    mix = S.with_seasons(card(2028, "2028-03-06"), old27, again, {"kind": "other"}, "junk")
+    l27 = mix["seasons"][1]["layers"]
+    assert l27["japanese-beetle"]["summary"]["miss"] == 1.0 and l27["firefly"]["summary"]["miss"] == 2.0
+    assert mix["seasons"][1]["score_date"] == "2027-08-02"
+    # the file's own season is never listed as a past one (a backfill of 2026 run in 2027 keeps 2027 instead)
+    back = S.with_seasons(y26, again)
+    assert [e["season"] for e in back["seasons"]] == [2027]
+
+
+def test_main_keeps_the_bundled_season_on_the_first_night(tmp_path, monkeypatch):
+    """The nightly command (live-forecast.yml) on the first 2027 night: no scorecard on live-data yet, so 2026 comes
+    from main's bundled copy; on later nights from the file itself, even with no bundled copy."""
+    bundled = tmp_path / "main" / "scorecard.json"
+    bundled.parent.mkdir()
+    bundled.write_text(json.dumps({**card(2026, "2026-10-19", japanese_beetle=(5, 3.5, 2.4)), "rehearsal": True}))
+    week = {"n": 0}
+
+    def fake_all(season, today, archive, records, prev, keys=None):
+        week["n"] += 1
+        return card(season, S.week_start(today).isoformat(), luna=(week["n"], 4.0, 5.0)), []
+    monkeypatch.setattr(S, "scorecard_all", fake_all)
+    out = tmp_path / "ld" / "live" / "scorecard.json"
+    args = ["--archive", str(tmp_path / "a"), "--season", "2027", "--out", str(out), "--past", str(bundled)]
+    assert S.main([*args, "--today", "2027-03-02"]) == 0
+    got = json.loads(out.read_text())
+    assert got["season"] == 2027 and got["seasons"][0]["season"] == 2026 and got["seasons"][0]["rehearsal"]
+    assert got["seasons"][0]["layers"]["japanese-beetle"]["summary"]["miss"] == 3.5
+    bundled.unlink()
+    assert S.main([*args, "--today", "2027-03-09"]) == 0
+    assert json.loads(out.read_text())["seasons"] == got["seasons"]

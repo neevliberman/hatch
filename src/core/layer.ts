@@ -88,6 +88,10 @@ export interface RecordCheck {
   days: number;
   usual: number;
   size?: string;
+  /** A live season's check (ui/scorecard.ts): its year and strips scored. recordLine pools the seasons that share a
+   * verb into one clause ("in 2026 and 2027 (10 strip-years)"), weighted by strips, so the line stays one line. */
+  season?: number;
+  n?: number;
 }
 
 export interface Explainer {

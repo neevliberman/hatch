@@ -6,7 +6,7 @@
  * species. A species with no entry in the file shows no line.
  */
 import type { RecordCheck } from '../core/layer';
-import { recordLine } from './explainer';
+import { recordLine, stripYears } from './explainer';
 
 interface Dates { real: number; forecast: number; calendar: number }
 interface Band { band: string; status: string; settles_on: string; peak?: Dates; miss?: number }
@@ -14,7 +14,11 @@ interface Card {
   summary: { scored: number; pending: number; too_few?: number; no_forecast?: number; miss: number | null; calendar_miss: number | null };
   bands: Band[];
 }
-interface File { version: number; kind: string; season: number; rehearsal?: boolean; layers?: Record<string, Card> }
+type Summary = Card['summary'];
+/** Every other season the file carries (scorecard.py with_seasons), each species' last published summary. Older files
+ * have none. */
+interface Past { season: number; rehearsal?: boolean; layers?: Record<string, { summary?: Summary }> }
+interface File { version: number; kind: string; season: number; rehearsal?: boolean; layers?: Record<string, Card>; seasons?: Past[] }
 
 let file: Promise<File | null> | null = null;
 
@@ -52,10 +56,14 @@ function html(f: File, c: Card): string {
     <thead><tr><th scope="col">Strip</th><th scope="col">Peak seen</th><th scope="col">Forecast</th><th scope="col">Usual</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-/** Fill every [data-score] card in `root` (the drawer re-renders, so this runs after each render), and add this season's
- * check to every [data-record] line, then show it. A layer the file has not scored this season shows its past checks,
- * named "Record through <last year>". If the file is missing or broken, the lines stay hidden: a record that silently
- * left this season out would read as the whole record. */
+const isScored = (s?: Summary): s is Summary & { miss: number; calendar_miss: number } =>
+  !!(s?.scored && s.miss != null && s.calendar_miss != null);
+
+/** Fill every [data-score] card in `root` (the drawer re-renders, so this runs after each render), and add every live
+ * season's check (the past ones the file carries, then this one) to every [data-record] line, then show it. A layer
+ * the file has not scored this season shows its other checks, named "Record through <last season it holds>". If the
+ * file is missing or broken, the lines stay hidden: a record that silently left a season out would read as the whole
+ * record. */
 export function fillScores(root: HTMLElement): void {
   file ??= fetch(new URL(`${import.meta.env.BASE_URL}live/scorecard.json`, document.baseURI), { cache: 'no-cache' })
     .then((r) => (r.ok ? (r.json() as Promise<File>) : null))
@@ -70,11 +78,22 @@ export function fillScores(root: HTMLElement): void {
       } catch {
         return; // a bad attribute just means no line
       }
+      const key = el.dataset.record!.replace(/-replay$/, '');
+      const add = (season: number, s: Summary & { miss: number; calendar_miss: number }) =>
+        checks.push({ where: `in ${season}`, days: s.miss, usual: s.calendar_miss, size: stripYears(s.scored), season, n: s.scored });
+      let through = Number(el.dataset.through) || 0;
+      const past = (Array.isArray(f.seasons) ? f.seasons : [])
+        .filter((p) => p && Number.isInteger(p.season) && p.season !== f.season && p.layers?.[key])
+        .sort((a, b) => a.season - b.season);
+      for (const p of past) {
+        const s = p.layers![key]!.summary;
+        if (isScored(s)) add(p.season, s);
+        through = Math.max(through, p.season);
+      }
       const s = card(el, 'record')?.summary;
-      const scored = !!(s?.scored && s.miss != null && s.calendar_miss != null);
-      if (scored)
-        checks.push({ where: `in ${f.season}`, days: s!.miss!, usual: s!.calendar_miss!, size: `${s!.scored} strip-\u2060year${s!.scored > 1 ? 's' : ''}` });
-      el.textContent = recordLine(checks, scored ? undefined : Number(el.dataset.through) || undefined);
+      const scored = isScored(s);
+      if (scored) add(f.season, s);
+      el.textContent = recordLine(checks, scored ? undefined : through || undefined);
       el.hidden = !el.textContent;
     });
     root.querySelectorAll<HTMLElement>('[data-score]').forEach((el) => {

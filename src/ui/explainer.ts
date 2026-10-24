@@ -69,8 +69,41 @@ function scoreLead([f, base]: { label: string; days: number }[], scope?: string)
 
 const and = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
+/** "5 strip-years", with a word joiner after the hyphen so it stays on one line (the fonts have no non-breaking hyphen). */
+export const stripYears = (n: number) => `${n} strip-\u2060year${n === 1 ? '' : 's'}`;
+
+/** Years in words, three or more in a row as a span: [2026, 2027] "2026 and 2027", [2026, 2027, 2028, 2030] "2026–2028 and 2030". */
+function years(ys: number[]): string {
+  const runs: string[] = [];
+  for (let i = 0; i < ys.length; ) {
+    let j = i;
+    while (j + 1 < ys.length && ys[j + 1] === ys[j]! + 1) j++;
+    if (j - i >= 2) runs.push(`${ys[i]}\u2013${ys[j]}`);
+    else for (let k = i; k <= j; k++) runs.push(String(ys[k]));
+    i = j + 1;
+  }
+  return and(runs);
+}
+
+/** One verb group's live seasons as one check: "in 2026 and 2027", their strip-years added up, days off averaged per
+ * strip-year. Every season in it already has the group's verb, so the pooled numbers keep it too. Other checks stay. */
+function poolSeasons(cs: RecordCheck[]): RecordCheck[] {
+  const live = cs.filter((c) => c.season != null && c.n);
+  if (live.length < 2) return cs;
+  const n = live.reduce((a, c) => a + c.n!, 0);
+  const mean = (f: (c: RecordCheck) => number) => Math.round((live.reduce((a, c) => a + f(c) * c.n!, 0) / n) * 10) / 10;
+  const pooled: RecordCheck = {
+    where: `in ${years(live.map((c) => c.season!).sort((a, b) => a - b))}`,
+    days: mean((c) => c.days),
+    usual: mean((c) => c.usual),
+    size: stripYears(n),
+  };
+  const at = cs.indexOf(live[0]!);
+  return [...cs.slice(0, at).filter((c) => !live.includes(c)), pooled, ...cs.slice(at).filter((c) => !live.includes(c))];
+}
+
 /** The species' whole record against the usual date in one plain line, from its own checks (past years, places it never
- * learned from, this season's live scorecard): what it beat, tied and lost to, each with how big a test it was, and
+ * learned from, every live season the scorecard holds, pooled per verb): what it beat, tied and lost to, each with how big a test it was, and
  * the numbers for any tie or loss. `through`: the last season the checks cover when this season's live check is not
  * among them ("Record through 2025"), so the line never passes for the whole record. Species-neutral: every word comes
  * from the checks. Empty when there are none. */
@@ -79,9 +112,9 @@ export function recordLine(checks: RecordCheck[], through?: number): string {
   const t = (d: number) => Math.round(d * 10); // compare as shown, to a tenth of a day
   const size = (c: RecordCheck, more = '') => (c.size || more ? ` (${[c.size, more].filter(Boolean).join(': ')})` : '');
   const groups: [string, RecordCheck[], (c: RecordCheck) => string][] = [
-    ['beat', checks.filter((c) => t(c.days) < t(c.usual)), (c) => size(c)],
-    ['tied with', checks.filter((c) => t(c.days) === t(c.usual)), (c) => size(c, `${c.days.toFixed(1)} days off each`)],
-    ['lost to', checks.filter((c) => t(c.days) > t(c.usual)), (c) => size(c, `${c.days.toFixed(1)} days off against ${c.usual.toFixed(1)}`)],
+    ['beat', poolSeasons(checks.filter((c) => t(c.days) < t(c.usual))), (c) => size(c)],
+    ['tied with', poolSeasons(checks.filter((c) => t(c.days) === t(c.usual))), (c) => size(c, `${c.days.toFixed(1)} days off each`)],
+    ['lost to', poolSeasons(checks.filter((c) => t(c.days) > t(c.usual))), (c) => size(c, `${c.days.toFixed(1)} days off against ${c.usual.toFixed(1)}`)],
   ];
   const clauses = groups
     .filter(([, cs]) => cs.length)
