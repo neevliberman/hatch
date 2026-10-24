@@ -552,6 +552,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const { res, days } = pickRes(resForZoom(zoom));
       shownDays = days;
       if (res === 4) releaseLater();
+      else if (releaseTimer) releaseTimer = (clearTimeout(releaseTimer), 0); // back in: the 60 s starts again next time
       if (res !== shownRes) {
         shownRes = res;
         queueMicrotask(onData); // the card and its outline follow the new level

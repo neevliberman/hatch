@@ -261,6 +261,7 @@ export function createFireflyLayer(
       const { res, days } = resFor(zoom);
       shownDays = days;
       if (res === GRID_RES) releaseLater();
+      else if (releaseTimer) releaseTimer = (clearTimeout(releaseTimer), 0); // back in: the 60 s starts again next time
       if (res !== shownRes) {
         shownRes = res;
         queueMicrotask(onData); // the card and its outline follow the new level
