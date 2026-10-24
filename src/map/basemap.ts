@@ -157,7 +157,9 @@ const outside = (p: Part): Layer[] =>
 // an ink line floating in the lake or a strip beside it. From SHORE_ZOOM the sea and the Great Lakes are drawn again
 // over the state lines, so the shore is just where the hexagons meet the water.
 const SHORE_ZOOM = 7;
-let shoreLayers: Layer[] | null = null;
+// The filtered features are kept, not the layers: deck finalizes a layer once it leaves the layer list (zoomed back
+// under SHORE_ZOOM), and handing it the same instance again later fails. Fresh layers on the same data cost nothing.
+let shoreData: [Feature[], Feature[]] | null = null;
 const shore = (zoom: number): Layer[] => {
   const p = parts.overview;
   if (!__BASEMAP__ || !p?.outside || zoom < SHORE_ZOOM) return [];
@@ -165,10 +167,11 @@ const shore = (zoom: number): Layer[] => {
     // A water-coloured edge as well, over the half of the ink line that lies on the land side of the shore.
     new GeoJsonLayer({ id, data: features, filled: true, stroked: true, getFillColor: P.water, getLineColor: P.water,
       getLineWidth: 2, lineWidthUnits: 'pixels', pickable: false });
-  return (shoreLayers ??= [
-    water('sea-top', p.outside.features.filter((f) => !(f.properties as Props).kind)),
-    water('lakes-top', p.water.features.filter((f) => (f.properties as Props).great)),
+  const [sea, lakes] = (shoreData ??= [
+    p.outside.features.filter((f) => !(f.properties as Props).kind),
+    p.water.features.filter((f) => (f.properties as Props).great),
   ]);
+  return [water('sea-top', sea), water('lakes-top', lakes)];
 };
 
 function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {

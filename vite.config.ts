@@ -28,7 +28,8 @@ function serviceWorker(): Plugin {
       const hash = createHash('sha256').update(src);
       // Not the nightly live forecast: the worker fetches it network-first, so a new night needn't replace the whole cache.
       for (const f of files.filter((f) => !f.startsWith('live/'))) hash.update(f).update(readFileSync(join(outDir, f)));
-      const shell = files.filter((f) => /^assets\/|^(index\.html|manifest\.webmanifest|favicon[^/]*)$/.test(f));
+      // Not the radar replay's code (assets/radar*): few open it, so it is cached when it is, like its frames.
+      const shell = files.filter((f) => /^assets\/|^(index\.html|manifest\.webmanifest|favicon[^/]*)$/.test(f) && !f.startsWith('assets/radar'));
       const sw = src
         .replace('__VERSION__', hash.digest('hex').slice(0, 12))
         .replace('__PRECACHE__', JSON.stringify(['./', ...shell.filter((f) => f !== 'index.html')]));
@@ -46,6 +47,8 @@ const TERSER = { compress: { passes: 2 }, format: { comments: false } };
 // instead of one ~430 KB file every time anything changes. They also download in parallel.
 const chunkOf = (id: string): string | undefined => {
   if (id.includes('/node_modules/h3-js/')) return 'h3';
+  // The one deck layer only the radar replay uses (src/radar/radarReplay.ts, a chunk of its own): loaded with it.
+  if (/\/@deck\.gl\/layers\/dist[^/]*\/bitmap-layer\//.test(id)) return 'radar-layer';
   if (/\/node_modules\/(@deck\.gl|@luma\.gl|@math\.gl|@loaders\.gl|@probe\.gl|mjolnir\.js|earcut|gl-matrix)\//.test(id)) return 'deck';
   if (id === '\0hatch-packed-replay') return 'replay-data'; // src/data/luna-replay.json, see scripts/pack-replay.mjs
   return undefined;

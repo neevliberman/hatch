@@ -23,6 +23,7 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
 - **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
 - **Install it:** on a phone, *Share → Add to Home Screen* (iPhone) or *Install app* (Android) puts a hand-drawn moth on your home screen. After one visit it opens with no signal too.
+- **See a real mayfly hatch on radar** (in About): a replay of the evening of 20 July 2014, when the National Weather Service radar at La Crosse, Wisconsin saw a cloud of mayflies rise off the Mississippi. Its frames load only when opened ([pipeline/radar](pipeline/radar/README.md)).
 - **"How sure?"** is always on screen and opens the honest version: how far off the forecast is, and what it can't do yet.
 
 | Desktop | Phone |
@@ -123,6 +124,7 @@ pipeline/replay/  builds the forecast files the app reads
 pipeline/firefly/ the firefly's data and fit
 pipeline/species/ every further species (Japanese beetle so far): one list, one fetch/fit/fine-hex recipe
 pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
+pipeline/radar/   radar replays: NEXRAD scans -> public/radar/<event>/ (run by hand, needs Py-ART)
 pipeline/live/    nightly live forecast -> live/latest.json, every species in registry.py (PRISM + Open-Meteo + Daymet, frozen fits)
 .github/workflows/live-forecast.yml  the nightly live job, 2 Mar-7 Oct
 notebooks/        the first prototype model (Jupyter notebook)
@@ -138,6 +140,7 @@ docs/             engineering notes and README media
 - **Lakes, rivers, highways, national parks and the land beyond the US:** [Natural Earth](https://www.naturalearthdata.com/). Public domain.
 - **National forests:** [US Forest Service](https://data.fs.usda.gov/geodata/edw/datasets.php). Public domain.
 - **Woods (deciduous and mixed forest):** [USGS National Land Cover Database 2021](https://www.mrlc.gov/). Public domain.
+- **Radar replay:** NOAA NEXRAD Level II data, radar KARX (public domain), read with Py-ART. Mayfly numbers from Stepanian et al. 2020, PNAS 117(6): 2987-2992.
 - **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
 
 **License:** the code is [MIT](LICENSE). The data keeps its own terms above. The sighting files (`src/data/luna-replay.json`, `public/firefly-replay.json`, `public/species/*/replay.json`) mix CC0, CC BY and CC BY-NC records, so attribution and non-commercial terms apply to them. The fonts stay under the SIL Open Font License.

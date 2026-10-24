@@ -48,6 +48,9 @@ export interface MapHandle {
   zoom(): number | null;
   /** Jump (or, given `ms`, fly) to lngLat at a zoom level (also used by the zoomed-in smoke test, scripts/fine.mjs). */
   view(lngLat: [number, number], zoom: number, ms?: number): void;
+  /** Layers drawn over the hexagons and woods, under the lakes, roads, rivers and lines (the radar replay, src/radar/).
+   * While any are set the sighting dots stand down, so nothing but the overlay's own story sits on it. [] clears it. */
+  setOverlay(layers: Layer[]): void;
 }
 
 export interface Padding {
@@ -55,6 +58,8 @@ export interface Padding {
   bottom: number;
   /** Width an open side panel takes on the right (desktop About drawer), or the phone's button stack. */
   right?: number;
+  /** Width a card beside the map takes on the left (focus only: the radar replay's open card on a phone on its side). */
+  left?: number;
   /** For the phone's button stack: the height (from the top of the map) where it starts. Above it, the right edge is free. */
   rightFrom?: number;
   /** On a phone, the bottom room for the time bar and the key even while the key is folded: where the card docks. */
@@ -89,7 +94,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     onFirstDraw?.();
-    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {} };
+    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {} };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   // The size the last fit was worked out for. Before layout (an in-app browser still sliding in) the map can be 0 x 0,
@@ -156,7 +161,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   const focusState = (lngLat: [number, number], z: number, p: Padding) => {
     const { width, height } = size();
     const vp = new WebMercatorViewport({ width, height, longitude: lngLat[0], latitude: lngLat[1], zoom: z });
-    const [longitude, latitude] = vp.unproject([width / 2 + (p.right ?? 0) / 2, height / 2 + (p.bottom - p.top) / 2]);
+    const [longitude, latitude] = vp.unproject([width / 2 + ((p.right ?? 0) - (p.left ?? 0)) / 2, height / 2 + (p.bottom - p.top) / 2]);
     return { longitude: longitude!, latitude: latitude!, zoom: z };
   };
 
@@ -425,7 +430,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   time.subscribe(wake);
   wake();
   const placeRings = (vp?: WebMercatorViewport) => {
-    const pts = !vp || time.playing ? [] : registry.activeLayers().flatMap((l) => l.newest?.(time.cursor) ?? []);
+    const pts = !vp || time.playing || overlay.length ? [] : registry.activeLayers().flatMap((l) => l.newest?.(time.cursor) ?? []);
     while (rings.children.length > pts.length) rings.lastChild!.remove();
     while (rings.children.length < pts.length) rings.append(document.createElement('i'));
     pts.forEach((s, i) => {
@@ -464,6 +469,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         ]
       : [];
 
+  let overlay: Layer[] = [];
   let picked: string | null = null;
   let pickedBuilt: Layer[] = [];
   const pickedLayers = (): Layer[] =>
@@ -517,13 +523,21 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
-    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid, ...rest, ...pickedBuilt, ...markerBuilt] });
+    // An overlay goes over the woods' tree marks and under the lakes, roads and rivers.
+    const cut = overlay.length ? mid.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
+    const at = cut < 0 ? mid.length : cut;
+    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid.slice(0, at), ...overlay, ...mid.slice(at), ...(overlay.length ? [] : rest), ...pickedBuilt, ...markerBuilt] });
   };
 
   const handle: MapHandle = {
     refresh,
     fit(p, smooth) {
       const v = fitState(p);
+      // Already gliding to this very view (two refits in one tick, say a closing panel and the resize it causes): let the
+      // glide fly on. Handing deck the same target again before its next frame would leave the camera where it was.
+      const same = (a: { longitude: number; latitude: number; zoom: number }) =>
+        Math.abs(a.longitude - v.longitude) < 1e-9 && Math.abs(a.latitude - v.latitude) < 1e-9 && Math.abs(a.zoom - v.zoom) < 1e-9;
+      if (gliding && target && same(target)) return;
       unhover(); // refreshed below
       zoom = v.zoom;
       fitted = v;
@@ -573,6 +587,10 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       if (!lngLat && !marker) return;
       marker = lngLat;
       markerBuilt = markerLayers();
+      refresh();
+    },
+    setOverlay(layers) {
+      overlay = layers;
       refresh();
     },
     setPicked(cell) {

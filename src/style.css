@@ -655,3 +655,12 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sc-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .sc-tab th, .sc-tab td { padding: 2px 4px; text-align: left; border-top: 1px solid var(--line); font-weight: 400; }
 .sc-tab thead th { color: var(--muted); border-top: 0; } .sc-tab tbody th { font-weight: 600; }
+
+/* Radar replay (src/radar/): a specimen label in the key's place, with its own play button, so the time bar, key, hex
+   cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. */
+#app.radar-on :is(#legend, #probe, #dock, #recenter, #asleep, #end-note, #explore) { display: none !important; }
+.ex-radars { margin: 0 0 10px; }
+.ex-radar { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 4px 12px 4px 9px; font: inherit; font-size: 13px; font-weight: 700;
+  color: var(--moon); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); cursor: pointer; text-align: left; }
+.ex-radar:hover { border-color: var(--line-strong); }
+.ex-radar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

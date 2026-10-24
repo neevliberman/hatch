@@ -16,6 +16,7 @@ import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
+import { RADAR_LINKS } from './radar/index';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
@@ -107,6 +108,8 @@ function start() {
   let pinned = false;
   let resetKeys = () => {}; // set once the keyboard explorer is built; a species or season switch starts it afresh
   let lastPin: [number, number] | null = null; // the last pinned spot, by any means: where the keyboard explorer starts
+  // An open radar replay (src/radar/): the map belongs to it for now, so hexagons give no cards.
+  let radar: { id: string; close(back?: boolean): void } | null = null;
   const probeEl = $('probe');
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
@@ -209,6 +212,7 @@ function start() {
       syncUrl(); // a shared link reopens the same place and zoom
     },
     onProbe: (h, clicked) => {
+      if (radar) return;
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
         // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
@@ -557,10 +561,13 @@ function start() {
     else if (picker.value === TYPICAL) q.delete('year');
     else if (picker.value === LIVE) (q.delete('year'), q.set('season', LIVE));
     else q.set('year', picker.value);
-    // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short).
+    // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short). A radar
+    // replay's link names the replay instead, which brings its own view.
     const c = map.center(padding());
-    if (map.moved() && c) q.set('at', `${c.lngLat[1].toFixed(3)},${c.lngLat[0].toFixed(3)},${c.zoom.toFixed(1)}`);
+    if (map.moved() && c && !radar) q.set('at', `${c.lngLat[1].toFixed(3)},${c.lngLat[0].toFixed(3)},${c.zoom.toFixed(1)}`);
     else q.delete('at');
+    if (radar) q.set('radar', radar.id);
+    else q.delete('radar');
     q.delete('noauto');
     q.delete('today');
     return `${location.pathname}?${q}`;
@@ -693,6 +700,7 @@ function start() {
   // the shore, land beyond the Midwest): the arrows can't move that one, so they start a walk from the nearest hexagon
   // rather than say "Already pinned", which would be wrong.
   const pin = (arrowed = false) => {
+    if (radar) return; // the radar replay has the map: no hexagon to walk under it
     if (pinned && !arrowed) return say('Already pinned. Arrow keys move it, Escape lets go.');
     const c = startCell();
     if (!c) return say('No forecast in view');
@@ -701,6 +709,7 @@ function start() {
     selectCell(c);
   };
   const arrow = (a: Arrow) => {
+    if (radar) return;
     const from = pinned && hit ? cur.cellAt(hit.lngLat) : null;
     if (!from) return pin(true);
     if (hit !== keyHit) ([row, col] = cellToLatLng(from)), (steps = 0); // pinned by mouse, tap or town since: start afresh there
@@ -726,6 +735,7 @@ function start() {
   // same box inside the panel: a way to read a place's season without pointing at the map.
   if (__BASEMAP__) {
     const finder = mountFinder($('find'), $('finder'), (lat, lng, name) => {
+      radar?.close(false); // a town's card replaces the radar replay; the map goes to the town, not back to the Midwest
       // On a phone, drop the About sheet to its middle stop first, so the place lands in the map above it.
       if ($('drawer').classList.contains('open') && phone.matches && !slim.matches) toggleDrawer(true);
       if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
@@ -891,6 +901,57 @@ function start() {
   time.subscribe(() => {
     if (time.playing && pinned && hit?.picked && !isForecast(hit.picked.layerId)) unpin();
   });
+  // Radar replays (src/radar/): a real evening when a weather radar saw insects come off the water. Its code and frames
+  // load only when one is opened, from the About panel's link or a ?radar= link; not in the one-file build (no files
+  // beside it). While open, its card takes the key's place and the time bar steps aside: it has its own play button.
+  let radarAsking = 0;
+  // A pen radar: the dish's dot, two range rings and the sweep.
+  const RADAR_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="10" stroke-dasharray="3 2.4"/><path d="M12 12l6.4-6.6"/></g><circle cx="12" cy="12" r="1.9" fill="currentColor"/></svg>';
+  const openRadar = async (id: string) => {
+    if (!__BASEMAP__) return;
+    if ($('drawer').classList.contains('open')) toggleDrawer(false);
+    if (radar?.id === id) return;
+    radar?.close();
+    const ticket = ++radarAsking;
+    time.pause();
+    unpin();
+    say('Loading the radar replay…');
+    const opened = await import('./radar/radarReplay')
+      .then((m) => m.openRadar(id, {
+        map,
+        padding,
+        mount: $('floats'),
+        onClose: () => {
+          if (radar?.id === id) radar = null;
+          $('app').classList.remove('radar-on');
+          syncUrl();
+        },
+      }))
+      .catch(() => null);
+    if (ticket !== radarAsking) return opened?.close();
+    if (!opened) return say('Couldn\u2019t load the radar replay. Try again later.');
+    msg.textContent = '';
+    radar = opened;
+    $('app').classList.add('radar-on');
+    syncUrl();
+  };
+  // The About panel's way in, under its opening lines (re-added each time the panel redraws).
+  const aboutRadar = () => {
+    const hook = $('drawer').querySelector('.ex-hook');
+    // Not without WebGL: there is no map to replay it on.
+    if (!__BASEMAP__ || document.getElementById('no-webgl') || !hook || hook.parentElement!.querySelector('.ex-radar')) return;
+    const links = RADAR_LINKS.map((r) => `<button type="button" class="ex-radar" data-radar="${r.id}">${RADAR_ICON}${r.label}</button>`);
+    (hook.parentElement!.querySelector('.cd') ?? hook).insertAdjacentHTML('afterend', `<p class="ex-radars">${links.join('')}</p>`);
+  };
+  registry.subscribe(aboutRadar);
+  aboutRadar();
+  $('drawer').addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLElement>('[data-radar]');
+    if (b) void openRadar(b.dataset.radar!);
+  });
+  const askedRadar = params.get('radar');
+  if (askedRadar && !document.getElementById('no-webgl') && RADAR_LINKS.some((r) => r.id === askedRadar)) void openRadar(askedRadar);
+
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };
 
