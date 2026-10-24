@@ -2,25 +2,65 @@ import './style.css';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
-import { createFireflyLayer, loadFirefly } from './layers/fireflyReplay';
-import type { ReplayFile } from './layers/lunaData';
-import { data, firstBroodCount, LIVE, TYPICAL, type Mode } from './layers/lunaData';
+import { GROUP_AFTER, SPECIES } from './species';
+import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
 import { inSeason, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
 import { basemapLabels, theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
-import { countdownParts } from './ui/countdown';
 import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
-import { isForecast } from './core/layer';
+import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
+
+/** The days of a layer's ribbon with anything going on: hexagons between "not yet" and "over", or sightings. */
+function activeDays(p: SeasonProfile): [number, number] | null {
+  const n = p.seen.length;
+  const top = Math.max(...p.seen, ...(p.seenOnly ?? []).flatMap((o) => o.seen)) || 1;
+  const busy = (i: number) =>
+    1 - (p.bands[0]?.share[i] ?? 0) - (p.bands[p.bands.length - 1]?.share[i] ?? 0) > 0.01 || p.seen[i]! > 0.03 * top;
+  let a = 0;
+  let b = n - 1;
+  while (a < n && !busy(a)) a++;
+  while (b > a && !busy(b)) b--;
+  return a < n ? [a, b] : null;
+}
+
+/**
+ * Each species' slider spans its own season, not one fixed April to September for all: the whole months around the
+ * days its ribbon has anything in (src/ui/scrubber.ts), so a summer beetle's ribbon isn't 40% empty paper. `s` is the
+ * layer's full replay range, which the ribbon's day 0 is; live mode (luna only) keeps its full range.
+ */
+function fitSeason(layer: HatchLayer, s: TimeSpec): TimeSpec {
+  const p = s.asOf ? undefined : layer.profile?.();
+  const on = p && activeDays(p);
+  if (!on) return s;
+  const DAY = TimeAxis.DAY;
+  const a = new Date(s.start + Math.max(0, on[0] - 7) * DAY);
+  const b = new Date(s.start + (on[1] + 7) * DAY);
+  const start = Math.max(s.start, Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), 1));
+  const end = Math.min(s.end, Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 1, 0));
+  return start === s.start && end === s.end ? s : { ...s, start, end };
+}
+
+/** A ribbon cut to the slider's range: `off` days in from the layer's full range, `n` days long. */
+function cutProfile(p: SeasonProfile, off: number, n: number): SeasonProfile {
+  if (!off && n === p.seen.length) return p;
+  const cut = (v: number[]) => v.slice(off, off + n);
+  return {
+    bands: p.bands.map((b) => ({ ...b, share: cut(b.share) })),
+    seen: cut(p.seen),
+    seenOnly: p.seenOnly?.map((o) => ({ ...o, seen: cut(o.seen) })),
+    notes: p.notes.map((k) => ({ ...k, at: k.at - off })).filter((k) => k.at >= 0 && k.at < n),
+  };
+}
 
 function start() {
   const params = new URLSearchParams(location.search);
@@ -48,12 +88,13 @@ function start() {
   let onLunaData = () => {};
   const luna = createLunaLayer(initialMode, () => onLunaData());
   const registry = new LayerRegistry();
-  registry.register(luna, replayTimeSpec(initialMode, month, day));
-  // The species on screen. Only one is active at a time; the firefly loads the first time it is picked.
+  registry.register(luna, fitSeason(luna, replayTimeSpec(initialMode, month, day)));
+  // The species on screen. Only one is active at a time; each other species loads the first time it is picked.
   let cur: LunaLayer = luna;
-  let speciesPending = false;
-  let firefly: LunaLayer | null = null;
-  let seasonCount = firstBroodCount;
+  let curKey = 'luna';
+  /** A ?species= link's species, until it has loaded (the address bar keeps asking for it meanwhile). */
+  let speciesPending: string | null = null;
+  const loaded = new Map<string, LunaLayer>([['luna', luna]]);
 
   const time = new TimeAxis(registry.activeTime()!, clock);
   let spec: TimeSpec | null = registry.activeTime();
@@ -273,6 +314,24 @@ function start() {
     srSummary.textContent = cur.summary(time.cursor);
   };
   time.subscribe(refresh);
+  // The calendar day the reader asked for (a link's ?date=, the slider, playback), kept apart from the cursor: each
+  // species' slider spans only its own season (fitSeason), so the cursor may be clamped to fit. Switching species or
+  // season asks for this day again, so beetle Sep 30 -> firefly (shows Aug 31) -> back to beetle is Sep 30 again.
+  const dayOf = (ms: number): [number, number] => [new Date(ms).getUTCMonth(), new Date(ms).getUTCDate()];
+  let wantDay: [number, number] = [month, day];
+  let fitting = false; // a switch is moving the cursor (maybe clamping it): not the reader's own pick
+  time.subscribe(() => {
+    if (!fitting) wantDay = dayOf(time.cursor);
+  });
+  /** Re-span the slider without letting a clamp overwrite wantDay. */
+  const asSwitch = (change: () => void) => {
+    fitting = true;
+    try {
+      change();
+    } finally {
+      fitting = false;
+    }
+  };
   time.onFrame(map.refresh); // in-between frames while playing: only the map moves, the card and summary keep the day
   onLunaData = refresh;
   registry.subscribe(() => {
@@ -290,115 +349,133 @@ function start() {
   let liveFile: Live | null = null;
   // A ?season=live link opens on the default view until the file arrives: keep "season=live" in the address bar meanwhile.
   let livePending = asked === LIVE;
+  // A narrow phone's closed menu shows just the season ("2024"), not its count, which would be cut off ("2024 (1,498
+  // beet"); the open menu still lists the counts (style.css).
+  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : modeLabel(picker.value));
   const fillPicker = () => {
     const keep = picker.value || initialMode;
     const live = liveFile && cur === luna ? [LIVE] : [];
-    // The counts are sightings (photos), so the menu says "seen", not a number of animals. "All years" goes without
-    // one so the closed menu fits a small phone.
+    // The counts are sightings (photos) of the species' own kind (cur.words.countedAs, e.g. first-wave moths), so the
+    // menu says "seen", not a number of animals. "All years" goes without one so the closed menu fits a small phone.
     // This year's forecast is luna's alone so far: say so at the top of the list rather than drop it silently.
     picker.innerHTML = (__BASEMAP__ && liveFile && cur !== luna ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
       [...live, TYPICAL, ...[...years].reverse()]
-        .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${seasonCount(m).toLocaleString()} seen)`}</option>`)
+        .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
         .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
-    picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses; ${seasonCount(TYPICAL).toLocaleString()} in all years)`;
+    face();
+    picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses; ${cur.seasonCount(TYPICAL).toLocaleString()} in all years)`;
   };
   fillPicker();
   // This season, live: "next real season ... days from now" would contradict the map.
   const syncCountdown = () => ($('countdown').hidden = picker.value === LIVE && !!liveFile && inSeason(liveFile, clock));
   // Live mode opens on its last day of observed weather (or the day a link asks for); the others keep the calendar day.
   const switchMode = (m: Mode, at?: [number, number]) => {
-    const now = new Date(time.cursor);
     cur.setMode(m);
     hit = null;
     pinned = false;
     resetKeys();
     map.setMarker(null);
     $('season-name').textContent = modeLabel(m);
-    at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
-    registry.setTime(cur.id, replayTimeSpec(m, at?.[0], at?.[1], clock));
+    face();
+    at ??= m === LIVE ? undefined : wantDay;
+    asSwitch(() => registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(m, at?.[0], at?.[1], clock))));
+    if (!at) wantDay = dayOf(time.cursor); // live opens on its own last observed day: that becomes the day asked for
     updateProbe(); // a card pinned in the old season describes that season: it went with the switch
     syncCountdown();
   };
   picker.addEventListener('change', () => switchMode(picker.value));
   $('season-name').textContent = modeLabel(initialMode);
 
-  // Species switcher. Switching keeps the season and the calendar day, and drops any pinned card.
+  // Species menu, from the one species list (src/species.ts): a native menu stays small in the header however long the
+  // list gets, and a phone opens it as its own scrolling picker. Past GROUP_AFTER species it gets group headings.
+  // Switching keeps the season and the calendar day, and drops any pinned card.
   const speciesSel = $<HTMLSelectElement>('species');
-  const setSpecies = async (want: 'luna' | 'firefly') => {
-    if (want === 'firefly' && !firefly) {
+  const opt = (e: (typeof SPECIES)[number]) => `<option value="${e.key}">${e.label}</option>`;
+  const groups = [...new Set(SPECIES.map((e) => e.group))];
+  speciesSel.innerHTML = SPECIES.length > GROUP_AFTER
+    ? groups.map((g) => `<optgroup label="${g}">${SPECIES.filter((e) => e.group === g).map(opt).join('')}</optgroup>`).join('')
+    : SPECIES.map(opt).join('');
+  let asking = 0; // the latest pick: a slow load that finishes after a newer pick must not switch to its species
+  const setSpecies = async (want: string) => {
+    const entry = SPECIES.find((e) => e.key === want) ?? SPECIES[0]!;
+    const ticket = ++asking;
+    if (!loaded.has(entry.key)) {
+      if (!entry.load) return;
       speciesSel.disabled = true;
-      const file = await loadFirefly();
+      const mode0 = picker.value === LIVE ? TYPICAL : picker.value;
+      const layer = await entry.load(mode0, () => onLunaData());
       speciesSel.disabled = false;
-      if (!file) {
-        speciesSel.value = 'luna';
-        return say('Couldn\u2019t load the fireflies. Try again later.');
+      if (!layer) {
+        if (ticket === asking) speciesSel.value = curKey;
+        return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
       }
-      fireflyFile = file;
-      const ffMode = picker.value === LIVE ? TYPICAL : picker.value;
-      const ff = createFireflyLayer(file, ffMode, () => onLunaData());
-      firefly = ff;
-      registry.register(ff, replayTimeSpec(ffMode, 5, 10), false);
-      fireflyCount = ff.seasonCount;
+      loaded.set(entry.key, layer);
+      registry.register(layer, fitSeason(layer, replayTimeSpec(mode0, 5, 10)), false);
     }
-    const next = want === 'firefly' ? firefly! : luna;
-    speciesSel.value = want;
+    if (ticket !== asking) return;
+    const next = loaded.get(entry.key)!;
+    speciesSel.value = entry.key;
     if (next === cur) return;
-    // Fireflies have no live season: switching to them from live mode goes to all years, on the same calendar day.
+    // Only luna has a live season: switching to another species from live mode goes to all years, on the same day.
     if (next !== luna && picker.value === LIVE) {
       picker.value = TYPICAL;
       $('season-name').textContent = modeLabel(TYPICAL);
     }
-    const now = new Date(time.cursor);
     hit = null;
     pinned = false;
     resetKeys();
     map.setMarker(null);
     next.setMode(picker.value);
+    const prev = cur;
     cur = next;
-    seasonCount = cur === luna ? firstBroodCount : fireflyCount;
+    curKey = entry.key;
     fillPicker();
     $('tagline').textContent = cur.words.tagline;
     ($('mark') as HTMLImageElement).src = cur.words.mark;
+    showMark();
     $('dots-what').textContent = cur.words.plural;
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur.words.sightingsOf} sightings over hexagons colored by the forecast`);
-    registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
-    // Old one off first, so the two never draw together for a frame.
-    registry.setActive((cur === luna ? firefly : luna)!.id, false);
-    registry.setActive(cur.id, true);
+    asSwitch(() => {
+      registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(picker.value, wantDay[0], wantDay[1])));
+      // Old one off first, so the two never draw together for a frame.
+      registry.setActive(prev.id, false);
+      registry.setActive(cur.id, true);
+    });
     syncUrl();
   };
-  let fireflyCount = firstBroodCount;
-  let fireflyFile: ReplayFile | null = null;
-  // The one-file preview has no firefly file next to it, so it offers luna only.
+  // The one-file preview has no species files next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
-  // On narrow phones both header menus can't show full names, so each species is listed by its first word ("Luna", "Monarch").
-  const narrow = matchMedia('(max-width: 430px)');
-  const shortNames = () => {
-    for (const o of speciesSel.options) o.text = narrow.matches ? (o.dataset.full ??= o.text).split(' ')[0]! : (o.dataset.full ?? o.text);
-  };
-  shortNames();
-  narrow.addEventListener('change', shortNames);
-  speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value === 'firefly' ? 'firefly' : 'luna'));
-  // Until a ?species=firefly link has loaded, the address bar keeps asking for the firefly.
-  if (params.get('species') === 'firefly' && __BASEMAP__) {
-    speciesPending = true;
-    void setSpecies('firefly').finally(() => (speciesPending = false));
+  // On narrow phones the closed menu shows just the species' sketch mark (style.css), so it stays one small square.
+  const showMark = () => speciesSel.style.setProperty('--mark', `url("${cur.words.mark}")`);
+  showMark();
+  speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value));
+  // ?species=<key> opens on that species (?species=firefly links from before the list still work).
+  const askedSpecies = params.get('species');
+  if (askedSpecies && askedSpecies !== 'luna' && SPECIES.some((e) => e.key === askedSpecies && e.load)) {
+    speciesPending = askedSpecies;
+    void setSpecies(askedSpecies).finally(() => (speciesPending = null));
   }
 
   const setRibbon = mountScrubber($('bar'), time, () => registry.activeLayers().find((l) => l.endNote)?.endNote, showEnd);
   // The slider's track pictures the active species' season; a season or species change redraws it.
   // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
+  // The ribbon covers the layer's full replay range; the slider may span less of it (fitSeason).
+  const ribbonNow = () => {
+    const p = registry.activeLayers().find((l) => l.profile)?.profile?.();
+    const off = Math.round((time.start - replayTimeSpec(picker.value).start) / TimeAxis.DAY);
+    return p && off >= 0 ? cutProfile(p, off, time.steps + 1) : p;
+  };
   let ribbonFrame = 0;
   const drawRibbon = () =>
     (ribbonFrame ||= requestAnimationFrame(() => {
       ribbonFrame = 0;
-      setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
+      setRibbon(ribbonNow());
     }));
   registry.subscribe(drawRibbon);
-  setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
+  setRibbon(ribbonNow());
   mountLayerList($('layers'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   // With nothing pinned, the panel's example is the area in view (once the map has left the whole-Midwest fit).
@@ -437,8 +514,9 @@ function start() {
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
     q.delete('season');
-    if (cur === luna && !speciesPending) q.delete('species');
-    else q.set('species', 'firefly');
+    const sp = speciesPending ?? curKey;
+    if (sp === 'luna') q.delete('species');
+    else q.set('species', sp);
     if (livePending) (q.delete('year'), q.set('season', LIVE));
     else if (picker.value === TYPICAL) q.delete('year');
     else if (picker.value === LIVE) (q.delete('year'), q.set('season', LIVE));
@@ -657,7 +735,7 @@ function start() {
 
   // Each species has its own season: the firefly's starts weeks after the luna moth's. (?today= fakes the clock.)
   function showCountdown() {
-    const [short, more] = cur === luna ? countdownParts(clock) : countdownParts(clock, 'firefly', fireflyFile!);
+    const [short, more] = cur.countdown(clock);
     const moreEl = document.createElement('span');
     moreEl.className = 'more';
     moreEl.textContent = more;
@@ -722,6 +800,8 @@ function start() {
   };
   const ro = new ResizeObserver(() => refit());
   for (const id of ['map', 'top', 'bottom']) ro.observe($(id));
+  // A phone on its side opens About beside the map and above the time bar (style.css), so the bar stays whole.
+  new ResizeObserver(() => $('app').style.setProperty('--dock-h', `${$('dock').offsetHeight}px`)).observe($('dock'));
   // The key folding to its chip (or opening) frees or takes room. Not while a card is up, though: a card hides the
   // key, and the tap that pinned it also folds it, and the map must not slide out from under that card.
   let keySeen = false; // the observer's first call is just it starting up
@@ -781,7 +861,7 @@ function start() {
     setLive(live);
     liveFile = live;
     fillPicker();
-    if (cur !== luna || speciesPending) return syncUrl(); // fireflies have no live season
+    if (cur !== luna || speciesPending) return syncUrl(); // only luna has a live season
     if (picker.value !== initialMode || time.cursor !== cursor0) return syncUrl(); // the user got there first: leave their choice
     const explicit = params.has('season') || params.has('year') || params.has('date') || params.has('species');
     if (asked !== LIVE && (explicit || !inSeason(live, clock))) return syncUrl();

@@ -18,6 +18,7 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 
 - **Press play** and watch a season: the forecast wave (hexagons) and the real sightings (dots) move north together.
 - **Pick a year** from 2015 to 2025, or "all years" pooled into one typical season.
+- **Pick a species** from the menu by the title: the luna moth, the common eastern firefly or the Japanese beetle (an invasive beetle, so knowing when it comes out lets gardeners hand-pick the first ones instead of spraying). The firefly and the beetle are exploratory first tries with luna's model: leave-one-year-out, the beetle's forecast is 2.9 days off against 3.8 for its usual date ([pipeline/species](pipeline/species/README.md)), the firefly's 3.7 against 5.4 ([pipeline/firefly](pipeline/firefly/README.md)). Each one's data loads only when picked.
 - **Hover or tap a hexagon** for its forecast: when the first moths show up and the busiest days.
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
 - **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
@@ -115,9 +116,12 @@ The Python side: `pip install -r notebooks/requirements.txt`, then see [pipeline
 ## Repo layout
 
 ```
-src/              the web app (core/ clock and hex grid, layers/ the luna layer, map/, ui/)
+src/              the web app (core/ clock and hex grid, layers/ the luna layer and the one-generation layer, map/, ui/)
+src/species.ts    the species list behind the species menu; src/species/ each species's words and sketch
 pipeline/fit/     the model, its tests and the scored result
 pipeline/replay/  builds the forecast files the app reads
+pipeline/firefly/ the firefly's data and fit
+pipeline/species/ every further species (Japanese beetle so far): one list, one fetch/fit/fine-hex recipe
 pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
 pipeline/live/    nightly live forecast -> live/latest.json (PRISM + Open-Meteo + Daymet, frozen P3 fits)
 .github/workflows/live-forecast.yml  the nightly live job, 2 Mar-7 Oct
@@ -136,7 +140,7 @@ docs/             engineering notes and README media
 - **Woods (deciduous and mixed forest):** [USGS National Land Cover Database 2021](https://www.mrlc.gov/). Public domain.
 - **Fonts:** Fraunces, Atkinson Hyperlegible and Caveat, under the SIL Open Font License.
 
-**License:** the code is [MIT](LICENSE). The data keeps its own terms above. The sighting files (`src/data/luna-replay.json`, `public/firefly-replay.json`) mix CC0, CC BY and CC BY-NC records, so attribution and non-commercial terms apply to them. The fonts stay under the SIL Open Font License.
+**License:** the code is [MIT](LICENSE). The data keeps its own terms above. The sighting files (`src/data/luna-replay.json`, `public/firefly-replay.json`, `public/species/*/replay.json`) mix CC0, CC BY and CC BY-NC records, so attribution and non-commercial terms apply to them. The fonts stay under the SIL Open Font License.
 
 ## Who made it
 

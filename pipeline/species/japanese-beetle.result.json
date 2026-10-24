@@ -1,0 +1,188 @@
+{
+ "loyo": [
+  {
+   "model": "p3_flat",
+   "n": 44,
+   "onset": 2.718,
+   "peak": 2.977,
+   "mae": 2.848
+  },
+  {
+   "model": "p1",
+   "n": 44,
+   "onset": 4.059,
+   "peak": 4.614,
+   "mae": 4.336
+  },
+  {
+   "model": "cal",
+   "n": 44,
+   "onset": 3.794,
+   "peak": 3.833,
+   "mae": 3.813
+  }
+ ],
+ "holdout": [
+  {
+   "model": "p3_flat",
+   "n": 25,
+   "onset": 2.904,
+   "peak": 3.86,
+   "mae": 3.382
+  },
+  {
+   "model": "p1",
+   "n": 25,
+   "onset": 4.408,
+   "peak": 6.7,
+   "mae": 5.554
+  },
+  {
+   "model": "cal",
+   "n": 25,
+   "onset": 3.999,
+   "peak": 4.596,
+   "mae": 4.297
+  },
+  {
+   "model": "cal_lat",
+   "n": 25,
+   "onset": 3.693,
+   "peak": 4.447,
+   "mae": 4.07
+  }
+ ],
+ "band_years": 44,
+ "holdout_band_years": 25,
+ "noise_floor": {
+  "records": 1.633191446827319,
+  "observers": 1.6646006894066796,
+  "sd_onset": 1.2496493675056983,
+  "sd_peak": 1.5435322926218134
+ },
+ "interval": {
+  "level": 0.8,
+  "onset": [
+   -3.0,
+   5.8
+  ],
+  "peak": [
+   -5.7,
+   4.0
+  ]
+ },
+ "model": {
+  "id": "japanese-beetle-v0",
+  "spec": "p3_flat",
+  "summary": "luna's P3 model, refit on Japanese beetle: skew-normal warmth targets, base 10 C from 1 March, 7-day flight life, effort = beetle records minus Japanese beetles, one generation, no latitude term; exploratory",
+  "median_dd_at_lat": {
+   "38": 949.7,
+   "42": 949.7,
+   "46": 949.7
+  },
+  "loyo_mae": {
+   "heat": 2.85,
+   "p1": 4.34,
+   "cal": 3.81
+  },
+  "holdout_mae": {
+   "heat": 3.38,
+   "p1": 5.55,
+   "cal": 4.3,
+   "cal_lat": 4.07
+  },
+  "noise_floor": 1.63,
+  "band_years": 44,
+  "holdout_band_years": 25
+ },
+ "counts": {
+  "sightings": 8881,
+  "first_brood": 8881,
+  "second_brood": 0,
+  "approximate": 1096,
+  "fit_records": 11217,
+  "observers": 5312,
+  "cells": 551,
+  "seen_cells": 528,
+  "licence_dropped": 4221
+ },
+ "params": {
+  "2015": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.790632435556727,
+   "mu0": 538.8787093610227,
+   "log_sigma": 6.411925837376518
+  },
+  "2016": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.698015501286729,
+   "mu0": 541.6737628599212,
+   "log_sigma": 6.4035042594239595
+  },
+  "2017": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.695901044450125,
+   "mu0": 542.7973119874048,
+   "log_sigma": 6.40668045141866
+  },
+  "2018": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 8.0590417623079,
+   "mu0": 537.2852727885733,
+   "log_sigma": 6.429598259718807
+  },
+  "2019": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.433085936008845,
+   "mu0": 542.1908091162999,
+   "log_sigma": 6.393438468063568
+  },
+  "2020": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.355327669280584,
+   "mu0": 547.5218404663291,
+   "log_sigma": 6.386230185194958
+  },
+  "2021": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.95414256203133,
+   "mu0": 537.5223323217745,
+   "log_sigma": 6.431752515638001
+  },
+  "2022": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.9916426745329,
+   "mu0": 538.5373725675322,
+   "log_sigma": 6.411335114321053
+  },
+  "2023": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 8.231439365921878,
+   "mu0": 537.2363742760281,
+   "log_sigma": 6.421114087261084
+  },
+  "2024": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 7.589657186630771,
+   "mu0": 541.0293587686976,
+   "log_sigma": 6.405583853302088
+  },
+  "2025": {
+   "beta": 0.0,
+   "gamma": 0.0,
+   "alpha": 8.050987907995738,
+   "mu0": 537.0158555826202,
+   "log_sigma": 6.420664950463962
+  }
+ }
+}

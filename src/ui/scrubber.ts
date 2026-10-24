@@ -107,10 +107,11 @@ export function mountScrubber(
   const fcEl = $('t-fc');
   const md = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
-  // Wave notes sit just right of their peak. When the thumb would cover one, slide it to the nearest free spot:
-  // left of the peak, or just past the thumb on either side. On a narrow track (a phone, or a desktop band squeezed
-  // by the About panel) notes that would run into each other or off the ribbon shorten to their first word ("1st"),
-  // and a note that still collides is left out.
+  // Wave notes sit just right of their peak. When the thumb would cover one, or it would run off the ribbon's end,
+  // slide it to the nearest free spot on the ribbon: pulled in from the end, left of the peak, or just past the thumb
+  // on either side. On a narrow track (a phone, or a desktop band squeezed by the About panel) a note that still runs
+  // into another or off the ribbon shortens to its first word ("2nd"), then all do, and one that still collides is
+  // left out.
   const placeWaves = () => {
     const waves = [...ribbonEl.querySelectorAll<HTMLElement>('.wave')];
     if (!waves.length) return;
@@ -118,24 +119,28 @@ export function mountScrubber(
     const half = range.offsetWidth - w; // the ribbon is inset half a thumb each side, so this is one thumb
     const x = (time.stepIndex / Math.max(1, time.steps)) * w;
     const clear = half / 2 + 4;
-    const lay = (short: boolean) =>
-      waves.map((el) => {
+    const lay = (short: (i: number) => boolean) =>
+      waves.map((el, i) => {
         el.hidden = false;
-        el.textContent = (short ? el.dataset.short : el.dataset.full) ?? el.textContent;
+        el.textContent = (short(i) ? el.dataset.short : el.dataset.full) ?? el.textContent;
         el.style.transform = '';
         const lw = el.offsetWidth;
         const anchor = el.offsetLeft; // label's left edge (peak + its margin)
         const peak = anchor - 4;
         const hits = (l: number) => x + clear > l && x - clear < l + lw;
-        const spot = [anchor, peak - 4 - lw, x + clear, x - clear - lw].find((l) => !hits(l)) ?? anchor;
+        const spot = [anchor, w - lw, peak - 4 - lw, x + clear, x - clear - lw]
+          .filter((l) => l >= 0 && l + lw <= w && !hits(l))
+          .sort((a, b) => Math.abs(a - anchor) - Math.abs(b - anchor))[0] ?? anchor;
         if (spot !== anchor) el.style.transform = `translateX(${(spot - anchor).toFixed(1)}px)`;
         return [spot, spot + lw] as const;
       });
     const off = (r: readonly (readonly [number, number])[]) =>
-      r.map(([l, rt], i) => l < -half / 2 || rt > w + half / 2 || r.some(([l2, r2], j) => j !== i && l < r2 + 4 && l2 < rt + 4));
-    let spots = lay(false);
+      r.map(([l, rt], i) => l < 0 || rt > w || r.some(([l2, r2], j) => j !== i && l < r2 + 4 && l2 < rt + 4));
+    let spots = lay(() => false);
+    const bad = off(spots);
+    if (bad.some(Boolean)) spots = lay((i) => bad[i]!);
     if (off(spots).some(Boolean)) {
-      spots = lay(true);
+      spots = lay(() => true);
       // Still in the way: drop the later notes (keep the first wave's) until the rest fit.
       const kept: (readonly [number, number])[] = [];
       spots.forEach((s, i) => {

@@ -1,4 +1,4 @@
-import type { Explainer } from '../core/layer';
+import type { Creature, Explainer } from '../core/layer';
 
 // The About panel's picture strip, drawn the way a person doodles in a field notebook: tapered pen strokes that
 // swell in the middle and thin at the ends, main lines gone over twice, shapes that overshoot instead of closing,
@@ -77,17 +77,17 @@ export function loop(cx: number, cy: number, rx: number, ry: number, rot = 0, tu
 }
 
 /** Move, turn (degrees) and scale a drawing made around (0, 0). */
-const place = (pts: P[], dx: number, dy: number, deg = 0, k = 1): P[] => {
+export const place = (pts: P[], dx: number, dy: number, deg = 0, k = 1): P[] => {
   const c = Math.cos((deg * Math.PI) / 180);
   const s = Math.sin((deg * Math.PI) / 180);
   return pts.map(([x, y]) => [dx + k * (x * c - y * s), dy + k * (x * s + y * c)]);
 };
 
 /** A smooth closed shape, used for the watercolour washes (no outline). */
-const blob = (pts: P[]) => `M${smooth(pts).map(([x, y]) => `${f1(x)} ${f1(y)}`).join('L')}Z`;
+export const blob = (pts: P[]) => `M${smooth(pts).map(([x, y]) => `${f1(x)} ${f1(y)}`).join('L')}Z`;
 
 /** A few quick parallel strokes, as a hand shades one side of a shape. */
-const hatch = (x: number, y: number, n: number, dx: number, len: number, slant: number, seed: number) => {
+export const hatch = (x: number, y: number, n: number, dx: number, len: number, slant: number, seed: number) => {
   const r = rng(seed);
   return Array.from({ length: n }, (_, i) => {
     const l = len * (0.6 + 0.5 * r());
@@ -131,51 +131,36 @@ interface Art {
   extra?: string;
 }
 
-/** The sleeping stage, centred on (cx, cy): the moth's cocoon wrapped in silk, or the firefly's grub. */
-function sleeper(kind: Explainer['creature'], cx: number, cy: number, k: number, seed: number): { wash: string; ink: string } {
-  if (kind === 'firefly')
-    return {
-      wash: blob(loop(cx, cy, 16 * k, 4.5 * k, 0, 1)),
-      ink: [0, 1, 2, 3].map((i) => pen([[cx + (i * 8 - 16) * k, cy], [cx + (i * 8 - 12) * k, cy - 4 * k], [cx + (i * 8 - 8) * k, cy]], 1.1, seed + i)).join('') +
-        pen([[cx - 16 * k, cy], [cx, cy + 3 * k], [cx + 16 * k, cy]], 0.8, seed + 5) + pen(loop(cx - 18 * k, cy - 1, 2 * k, 2 * k), 0.9, seed + 6),
-    };
-  return {
+/** The luna moth as the About panel draws it: a cocoon wrapped in silk in the leaf litter, and the adult perched
+ * with its wings half open. Other species bring their own drawing (src/species/). */
+export const MOTH_ART: Creature = {
+  winters: 'litter',
+  months: ['May', 'June'],
+  shell: true,
+  sleeper: (cx, cy, k, seed) => ({
     wash: blob(loop(cx + 1.5, cy + 1.5, 11 * k, 5 * k, -0.35, 1)),
     ink: pen(loop(cx, cy, 12 * k, 5.5 * k, -0.35, 1.2, 0.6), 1.4, seed) +
       ([[-7, -1, -4, 4.5, -5, 8], [-1, -5, 2, 1, 1, 6], [5, -7, 8, -2, 8, 2]] as number[][])
         .map(([a, b, c, d, e, f], i) => pen([[cx + a! * k, cy + b! * k], [cx + c! * k, cy + d! * k], [cx + e! * k, cy + f! * k]], 0.6, seed + 1 + i, false))
         .join('') + hatch(cx - 2 * k, cy + 7 * k, 5, 2.4 * k, 4 * k, 1.2, seed + 5),
-  };
-}
-
-/** The adult, flying or resting, centred on (cx, cy) at scale k. Wings separate so they can flap. */
-function adult(kind: Explainer['creature'], cx: number, cy: number, k: number, seed: number): { wash: string; wings: string; body: string } {
-  if (kind === 'firefly') {
-    const F = (pts: P[]) => place(pts, cx, cy, 0, k);
-    const w = Math.max(0.7, Math.sqrt(k));
+  }),
+  adult: (cx, cy, k, seed) => {
+    const M = (pts: P[]) => place(pts, cx, cy, -10, k);
+    const w = Math.max(0.8, 1.2 * Math.sqrt(k));
     return {
-      wash: blob(loop(cx, cy + 8 * k, 8 * k, 8 * k, 0, 1)),
-      wings: pen(F([[1, -6], [8, -9], [12, -2], [9, 6], [2, 4]]), w, seed) + pen(F([[-1, -6], [-8, -9], [-12, -2], [-9, 6], [-2, 4]]), w, seed + 1),
-      body: pen(F([[0, -11], [3, -4], [3, 6], [0, 12], [-3, 6], [-3, -4], [0, -11]]), 1.3 * w, seed + 2) +
-        ([[-8, 10], [0, 18], [8, 10]] as P[]).map(([x, y], i) => pen(F([[x * 0.8, y * 0.8 + 2], [x * 1.3, y * 1.2 + 2]]), 0.7, seed + 3 + i, false)).join(''),
+      wash: MOTH.wash.map((p) => blob(M(p).map(([x, y]) => [x + 2 * k, y + 1.5 * k] as P))).join(''),
+      wings: MOTH.wings.map((p, i) => pen(M(p), i === 1 ? 0.6 * w : w, seed + i)).join('') +
+        MOTH.spots.map((p, i) => pen(M(p), 0.7, seed + 10 + i, false)).join(''),
+      body: MOTH.body.map((b, i) => pen(M(b), i < 2 ? w : 0.7, seed + 20 + i)).join(''),
     };
-  }
-  const M = (pts: P[]) => place(pts, cx, cy, -10, k);
-  const w = Math.max(0.8, 1.2 * Math.sqrt(k));
-  return {
-    wash: MOTH.wash.map((p) => blob(M(p).map(([x, y]) => [x + 2 * k, y + 1.5 * k] as P))).join(''),
-    wings: MOTH.wings.map((p, i) => pen(M(p), i === 1 ? 0.6 * w : w, seed + i)).join('') +
-      MOTH.spots.map((p, i) => pen(M(p), 0.7, seed + 10 + i, false)).join(''),
-    body: MOTH.body.map((b, i) => pen(M(b), i < 2 ? w : 0.7, seed + 20 + i)).join(''),
-  };
-}
+  },
+};
 
-/** The off-season margin note's sketch (64x34): the moth's cocoon on the leaf litter, or the firefly's grub under the
- * ground line. */
-export function restingSketch(kind: Explainer['creature']): string {
-  const moth = kind === 'moth';
-  const s = moth ? sleeper(kind, 26, 16, 1.1, 13) : sleeper(kind, 32, 22, 1, 40);
-  return `<path class="wash" d="${s.wash}"/><path d="${s.ink + (moth
+/** The off-season margin note's sketch (64x34): a cocoon on the leaf litter, or a grub under the ground line. */
+export function restingSketch(c: Creature): string {
+  const litter = c.winters === 'litter';
+  const s = litter ? c.sleeper(26, 16, 1.1, 13) : c.sleeper(32, 22, 1, 40);
+  return `<path class="wash" d="${s.wash}"/><path d="${s.ink + (litter
     ? pen([[3, 29], [30, 28], [61, 29.5]], 1.1, 3) + pen([[40, 27], [48, 22], [58, 26], [48, 28], [40, 27]], 0.9, 5)
     : pen([[3, 11], [30, 10], [61, 11.5]], 1.1, 3))}"/>`;
 }
@@ -190,19 +175,19 @@ const sunAt = (cx: number, cy: number, r: number, rays: number[][], seed: number
     })
     .join('');
 
-/** Panel 1: winter. The moth's cocoon tucked against an oak leaf under the snow; the firefly's grub in the soil. */
-function winter(kind: Explainer['creature']): Art {
+/** Panel 1: winter. A cocoon tucked against an oak leaf under the snow, or a grub in the soil. */
+function winter(kind: Creature): Art {
   const z = '<text class="note" x="68" y="48" transform="rotate(-8 68 48)">zzz</text>';
   const snow = ([[34, 12], [52, 22], [62, 9], [8, 32], [90, 40], [44, 32]] as P[]).map(([x, y], i) => pen(loop(x, y, 0.7, 0.7, 0, 1), 0.7, 20 + i, false)).join('');
-  if (kind === 'firefly') {
-    const g = sleeper(kind, 50, 62, 1, 40);
+  if (kind.winters === 'soil') {
+    const g = kind.sleeper(50, 62, 1, 40);
     return {
       wash: `<path class="wash tan" d="${g.wash}"/>`,
       ink: flake(20, 16, 1.4, 1) + flake(76, 22, 1.1, 4) + snow + pen([[8, 46], [30, 44], [52, 46], [92, 44]], 1.2, 7) + hatch(14, 54, 3, 22, 2, 1, 9) + g.ink,
       extra: z,
     };
   }
-  const c = sleeper(kind, 54, 62, 1, 13);
+  const c = kind.sleeper(54, 62, 1, 13);
   return {
     wash: `<path class="wash tan" d="${c.wash}"/>`,
     ink: flake(18, 16, 1.4, 1) + flake(80, 22, 1.1, 4) + snow +
@@ -215,8 +200,8 @@ function winter(kind: Explainer['creature']): Art {
 }
 
 /** Panel 2: warmth wakes it. The sun beams wavy heat down onto the sleeper, which starts to stir. */
-function wake(kind: Explainer['creature'], moving: boolean): Art {
-  const c = sleeper(kind, 66, 62, 0.9, 60);
+function wake(kind: Creature, moving: boolean): Art {
+  const c = kind.sleeper(66, 62, 0.9, 60);
   // Three wavy heat lines from the sun down towards the sleeper.
   const waves = [-5, 0, 5]
     .map((off, i) => {
@@ -245,33 +230,34 @@ function wake(kind: Explainer['creature'], moving: boolean): Art {
   };
 }
 
-/** Panel 3: the payoff. Two springs side by side: in a warm one the adult is out in May; in a cool one it is still
- * asleep in May and comes out in June. */
-function race(kind: Explainer['creature'], moving: boolean): Art {
-  const early = adult(kind, 54, 17, 0.42, 100);
-  const late = adult(kind, 84, 56, 0.42, 130);
-  const still = sleeper(kind, 50, 64, 0.55, 160);
+/** Panel 3: the payoff. Two springs side by side: in a warm one the adult is out in its warm month (luna: May); in a
+ * cool one it is still asleep then and comes out in the next (June). The months are the species' own (kind.months). */
+function race(kind: Creature, moving: boolean): Art {
+  const [warmMonth, coolMonth] = kind.months;
+  const early = kind.adult(54, 17, 0.42, 100);
+  const late = kind.adult(84, 56, 0.42, 130);
+  const still = kind.sleeper(50, 64, 0.55, 160);
   const cloud = pen([[5, 62], [4, 58], [8, 56], [10, 52], [15, 51], [18, 54], [21, 55], [23, 59], [20, 62], [6, 62]], 1.1, 170) +
     pen([[8, 65], [7, 69]], 0.7, 172, false) + pen([[13, 65], [12, 69]], 0.7, 173, false) + pen([[18, 65], [17, 69]], 0.7, 174, false);
   // The warm spring's cocoon is already empty, torn open at the top.
   const shell = pen(loop(30, 22, 6, 2.8, -0.35, 0.5, 0), 1, 175) +
     pen([[24.4, 24], [26, 22], [28, 23], [30, 20.5], [32, 21.5], [35.6, 20]], 0.6, 176, false);
   const flap = (a: { wash: string; wings: string }, x: number, y: number) =>
-    `<g class="${moving ? 'flap' : ''}" style="transform-origin:${x}px ${y}px">${kind === 'moth' ? `<path class="wash leaf" d="${a.wash}"/>` : ''}<path class="pen" d="${a.wings}"/></g>`;
+    `<g class="${moving ? 'flap' : ''}" style="transform-origin:${x}px ${y}px">${kind.glow ? '' : `<path class="wash leaf" d="${a.wash}"/>`}<path class="pen" d="${a.wings}"/></g>`;
   return {
-    wash: `<path class="wash sun" d="${blob(loop(13, 19.5, 4.5, 4.5, 0, 1))}"/>${kind === 'firefly' ? `<path class="wash sun" d="${early.wash}${late.wash}"/>` : ''}` +
+    wash: `<path class="wash sun" d="${blob(loop(13, 19.5, 4.5, 4.5, 0, 1))}"/>${kind.glow ? `<path class="wash sun" d="${early.wash}${late.wash}"/>` : ''}` +
       `<path class="wash tan" d="${still.wash}"/>`,
     ink: sunAt(12, 18, 4.5, [[200, 1.8], [250, 3], [300, 3], [340, 3.5], [20, 3]], 171) + cloud +
       pen([[5, 43], [50, 42.2], [95, 43.5]], 0.6, 180, false) +
       pen([[37, 21], [41, 20.5], [44, 21]], 0.7, 181, false) + pen([[41.5, 18.5], [44.5, 21], [41.5, 23.5]], 0.7, 182, false) +
       pen([[26, 64], [40, 63.5]], 0.7, 183, false) + pen([[60, 63.5], [72, 63]], 0.7, 184, false) + pen([[69, 60.5], [72.5, 63], [69, 65.5]], 0.7, 185, false) +
-      (kind === 'moth' ? shell : '') + early.body + late.body + still.ink,
+      (kind.shell ? shell : '') + early.body + late.body + still.ink,
     extra: `<text class="note small" x="4" y="36" transform="rotate(-4 4 36)">warm</text>
       <text class="note small" x="4" y="78" transform="rotate(-4 4 78)">cool</text>
-      <text class="note small" x="47" y="40" transform="rotate(-3 47 40)">May</text>
-      <text class="note small" x="44" y="78" transform="rotate(-3 44 78)">May</text>
+      <text class="note small" x="47" y="40" transform="rotate(-3 47 40)">${warmMonth}</text>
+      <text class="note small" x="44" y="78" transform="rotate(-3 44 78)">${warmMonth}</text>
       <text class="note small" x="55" y="57" transform="rotate(-8 55 57)">zz</text>
-      <text class="note small" x="76" y="79" transform="rotate(-3 76 79)">June</text>
+      <text class="note small" x="76" y="79" transform="rotate(-3 76 79)">${coolMonth}</text>
       ${flap(early, 54, 17)}${flap(late, 84, 56)}`,
   };
 }

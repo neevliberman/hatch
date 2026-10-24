@@ -32,9 +32,8 @@ export function mountLayerList(root: HTMLElement, registry: LayerRegistry): void
 const FOLD_KEY = 'hatch-legend-folded';
 
 /**
- * Colour key. On narrow screens (under 1000px, where it sits over the map) it can fold to a one-line "Key" chip:
- * it starts open, folds itself after the first tap on the map or press of Play, and remembers that for next time.
- * Wide screens always show it; the folded class does nothing there.
+ * Colour key. It can fold to a small "Key" chip, so the map gets its room: it starts open, folds itself after the
+ * first tap on the map or press of Play, and remembers that for next time. The chip opens it again.
  */
 export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoFold(): void } {
   // Stored: '1' folded, 'open' opened by hand (never fold it for them again), nothing yet: open until the first tap.
@@ -47,7 +46,6 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
   // A phone on its side has no height to spare: there the key starts as its chip unless the reader opened it.
   let folded = stored === '1' || (stored !== 'open' && matchMedia('(orientation: landscape) and (max-height: 500px)').matches);
   let touched = stored === 'open'; // the reader opened or closed it themselves: stop folding it for them
-  const narrow = window.matchMedia('(max-width: 999px), (orientation: landscape) and (max-height: 500px)');
   const setFolded = (f: boolean, focus = false) => {
     folded = f;
     root.classList.toggle('folded', f);
@@ -73,13 +71,15 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
             ? `<div class="lg-ramp" style="background:linear-gradient(90deg,${stops.map((s) => s.color).join(',')})"></div>
           <div class="lg-labels"><span>${esc(stops[0]!.label)}</span><span>${esc(stops[stops.length - 1]!.label)}</span></div>`
             : '';
+          // The fold button floats at the right end of the first card's first row of swatches: inside the card, over
+          // nothing, and the rows below run full width.
+          const fold = i === 0 ? `<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">${CROSS}</button>` : '';
           const items = lg.items?.length
-            ? `<ul class="lg-items">${lg.items
+            ? `<ul class="lg-items">${fold && `<li class="lg-x">${fold}</li>`}${lg.items
                 .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
                 .join('')}</ul>`
             : '';
-          const fold = i === 0 ? `<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">${CROSS}</button>` : '';
-          return `<div class="legend-card">${fold}<div class="lg-title">${esc(lg.title)}</div>${ramp}${items}
+          return `<div class="legend-card"><div class="lg-title">${esc(lg.title)}${items ? '' : fold}</div>${ramp}${items}
           ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
         })
         .join('') +
@@ -97,7 +97,6 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
   root.classList.toggle('folded', folded);
   return {
     autoFold() {
-      if (!narrow.matches) return; // wide screens always show the key; don't fold it behind their back for later
       if (!touched && !folded) setFolded(true);
       touched = true; // once per visit
     },

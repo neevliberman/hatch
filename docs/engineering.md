@@ -10,6 +10,19 @@ The design choices behind Hatch, for anyone reading the code. The [README](../RE
 - **Map detail.** Lakes, rivers, highways, national forests and parks, and ~1,700 town names, all public domain (Natural Earth, US Forest Service, US Census Bureau). Each thing shows from its own zoom: big rivers and lakes on the whole-Midwest view, highways, forests and small towns as you zoom in. Names are placed most important first and skipped if they would overlap a name, a sighting dot or a panel, like a cartographer working down a list. Lakes are drawn over the hexagons, so a shore hexagon stops at the shore. A hexagon belongs to a state when its centre does, which would leave up to half a hexagon of bare paper along every shore and state line (it reads as missing data); so a ring of extra hexagons just outside takes a neighbour's colour, and a mask of the sea and the land around the seven states, drawn over them, trims everything to the edge. That land (the rest of the US, Canada) is drawn too, quietly, so Pittsburgh is not in a lake. Rivers that form a state line (Ohio, Mississippi, Wabash) are drawn on the line itself rather than a kilometre beside it. Two lazy files in `public/basemap/` (built by `pipeline/basemap/build_basemap.py`; the second loads only once you zoom in), so the bundle doesn't grow.
 - **Data file.** `src/data/luna-replay.json` (about 270 KB), built by `pipeline/replay/build_replay.py` (see its README).
 
+## Many species, one list
+`src/species.ts` is the one list of species: the header's species menu, the `?species=<key>` link and the loading all
+come from it. The luna moth ships in the page. Every other species is one generation a year and shares one layer
+(`layers/oneGeneration.ts`); what differs (its words, dot colour, pen sketch, fine print) is a `SpeciesConfig` in
+`src/species/<key>.ts`. Picking a species fetches its config, the shared layer and its data file in parallel, so the
+first load never grows with the list (and the one-file build, which offers luna only, leaves them out). Adding a
+species: its data (`pipeline/species`), its config, one line in the list. The menu is a native select: it stays one
+small control in the header however long the list gets, a phone opens it as its own scrolling picker, and past six
+species it gets group headings (Moths, Beetles, ...). The header's sketch mark changes with the species. The time
+slider spans each species' own season (the whole months around the days its ribbon has anything in, `fitSeason` in
+`main.ts`), so a summer beetle's ribbon isn't half empty April and May. A season with thousands of dots out at once
+draws them smaller on the zoomed-out map (`dotScale` in `layers/oneGeneration.ts`); luna's dots never change.
+
 ## How time reaches the GPU
 The ~3,000 dots are uploaded once per season. Scrubbing only changes deck.gl's `DataFilterExtension` range, a single shader uniform: "show dots whose day is between today-10 and today, fading the older ones". Analogy: the dots are a printed transparency; moving the slider just slides the spotlight over it.
 

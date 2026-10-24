@@ -11,4 +11,11 @@ pyftsubset fraunces-latin-700-normal.woff2 --unicodes="U+0020-007E,U+00A0,U+00B0
 pyftsubset caveat-latin-600-normal.woff2 --unicodes="U+0020-007E" --layout-features='kern' --flavor=woff2
 ```
 
+Then the two Atkinson files get a plain zero (`python3 scripts/plain-zero.py in.woff2 out.woff2`): the font's own
+zero is slashed, read as "Ø" in running text ("1Ø days"), and has no alternate to switch on.
+The patched zero has no hinting of its own: the font's per-glyph hints name the outline's point numbers, and the
+new outline (the zero's outer contour with the O's counter) has different points from both the old zero and the O,
+so neither glyph's hints can be copied over. Every other glyph keeps its hinting; on Windows the zero alone may
+render slightly softer than the digits beside it.
+
 - Fraunces 700: titles. Atkinson Hyperlegible 400/700: everything else (built for low-vision readers). Caveat 600: the handwritten asides.
