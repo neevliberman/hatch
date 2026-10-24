@@ -70,3 +70,49 @@ def test_static_inputs_match_the_replay_cells():
     eff = json.loads((HERE / "effort_profile.json").read_text())
     prof = np.array(eff["profile"])
     assert prof.shape == (7, 365) and (prof > 0).all()
+
+
+def test_prism_high_is_filed_on_the_next_acis_date(monkeypatch):
+    """PRISM's day ends at 7 am, so ACIS files the afternoon high of day D under D + 1 (the low under D). prism_point
+    must hand back each weather day's own high, so the live job banks an afternoon's warmth on the day it happened."""
+    from live import sources
+    calls = []
+
+    def acis(lat, lng, s, e):              # stand-in feed: low = 10 + day, high = 20 + day, by ACIS date from 1 May
+        calls.append((s, e))
+        k = np.arange((s - dt.date(2026, 5, 1)).days, (e - dt.date(2026, 5, 1)).days + 1, dtype=float)
+        return 10 + k, 20 + k
+    monkeypatch.setattr(sources, "prism_acis", acis)
+    tmin, tmax = sources.prism_point(40.0, -88.0, dt.date(2026, 5, 1), dt.date(2026, 5, 3))
+    assert calls == [(dt.date(2026, 5, 1), dt.date(2026, 5, 4))]      # one ACIS date past the last weather day
+    assert tmin.tolist() == [10, 11, 12]                              # lows as filed
+    assert tmax.tolist() == [21, 22, 23]                              # highs from the next ACIS date
+
+
+def test_newest_weather_day_waits_for_the_next_prism_date(monkeypatch):
+    """With ACIS posted through 20 May, 20 May's high is not known yet: the newest full weather day is 19 May."""
+    from live import sources
+    posted = dt.date(2026, 5, 20)
+
+    def acis(lat, lng, s, e):
+        n = (e - s).days + 1
+        ok = np.array([s + dt.timedelta(days=i) <= posted for i in range(n)])
+        return np.where(ok, 10.0, np.nan), np.where(ok, 20.0, np.nan)
+    monkeypatch.setattr(sources, "prism_acis", acis)
+    assert L.last_prism_day(dt.date(2026, 5, 22)) == dt.date(2026, 5, 19)
+    tmin, tmax = sources.prism_point(40.0, -88.0, dt.date(2026, 5, 18), posted)
+    assert not np.isnan(tmin).any() and np.isnan(tmax[-1]) and not np.isnan(tmax[:-1]).any()
+
+
+def test_backtest_lag_matches_the_live_job(monkeypatch):
+    """On a morning when ACIS has PRISM through two days ago (24 Oct 2026, 08:35Z: data through 22 Oct), the newest
+    weather day the live job can use is PRISM_LAG_DAYS back; rehearse.py and leadtime.py use the same lag."""
+    from live import sources
+    today = dt.date(2026, 10, 24)
+
+    def acis(lat, lng, s, e):
+        n = (e - s).days + 1
+        ok = np.array([s + dt.timedelta(days=i) <= today - dt.timedelta(days=2) for i in range(n)])
+        return np.where(ok, 10.0, np.nan), np.where(ok, 20.0, np.nan)
+    monkeypatch.setattr(sources, "prism_acis", acis)
+    assert L.last_prism_day(today) == today - dt.timedelta(days=L.PRISM_LAG_DAYS)

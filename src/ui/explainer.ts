@@ -94,7 +94,8 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
             <b>${x.days.toFixed(1)} days</b></div>`,
           )
           .join('')}
-        <ul class="ex-pts">${score.points.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+        <ul class="ex-pts">${score.points.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+        <div data-score="${esc(id)}" hidden></div></div>`
         : ''
     }
     <details class="ex-fine" data-key="fine-${esc(id)}"><summary>${esc(ex.finePrintLabel)}</summary>
