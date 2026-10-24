@@ -29,15 +29,17 @@ CACHE = L.ROOT / "notebooks" / "data"
 
 
 def cached_prism(season, cells):
-    """Whole-season PRISM at every hex centre, one download, kept in notebooks/data (gitignored)."""
+    """Whole-season PRISM at every hex centre as ACIS dates it (sources.prism_acis), one download, kept in
+    notebooks/data (gitignored). It runs to 1 October, so a 30 September weather day still has its high."""
     path = CACHE / f"prism_{season}.npz"
-    start, end = dt.date(season, 1, 1) + dt.timedelta(days=L.START_DOY - 1), dt.date(season, 9, 30)
+    start, end = dt.date(season, 1, 1) + dt.timedelta(days=L.START_DOY - 1), dt.date(season, 10, 1)
     if path.exists():
         z = np.load(path)
-        return start, z["tmin"], z["tmax"]
+        if z["tmin"].shape[1] >= (end - start).days + 1:
+            return start, z["tmin"], z["tmax"]
     ll = [h3.cell_to_latlng(c) for c in cells]
     with ThreadPoolExecutor(6) as ex:
-        got = list(ex.map(lambda p: sources.prism_point(p[0], p[1], start, end), ll))
+        got = list(ex.map(lambda p: sources.prism_acis(p[0], p[1], start, end), ll))
     tmin, tmax = np.array([g[0] for g in got]), np.array([g[1] for g in got])
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(path, tmin=tmin, tmax=tmax)
@@ -63,10 +65,10 @@ def main(argv=None):
         start, tmin, tmax = cached_prism(a.season, cells)
         index = {(round(lat, 6), round(lng, 6)): i for i, (lat, lng) in enumerate(h3.cell_to_latlng(c) for c in cells)}
 
-        def prism_point(lat, lng, s, e):          # slice of the season download, same contract as sources.prism_point
+        def prism_acis(lat, lng, s, e):           # slice of the season download, same contract as sources.prism_acis
             i, a0 = index[(round(lat, 6), round(lng, 6))], (s - start).days
             return tmin[i, a0:a0 + (e - s).days + 1].copy(), tmax[i, a0:a0 + (e - s).days + 1].copy()
-        sources.prism_point = prism_point
+        sources.prism_acis = prism_acis           # sources.prism_point still applies the weather-day rule
         L.season_sightings = lambda *_: []        # the archive keeps strip dates only; the dots are not needed
         d = a.first
         while d <= a.last:

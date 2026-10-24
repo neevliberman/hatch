@@ -1,4 +1,4 @@
-# Live scorecard, rehearsed on 2026 (built 2026-10-24)
+# Live scorecard, rehearsed on 2026 (built 2026-10-24, rebuilt the same day with the PRISM date fix)
 
 The scorecard the nightly job will keep from 2027 (`scorecard.py`), run on the 2026 season as if the live pipeline
 had been running then. `rehearse.py` rebuilt the forecast as it would have stood every Sunday from 8 March to
@@ -19,35 +19,43 @@ hex and day), first wave only.
 
 ## Result, as of Monday 19 October 2026: all 5 strips scored
 
-**The forecast missed by 5.0 days on average, against 7.8 for the calendar.** 7 of the 10 dates fell inside the
+**The forecast missed by 5.0 days on average, against 7.8 for the calendar.** 8 of the 10 dates fell inside the
 forecast's "likely" range.
 
 | Strip | Records | Onset: real / forecast / calendar | Peak: real / forecast / calendar | Miss | Calendar miss |
 |---|---|---|---|---|---|
 | 37-39 N | 65 | 5 Apr / 11 Apr / 17 Apr | 10 May / 25 Apr / 15 May | 10.3 | 8.2 |
-| 39-41 N | 222 | 11 Apr / 17 Apr / 28 Apr | 9 May / 6 May / 23 May | 4.5 | 15.5 |
-| 41-43 N | 139 | 24 Apr / 4 May / 10 May | 29 May / 29 May / 30 May | 5.1 | 8.9 |
+| 39-41 N | 222 | 11 Apr / 17 Apr / 28 Apr | 9 May / 7 May / 23 May | 4.0 | 15.5 |
+| 41-43 N | 139 | 24 Apr / 3 May / 10 May | 29 May / 28 May / 30 May | 5.1 | 8.9 |
 | 43-45 N | 54 | 5 May / 12 May / 17 May | 8 Jun / 7 Jun / 7 Jun | 3.5 | 6.1 |
-| 45-49 N | 126 | 7 Jun / 5 Jun / 7 Jun | 22 Jun / 20 Jun / 21 Jun | 1.8 | 0.4 |
+| 45-49 N | 126 | 7 Jun / 5 Jun / 7 Jun | 22 Jun / 19 Jun / 21 Jun | 2.2 | 0.4 |
 
 In plain words:
 - **It beat the calendar overall and in three of five strips**, most clearly in central Illinois, Indiana and Ohio
   (39-41 N), where 2026 ran about two weeks ahead of a usual year and the forecast saw that coming.
 - **The far south is the big miss again.** It called the 37-39 N peak for 25 April; the real peak was 10 May, two
-  weeks later, and the calendar did better there. The 2026 dry run found the same miss with a different summary.
+  weeks later, and the calendar did better there. The 2026 dry run found the same miss with a different summary. Why: `pipeline/fit/SOUTH_BIAS.md` (a spring far warmer than any
+  the model was fitted on).
 - **First moths came earlier than forecast in four strips** (by about 6 to 10 days), even where the peak was right. The
   forecast's spread is shaped well around the peak but starts too late.
 - **In the north the calendar was as good or better** (45-49 N: 0.4 days). 2026 was an ordinary year up there, which
   is exactly when the usual date is hard to beat.
+
+**PRISM date fix (rebuilt 2026-10-24).** PRISM's daily high, as RCC-ACIS files it, belongs to the day before (PRISM's
+day ends at 7 am), so the first build banked each afternoon's warmth a day late. `sources.py` now takes each day's high
+from the next ACIS date, and `prism_offsets.json` was rebuilt the same way. Same weather download, same records: 74 of
+the 300 archived strip dates moved by one day (41 a day earlier, 33 a day later). The season's average miss stays
+5.0 days (39-41 N 4.5 to 4.0, 45-49 N 1.8 to 2.2), and the southern onset now falls just inside its range (7 to 8 of
+10 inside). The southern peak is unchanged: the fix is not the far-south miss (`pipeline/fit/SOUTH_BIAS.md`).
 
 ## How it would have read during the season
 
 | Monday | Scored | Pending | Forecast miss | Calendar miss |
 |---|---|---|---|---|
 | 4 May to 6 Jul | 0 | 5 | - | - |
-| 13 Jul | 3 | 2 | 6.8 | 11.0 |
-| 27 Jul | 4 | 1 | 6.6 | 10.2 |
-| 14 Sep | 5 | 0 | 5.2 | 7.9 |
+| 13 Jul | 3 | 2 | 6.3 | 11.0 |
+| 27 Jul | 4 | 1 | 6.4 | 10.2 |
+| 14 Sep | 5 | 0 | 4.9 | 7.9 |
 | 19 Oct | 5 | 0 | 5.0 | 7.8 |
 
 The first strips settle in mid-July (the "July scorecard" of plan v2), 43-45 N at the end of July, and the far north

@@ -80,6 +80,10 @@ In plain words:
   day, 3.5 °C as filed; lows line up as filed). So the live job credits each afternoon's warmth a day late and the
   forecast's first day repeats a high. In spring that is worth well under a day, but `sources.py`'s weather-day rule
   could shift PRISM highs back a day; that changes the live forecast, so it is left for its own change.
+  **Since fixed** (`sources.py`, with `prism_offsets.json` rebuilt): in the 2026 rehearsal it moved 74 of 300 strip
+  dates by a day and left the season's average miss at 5.0 days. The numbers in this note are from before the fix and
+  were not rerun; `leadtime.py` now reads PRISM the fixed way (its season caches must run to 1 October, so a rerun
+  refetches them).
 
 ## Reproduce
 ```

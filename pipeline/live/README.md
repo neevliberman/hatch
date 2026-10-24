@@ -7,9 +7,11 @@ the file's `model` field.
 
 ## One night, step by step
 Analogy: finishing a sentence someone has started.
-1. **The words already said.** Real daily Tmin/Tmax from 1 March to the newest day PRISM has (usually yesterday or
-   the day before), fetched per hex centre from RCC-ACIS (grid 21 = PRISM). The model was fitted on Daymet, so each
-   day gets a per-hex, per-month offset (`prism_offsets.json`: mean Daymet minus PRISM over 2015-2025), like
+1. **The words already said.** Real daily Tmin/Tmax from 1 March to the newest day PRISM has a high for (usually
+   two or three days ago), fetched per hex centre from RCC-ACIS (grid 21 = PRISM). PRISM's day ends at 7 am, so ACIS
+   files each afternoon's high under the next date; `sources.py` moves it back to the day it happened (lows stay as
+   filed), which is how Daymet dates them. The model was fitted on Daymet, so each
+   day gets a per-hex, per-month offset (`prism_offsets.json`: mean Daymet minus PRISM over 2015-2025, PRISM read the same way), like
    setting a second thermometer to read like the first.
 2. **The next few words.** A 7-day forecast from Open-Meteo (same offsets). Backfills (as-of more than 4 days ago)
    skip this: there is no honest archived forecast to use.

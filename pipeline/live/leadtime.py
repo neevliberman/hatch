@@ -169,21 +169,23 @@ class Patched:
         self.season, self.cells = season, cells
         self.start, self.tmin, self.tmax = R.cached_prism(season, cells)
         self.index = {(round(a, 6), round(b, 6)): i for i, (a, b) in enumerate(h3.cell_to_latlng(c) for c in cells)}
-        self.orig = (L.REPLAY, L.FOLD_FITS, L.temperature_cube, sources.prism_point, sources.open_meteo,
+        self.orig = (L.REPLAY, L.FOLD_FITS, L.temperature_cube, sources.prism_acis, sources.open_meteo,
                      L.season_sightings)
         self.forecast = None
 
-    def prism_point(self, lat, lng, s, e):
+    def prism_acis(self, lat, lng, s, e):
+        """The cached season by ACIS date (sources.prism_point applies the weather-day rule on top)."""
         i, a0 = self.index[(round(lat, 6), round(lng, 6))], (s - self.start).days
         return self.tmin[i, a0:a0 + (e - s).days + 1].copy(), self.tmax[i, a0:a0 + (e - s).days + 1].copy()
 
     def prism_cube(self, s, e):
+        """Real weather s..e for every cell by weather day (each high from the next ACIS date)."""
         a0 = (s - self.start).days
-        return self.tmin[:, a0:a0 + (e - s).days + 1].copy(), self.tmax[:, a0:a0 + (e - s).days + 1].copy()
+        return sources.weather_days(self.tmin[:, a0:a0 + (e - s).days + 2], self.tmax[:, a0:a0 + (e - s).days + 2])
 
     def __enter__(self):
         season = self.season
-        sources.prism_point = self.prism_point
+        sources.prism_acis = self.prism_acis
         sources.open_meteo = lambda lats, lngs, s, e: self.forecast
         L.season_sightings = lambda *_: []
         if season <= L.ANALOG_YEARS[1]:            # a fitted year: no peeking at its moths or its weather
@@ -204,7 +206,7 @@ class Patched:
         return self
 
     def __exit__(self, *exc):
-        L.REPLAY, L.FOLD_FITS, L.temperature_cube, sources.prism_point, sources.open_meteo, L.season_sightings = self.orig
+        L.REPLAY, L.FOLD_FITS, L.temperature_cube, sources.prism_acis, sources.open_meteo, L.season_sightings = self.orig
 
 
 def forecast(p: Patched, issue: dt.date, variant):
