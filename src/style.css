@@ -552,6 +552,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .bar-l b { font-weight: 600; font-variant-numeric: tabular-nums; }
 /* "How sure is it?": the answer in bold first, then the bars, then a few plain lines with a handwritten lead-in. */
 .ex-lead { margin: 4px 0 6px; font-size: 15px; font-weight: 700; }
+.ex-record { margin: 0 0 8px; font-size: 13px; }
 .ex-pts { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
 .ex-pts li { margin-top: 4px; }
 .ex-pts li::marker { color: var(--ac); }

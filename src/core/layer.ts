@@ -81,6 +81,15 @@ export interface Creature {
  * The visual About panel for a species (plan v2: "wow first, honesty one tap away"). Optional: a layer without one
  * falls back to its caveats() list. The fine print is always caveats(), so the honesty lives in one place.
  */
+/** One test of the forecast against the usual date: where ("on past years", "in 2026"), mean days off for each, and
+ * how big a test it was ("44 strip-years"). */
+export interface RecordCheck {
+  where: string;
+  days: number;
+  usual: number;
+  size?: string;
+}
+
 export interface Explainer {
   name: string;
   sci: string;
@@ -97,7 +106,18 @@ export interface Explainer {
   spot(lngLat: [number, number] | null, t: number, name?: string, example?: boolean): SpotStory | null;
   /** How sure it is. The bold answer line is worked out from the bars (the forecast first, then what it is measured
    * against), so it always says what this layer's own scores say. `points`: a few short plain sentences. */
-  score?: { title: string; points: string[]; bars: { label: string; days: number; best?: boolean }[] };
+  score?: {
+    title: string;
+    points: string[];
+    bars: { label: string; days: number; best?: boolean }[];
+    /** What the bars were scored on, for the bold line: "on past years", "in 2019". */
+    scope?: string;
+    /** Every check of the model against the usual date that this layer's data holds (ui/explainer.ts recordLine);
+     * this season's live check is added from the scorecard file when it loads. */
+    checks?: RecordCheck[];
+    /** The last season `checks` cover (the replay's last year), said when no live season joins them. */
+    checksThrough?: number;
+  };
   /** A short card near the top for a special mode (this year's live forecast): what it is, in plain words. */
   notice?: { title: string; bullets: string[] };
   finePrintLabel: string;

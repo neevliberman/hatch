@@ -10,7 +10,7 @@ import { restingSketch } from '../ui/sketch';
 import { countdownParts, type SeasonWords } from '../ui/countdown';
 import { doyToMs, LIVE, UNCONFIRMED, type ReplayFile } from './lunaData';
 import type { Live } from './liveData';
-import { APPROXIMATE, replayData, TYPICAL, windowCheck, type Mode, type Sighting } from './replayData';
+import { APPROXIMATE, modelChecks, replayData, TYPICAL, windowCheck, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, liveNotice, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
@@ -569,14 +569,19 @@ export function createOneGenerationLayer(
     explainer(): Explainer {
       const sc = mode === TYPICAL || isLive() ? scoreSummary() : scoreSummary(Number(mode));
       const all = sc.n ? sc : scoreSummary();
+      const past = scoreSummary();
       const lm = data.model?.loyo_mae;
-      // The simpler rule (warmth at past sightings alone, luna's first model), said as its numbers say it.
-      const simpler = lm
-        ? Math.abs(lm.p1 - lm.heat) < 0.5
-          ? `A simpler rule, the warmth at past sightings alone, did about as well: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
-          : lm.p1 < lm.heat
-            ? `A simpler rule, the warmth at past sightings alone, did better: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
-            : `A simpler rule, the warmth at past sightings alone, did worse: ${lm.p1.toFixed(1)} days off against ${lm.heat.toFixed(1)}.`
+      // The simpler rule (warmth at past sightings alone, luna's first model), said as its numbers say it, on the same
+      // strip-years as the bars (all years, or the one year picked), so the card never shows two numbers for one score.
+      const p1 = all.rows.filter((r) => r.p1_onset != null && r.p1_peak != null);
+      const p1Days = p1.reduce((a, r) => a + (Math.abs(r.p1_onset! - r.obs_onset) + Math.abs(r.p1_peak! - r.obs_peak)) / 2, 0) / Math.max(1, p1.length);
+      const vs = `${p1Days.toFixed(1)} days off against ${all.heat.toFixed(1)}`;
+      const simpler = lm && p1.length === all.rows.length
+        ? Math.abs(p1Days - all.heat) < 0.5
+          ? `A simpler rule, the warmth at past sightings alone, did about as well: ${vs}.`
+          : p1Days < all.heat
+            ? `A simpler rule, the warmth at past sightings alone, did better: ${vs}.`
+            : `A simpler rule, the warmth at past sightings alone, did worse: ${vs}.`
         : null;
       return {
         name: cfg.name,
@@ -604,6 +609,9 @@ export function createOneGenerationLayer(
             { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
+          scope: sc.n && mode !== TYPICAL && !isLive() ? `in ${mode}` : 'on past years',
+          checks: modelChecks(data, past, cfg.holdoutYears),
+          checksThrough: data.years[data.years.length - 1],
         },
         finePrintLabel: 'Limits and fine print',
         notice: isLive() ? liveNotice(live!) : undefined,

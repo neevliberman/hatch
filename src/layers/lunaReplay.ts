@@ -28,7 +28,7 @@ import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
-import { windowCheck } from './replayData';
+import { modelChecks, windowCheck } from './replayData';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
 export const GLOW_DAYS = 10;
@@ -48,6 +48,9 @@ export const SETTLE_MS = 300;
  */
 export const COARSE = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 /** Spatial holdout (learn IL/IN/OH, test WI/MN): only claimed when the shipped model's own numbers show a pass. */
+/** Strip-years in luna's WI/MN holdout (pipeline/fit/RESULT.md: 8 band-years, 7 at 45-49 °N); its file predates
+ * model.holdout_band_years. */
+const HOLDOUT_BAND_YEARS = 8;
 const hoHeat = data.model?.holdout_mae?.heat;
 const hoCal = data.model?.holdout_mae?.cal;
 const holdoutPass = Number.isFinite(hoHeat) && Number.isFinite(hoCal) && hoHeat! < hoCal!;
@@ -821,7 +824,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             ]
           : Number.isFinite(hoHeat) && Number.isFinite(hoCal)
             ? [
-                `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${hoHeat!.toFixed(1)} days off on average, against ${hoCal!.toFixed(1)} for their own usual dates, over just 8 strip-years). So it is not ready for places it has never seen.`,
+                `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${hoHeat!.toFixed(1)} days off on average, against ${hoCal!.toFixed(1)} for their own usual dates, over just ${HOLDOUT_BAND_YEARS} strip-years). So it is not ready for places it has never seen.`,
               ]
             : []),
         'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
@@ -876,6 +879,9 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
             { label: 'Usual date', days: all.calendar, best: all.calendar < all.heat },
           ],
+          scope: sc.n && mode !== TYPICAL && mode !== LIVE ? `in ${mode}` : 'on past years',
+          checks: modelChecks(data, scoreSummary(), HOLDOUT_BAND_YEARS),
+          checksThrough: data.years[data.years.length - 1],
         },
         finePrintLabel: 'Limits and fine print',
         notice: isLive() ? liveNotice(live!) : undefined,
