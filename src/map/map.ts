@@ -183,7 +183,26 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   let target: { longitude: number; latitude: number; zoom: number } | null = null;
   let grabbed = false;
   let down = 0; // pointers on the map right now: a glide that starts under a finger is already grabbed
+  // The hexagon under the mouse gets a darker tint. Not deck's own autoHighlight: that picks again only when the mouse
+  // moves, and its pick on the pointer leaving the map finds no viewport at (-1, -1) and returns early, so it never
+  // clears. A hexagon then stayed dark after the mouse left for a card or panel, or after code moved the map under a
+  // still mouse (the keys, Find a town, recenter, a re-fit), even once its card was closed with Escape. Here the
+  // hovered hexagon is set from each hover pick and given to its layer (highlightedObjectIndex, which overrides the
+  // auto tint), and it is let go when the pointer leaves or the map moves without it; the next mouse move picks again.
+  let hovered: { id: string; index: number } | null = null;
+  const setHovered = (h: { id: string; index: number } | null) => {
+    if (h?.id === hovered?.id && h?.index === hovered?.index) return;
+    hovered = h;
+    refresh();
+  };
+  // The map moved without the mouse: the hovered hexagon (and its hover card) is no longer the one under it.
+  const unhover = () => {
+    if (!hovered) return;
+    hovered = null;
+    onProbe(null, false);
+  };
   const land = (v: { longitude: number; latitude: number; zoom: number }) => {
+    unhover(); // refreshed below
     nudge = nudge ? 0 : 1e-9;
     current = { longitude: v.longitude, latitude: v.latitude, zoom: v.zoom };
     zoom = v.zoom;
@@ -302,6 +321,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     onHover: (info: PickingInfo) => {
       overSighting = !!info.object && !isForecast(info.layer?.id);
+      setHovered(info.picked && info.layer?.props.autoHighlight ? { id: info.layer.id, index: info.index } : null);
       onProbe(hit(info), false);
     },
     // The canvas gets a Tab stop for deck's keyboard controls, which are off: drop it, so Tab goes straight to the controls.
@@ -352,6 +372,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     onProbe(info ? hit(info) : null, true);
   });
   container.addEventListener('pointercancel', () => (touchDown = null));
+  container.addEventListener('mouseleave', () => setHovered(null));
   // Capture phase: deck's own handler (on the canvas inside) stops the glide first, and must find this already set.
   for (const type of ['pointerdown', 'wheel']) container.addEventListener(type, () => (grabbed = true), { capture: true, passive: true });
   container.addEventListener('pointerdown', () => down++, { capture: true });
@@ -489,7 +510,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   const refresh = () => {
     const { under, mid } = basemapLayers(zoom);
     // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
-    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }));
+    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }))
+      .map((l) => (l.props.autoHighlight ? l.clone({ highlightedObjectIndex: hovered?.id === l.id ? hovered.index : -1 }) : l));
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
@@ -500,6 +522,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     refresh,
     fit(p, smooth) {
       const v = fitState(p);
+      unhover(); // refreshed below
       zoom = v.zoom;
       fitted = v;
       setMoved(false);
@@ -534,6 +557,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     },
     view([longitude, latitude], z, ms = 0) {
       z = Math.min(fitted.maxZoom, Math.max(fitted.minZoom, z));
+      unhover(); // refreshed below
       zoom = z;
       setMoved(true);
       nudge = nudge ? 0 : 1e-9;
