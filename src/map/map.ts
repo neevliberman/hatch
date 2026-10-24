@@ -30,6 +30,8 @@ export interface MapHandle {
    * eases there in about a third of a second instead of cutting. */
   fit(padding: Padding, glide?: boolean): void;
   /** Whether a pan or zoom has left the fitted view (a re-fit on resize would throw that away). */
+  /** After a resize that keeps the reader's view: the zoom-out limit follows the new whole-Midwest fit. */
+  rebound(padding: Padding): void;
   moved(): boolean;
   /** Centre lngLat in the free area at a zoom level (the city menu, My area and shared links). `fly` flies there. */
   focus(lngLat: [number, number], zoom: number, padding: Padding, fly?: boolean): void;
@@ -87,7 +89,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     onFirstDraw?.();
-    return { refresh() {}, fit() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {} };
+    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {} };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   // The size the last fit was worked out for. Before layout (an in-app browser still sliding in) the map can be 0 x 0,
@@ -494,6 +496,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       deck.setProps({ initialViewState: { ...v, zoom: v.zoom + nudge, ...g } });
       refresh(); // the hexagon size follows zoom: zooming back out must swap the small hexagons for big ones
       if (onView) requestAnimationFrame(onView);
+    },
+    rebound(p) {
+      const was = fitted.minZoom;
+      fitted = fitState(p);
+      if (Math.abs(fitted.minZoom - was) < 1e-6) return;
+      const v = target ?? current; // mid-glide: land where it was going
+      land({ ...v, zoom: Math.max(fitted.minZoom, v.zoom) });
     },
     moved: () => moved,
     fitZoom: () => fitted.zoom,

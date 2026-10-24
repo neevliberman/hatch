@@ -5,7 +5,7 @@ national forest boundaries, and the Census Bureau's 2024 place gazetteer (locati
 estimates (which towns to name first), and the USGS National Land Cover Database 2021 (where the woods are, woods.json).
 Around the Midwest: the other US states (Census, from node_modules/us-atlas, so run `npm ci` first) and Natural Earth's
 countries, as quiet land, plus the mask and shore hexagons that trim the forecast to the coasts and state lines.
-Run from the repo root: `pip install shapely pyshp numpy scipy matplotlib pillow h3`, then
+Run from the repo root: `pip install shapely pyshp numpy scipy matplotlib pillow "h3>=4,<5"`, then
 `python3 pipeline/basemap/build_basemap.py`. Downloads go to notebooks/data/basemap/ (git-ignored); reruns are offline.
 
 Every feature carries `z`, the zoom it shows from (the app's zoom: the whole Midwest is about 4.5 on a phone and 5.5 on

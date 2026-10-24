@@ -688,6 +688,7 @@ function start() {
     fitTimer = window.setTimeout(() => {
       if (dragging) return refit();
       if (!map.moved()) map.fit(padding(), glide);
+      else map.rebound(padding());
       glide = false;
       placeProbe();
     }, wait);
