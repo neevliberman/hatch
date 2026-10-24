@@ -11,7 +11,7 @@
 // Also over http: the radar replays (load nothing until opened from About, then play at La Crosse or on Lake Erie and
 // close cleanly).
 import { createRequire } from 'node:module';
-import { mkdirSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { extname, join, normalize, resolve } from 'node:path';
@@ -739,29 +739,70 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     'kcle-2019-06-26': { at: [-81.86, 41.41], when: /\b\d{1,2}:\d\d (am|pm) EDT\b[\s\S]*June 2019/, sheet: [-81.86, 40.87], off: [-83.78, 41.41] },
   };
   const ERIE = 'kcle-2019-06-26';
-  for (const [label, w, h, phone, reduce, id] of [
-    ['desktop', 1366, 768, false, false, 'karx-2014-07-20'], ['desktop, Lake Erie', 1366, 768, false, false, ERIE],
-    ['phone', 390, 844, true, false, 'karx-2014-07-20'], ['phone, Lake Erie', 390, 844, true, false, ERIE],
-    ['phone on its side', 852, 393, true, false, 'karx-2014-07-20'], ['phone on its side, Lake Erie', 852, 393, true, false, ERIE],
-    ['reduced motion link', 1280, 720, false, true, 'karx-2014-07-20'], ['reduced motion link, Lake Erie', 1280, 720, false, true, ERIE],
+  // A screenshot straight from the browser (CDP): page.screenshot first waits for web fonts and quiet frames, which on
+  // software GL with a replay playing can take past its timeout. Saved to `path`; the PNG bytes come back.
+  const shotCdp = async (page, path) => {
+    const cdp = await page.context().newCDPSession(page);
+    const png = Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64');
+    await cdp.detach();
+    writeFileSync(path, png);
+    return png;
+  };
+  // La Crosse in every case; Lake Erie at the desktop size (from About), then the switch case on the same page. Erie on a
+  // phone (upright and on its side, with "How we know" clear of the radar) and from a ?radar= link are mobile.mjs's
+  // radar pass; opening paused under reduced motion is the same code for every event (La Crosse's case here).
+  // Waits poll for what they wait for (a glide that has settled, the link catching up), never a fixed time.
+  // A case marked `keep` hands its page on to the next one (same kind of screen; a phone turned on its side), which
+  // starts from it at the whole Midwest with the replay closed instead of loading the page again; the last desktop one
+  // goes on to the switch case.
+  let carry = null;
+  for (const [label, w, h, phone, reduce, id, keep] of [
+    ['phone', 390, 844, true, false, 'karx-2014-07-20', true], ['phone on its side', 852, 393, true, false, 'karx-2014-07-20'],
+    ['reduced motion link', 1280, 720, false, true, 'karx-2014-07-20'],
+    ['desktop', 1366, 768, false, false, 'karx-2014-07-20', true], ['desktop, Lake Erie', 1366, 768, false, false, ERIE, true],
   ]) {
     const ev = RADARS[id];
     const tag = `radar ${label}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
-      reducedMotion: reduce ? 'reduce' : 'no-preference' });
-    const page = await ctx.newPage();
-    const fetched = [];
-    page.on('request', (r) => /radar/i.test(new URL(r.url()).pathname) && fetched.push(new URL(r.url()).pathname));
-    page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
-    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
-    const shotR = (step) => page.screenshot({ path: `${out}/radar-${label.replace(/\W+/g, '-')}-${step}.png` });
+    const reused = !!carry && carry.phone === phone && !reduce;
+    if (carry && !reused) await carry.ctx.close();
+    const { ctx, page, fetched, state } = reused ? carry : await (async () => {
+      const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+        reducedMotion: reduce ? 'reduce' : 'no-preference' });
+      const page = await ctx.newPage();
+      const fetched = [];
+      const state = { fail };
+      page.on('request', (r) => /radar/i.test(new URL(r.url()).pathname) && fetched.push(new URL(r.url()).pathname));
+      page.on('console', (m) => m.type() === 'error' && state.fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => state.fail(`pageerror: ${e.message}`));
+      return { ctx, page, fetched, state, phone };
+    })();
+    carry = null;
+    state.fail = fail;
+    fetched.length = 0;
+    const shotR = (step) => shotCdp(page, `${out}/radar-${label.replace(/\W+/g, '-')}-${step}.png`);
     const link = page.locator(`#drawer .ex-radar[data-radar="${id}"]`);
     const view = () => page.evaluate(() => ({ zoom: window.__hatch.map.zoom(), fit: window.__hatch.map.moved() === false, c: window.__hatch.map.center(window.__hatch.padding()) }));
+    // The glide has come to rest: the same view on two polls in a row.
+    const settled = () => page.waitForFunction(() => {
+      const c = window.__hatch.map.center(window.__hatch.padding());
+      const v = `${window.__hatch.map.zoom()?.toFixed(4)}|${c?.lngLat.map((x) => x.toFixed(5))}`;
+      const same = window.__radarView === v;
+      window.__radarView = v;
+      return same;
+    }, null, { timeout: 30000, polling: 200 }).catch(() => fail('the map never came to rest'));
+    // The address bar catches up with the page on its own beat: poll for it, then say what it shows if it never does.
+    const urlIs = (want) => page.waitForFunction((w) => new URL(location.href).searchParams.get('radar') === w, want, { timeout: 5000, polling: 100 }).catch(() => {});
     try {
-      await page.goto(origin + (reduce ? `/?radar=${id}&noauto&today=2027-01-15` : '/?noauto&today=2027-01-15'));
+      if (reused) {
+        // Turned (or the same screen): back at the whole Midwest for this size before anything is opened.
+        if (page.viewportSize().width !== w || page.viewportSize().height !== h) await page.setViewportSize({ width: w, height: h });
+        await page.waitForFunction(() => window.__hatch.map.moved() === false && Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05,
+          null, { timeout: 30000, polling: 200 }).catch(() => fail('the page handed on was not at the whole Midwest'));
+      } else await page.goto(origin + (reduce ? `/?radar=${id}&noauto&today=2027-01-15` : '/?noauto&today=2027-01-15'));
       if (!reduce) {
-        await page.waitForTimeout(3000);
+        // The page has fetched all it fetches by itself (nothing on the wire for half a second).
+        await page.waitForLoadState('networkidle');
         if (fetched.length) fail(`fetched before it was opened: ${fetched.join(', ')}`);
         await page.locator('#info-btn').click();
         // Once the panel has slid in, the whole list of links shows without scrolling (on a phone, at the sheet's middle
@@ -786,7 +827,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         const c = window.__hatch.map.center(window.__hatch.padding());
         return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && Math.abs(c.lngLat[0] - lng) < 0.5 && Math.abs(c.lngLat[1] - lat) < 0.6;
       }, ev.at, { timeout: 30000 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
-      await page.waitForTimeout(1000);
+      await settled();
       // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and the map's own colours well outside it.
       const png = await shotR('1-open');
       const px = await page.evaluate(async ([b64, sheet, off]) => {
@@ -808,7 +849,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         .then(() => true, () => false);
       if (moving === reduce) fail(reduce ? 'it plays under reduced motion' : 'the replay does not play');
       if (reduce && !/^Play/.test((await page.locator('#radar .rd-play').getAttribute('aria-label')) ?? '')) fail('under reduced motion it does not open paused');
-      await page.waitForTimeout(500);
+      await urlIs(id);
       if (new URL(page.url()).searchParams.get('radar') !== id) fail(`the link does not name the replay: ${page.url()}`);
       await page.locator('#radar .rd-i').click();
       if (h <= 500) {
@@ -837,27 +878,30 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // Back at the whole-Midwest fit: not just flagged as fitted, but drawn at the fit's zoom once the glide is done.
       await page.waitForFunction(() => window.__hatch.map.moved() === false && Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05, null, { timeout: 30000 })
         .catch(async () => fail(`closing it did not bring the Midwest back: ${JSON.stringify(await view())}, fit zoom ${await page.evaluate(() => window.__hatch.map.fitZoom())}`));
-      // Open it once more (past the shore zoom, back out, past it again), then close: a console error fails the run.
-      if (!reduce) {
+      // Open it once more (past the shore zoom, back out, past it again), then close with Escape: a console error fails
+      // the run. On a keyboard's screens: a phone has no Escape key, and its first open and × are checked above. Lake
+      // Erie opens twice more in the switch case below (on this same page), so Escape is La Crosse's here.
+      if (!reduce && !phone && id !== ERIE) {
         await page.locator('#info-btn').click();
         await page.waitForFunction(() => getComputedStyle(document.getElementById('drawer')).transform === 'none', null, { timeout: 30000, polling: 250 });
         await link.click();
         await page.waitForSelector('#radar', { timeout: 30000 });
         await page.waitForFunction(() => window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1, null, { timeout: 30000, polling: 250 }).catch(() => fail('reopening did not go back to the radar'));
-        await page.waitForTimeout(800);
+        await settled();
         await page.keyboard.press('Escape');
         if (await page.locator('#radar').count()) fail('Escape did not close the replay');
         await page.waitForFunction(() => Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05, null, { timeout: 30000, polling: 250 })
           .catch(async () => fail(`closing it again did not bring the Midwest back: ${JSON.stringify(await view())}`));
       }
       if (await page.locator('#dock').isHidden()) fail('the time bar did not come back');
-      await page.waitForTimeout(600);
+      await urlIs(null);
       if (new URL(page.url()).searchParams.has('radar')) fail(`the link still names the replay after closing: ${page.url()}`);
       await shotR('3-closed');
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
-    await ctx.close();
+    if (keep) carry = { ctx, page, fetched, state, phone };
+    else await ctx.close();
     console.log(`${tag}: checked`);
   }
   // Switching replays: one open, then the other from About, then ×: back to the whole Midwest, not to the first radar.
@@ -865,10 +909,16 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   {
     const tag = 'radar switch';
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
-    const page = await ctx.newPage();
-    page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
-    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    // On the desktop cases' page (the same size, back at the whole Midwest), else a fresh one.
+    const reuse = carry && !carry.phone ? carry : null;
+    if (reuse) reuse.state.fail = fail;
+    else if (carry) await carry.ctx.close();
+    const ctx = reuse?.ctx ?? (await browser.newContext({ viewport: { width: 1366, height: 768 } }));
+    const page = reuse?.page ?? (await ctx.newPage());
+    if (!reuse) {
+      page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    }
     const about = async () => {
       await page.locator('#info-btn').click();
       await page.waitForFunction(() => getComputedStyle(document.getElementById('drawer')).transform === 'none', null, { timeout: 30000, polling: 250 });
@@ -881,8 +931,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const home = () => page.waitForFunction(() => window.__hatch.map.moved() === false && Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05,
       null, { timeout: 30000, polling: 250 }).then(() => true, () => false);
     try {
-      await page.goto(origin + '/?noauto&today=2027-01-15');
-      await page.waitForTimeout(2000);
+      if (!reuse) {
+        await page.goto(origin + '/?noauto&today=2027-01-15');
+        await page.waitForLoadState('networkidle');
+      }
       await about();
       await page.locator('#drawer .ex-radar[data-radar="karx-2014-07-20"]').click();
       if (!(await at('karx-2014-07-20'))) fail('the first replay did not open at La Crosse');
@@ -891,19 +943,30 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (!(await at(ERIE))) fail('switching did not go to Lake Erie');
       if ((await page.locator('#radar').count()) !== 1) fail('more than one replay card after switching');
       if (!/EDT/.test(await page.locator('#radar .rd-cap').innerText())) fail('the card after switching is not Lake Erie\'s');
-      await page.waitForTimeout(800);
+      // At rest at Lake Erie before ×: the same view on two polls in a row.
+      await page.waitForFunction(() => {
+        const v = `${window.__hatch.map.zoom()?.toFixed(4)}`;
+        const same = window.__switchView === v;
+        window.__switchView = v;
+        return same;
+      }, null, { timeout: 30000, polling: 200 }).catch(() => fail('the map never came to rest at Lake Erie'));
       await page.locator('#radar .rd-x').click();
       if (!(await home())) fail(`× after a switch did not bring the Midwest back: zoom ${await page.evaluate(() => window.__hatch.map.zoom())}, fit ${await page.evaluate(() => window.__hatch.map.fitZoom())}`);
       if (await page.locator('#dock').isHidden()) fail('the time bar did not come back after a switch');
       // Both at once: the drawer's buttons stay in the page while it closes, so a second click still lands.
       await about();
+      // The first click's frames: once they are in, that load finds it was overtaken.
+      const late = page.waitForEvent('requestfinished', { predicate: (r) => r.url().endsWith('/radar/karx-2014-07-20/frames.bin.gz'), timeout: 30000 }).catch(() => null);
       await page.evaluate((ids) => ids.forEach((id) => document.querySelector(`#drawer .ex-radar[data-radar="${id}"]`).click()), ['karx-2014-07-20', ERIE]);
       if (!(await at(ERIE))) fail('of two quick clicks, the last did not open');
-      await page.waitForTimeout(2500);
+      // The first click's load has come back, unpacked its frames (a moment) and found it was overtaken; the page has
+      // drawn since. Nothing to poll for here (it must change nothing), so a short grace after its file is in.
+      await late;
+      await page.waitForTimeout(300);
       if ((await page.locator('#radar').count()) !== 1 || !/EDT/.test(await page.locator('#radar .rd-cap').innerText())) fail('of two quick clicks, the wrong card is left');
       if (!(await page.evaluate(() => document.getElementById('app').classList.contains('radar-on')))) fail('of two quick clicks, the time bar came back over the replay');
       if (!(await at(ERIE))) fail('of two quick clicks, the first one moved the map after the last opened');
-      const png = await page.screenshot({ path: `${out}/radar-switch-race.png` });
+      const png = await shotCdp(page, `${out}/radar-switch-race.png`);
       const sheet = await page.evaluate(async ([b64, lngLat]) => {
         const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
         const c = new OffscreenCanvas(bmp.width, bmp.height);
