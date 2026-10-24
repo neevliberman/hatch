@@ -36,7 +36,7 @@ const screens = [
 const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
-const TAB_ORDER = ['season', 'info-btn', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
+const TAB_ORDER = ['season', 'info-btn', 'explore', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
 const problems = [];
 const browsers = {};
 for (const e of new Set(screens.map((s) => s[0]))) {
@@ -52,7 +52,7 @@ for (const e of new Set(screens.map((s) => s[0]))) {
 // Runs in the page: visible controls that are off-screen, too small, or covered.
 const audit = () => {
   const bad = [];
-  for (const el of document.querySelectorAll('#top button, #top select, #bottom button, #bottom input, #bottom a')) {
+  for (const el of document.querySelectorAll('#top button:not(#explore), #top select, #bottom button, #bottom input, #bottom a')) {
     const b = el.getBoundingClientRect();
     if (!b.width || !b.height || el.closest('[hidden]')) continue;
     const name = el.id || el.textContent.trim().slice(0, 24);
@@ -217,9 +217,9 @@ for (const [engine, width, height] of screens) {
   await page.goto(file + '?noauto');
   await page.waitForTimeout(1500);
   const order = [];
-  // Under 1000px the colour key can fold, so its fold button (or, folded, its "Key" chip) comes right after About.
+  // Under 1000px the colour key can fold, so its fold button (or, folded, its "Key" chip) comes right after "Explore map with keys".
   const key = (await page.locator('#key-fold').isVisible()) ? 'key-fold' : (await page.locator('#key-chip').isVisible()) ? 'key-chip' : null;
-  const want = key ? [...TAB_ORDER.slice(0, 2), key, ...TAB_ORDER.slice(2)] : TAB_ORDER;
+  const want = key ? [...TAB_ORDER.slice(0, 3), key, ...TAB_ORDER.slice(3)] : TAB_ORDER;
   for (let i = 0; i < want.length + 3 && order.length < want.length; i++) {
     await page.keyboard.press('Tab');
     const f = await page.evaluate(() => {
@@ -245,6 +245,73 @@ for (const [engine, width, height] of screens) {
     if (!f.ring) fail(`${f.id} shows no focus ring`);
   }
   if (order.join() !== want.join()) fail(`Tab order is ${order.join(' > ')} (want ${want.join(' > ')})`);
+  // Keyboard path into the map: from "Explore map with keys", arrows pin a hexagon and move it to its neighbours (the
+  // card is a live region, so it is announced), Enter pins, the map pans to keep it in view, Escape lets go.
+  const cardText = () => page.locator('#probe').innerText();
+  const pinnedAt = async () => page.evaluate(() => {
+    const p = document.getElementById('probe');
+    return p && !p.hidden && p.dataset.key?.endsWith('|true') ? p.dataset.key : null;
+  });
+  await page.locator('#explore').focus();
+  const chip = await page.locator('#explore').boundingBox();
+  if (!chip || chip.width < 60 || chip.height < 20) fail('Explore map with keys is not visible when focused');
+  else if (chip.y + chip.height > 120) fail('Explore map with keys sits too low to be compact');
+  await shot('3b-explore-focus');
+  const d2 = await page.locator('#t-date').textContent();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(300);
+  const k1 = await pinnedAt();
+  const c1 = await cardText();
+  if (!k1) fail('an arrow key on Explore map with keys pinned no hexagon');
+  if ((await page.locator('#t-date').textContent()) !== d2) fail('arrow keys on the map explorer also stepped the date');
+  if ((await page.locator('#probe').getAttribute('aria-live')) !== 'polite') fail('the hexagon card is not a polite live region');
+  if (!(await page.locator('#probe .probe-title').count())) fail('the keyboard-pinned card has no title');
+  const seen = new Set([k1]);
+  for (const key of ['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown']) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(250);
+    const k = await pinnedAt();
+    if (!k) fail(`${key} dropped the pinned hexagon`);
+    else if (seen.has(k) && key !== 'ArrowLeft' && key !== 'ArrowDown') fail(`${key} did not move to a new hexagon`);
+    seen.add(k);
+  }
+  if (seen.size < 4) fail(`arrow keys visited only ${seen.size} different hexagons`);
+  if (c1 === (await cardText()) && seen.size < 3) fail('the card did not change as the selection moved');
+  // Left, then right, comes back to the same hexagon.
+  const before = await pinnedAt();
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(200);
+  const left = await pinnedAt();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(200);
+  if ((await pinnedAt()) !== before || left === before) fail('Left then Right did not return to the same hexagon');
+  await shot('3c-explore-pinned');
+  if ((await page.evaluate(() => document.activeElement?.id)) !== 'explore') fail('focus left Explore map with keys while arrowing');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  if (await pinnedAt()) fail('Escape did not release the keyboard-pinned hexagon');
+  // Enter pins again, starting from the last pinned hexagon.
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+  if ((await pinnedAt()) !== before) fail('Enter did not pin the last pinned hexagon again');
+  // Zoomed in, walking off the edge of the view pans the map to follow.
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => window.__hatch.map.view([-89.4, 43.07], 7));
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+  const mid0 = await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding()).lngLat);
+  for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(1500);
+  const mid1 = await page.evaluate(() => window.__hatch.map.center(window.__hatch.padding()).lngLat);
+  if (Math.abs(mid1[0] - mid0[0]) < 0.05) fail('walking off the edge of the view did not pan the map');
+  await shot('3d-explore-pan');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.reload();
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => document.activeElement?.blur());
+
   // On the focused slider, plain arrows step one day and the slider says the date, not a number.
   const dr = await page.locator('#t-date').textContent();
   await page.keyboard.press('ArrowRight');

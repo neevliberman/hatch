@@ -41,7 +41,7 @@ const audit = () => {
   const sub = document.querySelector('#top').getBoundingClientRect();
   const bottom = document.querySelector('#bottom').getBoundingClientRect();
   const bad = [];
-  for (const el of document.querySelectorAll('#top button, #top select, #bottom button, #bottom input, #bottom a')) {
+  for (const el of document.querySelectorAll('#top button:not(#explore), #top select, #bottom button, #bottom input, #bottom a')) {
     const b = el.getBoundingClientRect();
     if (!b.width || !b.height || el.closest('[hidden]')) continue;
     const name = el.id || el.textContent.trim().slice(0, 24);

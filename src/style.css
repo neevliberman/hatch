@@ -118,6 +118,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .brand { margin: 0; font-weight: 700; font-size: 18px; letter-spacing: 0.02em; display: flex; align-items: baseline; gap: 8px;
   padding: 6px 2px; flex: none; font-family: var(--font-display);
   text-shadow: 0 0 6px var(--panel-solid), 0 0 14px var(--panel-solid), 0 0 2px var(--panel-solid); }
+/* "Explore map with keys": a keyboard-only way into the map, out of sight until it has focus, then a small chip under the title. */
+.explore:focus-visible { clip: auto; overflow: visible; width: auto; padding: 0 12px; top: 100%; left: var(--gl); }
 .brand small { font-weight: 400; color: var(--muted); font-size: 12px; }
 /* Once the map moves, hexes slide under the title: a paper backing keeps it readable. */
 .brand.over-map { background: var(--panel); border-radius: var(--radius); padding: 6px 10px; margin-left: -8px; }
