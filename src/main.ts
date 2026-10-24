@@ -136,8 +136,13 @@ function start() {
     const k = Math.min(1, (window.innerHeight - 80) / (top + bottom));
     // On a wide screen (or a phone on its side) the open About panel sits beside the map: fit the Midwest into what is
     // left. Otherwise, on a phone, the My area / Share stack floats on the right edge: keep the Midwest clear of it.
-    const right = open && (!phone.matches || slim.matches) ? drawer.offsetWidth : phone.matches ? $('actions').offsetWidth + 8 : 0;
-    return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2) };
+    const beside = open && (!phone.matches || slim.matches);
+    const right = beside ? drawer.offsetWidth : phone.matches ? $('actions').offsetWidth + 8 : 0;
+    // The stack sits on the key, low on a tall phone: the map may use the full width above it. Worked out from the
+    // padding, not where the stack is now, so a docked card (which lifts it ~20 px) never re-fits the map.
+    const dock = solid + (phone.matches ? legendH + parseFloat(getComputedStyle(floats).paddingBottom) : 0) + 8;
+    const rightFrom = !beside && phone.matches && !slim.matches ? window.innerHeight - Math.max(bottom, dock) - $('actions').offsetHeight - 30 : undefined;
+    return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2), rightFrom, dock: sheet ? 0 : dock };
   };
   const map = createMap({
     container: $<HTMLDivElement>('map'),
