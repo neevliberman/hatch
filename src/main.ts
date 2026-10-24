@@ -312,6 +312,24 @@ function start() {
     srSummary.textContent = cur.summary(time.cursor);
   };
   time.subscribe(refresh);
+  // The calendar day the reader asked for (a link's ?date=, the slider, playback), kept apart from the cursor: each
+  // species' slider spans only its own season (fitSeason), so the cursor may be clamped to fit. Switching species or
+  // season asks for this day again, so beetle Sep 30 -> firefly (shows Aug 31) -> back to beetle is Sep 30 again.
+  const dayOf = (ms: number): [number, number] => [new Date(ms).getUTCMonth(), new Date(ms).getUTCDate()];
+  let wantDay: [number, number] = [month, day];
+  let fitting = false; // a switch is moving the cursor (maybe clamping it): not the reader's own pick
+  time.subscribe(() => {
+    if (!fitting) wantDay = dayOf(time.cursor);
+  });
+  /** Re-span the slider without letting a clamp overwrite wantDay. */
+  const asSwitch = (change: () => void) => {
+    fitting = true;
+    try {
+      change();
+    } finally {
+      fitting = false;
+    }
+  };
   time.onFrame(map.refresh); // in-between frames while playing: only the map moves, the card and summary keep the day
   onLunaData = refresh;
   registry.subscribe(() => {
@@ -349,7 +367,6 @@ function start() {
   const syncCountdown = () => ($('countdown').hidden = picker.value === LIVE && !!liveFile && inSeason(liveFile, clock));
   // Live mode opens on its last day of observed weather (or the day a link asks for); the others keep the calendar day.
   const switchMode = (m: Mode, at?: [number, number]) => {
-    const now = new Date(time.cursor);
     cur.setMode(m);
     hit = null;
     pinned = false;
@@ -357,8 +374,9 @@ function start() {
     map.setMarker(null);
     $('season-name').textContent = modeLabel(m);
     face();
-    at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
-    registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(m, at?.[0], at?.[1], clock)));
+    at ??= m === LIVE ? undefined : wantDay;
+    asSwitch(() => registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(m, at?.[0], at?.[1], clock))));
+    if (!at) wantDay = dayOf(time.cursor); // live opens on its own last observed day: that becomes the day asked for
     updateProbe(); // a card pinned in the old season describes that season: it went with the switch
     syncCountdown();
   };
@@ -400,7 +418,6 @@ function start() {
       picker.value = TYPICAL;
       $('season-name').textContent = modeLabel(TYPICAL);
     }
-    const now = new Date(time.cursor);
     hit = null;
     pinned = false;
     resetKeys();
@@ -417,10 +434,12 @@ function start() {
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur.words.sightingsOf} sightings over hexagons colored by the forecast`);
-    registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate())));
-    // Old one off first, so the two never draw together for a frame.
-    registry.setActive(prev.id, false);
-    registry.setActive(cur.id, true);
+    asSwitch(() => {
+      registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(picker.value, wantDay[0], wantDay[1])));
+      // Old one off first, so the two never draw together for a frame.
+      registry.setActive(prev.id, false);
+      registry.setActive(cur.id, true);
+    });
     syncUrl();
   };
   // The one-file preview has no species files next to it, so it offers luna only.
