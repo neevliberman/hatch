@@ -31,12 +31,11 @@ from hatch_p1.prep import BAND_LABELS, BANDS, YEARS, clean  # noqa: E402
 from fit import calibration as CAL, data as fdata, evaluate as EV, model as M  # noqa: E402
 from fit.context import BASE, Context, daily_from_cum, index_records  # noqa: E402
 from replay import build_replay as BR  # noqa: E402
-from firefly.fetch import EFFORT, RAW, TAXON  # noqa: E402
+from firefly.fetch import EFFORT, LAST_DOY, RAW, TAXON  # noqa: E402  (LAST_DOY: end of the fit window, model.D1)
 
 OUT = ROOT / "public" / "firefly-replay.json"
 RESULT = ROOT / "pipeline" / "firefly" / "result.json"
 SPEC = "p3_flat"
-LAST_DOY = 240     # end of the fit window (model.D1); later records are left out of the fit and the map
 MODEL_ID = "firefly-v0"
 
 

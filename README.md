@@ -10,9 +10,9 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 
 *Hexagons are the forecast, dots are real moths people photographed. Spring warmth sweeps north from Illinois and Ohio to Minnesota, and the moths follow.*
 
-**Live season (new).** From 2 March 2027 a nightly GitHub Action (`.github/workflows/live-forecast.yml`) rebuilds this season's forecast from real weather so far + a 7-day forecast + past years' weather run forward, and the map's **live** season shows it with a mark on the last day of real weather, this year's sightings and an "as of" badge that turns amber if the data goes stale. Until then the live season shows a 2026 dry run (`pipeline/live/DRYRUN_2026.md`). How it works: `pipeline/live/README.md`.
+**Live season (new).** From 2 March 2027 a nightly GitHub Action (`.github/workflows/live-forecast.yml`) rebuilds this season's forecast for every species (luna moth, firefly, Japanese beetle, each on its own frozen fits; one list in `pipeline/live/registry.py`) from real weather so far + a 7-day forecast + past years' weather run forward, and the map's **live** season shows it with a mark on the last day of real weather, this year's sightings and an "as of" badge that turns amber if the data goes stale. Until then the live season shows a 2026 dry run (`pipeline/live/DRYRUN_2026.md`). How it works: `pipeline/live/README.md`.
 
-**Live scorecard.** Each night's forecast is archived and graded strip by strip once that strip's first wave is over and its sightings have settled for 14 days, against the usual calendar date (`pipeline/live/scorecard.py`). Rehearsed on 2026 with forecasts rebuilt as they would have stood each Monday morning: **5.6 days off on average against 8.2 for the calendar**, over 5 strips, with the far south the big miss ([SCORECARD_2026.md](pipeline/live/SCORECARD_2026.md)). The app shows it in "How sure?".
+**Live scorecard.** Each night's forecast is archived and graded strip by strip once that strip's first wave is over and its sightings have settled for 14 days, against the usual calendar date (`pipeline/live/scorecard.py`). Rehearsed on 2026 with forecasts rebuilt as they would have stood each Monday morning: luna **5.6 days off on average against 8.2 for the calendar**, over 5 strips, with the far south the big miss; firefly 3.2 against 4.8 (3 strips); Japanese beetle 3.5 against 2.4, worse than the calendar (5 strips) ([SCORECARD_2026.md](pipeline/live/SCORECARD_2026.md)). The app shows it in "How sure?".
 
 ## What you can do with it
 
@@ -125,7 +125,7 @@ pipeline/firefly/ the firefly's data and fit
 pipeline/species/ every further species (Japanese beetle so far): one list, one fetch/fit/fine-hex recipe
 pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
 pipeline/radar/   radar replays: NEXRAD scans -> public/radar/<event>/ (run by hand, needs Py-ART)
-pipeline/live/    nightly live forecast -> live/latest.json (PRISM + Open-Meteo + Daymet, frozen P3 fits)
+pipeline/live/    nightly live forecast -> live/latest.json, every species in registry.py (PRISM + Open-Meteo + Daymet, frozen fits)
 .github/workflows/live-forecast.yml  the nightly live job, 2 Mar-7 Oct
 notebooks/        the first prototype model (Jupyter notebook)
 scripts/          smoke tests, bundle budget, data build helpers

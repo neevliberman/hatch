@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "pipeline"))
 from hatch_p1 import inat, run  # noqa: E402
 
 TAXON = 129350
+LAST_DOY = 240     # one generation: every strip's window runs 1 March to this day (fit, map and live forecast)
 COLEOPTERA = 47208
 RAW = run.DATA / "firefly_inat.parquet"
 EFFORT = run.DATA / "firefly_beetle_effort_by_state.parquet"
