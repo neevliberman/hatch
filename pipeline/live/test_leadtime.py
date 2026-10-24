@@ -56,6 +56,23 @@ def test_by_lead_bins_and_skips_empty():
     assert got == [(7, 14, 2, {"a": 3.0}, 5.0), (42, 63, 1, {"a": 9.0}, 3.0)]
 
 
+def test_forecast_days_use_only_runs_out_by_the_issue_morning():
+    """The 2 days between the last PRISM day and the issue day come from those days' own 00Z runs, the rest from the
+    issue day's run: model output only, never real weather the issuer could not have had."""
+    issue = dt.date(2026, 4, 15)
+    as_of = issue - dt.timedelta(days=3)
+    asked = []
+
+    def model_day(run, n):                 # value = run date's day of month * 100 + lead day
+        asked.append((run, n))
+        v = np.array([[run.day * 100 + k for k in range(n)]], float)
+        return v, v + 0.5
+    tmin, tmax = T.forecast_days(as_of, issue, 7, model_day)
+    assert asked == [(dt.date(2026, 4, 13), 1), (dt.date(2026, 4, 14), 1), (issue, 7)]
+    assert tmin.tolist() == [[1300, 1400, 1500, 1501, 1502, 1503, 1504]] and np.allclose(tmax - tmin, 0.5)
+    assert all(run <= issue for run, _ in asked)
+
+
 def test_won_counts_the_forecast_with_the_7_day_weather():
     """'Strips where the forecast won' is the gfs column (the forecast as the live job makes it), not the first one."""
     def row(v, miss):

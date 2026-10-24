@@ -6,18 +6,18 @@ issued weeks ahead, and how much does the 7-day weather forecast add? Script: [`
 Numbers: [`leadtime.json`](leadtime.json). The frozen P3 model was not refit or changed, and neither was the map.
 
 **Answer.** From 1 April on, the strip forecast beats the usual date by about half a day to a day and a half on
-average (4.7 against 6.2 days off on 1 April, 4.4 against 5.3 on 15 April, 3.4 against 3.8 on 1 May). That is a
+average (4.7 against 6.2 days off on 1 April, 4.6 against 5.3 on 15 April, 3.4 against 3.8 on 1 May). That is a
 modest edge, it is already there on 1 April (1 to 11 weeks before a strip's dates), and it does not grow as the date gets closer. By mid-May only
 the northern strip is still ahead, and there the usual date is hard to beat. **The 7-day weather forecast adds almost
 nothing:** it moves a strip's error by under a day either way and does not change the average. Even a perfect
-7-day forecast (the real weather) would add at most about 0.2 days.
+7-day forecast (the real weather) would add at most about 0.4 days.
 
 | Issued on | Strips graded | Usual date (calendar) | Forecast, past years' weather only | Forecast + 7-day weather forecast | Forecast + perfect 7 days | Strips where the forecast won |
 |---|---|---|---|---|---|---|
 | 1 April | 17 | 6.2 | 5.0 | **4.7** | 4.8 | 12 of 17 |
-| 15 April | 13 | 5.3 | 4.5 | **4.4** | 4.2 | 9 of 13 |
+| 15 April | 13 | 5.3 | 4.5 | **4.6** | 4.2 | 9 of 13 |
 | 1 May | 7 | 3.8 | 3.1 | **3.4** | 3.4 | 4 of 7 |
-| 15 May | 4 | **2.3** | 3.2 | 3.9 | 4.1 | 1 of 4 |
+| 15 May | 4 | **2.3** | 3.2 | 3.8 | 4.1 | 1 of 4 |
 | 1 June | 0 | - | - | - | - | - |
 
 Average days off, over each strip's first-wave onset and peak, seasons 2023 to 2026 pooled. "Won" counts the forecast
@@ -29,20 +29,20 @@ first moths had already come, so nothing is graded.
 
 In plain words:
 - **"How many weeks ahead?"** There is no clear horizon. The edge is there from 1 April and is about the same size
-  at every lead: grouped by how far ahead each date was, the forecast is 0.5 to 0.8 days better than
-  the usual date at 2 to 9 weeks ahead. In the last 1 to 2 weeks before a date it was 3.7 against 8.9 days, but only
+  at every lead: grouped by how far ahead each date was, the forecast is 0.5 to 0.7 days better than
+  the usual date at 2 to 9 weeks ahead. In the last 1 to 2 weeks before a date it was 3.8 against 8.9 days, but only
   7 dates (all onsets) are that close, and two 2026 dates where the usual date was 17 days off carry most of the
-  gap. More than 9 weeks ahead the usual date is slightly better (2.1 against 2.4).
+  gap. More than 9 weeks ahead the usual date is slightly better (2.1 against 2.5).
 - **Why it barely sharpens.** Weeks of real weather do help, but the model's own error (about 4 days on past years)
   stays once the weather is known. The usual date's error shrinks too as the rows move north, since the north was
   near-normal in these years.
-- **When it helps most: unusual springs.** 2024 (early): 4.9 days against 6.8. 2026 (early in the middle states):
-  3.9 against 5.2. In ordinary years (2023, 2025) it ties the usual date (3.5 against 3.9, 4.8 against 4.7).
-- **The 7-day forecast.** Replacing it with past years' weather changed the average by 0.03 days (0.7 days per strip
-  either way, at most 4.2). One week out of a spring of weather moves a date little, and past years' weather is a
+- **When it helps most: unusual springs.** 2024 (early): 5.0 days against 6.8. 2026 (early in the middle states):
+  4.0 against 5.2. In ordinary years (2023, 2025) it ties the usual date (3.5 against 3.9, 4.9 against 4.7).
+- **The 7-day forecast.** Replacing it with past years' weather changed the average by 0.02 days (the forecast with
+  it was that much worse; 0.7 days per strip either way, at most 4.2). One week out of a spring of weather moves a date little, and past years' weather is a
   fair guess for a single week. It is cheap and harmless, but it is not where the skill comes from.
-- **Rough uncertainty.** Resampling the four seasons, the 1 April gain is 0.5 to 2.5 days (95%) and the 15 April
-  gain 0.4 to 1.6 days. Four seasons is very few, so read these as rough.
+- **Rough uncertainty.** Resampling the four seasons, the 1 April gain is 0.6 to 2.4 days (95%) and the 15 April
+  gain 0.1 to 1.6 days. Four seasons is very few, so read these as rough.
 
 ## How it was done
 - **Seasons and dates.** 2023, 2024, 2025 and 2026, each issued on 1 April, 15 April, 1 May, 15 May and 1 June, with
@@ -53,10 +53,12 @@ In plain words:
   blocked).
 - **The 7-day forecast:** Open-Meteo's Historical Forecast API was the plan, but it refused every request from here
   ("daily API request limit exceeded"; the archive and previous-runs endpoints too). So the stand-in is NOAA's own
-  GFS, the 00Z run of each issue day from its public AWS archive (0.5°, 2 m max and min temperature over 6-hour
+  GFS, the 00Z run of each issue day (and of the 2 days before it, see below) from its public AWS archive (0.5°, 2 m max and min temperature over 6-hour
   windows, read at each hex centre), days 1 to 5, with the same Daymet offsets the live job adds to Open-Meteo. The live
-  job's 7 forecast days start the day after its last PRISM day, so the first 2 fall before the issue day; Open-Meteo
-  serves those from its own recent analysis, and real PRISM stands in for them here. This is
+  job's 7 forecast days start the day after its last PRISM day, so the first 2 fall before the issue day. Open-Meteo
+  serves those from model output, so here each comes from the 00Z GFS run of that same day (its first 24 hours), a
+  run the issuer already had; no real weather past the last PRISM day goes into the forecast. (A first version used
+  real PRISM for those 2 days, which flattered the 7-day forecast; the table is the rerun.) This is
   closer to "what the forecast said that night" than the Historical Forecast API, which stitches together the first
   hours of many runs. GFS ran about 1.9 °C cool on daily highs against PRISM here (lows about right); left as is, as
   the live job does.
@@ -96,5 +98,5 @@ python3 pipeline/live/leadtime.py  # writes leadtime.json and leadtime.png
 python3 -m pytest pipeline/live/test_leadtime.py
 ```
 Downloads are cached in `notebooks/data/` (gitignored): PRISM per season (`prism_<year>.npz`, 551 ACIS calls each),
-records (`luna_<year>_rg.parquet`), the 20 GFS weeks and the 60 rebuilt forecasts (`leadtime/`). With the Daymet cache
+records (`luna_<year>_rg.parquet`), the 20 GFS weeks plus 40 single GFS days and the 60 rebuilt forecasts (`leadtime/`). With the Daymet cache
 in place, a full run takes about 20 minutes, mostly the 60 forecast rebuilds.

@@ -5,10 +5,10 @@ For each season 2023-2026 and each issue date (1 Apr, 15 Apr, 1 May, 15 May, 1 J
 it would have stood that morning (build_live.build, frozen P3 fits, no refit), three ways:
 - analogs:  real weather through the newest day the morning job really has (issue day minus build_live.PRISM_LAG_DAYS,
             3 days), then past years' weather (what a backfill does);
-- gfs:      the same plus 7 forecast days from there, as the live job asks Open-Meteo for: the 2 days between the last
-            PRISM day and the issue day (Open-Meteo serves those from its own recent analysis; real PRISM stands in),
-            then days 1-5 of the GFS 00Z run of the issue day (NOAA's AWS archive), standing in for Open-Meteo's
-            forecast, which keeps no archive;
+- gfs:      the same plus 7 forecast days from there, as the live job asks Open-Meteo for, from GFS runs the issuer
+            already had (NOAA's AWS archive), standing in for Open-Meteo, which keeps no archive: the 2 days between
+            the last PRISM day and the issue day each from the 00Z run of that day (its first 24 hours: model output,
+            as Open-Meteo serves recent days), then days 1-5 of the issue day's 00Z run;
 - perfect:  the same 7 days as real weather (PRISM): the most a 7-day forecast could ever add.
 Each forecast is graded strip by strip against that season's research-grade first-wave records with scorecard.py's
 own code (score_band: real onset / peak = 10th percentile / median day, >= 20 records, graded only if issued at
@@ -138,20 +138,35 @@ def gfs_window(day: dt.date, fh: int, lats, lngs):
     return out
 
 
-def gfs_week(issue: dt.date, cells):
-    """Daily Tmin / Tmax [cell, 7] for issue .. issue + 6 from the 00Z GFS run of the issue day (cached)."""
-    path = CACHE / f"gfs_{issue.isoformat()}.npz"
+def gfs_days(run: dt.date, cells, n_days=L.FORECAST_DAYS):
+    """Daily Tmin / Tmax [cell, n_days] for run .. run + n_days - 1 from the 00Z GFS run of day `run` (cached)."""
+    name = f"gfs_{run.isoformat()}.npz" if n_days == L.FORECAST_DAYS else f"gfs_{run.isoformat()}_{n_days}d.npz"
+    path = CACHE / name
     if path.exists():
         z = np.load(path)
         return z["tmin"], z["tmax"]
     ll = np.array([h3.cell_to_latlng(c) for c in cells])
-    hours = [12 + 6 * j for j in range(4 * L.FORECAST_DAYS)]          # windows 06Z issue day .. 06Z issue + 7
+    hours = [12 + 6 * j for j in range(4 * n_days)]                   # windows 06Z run day .. 06Z run + n_days
     with ThreadPoolExecutor(6) as ex:
-        got = list(ex.map(lambda h: gfs_window(issue, h, ll[:, 0], ll[:, 1]), hours))
-    tmin, tmax = daily_extremes(np.array([g[0] for g in got]).T, np.array([g[1] for g in got]).T, L.FORECAST_DAYS)
+        got = list(ex.map(lambda h: gfs_window(run, h, ll[:, 0], ll[:, 1]), hours))
+    tmin, tmax = daily_extremes(np.array([g[0] for g in got]).T, np.array([g[1] for g in got]).T, n_days)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(path, tmin=tmin, tmax=tmax)
     return tmin, tmax
+
+
+def gfs_week(issue: dt.date, cells):
+    """Daily Tmin / Tmax [cell, 7] for issue .. issue + 6 from the 00Z GFS run of the issue day (cached)."""
+    return gfs_days(issue, cells)
+
+
+def forecast_days(as_of: dt.date, issue: dt.date, n_days, model_day):
+    """What the issuer's 7-day forecast holds, day by day, using only model runs out by the issue morning: each day
+    before the issue day from the 00Z run of that same day (its first 24 hours), the rest from the issue day's 00Z run.
+    model_day(run_day, n) -> (tmin, tmax) [cell, n] from that run. Returns [cell, n_days] arrays."""
+    parts = [model_day(as_of + dt.timedelta(days=k), 1) for k in range(1, (issue - as_of).days)]
+    parts.append(model_day(issue, L.FORECAST_DAYS))
+    return tuple(np.concatenate([q[i] for q in parts], 1)[:, :n_days] for i in (0, 1))
 
 
 def season_records(season):
@@ -216,10 +231,8 @@ def forecast(p: Patched, issue: dt.date, variant):
     """One rebuilt forecast, filed as issued on `issue` with real weather through the newest day the morning job has."""
     as_of = issue - dt.timedelta(days=L.PRISM_LAG_DAYS)
     f0, f1 = as_of + dt.timedelta(days=1), as_of + dt.timedelta(days=L.FORECAST_DAYS)
-    if variant == "gfs":
-        gap = p.prism_cube(f0, issue - dt.timedelta(days=1))          # days before the issue day: near-real
-        g = gfs_week(issue, p.cells)
-        p.forecast = tuple(np.concatenate([a, b], 1)[:, :L.FORECAST_DAYS] for a, b in zip(gap, g))
+    if variant == "gfs":       # model data only: no real weather past as_of, which the issuer could not have had
+        p.forecast = forecast_days(as_of, issue, L.FORECAST_DAYS, lambda d, n: gfs_days(d, p.cells, n))
     elif variant == "perfect":
         p.forecast = p.prism_cube(f0, f1)
     live = L.build(p.season, as_of, variant != "analogs", SCORE_TODAY)
