@@ -58,6 +58,8 @@ export interface Padding {
   bottom: number;
   /** Width an open side panel takes on the right (desktop About drawer), or the phone's button stack. */
   right?: number;
+  /** Width a card beside the map takes on the left (focus only: the radar replay's open card on a phone on its side). */
+  left?: number;
   /** For the phone's button stack: the height (from the top of the map) where it starts. Above it, the right edge is free. */
   rightFrom?: number;
   /** On a phone, the bottom room for the time bar and the key even while the key is folded: where the card docks. */
@@ -159,7 +161,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   const focusState = (lngLat: [number, number], z: number, p: Padding) => {
     const { width, height } = size();
     const vp = new WebMercatorViewport({ width, height, longitude: lngLat[0], latitude: lngLat[1], zoom: z });
-    const [longitude, latitude] = vp.unproject([width / 2 + (p.right ?? 0) / 2, height / 2 + (p.bottom - p.top) / 2]);
+    const [longitude, latitude] = vp.unproject([width / 2 + ((p.right ?? 0) - (p.left ?? 0)) / 2, height / 2 + (p.bottom - p.top) / 2]);
     return { longitude: longitude!, latitude: latitude!, zoom: z };
   };
 
@@ -531,6 +533,11 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     refresh,
     fit(p, smooth) {
       const v = fitState(p);
+      // Already gliding to this very view (two refits in one tick, say a closing panel and the resize it causes): let the
+      // glide fly on. Handing deck the same target again before its next frame would leave the camera where it was.
+      const same = (a: { longitude: number; latitude: number; zoom: number }) =>
+        Math.abs(a.longitude - v.longitude) < 1e-9 && Math.abs(a.latitude - v.latitude) < 1e-9 && Math.abs(a.zoom - v.zoom) < 1e-9;
+      if (gliding && target && same(target)) return;
       unhover(); // refreshed below
       zoom = v.zoom;
       fitted = v;

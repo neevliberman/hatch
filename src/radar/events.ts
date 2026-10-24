@@ -22,11 +22,11 @@ export const EVENTS: Record<string, RadarEvent> = {
     caption: 'Mayflies rising off the Mississippi',
     tz: { name: 'CDT', offset: -5 },
     more: [
-      'A replay of one evening on the National Weather Service radar at La Crosse, Wisconsin: a weather radar on the ground, one sweep about every 10 minutes. Darker means a stronger echo.',
+      'A replay of one evening on the National Weather Service radar at La Crosse, Wisconsin: a weather radar on the ground, one sweep about every 10 minutes. Darker means a stronger echo. The blank centre: the radar can\u2019t see straight up.',
       'How we know it’s insects: radar can tell raindrops (round, all alike) from insects (long, all different), and this cloud reads as insects, not rain.',
     ],
     numbers: {
-      lead: 'The same radars show mayflies declining (Stepanian et al. 2020):',
+      lead: 'Weather radars like this one show mayflies declining (Stepanian et al. 2020):',
       items: ['Upper Mississippi: down 52% from 2012 to 2019', 'Western Lake Erie: down 84% from 2015 to 2019'],
     },
     credits: [

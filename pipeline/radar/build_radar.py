@@ -97,10 +97,14 @@ def fetch(key: str, cache: Path) -> Path:
     return path
 
 
-def grid(path: Path) -> dict[str, np.ndarray]:
+def grid(path: Path, lat: float, lon: float) -> dict[str, np.ndarray]:
     import pyart  # build-time only
 
     radar = pyart.io.read_nexrad_archive(str(path))
+    # The app places the frames from the site in EVENTS; the grid is centred on the site in the volume's header.
+    head = (float(radar.latitude["data"][0]), float(radar.longitude["data"][0]))
+    if abs(head[0] - lat) > 1e-4 or abs(head[1] - lon) > 1e-4:
+        sys.exit(f"{path.name}: the radar's header puts it at {head}, EVENTS says ({lat}, {lon})")
     g = pyart.map.grid_from_radars(
         radar.extract_sweeps([0]),
         grid_shape=(1, N, N),
@@ -146,6 +150,8 @@ def main() -> None:
     if a.offline:
         scans = []
         for p in sorted(a.cache.glob(f"{ev['site']}*_V0*")):
+            if p.suffix == ".part":  # a download cut short
+                continue
             m = re.search(r"(\d{8}_\d{6})", p.name)
             t = datetime.strptime(m.group(1), "%Y%m%d_%H%M%S").replace(tzinfo=timezone.utc) if m else None
             if t and t0 <= t <= t1:
@@ -161,7 +167,7 @@ def main() -> None:
     rng = np.hypot(x, y)
     frames, times, checks = [], [], []
     for t, p in scans:
-        d = grid(p)
+        d = grid(p, ev["lat"], ev["lon"])
         frames.append(levels(d, rng))
         times.append(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
         ck = check(d, rng)

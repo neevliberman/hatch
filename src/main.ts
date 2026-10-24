@@ -109,7 +109,7 @@ function start() {
   let resetKeys = () => {}; // set once the keyboard explorer is built; a species or season switch starts it afresh
   let lastPin: [number, number] | null = null; // the last pinned spot, by any means: where the keyboard explorer starts
   // An open radar replay (src/radar/): the map belongs to it for now, so hexagons give no cards.
-  let radar: { id: string; close(): void } | null = null;
+  let radar: { id: string; close(back?: boolean): void } | null = null;
   const probeEl = $('probe');
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
@@ -700,6 +700,7 @@ function start() {
   // the shore, land beyond the Midwest): the arrows can't move that one, so they start a walk from the nearest hexagon
   // rather than say "Already pinned", which would be wrong.
   const pin = (arrowed = false) => {
+    if (radar) return; // the radar replay has the map: no hexagon to walk under it
     if (pinned && !arrowed) return say('Already pinned. Arrow keys move it, Escape lets go.');
     const c = startCell();
     if (!c) return say('No forecast in view');
@@ -708,6 +709,7 @@ function start() {
     selectCell(c);
   };
   const arrow = (a: Arrow) => {
+    if (radar) return;
     const from = pinned && hit ? cur.cellAt(hit.lngLat) : null;
     if (!from) return pin(true);
     if (hit !== keyHit) ([row, col] = cellToLatLng(from)), (steps = 0); // pinned by mouse, tap or town since: start afresh there
@@ -733,6 +735,7 @@ function start() {
   // same box inside the panel: a way to read a place's season without pointing at the map.
   if (__BASEMAP__) {
     const finder = mountFinder($('find'), $('finder'), (lat, lng, name) => {
+      radar?.close(false); // a town's card replaces the radar replay; the map goes to the town, not back to the Midwest
       // On a phone, drop the About sheet to its middle stop first, so the place lands in the map above it.
       if ($('drawer').classList.contains('open') && phone.matches && !slim.matches) toggleDrawer(true);
       if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
@@ -935,7 +938,8 @@ function start() {
   // The About panel's way in, under its opening lines (re-added each time the panel redraws).
   const aboutRadar = () => {
     const hook = $('drawer').querySelector('.ex-hook');
-    if (!__BASEMAP__ || !hook || hook.parentElement!.querySelector('.ex-radar')) return;
+    // Not without WebGL: there is no map to replay it on.
+    if (!__BASEMAP__ || document.getElementById('no-webgl') || !hook || hook.parentElement!.querySelector('.ex-radar')) return;
     const links = RADAR_LINKS.map((r) => `<button type="button" class="ex-radar" data-radar="${r.id}">${RADAR_ICON}${r.label}</button>`);
     (hook.parentElement!.querySelector('.cd') ?? hook).insertAdjacentHTML('afterend', `<p class="ex-radars">${links.join('')}</p>`);
   };
@@ -946,7 +950,7 @@ function start() {
     if (b) void openRadar(b.dataset.radar!);
   });
   const askedRadar = params.get('radar');
-  if (askedRadar && RADAR_LINKS.some((r) => r.id === askedRadar)) void openRadar(askedRadar);
+  if (askedRadar && !document.getElementById('no-webgl') && RADAR_LINKS.some((r) => r.id === askedRadar)) void openRadar(askedRadar);
 
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };

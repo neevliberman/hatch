@@ -31,7 +31,8 @@ export interface RadarHost {
 
 export interface Radar {
   id: string;
-  close(): void;
+  /** Close it; `back` (the default) returns the map to where it was before. */
+  close(back?: boolean): void;
 }
 
 type RGBA = [number, number, number, number];
@@ -275,16 +276,20 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   const before = map.moved() ? map.center(host.padding()) : null;
   // On a wide screen the card sits in a corner, so the radar only keeps clear of its closed height; on a phone it spans
   // the width, so the radar sits above all of it.
+  // A phone on its side has no height to spare: with "How we know" open the radar moves to the right of the card.
   const wide = () => card.offsetWidth < window.innerWidth * 0.6;
+  const short = matchMedia('(orientation: landscape) and (max-height: 500px)');
+  const beside = () => short.matches && !more.hidden;
   const room = (): Padding => {
     const p = host.padding();
     const r = card.getBoundingClientRect();
+    if (beside()) return { ...p, left: r.right + 12, bottom: 8, rightFrom: undefined };
     const top = wide() && !more.hidden ? r.top + more.offsetHeight + 7 : r.top;
     return { ...p, bottom: Math.max(8, window.innerHeight - top + 8), rightFrom: undefined };
   };
   const frame = () => {
     const p = room();
-    const w = window.innerWidth - (p.right ?? 0) - 24;
+    const w = window.innerWidth - (p.right ?? 0) - (p.left ?? 0) - 24;
     const h = window.innerHeight - p.top - p.bottom - 16;
     const metresPerPx = (2 * (reach + meta.grid.spacing_m)) / Math.max(120, Math.min(w, h));
     // Web Mercator, 512 px tiles: metres per pixel = 40075016 cos(lat) / (512 2^zoom).
@@ -295,12 +300,13 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     const { p, zoom } = frame();
     map.focus([meta.lon, meta.lat], zoom, p, fly);
   };
-  // "How we know" makes the card taller: keep the radar clear of it while the map above still has room for it.
+  // "How we know" makes the card taller: keep the radar clear of it, above it while the map there has room for it, or
+  // beside it on a phone on its side.
   info.addEventListener('click', () => {
     more.hidden = !more.hidden;
     info.setAttribute('aria-expanded', String(!more.hidden));
     info.classList.toggle('on', !more.hidden);
-    if (!wide() && window.innerHeight - room().top - room().bottom >= 200) look(true);
+    if (short.matches || (!wide() && window.innerHeight - room().top - room().bottom >= 200)) look(true);
   });
 
   // Playback: each scan holds, then fades into the next; the last one rests a little longer before the loop starts
@@ -384,7 +390,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   window.addEventListener('resize', onResize);
 
   let open = true;
-  const close = () => {
+  const close = (back = true) => {
     if (!open) return;
     open = false;
     cancelAnimationFrame(raf);
@@ -396,7 +402,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     map.setOverlay([]);
     host.onClose();
     // Back to where the reader was: the whole Midwest, or the place they had panned to. After the time bar is back.
-    requestAnimationFrame(() => {
+    if (back) requestAnimationFrame(() => {
       if (before) map.focus(before.lngLat, before.zoom, host.padding(), true);
       else map.fit(host.padding(), true);
     });
@@ -409,8 +415,8 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     draw(idx, idx, 0);
     label(idx, 0);
   };
-  // While it is open the keys drive the replay, not the hidden season slider: arrows step a scan, Space plays or
-  // pauses, Escape closes. Not while something on top (the About panel, the town box) has them.
+  // While it is open the keys drive the replay, not the hidden season slider: arrows step a scan, Home and End go to
+  // the first and last, Space plays or pauses, Escape closes. Not while something on top (the About panel, the town box) has them.
   const onKey = (e: KeyboardEvent) => {
     if (e.ctrlKey || e.metaKey || e.altKey || document.getElementById('drawer')?.classList.contains('open')) return;
     if (!document.getElementById('finder')?.hidden) return;
@@ -418,13 +424,15 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     if (e.key === 'Escape') close();
     else if (t.closest?.('input, select, textarea, [contenteditable]')) return;
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') stepBy(e.key === 'ArrowLeft' ? -1 : 1);
+    else if (e.key === 'Home' || e.key === 'End') stepBy((e.key === 'Home' ? first : last) - idx);
+    else if (e.key === 'PageUp' || e.key === 'PageDown') void 0; // the hidden season slider's keys: kept from it
     else if (e.key === ' ' && !(t instanceof HTMLButtonElement)) setPlaying(!playing);
     else return;
     e.preventDefault();
     e.stopPropagation();
   };
   window.addEventListener('keydown', onKey, true);
-  q<HTMLButtonElement>('.rd-x').addEventListener('click', close);
+  q<HTMLButtonElement>('.rd-x').addEventListener('click', () => close());
   playBtn.focus({ preventScroll: true });
   return { id, close };
 }

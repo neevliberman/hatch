@@ -26,4 +26,10 @@
 .rd-credits { margin-bottom: 0 !important; font-size: 12px; }
 .rd-credits a { display: block; width: fit-content; min-height: 24px; padding-top: 3px; color: var(--moon); }
 @media (max-width: 700px) { #radar { width: 100%; } }
-@media (orientation: landscape) and (max-height: 500px) { .rd-more { max-height: 52vh; } }
+/* A phone on its side: open, the card widens beside the radar (which moves right of it) so the notes fit its height. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #radar:has(.rd-more:not([hidden])) { width: min(580px, 64vw); }
+  .rd-more { max-height: calc(100dvh - 140px); font-size: 12.5px; }
+  .rd-more p { margin-bottom: 5px; }
+  .rd-credits a { display: inline-block; margin-right: 14px; }
+}

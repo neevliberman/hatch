@@ -731,7 +731,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // opened: About's link then fetches its code and frames, the map glides to La Crosse and plays, the card gives the
   // time in CDT, "How we know" has the sources, the link names the replay, and × brings the Midwest back. A ?radar= link
   // with reduced motion opens it paused, on a scan with echo.
-  for (const [label, w, h, phone, reduce] of [['desktop', 1366, 768, false, false], ['phone', 390, 844, true, false], ['reduced motion link', 1280, 720, false, true]]) {
+  for (const [label, w, h, phone, reduce] of [['desktop', 1366, 768, false, false], ['phone', 390, 844, true, false], ['phone on its side', 852, 393, true, false], ['reduced motion link', 1280, 720, false, true]]) {
     const tag = `radar ${label}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
@@ -767,7 +767,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (!(await page.locator('#dock').isHidden())) fail('the time bar stays up beside the replay');
       await page.waitForFunction(() => {
         const c = window.__hatch.map.center(window.__hatch.padding());
-        return window.__hatch.map.zoom() > 6.5 && Math.abs(c.lngLat[0] + 91.19) < 0.5 && Math.abs(c.lngLat[1] - 43.82) < 0.6;
+        return window.__hatch.map.zoom() > 6 && Math.abs(c.lngLat[0] + 91.19) < 0.5 && Math.abs(c.lngLat[1] - 43.82) < 0.6;
       }, null, { timeout: 30000 }).catch(async () => fail(`the map did not go to La Crosse: ${JSON.stringify(await view())}`));
       await page.waitForTimeout(1000);
       // Drawn where it belongs: the radar's paper sheet 60 km west of the radar, and an echo on the river south of it.
@@ -794,6 +794,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(500);
       if (new URL(page.url()).searchParams.get('radar') !== 'karx-2014-07-20') fail(`the link does not name the replay: ${page.url()}`);
       await page.locator('#radar .rd-i').click();
+      if (h <= 500) {
+        // A phone on its side: with "How we know" open, the radar moves to the right of the card.
+        const clear = await page.waitForFunction(() => {
+          const at = window.__hatch.map.project([-91.19, 43.82]);
+          return !!at && at[0] > document.getElementById('radar').getBoundingClientRect().right;
+        }, null, { timeout: 30000, polling: 250 }).then(() => true, () => false);
+        if (!clear) fail('with "How we know" open, the card covers the radar');
+      }
       const more = (await page.locator('#radar .rd-more').innerText()).replace(/\s+/g, ' ');
       for (const want of ['raindrops', 'Stepanian et al. 2020', 'NOAA NEXRAD data (public domain)', '52%', '84%'])
         if (!more.includes(want)) fail(`"How we know" does not say "${want}"`);
@@ -802,10 +810,29 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       bad.bad.forEach((m) => fail(m));
       if (bad.scrolls) fail('page scrolls');
       await shotR('2-how');
+      // The keys drive the replay, never the hidden season slider (its day would jump and the link with it).
+      const day = new URL(page.url()).searchParams.get('date');
+      for (const k of ['End', 'Home', 'PageDown', 'PageUp', 'ArrowRight']) await page.keyboard.press(k);
+      await page.waitForTimeout(600);
+      if (new URL(page.url()).searchParams.get('date') !== day) fail(`a key moved the hidden season slider: date ${day} -> ${new URL(page.url()).searchParams.get('date')}`);
       await page.locator('#radar .rd-x').click();
       if (await page.locator('#radar').count()) fail('× did not close the replay');
-      await page.waitForFunction(() => window.__hatch.map.moved() === false && window.__hatch.map.zoom() < window.__hatch.map.fitZoom() + 0.3, null, { timeout: 30000 })
-        .catch(async () => fail(`closing it did not bring the Midwest back: ${JSON.stringify(await view())}`));
+      // Back at the whole-Midwest fit: not just flagged as fitted, but drawn at the fit's zoom once the glide is done.
+      await page.waitForFunction(() => window.__hatch.map.moved() === false && Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05, null, { timeout: 30000 })
+        .catch(async () => fail(`closing it did not bring the Midwest back: ${JSON.stringify(await view())}, fit zoom ${await page.evaluate(() => window.__hatch.map.fitZoom())}`));
+      // Open it once more (past the shore zoom, back out, past it again), then close: a console error fails the run.
+      if (!reduce) {
+        await page.locator('#info-btn').click();
+        await page.waitForFunction(() => getComputedStyle(document.getElementById('drawer')).transform === 'none', null, { timeout: 30000, polling: 250 });
+        await page.locator('#drawer .ex-radar').click();
+        await page.waitForSelector('#radar', { timeout: 30000 });
+        await page.waitForFunction(() => window.__hatch.map.zoom() > 6, null, { timeout: 30000, polling: 250 }).catch(() => fail('reopening did not go back to La Crosse'));
+        await page.waitForTimeout(800);
+        await page.keyboard.press('Escape');
+        if (await page.locator('#radar').count()) fail('Escape did not close the replay');
+        await page.waitForFunction(() => Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05, null, { timeout: 30000, polling: 250 })
+          .catch(async () => fail(`closing it again did not bring the Midwest back: ${JSON.stringify(await view())}`));
+      }
       if (await page.locator('#dock').isHidden()) fail('the time bar did not come back');
       await page.waitForTimeout(600);
       if (new URL(page.url()).searchParams.has('radar')) fail(`the link still names the replay after closing: ${page.url()}`);
