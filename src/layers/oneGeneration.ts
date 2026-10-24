@@ -100,6 +100,20 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
   let fresh = { key: '', list: [] as Sighting[] };
   let sleepNote: OffSeasonNote | undefined;
+  // A season with thousands of dots out at once (the Japanese beetle's all-years view: ~9,000 on the peak days) buries
+  // the hexagons under them on the zoomed-out map. Its dots shrink there, by how crowded its busiest ten days are,
+  // and grow back to full size as you zoom in. Luna-sized seasons (a few hundred at once) keep full-size dots.
+  let crowd = { mode: '' as Mode, k: 1 };
+  const dotScale = (zoom: number) => {
+    if (crowd.mode !== mode) {
+      const perDay = new Array<number>(370).fill(0);
+      for (const s of shown) perDay[Math.min(369, Math.max(0, Math.round(day(s))))]!++;
+      let peak = 0;
+      for (let d = 0, sum = 0; d < 370; d++) (sum += perDay[d]! - (perDay[d - GLOW_DAYS] ?? 0)), (peak = Math.max(peak, sum));
+      crowd = { mode, k: Math.min(1, Math.max(0.55, Math.sqrt(1200 / Math.max(1, peak)))) };
+    }
+    return crowd.k + (1 - crowd.k) * Math.min(1, Math.max(0, (zoom - 6) / 1.5));
+  };
 
   // ---- finer hexes (res 5 only), from the species' fine/ folder, loaded when the reader zooms in
   type Cell = { id: string; i: number; seen: boolean };
@@ -288,6 +302,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
         queueMicrotask(onData); // the card and its outline follow the new level
       }
       const hexes = days ? fineLevel!.data : cells;
+      const radiusScale = dotScale(zoom);
       const qOf = (c: Cell) => (days ? fineQ(days, c.i) : forecast()[c.i]);
       const filter = {
         getFilterValue: day,
@@ -343,6 +358,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
           getFillColor: palette.dotShadow,
           radiusUnits: 'pixels',
           getRadius: 9,
+          radiusScale,
           pickable: true,
           updateTriggers: { getFilterValue: [mode] },
           ...filter,
@@ -354,6 +370,7 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
           getFillColor: palette.dotHalo,
           radiusUnits: 'pixels',
           getRadius: 6.5,
+          radiusScale,
           pickable: false,
           updateTriggers: { getFilterValue: [mode] },
           ...filter,
@@ -369,6 +386,8 @@ export function createOneGenerationLayer(cfg: SpeciesConfig, file: ReplayFile, i
           getLineWidth: 1.5,
           radiusUnits: 'pixels',
           getRadius: (s) => (s.flags & APPROXIMATE ? 3 : 4),
+          radiusScale,
+          lineWidthScale: Math.max(0.7, radiusScale),
           pickable: false,
           updateTriggers: { getFillColor: [mode], getFilterValue: [mode] },
           ...filter,

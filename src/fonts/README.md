@@ -9,4 +9,7 @@ pyftsubset fraunces-latin-700-normal.woff2 --unicodes="U+0020-007E,U+00A0-00FF,U
 pyftsubset caveat-latin-600-normal.woff2 --unicodes="U+0020-007E" --layout-features='kern' --flavor=woff2
 ```
 
+Then the two Atkinson files get a plain zero (`python3 scripts/plain-zero.py in.woff2 out.woff2`): the font's own
+zero is slashed, read as "Ø" in running text ("1Ø days"), and has no alternate to switch on.
+
 - Fraunces 700: titles. Atkinson Hyperlegible 400/700: everything else (built for low-vision readers). Caveat 600: the handwritten asides.

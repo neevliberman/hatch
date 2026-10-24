@@ -18,7 +18,10 @@ come from it. The luna moth ships in the page. Every other species is one genera
 first load never grows with the list (and the one-file build, which offers luna only, leaves them out). Adding a
 species: its data (`pipeline/species`), its config, one line in the list. The menu is a native select: it stays one
 small control in the header however long the list gets, a phone opens it as its own scrolling picker, and past six
-species it gets group headings (Moths, Beetles, ...). The header's sketch mark changes with the species.
+species it gets group headings (Moths, Beetles, ...). The header's sketch mark changes with the species. The time
+slider spans each species' own season (the whole months around the days its ribbon has anything in, `fitSeason` in
+`main.ts`), so a summer beetle's ribbon isn't half empty April and May. A season with thousands of dots out at once
+draws them smaller on the zoomed-out map (`dotScale` in `layers/oneGeneration.ts`); luna's dots never change.
 
 ## How time reaches the GPU
 The ~3,000 dots are uploaded once per season. Scrubbing only changes deck.gl's `DataFilterExtension` range, a single shader uniform: "show dots whose day is between today-10 and today, fading the older ones". Analogy: the dots are a printed transparency; moving the slider just slides the spotlight over it.

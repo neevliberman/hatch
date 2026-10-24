@@ -14,11 +14,53 @@ import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
-import { isForecast } from './core/layer';
+import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SEEN_KEY = 'hatch.seen.v2';
+
+/** The days of a layer's ribbon with anything going on: hexagons between "not yet" and "over", or sightings. */
+function activeDays(p: SeasonProfile): [number, number] | null {
+  const n = p.seen.length;
+  const top = Math.max(...p.seen, ...(p.seenOnly ?? []).flatMap((o) => o.seen)) || 1;
+  const busy = (i: number) =>
+    1 - (p.bands[0]?.share[i] ?? 0) - (p.bands[p.bands.length - 1]?.share[i] ?? 0) > 0.01 || p.seen[i]! > 0.03 * top;
+  let a = 0;
+  let b = n - 1;
+  while (a < n && !busy(a)) a++;
+  while (b > a && !busy(b)) b--;
+  return a < n ? [a, b] : null;
+}
+
+/**
+ * Each species' slider spans its own season, not one fixed April to September for all: the whole months around the
+ * days its ribbon has anything in (src/ui/scrubber.ts), so a summer beetle's ribbon isn't 40% empty paper. `s` is the
+ * layer's full replay range, which the ribbon's day 0 is; live mode (luna only) keeps its full range.
+ */
+function fitSeason(layer: HatchLayer, s: TimeSpec): TimeSpec {
+  const p = s.asOf ? undefined : layer.profile?.();
+  const on = p && activeDays(p);
+  if (!on) return s;
+  const DAY = TimeAxis.DAY;
+  const a = new Date(s.start + Math.max(0, on[0] - 7) * DAY);
+  const b = new Date(s.start + (on[1] + 7) * DAY);
+  const start = Math.max(s.start, Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), 1));
+  const end = Math.min(s.end, Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 1, 0));
+  return start === s.start && end === s.end ? s : { ...s, start, end };
+}
+
+/** A ribbon cut to the slider's range: `off` days in from the layer's full range, `n` days long. */
+function cutProfile(p: SeasonProfile, off: number, n: number): SeasonProfile {
+  if (!off && n === p.seen.length) return p;
+  const cut = (v: number[]) => v.slice(off, off + n);
+  return {
+    bands: p.bands.map((b) => ({ ...b, share: cut(b.share) })),
+    seen: cut(p.seen),
+    seenOnly: p.seenOnly?.map((o) => ({ ...o, seen: cut(o.seen) })),
+    notes: p.notes.map((k) => ({ ...k, at: k.at - off })).filter((k) => k.at >= 0 && k.at < n),
+  };
+}
 
 function start() {
   const params = new URLSearchParams(location.search);
@@ -46,7 +88,7 @@ function start() {
   let onLunaData = () => {};
   const luna = createLunaLayer(initialMode, () => onLunaData());
   const registry = new LayerRegistry();
-  registry.register(luna, replayTimeSpec(initialMode, month, day));
+  registry.register(luna, fitSeason(luna, replayTimeSpec(initialMode, month, day)));
   // The species on screen. Only one is active at a time; each other species loads the first time it is picked.
   let cur: LunaLayer = luna;
   let curKey = 'luna';
@@ -287,6 +329,9 @@ function start() {
   let liveFile: Live | null = null;
   // A ?season=live link opens on the default view until the file arrives: keep "season=live" in the address bar meanwhile.
   let livePending = asked === LIVE;
+  // A narrow phone's closed menu shows just the season ("2024"), not its count, which would be cut off ("2024 (1,498
+  // beet"); the open menu still lists the counts (style.css).
+  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : modeLabel(picker.value));
   const fillPicker = () => {
     const what = cur.words.plural;
     const keep = picker.value || initialMode;
@@ -296,6 +341,7 @@ function start() {
       .map((m) => `<option value="${m}">${m === LIVE ? modeLabel(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} ${what})`}</option>`)
       .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
+    face();
     picker.title = `Season to replay (${cur.words.countedAs} seen, in parentheses; ${cur.seasonCount(TYPICAL).toLocaleString()} in all years)`;
   };
   fillPicker();
@@ -310,8 +356,9 @@ function start() {
     resetKeys();
     map.setMarker(null);
     $('season-name').textContent = modeLabel(m);
+    face();
     at ??= m === LIVE ? undefined : [now.getUTCMonth(), now.getUTCDate()];
-    registry.setTime(cur.id, replayTimeSpec(m, at?.[0], at?.[1], clock));
+    registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(m, at?.[0], at?.[1], clock)));
     updateProbe(); // a card pinned in the old season describes that season: it went with the switch
     syncCountdown();
   };
@@ -342,7 +389,7 @@ function start() {
         return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
       }
       loaded.set(entry.key, layer);
-      registry.register(layer, replayTimeSpec(mode0, 5, 10), false);
+      registry.register(layer, fitSeason(layer, replayTimeSpec(mode0, 5, 10)), false);
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
@@ -370,7 +417,7 @@ function start() {
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', `Map of the Midwest: ${cur.words.sightingsOf} sightings over hexagons colored by the forecast`);
-    registry.setTime(cur.id, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate()));
+    registry.setTime(cur.id, fitSeason(cur, replayTimeSpec(picker.value, now.getUTCMonth(), now.getUTCDate())));
     // Old one off first, so the two never draw together for a frame.
     registry.setActive(prev.id, false);
     registry.setActive(cur.id, true);
@@ -392,14 +439,20 @@ function start() {
   const setRibbon = mountScrubber($('bar'), time, () => registry.activeLayers().find((l) => l.endNote)?.endNote, showEnd);
   // The slider's track pictures the active species' season; a season or species change redraws it.
   // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
+  // The ribbon covers the layer's full replay range; the slider may span less of it (fitSeason).
+  const ribbonNow = () => {
+    const p = registry.activeLayers().find((l) => l.profile)?.profile?.();
+    const off = Math.round((time.start - replayTimeSpec(picker.value).start) / TimeAxis.DAY);
+    return p && off >= 0 ? cutProfile(p, off, time.steps + 1) : p;
+  };
   let ribbonFrame = 0;
   const drawRibbon = () =>
     (ribbonFrame ||= requestAnimationFrame(() => {
       ribbonFrame = 0;
-      setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
+      setRibbon(ribbonNow());
     }));
   registry.subscribe(drawRibbon);
-  setRibbon(registry.activeLayers().find((l) => l.profile)?.profile?.());
+  setRibbon(ribbonNow());
   mountLayerList($('layers'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   followSpot = (t) => toggleDrawer.setSpot(pinned && hit ? hit.lngLat : null, t, pinned ? hit?.label : undefined);
@@ -701,6 +754,8 @@ function start() {
   };
   const ro = new ResizeObserver(() => refit());
   for (const id of ['map', 'top', 'bottom']) ro.observe($(id));
+  // A phone on its side opens About beside the map and above the time bar (style.css), so the bar stays whole.
+  new ResizeObserver(() => $('app').style.setProperty('--dock-h', `${$('dock').offsetHeight}px`)).observe($('dock'));
   // The key folding to its chip (or opening) frees or takes room. Not while a card is up, though: a card hides the
   // key, and the tap that pinned it also folds it, and the map must not slide out from under that card.
   let keySeen = false; // the observer's first call is just it starting up
