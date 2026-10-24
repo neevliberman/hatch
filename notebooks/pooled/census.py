@@ -50,9 +50,22 @@ def main():
     sp = pd.read_csv(HERE / "species.csv")
     cand = pd.read_csv(fetch.DATA / "pooled_candidates.csv")[["taxon_id", "inat_count"]]
     m = sp.merge(cand, on="taxon_id")
-    ratio = float(np.median(m.n_window / m.inat_count))   # cleaned, in-window records per raw count
+    # cleaned, in-window records per raw count, over EVERY downloaded species (selected or not)
+    ratio = float(np.median(m.n_window / m.inat_count))
+    # selection pass rate among species that would clear the >= 400 bar: the 80+ downloaded candidates
+    # plus the name-excluded ones ranked above the last download (their counts are all >= ~800 raw)
+    floor = cand.merge(sp[["taxon_id"]], on="taxon_id").inat_count.min()
+    name_excl = int(((cand.inat_count >= floor) & ~cand.taxon_id.isin(sp.taxon_id)).sum())
+    big = m[m.n_window >= 400]
+    excl_fetched = int((big.excluded.fillna("") != "").sum())
+    pool = len(big) + name_excl
+    pass_rate = float(big.selected.sum() / pool)
     th = [10, 25, 50, 100, 200, 400, 1000]
     res = {"species_total": int(len(c)), "clean_in_window_ratio": round(ratio, 3),
+           "ratio_from_species": int(len(m)),
+           "selection": {"candidates_400plus": int(pool), "name_excluded": name_excl + excl_fetched,
+                         "dropped_phenology_or_window": int(len(big) - big.selected.sum() - excl_fetched),
+                         "selected": int(big.selected.sum()), "pass_rate": round(pass_rate, 3)},
            "species_with_at_least_raw": {t: int((c["count"] >= t).sum()) for t in th},
            "species_with_at_least_clean_est": {t: int((c["count"] * ratio >= t).sum()) for t in th}}
     (HERE / "results").mkdir(exist_ok=True)

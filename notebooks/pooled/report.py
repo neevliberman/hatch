@@ -11,8 +11,8 @@ RES = HERE / "results"
 FIG = HERE / "figures"
 ARMS = ["cal", "cal_lat", "p1", "p3", "unpooled", "shared", "traits"]
 NS = ["10", "25", "50", "all"]
-PAIRS = [("shared", "unpooled"), ("traits", "unpooled"), ("traits", "shared"), ("shared", "p3"),
-         ("p3", "cal"), ("shared", "cal"), ("traits", "cal"), ("p3", "cal_lat"), ("cal_lat", "cal")]
+PAIRS = [("shared", "p3"), ("traits", "p3"), ("shared", "unpooled"), ("traits", "unpooled"), ("traits", "shared"),
+         ("p3", "cal"), ("shared", "cal"), ("p3", "cal_lat"), ("shared", "cal_lat"), ("cal_lat", "cal")]
 TITLE = "52 Midwest moths, leave-one-year-out (exploratory)"
 
 
@@ -66,10 +66,28 @@ def main():
     fits["n"] = fits.n.astype(str)
     at_bound = {n: fits[fits.n == n].groupby("arm").alpha.apply(lambda a: round(float((a > 14.9).mean()), 3)).to_dict()
                 for n in NS}
+    # best calendar at each n (lower mean over species), and heat vs that calendar
+    best_cal = {n: min(("cal", "cal_lat"), key=lambda a: tab[n][a]) for n in NS}
+    vs_best = {n: {h: boot_diff(sm, h, best_cal[n], n) for h in ("p3", "shared", "traits")} for n in NS}
+    wins = {h: int((paired(sm, h, "cal", "all") < 0).sum()) for h in ("p3", "shared", "traits")}
+    n_scored = int(len(paired(sm, "p3", "cal", "all")))
+    pins = fits[(fits.arm == "unpooled_full")]
+    pinned_share = float(pins.pinned.mean()) if "pinned" in pins else None
+    est = None
+    cfile = RES / "census.json"
+    if cfile.exists():
+        c = json.loads(cfile.read_text())
+        n400 = c["species_with_at_least_clean_est"]["400"]
+        pr = c["selection"]["pass_rate"]
+        wr = wins["p3"] / n_scored
+        est = {"species_400plus_clean": n400, "selection_pass_rate": pr, "heat_beats_calendar_rate": round(wr, 3),
+               "upper_bound": round(n400 * pr * wr)}
     out = {"targets": int(t[["sp", "year", "band"]].drop_duplicates().shape[0]),
            "species_scored": int(t.sp.nunique()),
            "mae_species_mean": tab, "mae_target_mean": by_target, "diffs": diffs, "mean_bias": bias,
-           "share_fits_skew_at_bound_15": at_bound}
+           "share_fits_skew_at_bound_15": at_bound, "best_calendar": best_cal, "heat_vs_best_calendar": vs_best,
+           "heat_beats_calendar_all_records": wins, "species_scored_all": n_scored,
+           "share_full_fits_pinned": pinned_share, "species_estimate": est}
     (RES / "summary.json").write_text(json.dumps(out, indent=1))
     print(json.dumps({"mae": tab, "diffs": {n: {k: (round(v["mean"], 2), [round(c, 2) for c in v["ci"]],
                                                   round(v["share_species_a_better"], 2))
@@ -83,15 +101,17 @@ def figure(sm):
     import matplotlib.pyplot as plt
     FIG.mkdir(exist_ok=True)
     x = np.arange(len(NS))
-    xl = ["10", "25", "50", "all\n(~400-2,300)"]
+    xl = ["10", "25", "50", "all\n(~150-2,200)"]
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4.6), dpi=150, gridspec_kw={"width_ratios": [1.35, 1]})
     lines = [("cal", "Calendar: those records' own dates", "#52514e", (0, (4, 3))),
+             ("cal_lat", "Calendar slid by latitude", "#52514e", (0, (1, 2))),
              ("p3", "Heat model, species alone (P3 code)", "#eb6834", "-"),
              ("shared", "Heat model, pooled across species", "#2a78d6", "-")]
     for arm, label, col, ls in lines:
         st = [_ci(sm[(sm.arm == arm) & (sm.n == n)].err.to_numpy()) for n in NS]
         y, lo, hi = map(np.array, zip(*st))
-        a1.fill_between(x, lo, hi, color=col, alpha=0.10, linewidth=0)
+        if arm != "cal_lat":
+            a1.fill_between(x, lo, hi, color=col, alpha=0.10, linewidth=0)
         a1.plot(x, y, color=col, ls=ls, lw=2, marker="o", ms=6, markeredgecolor="white", markeredgewidth=1.5,
                 label=label)
     a1.set_ylim(0, 13)
@@ -99,12 +119,12 @@ def figure(sm):
     a1.set_title("Error vs records per species", loc="left", fontsize=10.5)
     a1.legend(frameon=False, fontsize=8.5, loc="lower left")
     for arm, col, off, label in (("shared", "#2a78d6", -0.08, "pooled"), ("traits", "#1baf7a", 0.08, "pooled + traits")):
-        st = [_ci(-paired(sm, arm, "unpooled", n)) for n in NS]
+        st = [_ci(-paired(sm, arm, "p3", n)) for n in NS]
         y, lo, hi = map(np.array, zip(*st))
         a2.errorbar(x + off, y, yerr=[y - lo, hi - y], fmt="o", color=col, ms=6, capsize=0, lw=2, label=label)
     a2.axhline(0, color="#52514e", lw=1)
-    a2.set_ylim(-0.6, 0.6)
-    a2.set_ylabel("Days saved by pooling vs species alone (95% CI)")
+    a2.set_ylim(-1.2, 1.2)
+    a2.set_ylabel("Days saved by pooling vs species alone, P3 fitter (95% CI)")
     a2.set_title("What pooling adds", loc="left", fontsize=10.5)
     a2.legend(frameon=False, fontsize=8.5, loc="upper right")
     for a in (a1, a2):

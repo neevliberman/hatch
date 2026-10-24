@@ -34,6 +34,9 @@ BASE_Q = {"place_id": ",".join(map(str, inat.MIDWEST_PLACES)), "quality_grade": 
           "d1": "2015-01-01", "d2": "2025-12-31", "term_id": 1, "term_value_id": 2, "license": LICENSES}
 
 # Left out before any fit, for a biological reason the heat model can't handle (decided from names only).
+# 24 names; 15 of them occur among the candidates actually ranked (the rest were listed pre-emptively).
+# Hypena scabra and Emmelina monodactyla were added after the first download had started but before any fit,
+# so their raw files exist; select.py reads this dict and drops them ("adult overwinters" in species.csv).
 EXCLUDE = {
     # migrants: most Midwest adults fly in from the south, so local warmth doesn't time them
     "Agrotis ipsilon": "migrant", "Helicoverpa zea": "migrant", "Spodoptera frugiperda": "migrant",
@@ -71,6 +74,7 @@ def families(taxa, out=DATA / "pooled_families.json"):
         fam.update({r["id"]: r["name"] for r in js["results"] if r.get("rank") == "family"})
         time.sleep(1)
     res = {t["id"]: next((fam[a] for a in t["ancestor_ids"] if a in fam), None) for t in taxa}
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(res))
     return res
 
@@ -116,6 +120,7 @@ def main():
     ap.add_argument("--top", type=int, default=80)
     a = ap.parse_args()
     allc, keep = candidates(a.top)
+    DATA.mkdir(parents=True, exist_ok=True)
     allc.head(a.top + 40).to_csv(DATA / "pooled_candidates.csv", index=False)
     print(f"{len(keep)} candidates; smallest count {keep.inat_count.min()}", flush=True)
     for i, x in enumerate(keep.itertuples()):

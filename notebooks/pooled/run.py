@@ -142,18 +142,20 @@ def run_fold(Y):
         theta[s], V[s] = xf.x, PL.laplace_cov(xf, P)
         per[s] = dict(train=train, tg=EV.targets(test), cuts=cuts, cidx=cidx, full=xf, P=P)
     t_full = time.time() - t0
+    is_pin = PL.pinned(theta)
     rows, fits = [], []
     for s in range(S):
         if s % 10 == 0:
             print(f"fold {Y}: species {s}/{S} at {time.time() - t0:.0f}s", flush=True)
         q = per[s]
         tg, train, cuts, cidx = q["tg"], q["train"], q["cuts"], q["cidx"]
-        others = np.array([k for k in range(S) if k != s])
+        # the prior learns only from other species whose fit is not pinned at a bound (PL.pinned)
+        others = np.array([k for k in range(S) if k != s and not is_pin[k]])
         pr_shared = PL.meta(theta[others], V[others])[0]()
         pr_tr_fun, _ = PL.meta(theta[others], V[others], X[others])
         pr_traits = pr_tr_fun(X[s])
         fits.append({"year": Y, "sp": s, "n": "all", "draw": 0, "arm": "unpooled_full",
-                     **dict(zip(PL.NAMES, q["full"].x))})
+                     "pinned": bool(is_pin[s]), **dict(zip(PL.NAMES, q["full"].x))})
         if tg.empty:
             continue
         targets = []
@@ -221,9 +223,13 @@ def hyper_all_years(sp, rec, inc, E, X, xnames):
         rows.append({"taxon_id": int(sp.taxon_id[s]), "name": sp.name[s], "n_fit": len(tr),
                      "median_dd": float(np.exp(xf.x[0])), "sigma_dd": float(np.exp(xf.x[1])), "alpha": float(xf.x[2]),
                      "se_log_median": float(np.sqrt(V[s][0, 0])), "cuts": json.dumps(cuts)})
-    _, h0 = PL.meta(theta, V)
-    _, h1 = PL.meta(theta, V, X)
-    hyp = {"shared": {"mean": [float(h0["b"][0]), *map(float, h0["m12"])], "Sigma": h0["Sigma"].tolist()},
+    keep = ~PL.pinned(theta)
+    for row, k in zip(rows, keep):
+        row["pinned"] = not bool(k)
+    _, h0 = PL.meta(theta[keep], V[keep])
+    _, h1 = PL.meta(theta[keep], V[keep], X[keep])
+    hyp = {"species_used": int(keep.sum()), "species_pinned": int((~keep).sum()),
+           "shared": {"mean": [float(h0["b"][0]), *map(float, h0["m12"])], "Sigma": h0["Sigma"].tolist()},
            "traits": {"coef": dict(zip(xnames, map(float, h1["b"]))), "m12": list(map(float, h1["m12"])),
                       "Sigma": h1["Sigma"].tolist()}}
     return pd.DataFrame(rows), hyp

@@ -13,6 +13,21 @@ from fit import model as M, simulate  # noqa: E402
 import pooled as PL  # noqa: E402
 
 
+def test_fast_cdf_matches_exact():
+    """The (z, alpha) table that replaces P3's per-alpha table stays within 2e-4 of the exact CDF
+    (measured: ~1.4e-5), at random skews including off-grid ones, and is installed into fit.model."""
+    z = np.linspace(-8, 8, 3201)
+    alphas = np.concatenate([np.random.default_rng(0).uniform(0, 15, 200), [0.0, 0.01, 7.5, 14.99, 15.0]])
+    err = max(np.abs(PL.fast_sn_cdf(z, a) - M.sn_cdf_exact(z, a)).max() for a in alphas)
+    assert err < 2e-4
+    assert M.sn_cdf is PL.fast_sn_cdf
+
+
+def test_pinned_flags_bounds():
+    th = np.array([[PL.LO[0], 4.0, 3.0], [np.log(200), PL.HI[1], 3.0], [np.log(200), 4.0, 3.0]])
+    assert PL.pinned(th).tolist() == [True, True, False]
+
+
 def test_reparam_roundtrip():
     x = np.array([np.log(220.0), np.log(90.0), 7.0])
     assert np.allclose(PL.from_p(PL.to_p(x)), x, atol=1e-6)

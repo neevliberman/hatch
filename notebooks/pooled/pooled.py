@@ -36,11 +36,22 @@ NAMES = ("log_med", "log_sigma", "alpha")
 LO = np.array([np.log(5.0), np.log(5.0), 0.0])
 HI = np.array([np.log(3000.0), np.log(800.0), 15.0])
 
+
+def pinned(theta, tol=1e-3):
+    """True where a fit sits on the median's lower bound (5 DD) or the spread's upper bound (800 DD).
+
+    Those are the wide-curve fits P3 also met (FROZEN_P3.md change log): the likelihood prefers an almost
+    flat curve, and the bound, not the data, sets the median. They are kept as forecasts but left out of
+    the shared Gaussian, so the bound doesn't shape the prior (method review, PR #54)."""
+    theta = np.atleast_2d(theta)
+    return (theta[:, 0] <= LO[0] + tol) | (theta[:, 1] >= HI[1] - tol)
+
 # ---------------------------------------------------------------- speed: one CDF table for every alpha
 # P3's sn_cdf builds a 15,001-point Owen's T table for each new alpha (~10 ms). A fitter that moves alpha
 # every step pays that on every likelihood call, which made the ~20,000 fits here take days. So the CDF is
 # tabulated once on a (z, alpha) grid and interpolated linearly in alpha; max error vs exact is checked in
-# test_pooled.py (< 2e-4). It is installed into fit.model, so every arm, the P3 baseline too, uses it.
+# test_pooled.py::test_fast_cdf_matches_exact (< 2e-4; measured ~1.4e-5). It is installed into fit.model,
+# so every arm, the P3 baseline too, uses it.
 _ZT = np.linspace(-15, 15, 6001)
 _AT = np.linspace(0, 15, 751)
 _TAB = None
