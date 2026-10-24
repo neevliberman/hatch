@@ -24,6 +24,7 @@ python3 pipeline/replay/build_replay.py           # refits the leave-one-year-ou
 | `simulate.py` | a fake Midwest for simulate-and-recover |
 | `run_p3.py` | the one pre-registered run |
 | `figures.py` | the PNGs in `figures/` |
+| `calibration.py` | how often the "likely" window catches the real date ([CALIBRATION.md](CALIBRATION.md)) |
 
 ## The likelihood, in plain words
 Think of each spot as having a **warmth bank account**. From 1 March, every day pays in its degree-days: the warmth above 10 °C, capped at 30 °C.

@@ -306,6 +306,7 @@ def main():
     licences = {k: int((disp.license_code.str.lower() == k).sum()) for k in LICENCES}
     seen = seen_flags(cells, cleaned.hex.unique())
 
+    from fit import calibration as CAL
     lo_hi = list(zip(BANDS[:-1], BANDS[1:]))
     lm = headline["loyo"]["mae"]
     pooled = [f["fits"][chosen] for f in folds]
@@ -342,7 +343,9 @@ def main():
         },
         "interval": {"level": 0.8,
                      "onset": [round(v, 1) for v in headline["loyo_residual_q10_q90"]["onset"]],
-                     "peak": [round(v, 1) for v in headline["loyo_residual_q10_q90"]["peak"]]},
+                     "peak": [round(v, 1) for v in headline["loyo_residual_q10_q90"]["peak"]],
+                     # how often the window caught the real date, each year sized without itself (fit/CALIBRATION.md)
+                     "checked": CAL.checked(scores, CAL.season_record())},
         "scorecard": scorecard(rows, chosen, headline),
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)

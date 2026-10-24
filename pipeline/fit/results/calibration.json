@@ -1,0 +1,724 @@
+{
+ "level": 0.8,
+ "ci": "90% Clopper-Pearson",
+ "loyo": {
+  "luna": {
+   "strip_years": 31,
+   "years": 9,
+   "shipped_window": {
+    "level": 0.8,
+    "onset": [
+     -5.1,
+     6.0
+    ],
+    "peak": [
+     -6.0,
+     4.0
+    ]
+   },
+   "onset": {
+    "in_sample_shipped": {
+     "k": 25,
+     "n": 31,
+     "coverage": 0.806,
+     "ci90": [
+      0.653,
+      0.912
+     ],
+     "clearly_off": false
+    },
+    "honest_other_years": {
+     "k": 24,
+     "n": 31,
+     "coverage": 0.774,
+     "ci90": [
+      0.617,
+      0.889
+     ],
+     "clearly_off": false
+    },
+    "shipped_as_displayed": {
+     "k": 24,
+     "n": 31,
+     "coverage": 0.774,
+     "ci90": [
+      0.617,
+      0.889
+     ],
+     "clearly_off": false
+    },
+    "honest_width_days": [
+     10.7,
+     11.5,
+     11.8
+    ],
+    "misses_early": 3,
+    "misses_late": 3
+   },
+   "peak": {
+    "in_sample_shipped": {
+     "k": 25,
+     "n": 31,
+     "coverage": 0.806,
+     "ci90": [
+      0.653,
+      0.912
+     ],
+     "clearly_off": false
+    },
+    "honest_other_years": {
+     "k": 25,
+     "n": 31,
+     "coverage": 0.806,
+     "ci90": [
+      0.653,
+      0.912
+     ],
+     "clearly_off": false
+    },
+    "shipped_as_displayed": {
+     "k": 25,
+     "n": 31,
+     "coverage": 0.806,
+     "ci90": [
+      0.653,
+      0.912
+     ],
+     "clearly_off": false
+    },
+    "honest_width_days": [
+     10.0,
+     10.4,
+     10.8
+    ],
+    "misses_early": 3,
+    "misses_late": 3
+   },
+   "hexagons": {
+    "peak": {
+     "k": 3,
+     "n": 5,
+     "coverage": 0.6,
+     "ci90": [
+      0.189,
+      0.924
+     ],
+     "clearly_off": false
+    },
+    "min_sightings": 10,
+    "median_sd_of_hex_target_days": 3.4
+   }
+  },
+  "firefly": {
+   "strip_years": 23,
+   "years": 9,
+   "shipped_window": {
+    "level": 0.8,
+    "onset": [
+     -4.8,
+     4.8
+    ],
+    "peak": [
+     -5.4,
+     5.0
+    ]
+   },
+   "onset": {
+    "in_sample_shipped": {
+     "k": 17,
+     "n": 23,
+     "coverage": 0.739,
+     "ci90": [
+      0.549,
+      0.88
+     ],
+     "clearly_off": false
+    },
+    "honest_other_years": {
+     "k": 17,
+     "n": 23,
+     "coverage": 0.739,
+     "ci90": [
+      0.549,
+      0.88
+     ],
+     "clearly_off": false
+    },
+    "shipped_as_displayed": {
+     "k": 19,
+     "n": 23,
+     "coverage": 0.826,
+     "ci90": [
+      0.645,
+      0.938
+     ],
+     "clearly_off": false
+    },
+    "honest_width_days": [
+     7.4,
+     9.6,
+     10.5
+    ],
+    "misses_early": 3,
+    "misses_late": 3
+   },
+   "peak": {
+    "in_sample_shipped": {
+     "k": 18,
+     "n": 23,
+     "coverage": 0.783,
+     "ci90": [
+      0.596,
+      0.91
+     ],
+     "clearly_off": false
+    },
+    "honest_other_years": {
+     "k": 18,
+     "n": 23,
+     "coverage": 0.783,
+     "ci90": [
+      0.596,
+      0.91
+     ],
+     "clearly_off": false
+    },
+    "shipped_as_displayed": {
+     "k": 18,
+     "n": 23,
+     "coverage": 0.783,
+     "ci90": [
+      0.596,
+      0.91
+     ],
+     "clearly_off": false
+    },
+    "honest_width_days": [
+     10.0,
+     10.4,
+     10.7
+    ],
+    "misses_early": 3,
+    "misses_late": 2
+   },
+   "hexagons": {
+    "peak": {
+     "k": 7,
+     "n": 17,
+     "coverage": 0.412,
+     "ci90": [
+      0.212,
+      0.636
+     ],
+     "clearly_off": true
+    },
+    "min_sightings": 10,
+    "median_sd_of_hex_target_days": 4.5
+   }
+  }
+ },
+ "dryrun_2026": {
+  "records": 607,
+  "pulled": "2026-10-24",
+  "runs": [
+   {
+    "file": "asof_0415.json",
+    "as_of": "2026-04-15",
+    "strips": [
+     {
+      "strip": "37-39",
+      "sightings": 63,
+      "real_peak": 129.0,
+      "forecast": 115.0,
+      "likely": [
+       108.0,
+       122.0
+      ],
+      "inside": false
+     },
+     {
+      "strip": "39-41",
+      "sightings": 219,
+      "real_peak": 130.0,
+      "forecast": 132.0,
+      "likely": [
+       122.0,
+       143.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "41-43",
+      "sightings": 130,
+      "real_peak": 149.0,
+      "forecast": 151.0,
+      "likely": [
+       143.0,
+       155.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "43-45",
+      "sightings": 54,
+      "real_peak": 158.5,
+      "forecast": 158.0,
+      "likely": [
+       150.0,
+       163.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "45-49",
+      "sightings": 92,
+      "real_peak": 169.5,
+      "forecast": 176.0,
+      "likely": [
+       166.0,
+       182.0
+      ],
+      "inside": true
+     }
+    ],
+    "peak": {
+     "k": 4,
+     "n": 5,
+     "coverage": 0.8,
+     "ci90": [
+      0.343,
+      0.99
+     ],
+     "clearly_off": false
+    },
+    "hexagons": {
+     "k": 4,
+     "n": 10,
+     "coverage": 0.4,
+     "ci90": [
+      0.15,
+      0.696
+     ],
+     "clearly_off": true,
+     "median_sd_of_hex_target_days": 7.9
+    },
+    "mean_width_days": 15.2
+   },
+   {
+    "file": "asof_0501.json",
+    "as_of": "2026-05-01",
+    "strips": [
+     {
+      "strip": "37-39",
+      "sightings": 63,
+      "real_peak": 129.0,
+      "forecast": 113.0,
+      "likely": [
+       106.0,
+       118.0
+      ],
+      "inside": false
+     },
+     {
+      "strip": "39-41",
+      "sightings": 219,
+      "real_peak": 130.0,
+      "forecast": 126.0,
+      "likely": [
+       116.0,
+       132.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "41-43",
+      "sightings": 130,
+      "real_peak": 149.0,
+      "forecast": 148.0,
+      "likely": [
+       140.0,
+       154.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "43-45",
+      "sightings": 54,
+      "real_peak": 158.5,
+      "forecast": 157.0,
+      "likely": [
+       149.0,
+       162.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "45-49",
+      "sightings": 92,
+      "real_peak": 169.5,
+      "forecast": 175.0,
+      "likely": [
+       166.0,
+       181.0
+      ],
+      "inside": true
+     }
+    ],
+    "peak": {
+     "k": 4,
+     "n": 5,
+     "coverage": 0.8,
+     "ci90": [
+      0.343,
+      0.99
+     ],
+     "clearly_off": false
+    },
+    "hexagons": {
+     "k": 4,
+     "n": 10,
+     "coverage": 0.4,
+     "ci90": [
+      0.15,
+      0.696
+     ],
+     "clearly_off": true,
+     "median_sd_of_hex_target_days": 7.9
+    },
+    "mean_width_days": 14.0
+   },
+   {
+    "file": "asof_0515.json",
+    "as_of": "2026-05-15",
+    "strips": [
+     {
+      "strip": "37-39",
+      "sightings": 63,
+      "real_peak": 129.0,
+      "forecast": 114.0,
+      "likely": [
+       107.0,
+       118.0
+      ],
+      "inside": false
+     },
+     {
+      "strip": "39-41",
+      "sightings": 219,
+      "real_peak": 130.0,
+      "forecast": 131.0,
+      "likely": [
+       124.0,
+       136.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "41-43",
+      "sightings": 130,
+      "real_peak": 149.0,
+      "forecast": 150.0,
+      "likely": [
+       143.0,
+       155.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "43-45",
+      "sightings": 54,
+      "real_peak": 158.5,
+      "forecast": 158.0,
+      "likely": [
+       150.0,
+       163.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "45-49",
+      "sightings": 92,
+      "real_peak": 169.5,
+      "forecast": 177.0,
+      "likely": [
+       167.0,
+       183.0
+      ],
+      "inside": true
+     }
+    ],
+    "peak": {
+     "k": 4,
+     "n": 5,
+     "coverage": 0.8,
+     "ci90": [
+      0.343,
+      0.99
+     ],
+     "clearly_off": false
+    },
+    "hexagons": {
+     "k": 4,
+     "n": 10,
+     "coverage": 0.4,
+     "ci90": [
+      0.15,
+      0.696
+     ],
+     "clearly_off": true,
+     "median_sd_of_hex_target_days": 7.9
+    },
+    "mean_width_days": 12.8
+   },
+   {
+    "file": "asof_0601.json",
+    "as_of": "2026-06-01",
+    "strips": [
+     {
+      "strip": "37-39",
+      "sightings": 63,
+      "real_peak": 129.0,
+      "forecast": 114.0,
+      "likely": [
+       107.0,
+       118.0
+      ],
+      "inside": false
+     },
+     {
+      "strip": "39-41",
+      "sightings": 219,
+      "real_peak": 130.0,
+      "forecast": 131.0,
+      "likely": [
+       124.0,
+       136.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "41-43",
+      "sightings": 130,
+      "real_peak": 149.0,
+      "forecast": 148.0,
+      "likely": [
+       142.0,
+       153.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "43-45",
+      "sightings": 54,
+      "real_peak": 158.5,
+      "forecast": 155.0,
+      "likely": [
+       149.0,
+       160.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "45-49",
+      "sightings": 92,
+      "real_peak": 169.5,
+      "forecast": 176.0,
+      "likely": [
+       167.0,
+       181.0
+      ],
+      "inside": true
+     }
+    ],
+    "peak": {
+     "k": 4,
+     "n": 5,
+     "coverage": 0.8,
+     "ci90": [
+      0.343,
+      0.99
+     ],
+     "clearly_off": false
+    },
+    "hexagons": {
+     "k": 4,
+     "n": 10,
+     "coverage": 0.4,
+     "ci90": [
+      0.15,
+      0.696
+     ],
+     "clearly_off": true,
+     "median_sd_of_hex_target_days": 7.9
+    },
+    "mean_width_days": 11.8
+   },
+   {
+    "file": "asof_0615.json",
+    "as_of": "2026-06-15",
+    "strips": [
+     {
+      "strip": "37-39",
+      "sightings": 63,
+      "real_peak": 129.0,
+      "forecast": 114.0,
+      "likely": [
+       107.0,
+       118.0
+      ],
+      "inside": false
+     },
+     {
+      "strip": "39-41",
+      "sightings": 219,
+      "real_peak": 130.0,
+      "forecast": 132.0,
+      "likely": [
+       124.0,
+       136.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "41-43",
+      "sightings": 130,
+      "real_peak": 149.0,
+      "forecast": 148.0,
+      "likely": [
+       142.0,
+       153.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "43-45",
+      "sightings": 54,
+      "real_peak": 158.5,
+      "forecast": 155.0,
+      "likely": [
+       149.0,
+       160.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "45-49",
+      "sightings": 92,
+      "real_peak": 169.5,
+      "forecast": 171.0,
+      "likely": [
+       165.0,
+       176.0
+      ],
+      "inside": true
+     }
+    ],
+    "peak": {
+     "k": 4,
+     "n": 5,
+     "coverage": 0.8,
+     "ci90": [
+      0.343,
+      0.99
+     ],
+     "clearly_off": false
+    },
+    "hexagons": {
+     "k": 4,
+     "n": 10,
+     "coverage": 0.4,
+     "ci90": [
+      0.15,
+      0.696
+     ],
+     "clearly_off": true,
+     "median_sd_of_hex_target_days": 7.9
+    },
+    "mean_width_days": 11.2
+   },
+   {
+    "file": "latest.json",
+    "as_of": "2026-09-30",
+    "strips": [
+     {
+      "strip": "37-39",
+      "sightings": 63,
+      "real_peak": 129.0,
+      "forecast": 114.0,
+      "likely": [
+       107.0,
+       118.0
+      ],
+      "inside": false
+     },
+     {
+      "strip": "39-41",
+      "sightings": 219,
+      "real_peak": 130.0,
+      "forecast": 131.0,
+      "likely": [
+       124.0,
+       136.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "41-43",
+      "sightings": 130,
+      "real_peak": 149.0,
+      "forecast": 148.0,
+      "likely": [
+       142.0,
+       153.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "43-45",
+      "sightings": 54,
+      "real_peak": 158.5,
+      "forecast": 155.0,
+      "likely": [
+       149.0,
+       160.0
+      ],
+      "inside": true
+     },
+     {
+      "strip": "45-49",
+      "sightings": 92,
+      "real_peak": 169.5,
+      "forecast": 174.0,
+      "likely": [
+       168.0,
+       179.0
+      ],
+      "inside": true
+     }
+    ],
+    "peak": {
+     "k": 4,
+     "n": 5,
+     "coverage": 0.8,
+     "ci90": [
+      0.343,
+      0.99
+     ],
+     "clearly_off": false
+    },
+    "hexagons": {
+     "k": 4,
+     "n": 10,
+     "coverage": 0.4,
+     "ci90": [
+      0.15,
+      0.696
+     ],
+     "clearly_off": true,
+     "median_sd_of_hex_target_days": 7.9
+    },
+    "mean_width_days": 11.2
+   }
+  ]
+ }
+}

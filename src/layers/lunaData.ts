@@ -39,7 +39,19 @@ export interface ReplayFile {
     noise_floor: number;
   };
   /** Added in P3: 80% band for a forecast date, as day offsets [low, high] of real minus forecast. */
-  interval?: { level: number; onset: [number, number]; peak: [number, number] };
+  interval?: {
+    level: number;
+    onset: [number, number];
+    peak: [number, number];
+    /** How often the window caught the real date on past years, each year's window sized without that year:
+     * [inside, strip-years, 90% interval low %, high %] (pipeline/fit/CALIBRATION.md). `season`: a fresh season's
+     * strip peaks against the live window (luna only). */
+    checked?: {
+      onset: [number, number, number, number];
+      peak: [number, number, number, number];
+      season?: { year: number; as_of: string; peak: [number, number] };
+    };
+  };
   /** Added in P3: per latitude band, average days off and mean peak bias (forecast minus real). */
   scorecard?: { band: string; band_years: number; mae: { heat: number; p1: number; cal: number }; bias_peak: { heat: number; p1: number } }[];
   /** [iNat id, year, day of year, lat, lng, flags] */

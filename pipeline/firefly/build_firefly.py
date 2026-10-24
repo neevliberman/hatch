@@ -28,7 +28,7 @@ from hatch_p1 import run  # noqa: E402
 from hatch_p1.daymet import temperature_cube  # noqa: E402
 from hatch_p1.degree_days import accumulate  # noqa: E402
 from hatch_p1.prep import BAND_LABELS, BANDS, YEARS, clean  # noqa: E402
-from fit import data as fdata, evaluate as EV, model as M  # noqa: E402
+from fit import calibration as CAL, data as fdata, evaluate as EV, model as M  # noqa: E402
 from fit.context import BASE, Context, daily_from_cum, index_records  # noqa: E402
 from replay import build_replay as BR  # noqa: E402
 from firefly.fetch import EFFORT, RAW, TAXON  # noqa: E402
@@ -151,7 +151,8 @@ def main():
             "noise_floor": round(float(floor["records"]), 2),
         },
         "interval": {"level": 0.8, "onset": [round(v, 1) for v in resid["onset"]],
-                     "peak": [round(v, 1) for v in resid["peak"]]},
+                     "peak": [round(v, 1) for v in resid["peak"]],
+                     "checked": CAL.checked(scores)},   # see pipeline/fit/CALIBRATION.md
         "scorecard": BR.scorecard(rows, SPEC, None),
     }
     OUT.write_text(json.dumps(out, separators=(",", ":")))
