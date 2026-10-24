@@ -15,7 +15,7 @@ export const theme: Theme = {
 };
 
 /** [text, lng, lat, zoom it shows from, kind, rank (population for towns; bigger names first)]. */
-export type Label = [string, number, number, number, 'state' | 'water' | 'park' | 'city' | 'town', number];
+export type Label = [string, number, number, number, 'state' | 'water' | 'park' | 'city' | 'town', number, number?, number?];
 type Props = { z: number; great?: number; w?: number };
 interface Part {
   version: number;

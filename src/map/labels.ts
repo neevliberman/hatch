@@ -26,6 +26,11 @@ const MAX_COVER = 0.035;
 const DOT = 7; // a town's dot and the gap after it (style.css .place-town::before: 4 px, 5 px for a city, gap 3 px)
 const STATE_SPACING = 2.5;
 const DOT_R = 7; // a sighting dot with its halo
+/** A lake name must fit inside its lake, a state name well inside its state (a border through the text reads as struck
+ * through): the room comes with the label (pipeline/basemap/fit_labels.py). Smaller type is tried before giving up. */
+const WATER_SCALES = [1, 0.82, 0.68, 0.58];
+const STATE_SCALES = [1, 0.84];
+const STATE_SHARE = 0.72;
 
 type Box = [number, number, number, number];
 
@@ -66,6 +71,7 @@ export function createLabels(container: HTMLElement) {
     if (!n) {
       n = document.createElement('span');
       n.className = `place place-${l[4]}`;
+      n.style.transformOrigin = '0 0';
       n.textContent = l[0];
       layer.appendChild(n);
       nodes.set(key, n);
@@ -98,7 +104,9 @@ export function createLabels(container: HTMLElement) {
       lastDots = dots;
       last = key;
       const placed: Box[] = [...coverBoxes];
-      // Names keep off the dots: the data comes first. A lake name that can't get clear waits for a closer zoom.
+      // Towns and forest names keep off the dots: the data comes first. The cities (placed before the dots count) and
+      // the lakes and states keep their place: a city never goes unnamed because a dot sits on it, the name's paper
+      // halo keeps it readable.
       let dotsIn = false;
       const addDots = () => {
         dotsIn = true;
@@ -112,11 +120,26 @@ export function createLabels(container: HTMLElement) {
       const clear = (b: Box) => placed.every((p) => b[0] > p[2] || b[2] < p[0] || b[1] > p[3] || b[3] < p[1]);
       for (const l of sorted) {
         if (l[3] > zoom || (l[4] === 'state' && zoom >= STATE_MAX_ZOOM)) continue;
-        if (!dotsIn) addDots();
+        if (!dotsIn && (l[4] === 'park' || l[4] === 'town')) addDots();
         const [x, y] = vp.project([l[1], l[2]]) as [number, number];
         if (x < -50 || y < T - 20 || x > R + 50 || y > B + 20) continue;
-        const w = width(l);
-        const h = height(l);
+        const ext = l[4] === 'water' || l[4] === 'state';
+        let w = width(l);
+        let h = height(l);
+        let scale = 1;
+        if (ext) {
+          // Room in pixels: the chord (degrees of longitude, from the label's data) across the line of text.
+          const room = (vp.project([l[1] + (l[6] ?? 99), l[2]]) as [number, number])[0] - x;
+          const tall = l[4] === 'water' && l[7] !== undefined
+            ? Math.abs((vp.project([l[1], l[2] - l[7] / 2]) as [number, number])[1] - (vp.project([l[1], l[2] + l[7] / 2]) as [number, number])[1])
+            : Infinity;
+          const fits = (k: number) => l[4] === 'water' ? w * k + 6 <= room * 0.95 && h * k <= tall * 0.9 : w * k <= room * STATE_SHARE;
+          const k = (l[4] === 'water' ? WATER_SCALES : STATE_SCALES).find(fits);
+          if (k === undefined) continue; // too big for its lake or state at this zoom: wait for a closer one
+          scale = k;
+          w *= k;
+          h *= k;
+        }
         if (cover + w * h > MAX_COVER * (R * (B - T))) continue; // a shorter name may still fit
         const dotted = l[4] === 'town' || l[4] === 'city';
         const half = l[4] === 'city' ? 2.5 : 2; // the dot's centre sits on the place
@@ -124,7 +147,7 @@ export function createLabels(container: HTMLElement) {
         // nudged up or down a line to get clear of the dots.
         const tries: [number, number, boolean][] = dotted
           ? [[x - half, y, false], [x - w - DOT + half, y, true]]
-          : [0, -1, 1, -2, 2].map((k) => [x - w / 2, y + k * h, false]);
+          : (ext ? [0] : [0, -1, 1, -2, 2]).map((k) => [x - w / 2, y + k * h, false]); // a lake or state name stays put
         const gap = l[4] === 'town' ? TOWN_GAP : PAD;
         for (const [left, cy, flip] of tries) {
           const box: Box = [left - gap, cy - h / 2 - PAD, left + w + (dotted ? DOT : 0) + gap, cy + h / 2 + PAD];
@@ -133,7 +156,7 @@ export function createLabels(container: HTMLElement) {
           cover += w * h;
           const n = node(l);
           n.classList.toggle('flip', flip);
-          n.style.transform = `translate(${Math.round(left)}px, ${Math.round(cy - h / 2)}px)`;
+          n.style.transform = `translate(${Math.round(left)}px, ${Math.round(cy - h / 2)}px)${scale < 1 ? ` scale(${scale})` : ''}`;
           n.style.display = '';
           next.add(n);
           break;
