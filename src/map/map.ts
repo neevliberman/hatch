@@ -29,9 +29,9 @@ export interface MapHandle {
   /** Re-fit the Midwest into the free area between header and bottom bar (and beside an open side panel). `glide`
    * eases there in about a third of a second instead of cutting. */
   fit(padding: Padding, glide?: boolean): void;
-  /** Whether a pan or zoom has left the fitted view (a re-fit on resize would throw that away). */
   /** After a resize that keeps the reader's view: the zoom-out limit follows the new whole-Midwest fit. */
   rebound(padding: Padding): void;
+  /** Whether a pan or zoom has left the fitted view (a re-fit on resize would throw that away). */
   moved(): boolean;
   /** Centre lngLat in the free area at a zoom level (the city menu, My area and shared links). `fly` flies there. */
   focus(lngLat: [number, number], zoom: number, padding: Padding, fly?: boolean): void;
