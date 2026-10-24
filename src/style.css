@@ -157,7 +157,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   width: max-content; max-width: calc(100% - 24px); text-align: center; font-size: 12px; color: var(--text);
   padding: 6px 12px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 /* Kept rendered (just invisible) when empty: live regions that appear and fill at once are often not announced. */
-#action-msg.at { transform: none; max-width: min(260px, calc(100vw - 80px)); padding: 4px 10px; text-align: left; border-radius: 3px;
+#action-msg.at { z-index: 6; transform: none; /* over the About panel (5): the finder speaks from inside it */ max-width: min(260px, calc(100vw - 80px)); padding: 4px 10px; text-align: left; border-radius: 3px;
   border-color: var(--label-rule); }
 #action-msg:empty { opacity: 0; padding: 0; border: 0; box-shadow: none; pointer-events: none; }
 /* Season's end note: on empty paper beside the map, with the off-season note (placed from main.ts), never over the
@@ -171,7 +171,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 @media (prefers-reduced-motion: reduce) { #end-note { transition: none; } }
 /* Over the map's bottom-right corner on a wide screen (placed against #bottom); top of the button stack on a phone. */
 #recenter { position: absolute; right: var(--gr); bottom: calc(100% + 10px); pointer-events: auto; }
-#recenter[hidden] { display: none; }
+#recenter[hidden], #find[hidden] { display: none; }
 /* Find a town: a specimen label beside its button (placed from finder.ts, lifted over a phone keyboard), suggestions
    stacked above the box; opened from About, it sits in the panel instead. */
 #finder { position: absolute; z-index: 5; pointer-events: auto; display: flex; flex-direction: column; width: min(272px, calc(100vw - 80px));
@@ -185,7 +185,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .find-x { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius); background: none; color: var(--muted);
   font-size: 22px; line-height: 1; cursor: pointer; }
 .find-x:hover { color: var(--text); background: var(--track-faint); }
-#find-list { list-style: none; margin: 0 0 4px; padding: 0; font-size: 14px; }
+#find-list { list-style: none; margin: 0 0 4px; padding: 0; font-size: 14px; overflow-y: auto; overscroll-behavior: contain; }
 #finder.inline #find-list { margin: 4px 0 0; }
 #find-list li { padding: 6px 8px; border-radius: var(--radius); cursor: pointer; }
 #find-list li:hover, #find-list li[aria-selected="true"] { background: var(--track-faint); box-shadow: inset 2px 0 var(--accent); }
@@ -382,6 +382,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   #actions { position: absolute; right: var(--gr); bottom: calc(100% + 10px); flex-direction: column; gap: 8px; }
   #actions .icon-btn { padding: 0; background: var(--panel-solid); box-shadow: var(--shadow); }
   #recenter { bottom: calc(100% + 10px + 3 * 44px + 2 * 8px + 8px); } /* above the stack */
+  #bottom:has(#find[hidden]) #recenter { bottom: calc(100% + 10px + 2 * 44px + 8px + 8px); } /* two buttons (no Find) */
 }
 
 @media (max-width: 700px) {

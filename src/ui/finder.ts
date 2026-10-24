@@ -4,6 +4,8 @@ import { stateCollection } from '../core/grid';
 /** A town to jump to. `inside`: in one of the states the map forecasts. `tag`: its state, shown when the name repeats. */
 type Place = { name: string; lat: number; lng: number; pop: number; inside: boolean; tag?: string };
 type Label = [string, number, number, number, string, number];
+/** A town's name as listed: with its state (and a nearby city) when the name repeats. */
+const full = (p: Place) => (p.tag ? `${p.name}${p.tag[0] === '(' ? ' ' : ', '}${p.tag}` : p.name);
 
 /** The state a point is in (ray casting over the bundled outlines), or undefined beyond them. */
 function stateAt(lng: number, lat: number) {
@@ -41,16 +43,24 @@ async function loadPlaces(): Promise<Place[]> {
   if (!labels.length) labels = CITIES.map((c, i) => [c.name.replace(/, [A-Z]{2}$/, ''), c.lng, c.lat, 0, 'city', 100 - i]);
   const count = new Map<string, number>();
   for (const l of labels) count.set(l[0], (count.get(l[0]) ?? 0) + 1);
-  return labels
-    .map((l) => {
-      const st = stateAt(l[1], l[2]);
-      // Several Springfields: each says its state ("Springfield, IL"); one beyond the outlines keeps a plain name.
-      return { name: l[0], lat: l[2], lng: l[1], pop: l[5], inside: !!st?.core, tag: count.get(l[0])! > 1 ? st?.abbr : undefined };
-    })
-    .sort((a, b) => Number(b.inside) - Number(a.inside) || b.pop - a.pop);
+  // Several Springfields: each says its state ("Springfield, IL"); one beyond the outlines keeps a plain name. Two in
+  // the same state (Oakwood, OH) also name the nearest big city: "Oakwood, OH (near Dayton)".
+  const ps: Place[] = labels.map((l) => {
+    const st = stateAt(l[1], l[2]);
+    return { name: l[0], lat: l[2], lng: l[1], pop: l[5], inside: !!st?.core, tag: count.get(l[0])! > 1 ? st?.abbr : undefined };
+  });
+  const twice = new Map<string, number>();
+  for (const p of ps) twice.set(full(p), (twice.get(full(p)) ?? 0) + 1);
+  const big = labels.filter((l) => l[4] === 'city').sort((a, b) => b[5] - a[5]).slice(0, 60);
+  const d = (p: Place, l: Label) => ((p.lng - l[1]) * 0.75) ** 2 + (p.lat - l[2]) ** 2;
+  for (const p of ps)
+    if (twice.get(full(p))! > 1) {
+      const near = big.filter((l) => l[0] !== p.name).sort((a, b) => d(p, a) - d(p, b))[0];
+      if (near) p.tag = `${p.tag ?? ''}${p.tag ? ' ' : ''}(near ${near[0]})`;
+    }
+  return ps.sort((a, b) => Number(b.inside) - Number(a.inside) || b.pop - a.pop);
 }
 
-const full = (p: Place) => (p.tag ? `${p.name}, ${p.tag}` : p.name);
 
 /**
  * "Find a town": a name box that opens beside its button (or inside the About panel, from its own button), with
@@ -94,7 +104,7 @@ export function mountFinder(
   // Beside its button: above it when the buttons sit in a row (the time bar), to its left when they stand in a column
   // (a phone's floating stack). Lifted over a phone keyboard.
   const place = () => {
-    if (form.classList.contains('inline')) return;
+    if (form.classList.contains('inline')) return void (list.style.maxHeight = '');
     const b = btn.getBoundingClientRect();
     const box = home.getBoundingClientRect();
     const column = getComputedStyle(btn.parentElement!).flexDirection === 'column';
@@ -104,11 +114,14 @@ export function mountFinder(
     form.style.bottom = `${column ? box.bottom - b.bottom : box.bottom - top + 6}px`;
     const hidden = vv ? Math.max(0, innerHeight - vv.height - vv.offsetTop) : 0;
     form.style.transform = hidden ? `translateY(${-hidden}px)` : '';
+    // The suggestions stack above the box: keep them inside what the keyboard leaves showing, scrolling if need be.
+    const row = form.querySelector('.find-row')!.getBoundingClientRect();
+    list.style.maxHeight = `${Math.max(64, row.top - (vv?.offsetTop ?? 0) - 24)}px`;
   };
   const setActive = (i: number) => {
     active = i;
     [...list.children].forEach((li, k) => li.setAttribute('aria-selected', String(k === i)));
-    if (i >= 0) input.setAttribute('aria-activedescendant', `find-o${i}`);
+    if (i >= 0) input.setAttribute('aria-activedescendant', `find-o${i}`), list.children[i]?.scrollIntoView({ block: 'nearest' });
     else input.removeAttribute('aria-activedescendant');
   };
   const showList = (ps: Place[]) => {
@@ -210,5 +223,9 @@ export function mountFinder(
       setActive((active + (e.key === 'ArrowDown' ? 1 : shown.length - 1 + (active < 0 ? 1 : 0))) % shown.length);
     }
   });
-  return (from: HTMLElement) => open(true, from);
+  return {
+    open: (from: HTMLElement) => open(true, from),
+    /** Close the box if it is open inside the About panel (the panel is closing or redrawing). */
+    leave: () => void (!form.hidden && form.classList.contains('inline') && open(false)),
+  };
 }

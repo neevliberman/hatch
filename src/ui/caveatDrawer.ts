@@ -11,6 +11,8 @@ export interface Drawer {
   /** Point the explainer's spot card at a place on day `t`. With none, its example follows `near` (the view's centre),
    * or the layer's default. */
   setSpot(lngLat: [number, number] | null, t: number, name?: string, near?: [number, number]): void;
+  /** Called before the panel closes or redraws its contents: anything borrowed into it (the town box) goes home. */
+  onLeave(fn: () => void): void;
 }
 
 /**
@@ -48,7 +50,9 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
       lastSpot.set(el, html);
     }
   };
+  let leave = () => {};
   const render = () => {
+    leave();
     const layers = registry.activeLayers();
     const credits = layers.flatMap((l) => l.credits?.() ?? []);
     // Where the code lives and where to report a problem: the same for every layer, so it closes the list.
@@ -94,6 +98,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
 
   const toggle = (open: boolean, full = false) => {
     const was = drawer.classList.contains('open');
+    if (!open) leave();
     if (open) drawer.classList.toggle('full', full);
     drawer.querySelector('.drawer-grip')?.setAttribute('aria-label', full ? 'Show less of this panel' : 'Show more of this panel');
     drawer.classList.toggle('open', open);
@@ -191,6 +196,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   drawer.inert = true;
   if (new URLSearchParams(location.search).has('caveats')) toggle(true);
   return Object.assign(toggle, {
+    onLeave: (fn: () => void) => void (leave = fn),
     setSpot(lngLat: [number, number] | null, t: number, name?: string, view?: [number, number]) {
       const moved = String(lngLat) !== String(spot);
       spot = lngLat;

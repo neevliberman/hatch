@@ -490,10 +490,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const badge = page.locator('#t-asof');
       if (!(await badge.isVisible())) fail('no "as of" badge');
       const stale = (await badge.getAttribute('class')).includes('stale');
-      // Late (the nightly run is overdue) or old (observed weather ends more than 3 days before today) shows amber.
-      const today = Date.parse(new URLSearchParams(query).get('today') ?? '') || Date.now();
-      const old = today - Date.parse((served ?? stub).as_of) >= 4 * 86_400_000;
-      if (stale !== (label === 'late file' || old)) fail(stale ? 'fresh data marked stale' : 'late or old data is not marked stale');
+      // Amber only when the nightly run is overdue; a frozen or rebuilt file shows its age without it.
+      if (stale !== (label === 'late file')) fail(stale ? 'fresh data marked stale' : 'a late file is not marked stale');
       await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 3000 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
       await page.mouse.move(2, height / 2);
@@ -600,6 +598,30 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.waitForTimeout(1200);
         if (!/Cincinnati/.test((await page.locator('#drawer .spot-title').textContent()) ?? '')) fail('finding Cincinnati from About did not fill its season');
         await shotF('3-about');
+        // A name that is not on the map: the message shows over the panel, by the box.
+        await page.locator('#drawer [data-find]').click();
+        await page.locator('#find-q').fill('Zzyzx');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(400);
+        const onTop = await page.evaluate(() => {
+          const m = document.getElementById('action-msg');
+          const r = m.getBoundingClientRect();
+          return !!r.width && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === m;
+        });
+        if (!onTop) fail('"No town named ..." from the About panel is hidden under it');
+        // Closing the panel with the box still open sends the box home, closed, and Escape then lets the card go.
+        await page.locator('#drawer-close').click();
+        await page.waitForTimeout(500);
+        const home = await page.evaluate(() => {
+          const f = document.getElementById('finder');
+          return !!f && f.hidden && f.parentElement?.id === 'bottom' && document.getElementById('find').getAttribute('aria-expanded') === 'false';
+        });
+        if (!home) fail('closing About left the town box open inside it');
+        if (await page.locator('#probe').isVisible()) {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(300);
+          if (await page.locator('#probe').isVisible()) fail('after About closed over the town box, Escape no longer lets the card go');
+        }
       }
       await page.keyboard.press('Escape');
       if (!phone) {

@@ -64,6 +64,7 @@ function start() {
 
   let hit: ProbeHit | null = null;
   let pinned = false;
+  let tappedAt = -1e9; // when the map last took a tap or click (see the card's click handler)
   let resetKeys = () => {}; // set once the keyboard explorer is built; a species or season switch starts it afresh
   let lastPin: [number, number] | null = null; // the last pinned spot, by any means: where the keyboard explorer starts
   const probeEl = $('probe');
@@ -164,6 +165,7 @@ function start() {
     },
     onProbe: (h, clicked) => {
       if (clicked) {
+        tappedAt = performance.now();
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
         // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
         // landed on a neighbour (a point near a hex edge). A hex pinned from My area or the city menu has no picked
@@ -461,6 +463,7 @@ function start() {
   picker.addEventListener('change', syncUrl);
 
   const msg = $('action-msg');
+  const finderEl = $('finder'); // held on to: the town box can sit inside the About panel for a while
   let msgTimer = 0;
   // A status line beside the button it answers (above it in the time bar, to its left in a phone's button stack), or
   // under the header when no button asked.
@@ -597,7 +600,7 @@ function start() {
   // Find a town (needs the map's town names, so not in the one-file build). The About panel's "Find a town" opens the
   // same box inside the panel: a way to read a place's season without pointing at the map.
   if (__BASEMAP__) {
-    const openFinder = mountFinder($('find'), $('finder'), (lat, lng, name) => {
+    const finder = mountFinder($('find'), $('finder'), (lat, lng, name) => {
       // On a phone, drop the About sheet to its middle stop first, so the place lands in the map above it.
       if ($('drawer').classList.contains('open') && phone.matches && !slim.matches) toggleDrawer(true);
       if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
@@ -607,8 +610,9 @@ function start() {
       if (!b) return;
       // On a phone the sheet goes to its tall stop first, so the box shows above the keyboard.
       if (phone.matches && !slim.matches) toggleDrawer(true, true);
-      openFinder(b);
+      finder.open(b);
     });
+    toggleDrawer.onLeave(finder.leave);
   } else $('find').hidden = true;
 
   // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
@@ -734,14 +738,17 @@ function start() {
 
   // Close a pinned card: its × button, Escape, or (with a mouse) the pointer leaving the map for a panel.
   // The × goes away with the card, so hand keyboard focus to the time slider rather than drop it on the page.
+  // A tap pins its card before the browser sends that tap's click, and a docked card (a phone on its side) can open
+  // right under the finger: that same click must not land on the card's × or "More".
   probeEl.addEventListener('click', (e) => {
+    if (performance.now() - tappedAt < 500) return void (e.preventDefault(), e.stopPropagation());
     if (!(e.target as Element).closest('.probe-close')) return;
     unpin();
     $('t-range').focus({ preventScroll: true });
   });
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !$('finder').hidden) return;
+    if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !finderEl.hidden) return;
     const hadFocus = probeEl.contains(document.activeElement);
     unpin();
     if (hadFocus) $('t-range').focus({ preventScroll: true });

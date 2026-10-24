@@ -57,5 +57,5 @@ export function windowCheck(data: ReplayFile): string | null {
   const c = data.interval?.checked?.peak;
   if (!c) return null;
   const [k, n, lo, hi] = c;
-  return `A hexagon\u2019s "likely" dates caught the real peak of a whole band of the map in ${k} of ${n} past tries it never saw. The aim is 8 in 10; with this few tries the true rate could be anywhere from ${lo} to ${hi}%. One hexagon can miss by more.`;
+  return `The "likely" dates caught the real peak of a whole band of the map in ${k} of ${n} past tries it never saw. The aim is 8 in 10; with this few tries the true rate could be anywhere from ${lo} to ${hi}%. One hexagon can miss by more.`;
 }
