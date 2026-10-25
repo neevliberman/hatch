@@ -199,8 +199,8 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         for (const j of [0, 1, 2, 1]) await touch('touchMove', y + j);
         for (let i = 1; i <= 12; i++) { await touch('touchMove', y - i * 12); await page.waitForTimeout(16); }
         await touch('touchEnd', 0);
-        await page.waitForTimeout(500);
-        if (!(await page.evaluate(() => document.querySelector('#drawer').scrollTop > 20))) fail('a swipe that starts on the About text did not scroll it');
+        const scrolled = await page.waitForFunction(() => document.querySelector('#drawer').scrollTop > 20, null, { timeout: 5000 }).then(() => true, () => false);
+        if (!scrolled) fail('a swipe that starts on the About text did not scroll it');
       }
       // Above the sheet at the far left: the header's middle is the season menu, which a tap would open instead.
       await page.touchscreen.tap(12, Math.max(4, tall.y / 2));
