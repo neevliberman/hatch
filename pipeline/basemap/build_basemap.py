@@ -622,7 +622,8 @@ def shore_file(dry, wet, sea):
 
     def collection(geom):
         feats = []
-        for part in getattr(snapped(geom), 'geoms', [geom]):
+        fixed = snapped(geom)
+        for part in getattr(fixed, 'geoms', [fixed]):
             g = rounded(part, SHORE_TOL) if part.geom_type == 'Polygon' and not part.is_empty else None
             if g:
                 feats.append({'type': 'Feature', 'geometry': g, 'properties': {}})
