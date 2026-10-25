@@ -2,6 +2,7 @@ import type { Explainer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import { CITIES, explainerHtml, spotHtml } from './explainer';
 import { CROSS } from './icons';
+import { warmthHtml } from './warmth';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -88,6 +89,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
               .join('')
           : '<p class="muted">No layers are active.</p>'
       }
+      ${layers.length ? warmthHtml() : ''}
       ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}</div>`;
     drawer.querySelector('#drawer-close')!.addEventListener('click', () => toggle(false));
     // The grip is also a button, for a mouse or a keyboard on a narrow window: it swaps the two stops.
