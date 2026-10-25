@@ -55,6 +55,36 @@ Per strip, the scorecard's `miss` (rounded to 0.1 d, as published; D uses these 
 - **Amendments after 1 March 2027** are limited to two reasons: `bug-both-models` (a defect that breaks forecasts or scoring, fixed identically for both models) and `feed-outage` (a weather, iNat or archive outage, handled the same way for both). Each lists which strips were already scored (their rows stay frozen). An amendment can never change model parameters, the metric, thresholds, the verdict date or the gate. Before 1 March, `reason=pre-season` is also allowed.
 - A pinned file may change only via an amendment line below; `pipeline/fit/tests/test_prereg.py` fails CI (`.github/workflows/tests.yml` runs `pytest -q pipeline`) otherwise. This is a tripwire, not a lock: a determined edit of the test or table is visible in git history.
 
+## Second shadow: "A1 cap + flag and widen" (rule written 2026-10-25, before any 2027 data)
+A separate, secondary shadow beside P3 (P3.1 vs P3 above stays the decisive test and is untouched by this section). It
+is the combination proposed in `notebooks/southbias/RESULT.md` ("Proposed (not implemented) for 2027"); that combination
+was chosen after seeing the 2026 scores, so it is **not** a pre-registered winner and 2026 is a second look for it.
+Code: `pipeline/live/shadow_rule.py`, tests `pipeline/live/test_shadow_rule.py`. In plain words: never believe a warmth
+balance richer than the richest one the model learned from, and where a place is past that, say so and stretch the
+"likely" range to include the usual date. The point forecast is not moved.
+1. **Envelope E(t)** per fold fit: on each day index t (day of year - 1), the largest banked degree-days (Daymet, base
+   10 C, from 1 March) at any training place-year (a hexagon-year with at least one first-brood training record), all
+   latitudes pooled. 11 arrays of 365 numbers, shipped beside `fold_fits.json`.
+2. **A1 cap:** each hexagon's running bank is replaced by min(bank, E(t)) (`cap_inc`); the frozen P3 forecast then runs
+   unchanged on the capped weather.
+3. **Flag:** a hexagon is flagged if its real, uncapped bank is strictly above E(t) on any day from 1 April (index 90) to
+   its strip's A1 forecast peak. A strip is flagged if any hexagon with positive strip weight is flagged.
+4. **Widen, don't move:** a flagged strip's onset and peak "likely" ranges become (min(lo, c), max(hi, c)), c = the
+   scorecard's calendar date for that strip and quantity. Unflagged strips and all point forecasts are unchanged.
+5. **Weather sources, as they differ:** E(t) is built from Daymet (what the fit saw); the live bank is PRISM as
+   `pipeline/live/sources.py` reads it, after `prism_offsets.json`. The check on 2023-2025 (`notebooks/southbias/prism_flag.py`)
+   found PRISM moves which years fire rather than firing more often.
+6. **Grading:** the scorecard's `miss` on the point forecast would be identical to P3's except where the cap binds; the
+   widening is judged only by coverage of the real onset/peak and the widened width, reported, not part of the
+   P3.1 decision rule above.
+
+**Not yet done, and not hidden:** the 11 envelope arrays are not in the repo (they need the Daymet cube and training
+records, which are not cached here), the rule is not wired into `build_live.py` or an archive (`live/archive_a1/`), and
+the card text for a flag is not written. Each of those touches or adds inputs and must land before 1 March 2027 with a
+`reason=pre-season` amendment line for any pinned file it changes (`build_live.py` is pinned). Until then this shadow does
+not exist and nothing is claimed for it. If it is not archiving by 15 March 2027 it is dropped for 2027, with no effect on
+the P3 vs P3.1 test.
+
 ## Amendments
 Format: `- date | path | new sha256 | reason=<code> | scored=<strips or none> | why`.
 
