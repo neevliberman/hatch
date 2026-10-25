@@ -141,6 +141,8 @@ function woodsLayers(zoom: number): Layer[] {
   ];
 }
 
+// (The sea layer gets another id when its data changes: deck.gl drew stray triangles when a layer's polygons were swapped
+// for others under the same id.)
 // The sea's features: the overview's, or from SHORE_ZOOM, once shore.json is in, the ones with the shore land given back
 // (see shore() below). The same arrays come back, so deck does not re-tessellate them each frame.
 let seaFixed: Feature[] | null = null;
@@ -170,7 +172,7 @@ const outside = (p: Part, zoom: number): Layer[] =>
           lineWidthUnits: 'pixels',
           pickable: false,
         })),
-        new GeoJsonLayer({ id: 'outside-sea', data: seaOf(p, zoom), filled: true, stroked: false, getFillColor: P.water,
+        new GeoJsonLayer({ id: zoom >= SHORE_ZOOM && parts.shore ? 'outside-sea-fine' : 'outside-sea', data: seaOf(p, zoom), filled: true, stroked: false, getFillColor: P.water,
           pickable: false }),
       ]
     : [];
