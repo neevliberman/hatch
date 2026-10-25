@@ -15,12 +15,15 @@ export function vsNormalLine(peak: number | null | undefined, typicalPeak: numbe
 export const typicalPeak = (forecast: Record<string, (number | null)[][]>, i: number | undefined): number | null =>
   i === undefined ? null : (forecast[TYPICAL]?.[i]?.[2] ?? null);
 
+/** iCalendar TEXT escaping (RFC 5545 section 3.3.11). */
+const escText = (x: string) => x.replace(/[\\;,]/g, '\\$&').replace(/\r?\n/g, '\\n');
+
 const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10).replaceAll('-', '');
 
 /** An all-day calendar event covering days `from` to `to` (inclusive, day of year) of `year`, as a downloadable .ics file. */
 export function peakCalendar(what: string, id: string, year: number, from: number, to: number) {
-  const start = Date.UTC(year, 0, from);
-  const end = Date.UTC(year, 0, to + 1); // DTEND is the day after, for an all-day event
+  const start = Date.UTC(year, 0, Math.round(from)); // rounded, as the card's own dates are
+  const end = Date.UTC(year, 0, Math.round(to) + 1); // DTEND is the day after, for an all-day event
   const text = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -30,10 +33,11 @@ export function peakCalendar(what: string, id: string, year: number, from: numbe
     `DTSTAMP:${ymd(Date.now())}T000000Z`,
     `DTSTART;VALUE=DATE:${ymd(start)}`,
     `DTEND;VALUE=DATE:${ymd(end)}`,
-    `SUMMARY:${what}: busiest days likely`,
-    'DESCRIPTION:Forecast from Hatch. When people tend to see them; it can shift as the weather does.',
+    `SUMMARY:${escText(what)} busiest days likely`,
+    'DESCRIPTION:Hatch forecast: when people tend to see them.',
     'END:VEVENT',
     'END:VCALENDAR',
+    '',
   ].join('\r\n');
   return { href: `data:text/calendar;charset=utf-8,${encodeURIComponent(text)}`, filename: `${id}-${year}.ics`, label: 'Add to calendar' };
 }

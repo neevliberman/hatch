@@ -508,7 +508,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
     more.push(`Real weather to ${asOf}, then forecast.`);
-    const calendar = lo != null && hi != null && doyToMs(y, hi) >= Date.now() ? peakCalendar('Luna moth', 'luna-moth', y, lo, hi) : undefined;
+    const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar('Luna moth', 'luna-moth', y, lo, hi) : undefined;
     return { title, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
   };
 

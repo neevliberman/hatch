@@ -141,7 +141,7 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
             : ''
         }${
           card.calendar
-            ? `<a class="probe-link" href="${esc(card.calendar.href)}" download="${esc(card.calendar.filename)}">${esc(card.calendar.label)}</a>`
+            ? `<a class="probe-link" href="${esc(card.calendar.href)}" download="${esc(card.calendar.filename)}">${esc(card.calendar.label)}<span class="sr"> (downloads a calendar file)</span></a>`
             : ''
         }</div>`,
     )

@@ -287,7 +287,7 @@ export function createOneGenerationLayer(
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
     more.push(`Real weather to ${asOf}, then forecast.`);
-    const calendar = lo != null && hi != null && doyToMs(y, hi) >= Date.now() ? peakCalendar(one, key, y, lo, hi) : undefined;
+    const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar(one, key, y, lo, hi) : undefined;
     return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
   };
 
