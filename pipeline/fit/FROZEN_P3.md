@@ -96,3 +96,5 @@ In the spatial holdout the WI/MN targets use cut-offs from WI/MN records of the 
 
 - 2026-10-23, outcome: **P3.1 is not adopted; the map stays on P3 (p3_photo).** The live pipeline's 2026 dry run (PRISM weather, 2026 sightings, neither model saw 2026 moths) was rebuilt with the P3.1 fold fits. Sighting-weighted strip miss as of 30 Sep: P3 2.1-3.1 d, P3.1 4.4-6.9 d, depending on the summary (see pipeline/live/DRYRUN_2026.md). P3.1 runs earlier in the south and later in the north, the lean the daylength term was there to remove. One season, rough check, but it is the only test either model has not touched, so the pre-registered pick stays on the map. This overrides the amendment's tie rule above, using a check that was not pre-registered (its summaries were chosen after seeing the results). P3.1's numbers are kept in `results/p3_1/`.
 
+
+- 2026-10-24, correction (no choice changed): the P3.1 run note above says P3's run 2 results "moved to `results/p3_run2/`". That folder does not exist. P3's run 2 (the map's model) is still in `results/` and `figures/`; P3.1 is in `results/p3_1/`. The 2027 head-to-head is pre-registered in [PREREG_2027.md](PREREG_2027.md).
