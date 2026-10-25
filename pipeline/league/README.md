@@ -47,6 +47,10 @@ Each week's records file (about 100 KB for luna) is kept, with its sha256, as th
 **Adding a challenger.** Pass its tryout on past seasons (written up beside its code), freeze its fits, add it to
 `BENCH` with a gate before 1 March of its first season. From then on, the league grades it every week.
 
+**Tryouts so far** (`tryouts/`): learning from this year's first sightings, no gain ([ASSIM_RESULT.md](tryouts/ASSIM_RESULT.md));
+forecasting new regions, where a local heat clock beats the local calendar across the East by 1.5 days, found after
+the fact, so it needs 2027 to confirm it ([REGIONAL_RESULT.md](tryouts/REGIONAL_RESULT.md)).
+
 **Not built yet (before the first verdict, September 2027):** the step that swaps a winner onto the map for the next
 season and opens an issue saying what changed and why; showing the table in the app.
 

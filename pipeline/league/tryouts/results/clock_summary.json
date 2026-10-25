@@ -1,0 +1,43 @@
+{
+ "loyo_east": {
+  "cal": 6.27,
+  "r1": 6.64,
+  "clock": 4.73,
+  "mix": 5.14,
+  "n": 215,
+  "clock_minus_cal_ci": [
+   -2.76,
+   -0.68
+  ],
+  "mix_minus_cal_ci": [
+   -1.79,
+   -0.68
+  ]
+ },
+ "loyo_mw": {
+  "cal": 7.31,
+  "r1": 6.01,
+  "clock": 4.04,
+  "mix": 5.22,
+  "n": 31,
+  "clock_minus_cal_ci": [
+   -5.28,
+   -1.31
+  ],
+  "mix_minus_cal_ci": [
+   -3.12,
+   -1.08
+  ]
+ },
+ "cold": {
+  "slid": 9.7,
+  "one": 7.14,
+  "r1": 7.36,
+  "clock": 7.99,
+  "n": 217,
+  "clock_minus_slid_ci": [
+   -2.65,
+   -0.8
+  ]
+ }
+}
