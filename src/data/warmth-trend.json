@@ -1,0 +1,65 @@
+{
+ "years": [
+  1980,
+  2024
+ ],
+ "milestoneDD": 225.6,
+ "sites": [
+  {
+   "name": "Minneapolis",
+   "lat": 44.98,
+   "lng": -93.27,
+   "perDecade": -0.87,
+   "se": 0.88
+  },
+  {
+   "name": "Madison",
+   "lat": 43.07,
+   "lng": -89.4,
+   "perDecade": 0.65,
+   "se": 0.83
+  },
+  {
+   "name": "Detroit",
+   "lat": 42.33,
+   "lng": -83.05,
+   "perDecade": 0.5,
+   "se": 0.8
+  },
+  {
+   "name": "Des Moines",
+   "lat": 41.59,
+   "lng": -93.62,
+   "perDecade": -0.01,
+   "se": 1.03
+  },
+  {
+   "name": "Chicago",
+   "lat": 41.88,
+   "lng": -87.63,
+   "perDecade": 0.28,
+   "se": 0.91
+  },
+  {
+   "name": "Columbus",
+   "lat": 39.96,
+   "lng": -83.0,
+   "perDecade": 1.7,
+   "se": 0.75
+  },
+  {
+   "name": "Indianapolis",
+   "lat": 39.77,
+   "lng": -86.16,
+   "perDecade": 1.55,
+   "se": 0.85
+  },
+  {
+   "name": "St. Louis",
+   "lat": 38.63,
+   "lng": -90.2,
+   "perDecade": 1.2,
+   "se": 0.95
+  }
+ ]
+}
