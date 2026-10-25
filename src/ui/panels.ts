@@ -139,6 +139,10 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
           card.link
             ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)}<span aria-hidden="true"> &#8599;</span><span class="sr"> (opens in a new tab)</span></a>`
             : ''
+        }${
+          card.calendar
+            ? `<a class="probe-link" href="${esc(card.calendar.href)}" download="${esc(card.calendar.filename)}">${esc(card.calendar.label)}</a>`
+            : ''
         }</div>`,
     )
     .join('');

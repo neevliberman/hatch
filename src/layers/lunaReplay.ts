@@ -29,6 +29,7 @@ import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, parentOf, 
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
 import { modelChecks, windowCheck } from './replayData';
+import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
 
 /** Adults live about a week, so each sighting glows for this many days, fading as it ages. */
 export const GLOW_DAYS = 10;
@@ -496,6 +497,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const hi = i === undefined ? null : L.hi[i]?.[2];
     if (lo != null && hi != null) lines.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Peak likely about ${f(q[2])}.`);
+    const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
+    if (vs) lines.push(vs);
     if (!seen) lines.push('No sightings nearby to check against.');
     const out = i === undefined ? null : L.outNow[i];
     // Zeros are the empty state (early spring, or nothing banked yet): say nothing rather than "0% out".
@@ -505,7 +508,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
     more.push(`Real weather to ${asOf}, then forecast.`);
-    return { title, swatch: css(STAGE_COLOR[stage]), lines, more };
+    const calendar = lo != null && hi != null && doyToMs(y, hi) >= Date.now() ? peakCalendar('Luna moth', 'luna-moth', y, lo, hi) : undefined;
+    return { title, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
   };
 
   return {
@@ -756,6 +760,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       // In date order: the first moths, then the busiest stretch.
       else if (q25 != null && q75 != null)
         lines.push(`${q05 != null ? `First moths about ${fmtDoy(year, q05)}. ` : ''}Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      if (mode !== TYPICAL) {
+        const pi = cellIndex.get(at.parent);
+        const vs = vsNormalLine(pi === undefined ? null : forecast()[pi]?.[2], typicalPeak(data.forecast, pi));
+        if (vs) lines.push(vs);
+      }
       if (!at.seen) lines.push('No lunas ever seen near here to check this against.');
       if (likely && q05 != null && q25 != null && q75 != null)
         more.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
