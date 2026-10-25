@@ -1,1 +1,13 @@
 public/fine/** binary
+# Files pinned by hash in pipeline/fit/PREREG_2027.md: never convert line endings
+pipeline/live/scorecard.py text eol=lf
+pipeline/live/build_live.py text eol=lf
+notebooks/hatch_p1/prep.py text eol=lf
+pipeline/replay/build_replay.py text eol=lf
+pipeline/replay/fold_fits*.json text eol=lf
+pipeline/fit/model.py text eol=lf
+pipeline/fit/results/loyo_params.json text eol=lf
+pipeline/fit/results/p3_1/loyo_params.json text eol=lf
+pipeline/live/effort_profile.json text eol=lf
+pipeline/live/prism_offsets.json text eol=lf
+pipeline/live/records/*.parquet binary
