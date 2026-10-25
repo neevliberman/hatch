@@ -38,6 +38,11 @@ its strip dates under `shadows` in the live file (about 1 KB each); the nightly 
 The job's `git add live` commits all of it to the `live-data` branch. A challenger that fails never costs the night's
 forecast; it raises the job's alarm.
 
+**Locked for 2027.** `rules.py`, `weekly.py` and `gates.json` are pinned by hash in PREREG_2027.md, and P3.1's bench
+entry is held to it by a test. A verdict is computed from the verdict week's records and cards, and never recomputed
+from later data. A decided challenger leaves the bench. Earlier seasons' tables stay in `league.json` under `past`.
+Each week's records file (about 100 KB for luna) is kept, with its sha256, as the receipt.
+
 **Adding a challenger.** Pass its tryout on past seasons (written up beside its code), freeze its fits, add it to
 `BENCH` with a gate before 1 March of its first season. From then on, the league grades it every week.
 

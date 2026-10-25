@@ -60,6 +60,9 @@ def test_bench_is_the_preregistered_p31():
     assert [c.slug for c in bench.tonight(2027)] == ["luna~p3.1-v1"]
     assert bench.tonight(2027, ["firefly"]) == []
     assert P31.model_hash() == "a9fb5fe06cdb"                             # the hash PREREG_2027.md pins
+    # P3.1's entry is PREREG_2027.md's, field by field (bench.py itself is not pinned, so challengers can be added)
+    assert (P31.id, P31.species, P31.archive, P31.first_season, P31.gate) == ("p3.1-v1", "luna", "archive_p31", 2027, "daymet-2026")
+    assert P31.fits == Path(__file__).resolve().parents[2] / "pipeline" / "replay" / "fold_fits_p31.json"
     assert P31.verdict == dt.date(2027, 9, 27) and P31.verdict.weekday() == 0
     assert P31.archive_dir(Path("live/archive")) == Path("live/archive_p31")
     sp = P31.live_species()
@@ -178,11 +181,60 @@ def test_verdict_after_the_verdict_date_needs_the_gate(tmp_path):
     def fetch(season, until, taxon):
         return raw_records()
     late = dt.date(2027, 9, 27)
-    t = weekly.run(tmp_path, SEASON, late, fetch=fetch, gates={"luna~p3.1-v1": {"passed": None}})
+    t = weekly.run(tmp_path, SEASON, late, fetch=fetch, gates={"luna~p3.1-v1": {"d": None}})
     assert t["layers"]["luna"]["challengers"][0]["verdict"] == "tie"         # gate not settled
-    t = weekly.run(tmp_path, SEASON, late, fetch=fetch, gates={"luna~p3.1-v1": {"passed": True}})
+    assert weekly.run(tmp_path, SEASON, late, fetch=fetch, gates={"luna~p3.1-v1": {"d": 1.0}}
+                      )["layers"]["luna"]["challengers"][0]["verdict"] == "tie"      # D(2026) = +1.0 fails the gate
+    t = weekly.run(tmp_path, SEASON, late, fetch=fetch, gates={"luna~p3.1-v1": {"d": 0.4}})
     c = t["layers"]["luna"]["challengers"][0]
     assert c["verdict"] == "challenger_wins" and c["takes_map"] == 2028
+
+
+def test_the_verdict_week_stands_and_the_challenger_leaves_the_bench(tmp_path):
+    season_files(tmp_path)
+    pulls = []
+
+    def fetch(season, until, taxon):
+        pulls.append(until)
+        return raw_records()
+    gates = {"luna~p3.1-v1": {"d": 0.4}}
+    at = weekly.run(tmp_path, SEASON, dt.date(2027, 9, 27), fetch=fetch, gates=gates)["layers"]["luna"]["challengers"][0]
+    after = weekly.run(tmp_path, SEASON, dt.date(2027, 10, 6), fetch=fetch, gates=gates)["layers"]["luna"]["challengers"][0]
+    assert pulls == [dt.date(2027, 9, 27)]                 # the verdict week's records, never a later pull
+    assert after["verdict"] == at["verdict"] and after["tally"] == at["tally"] and after["strips"] == at["strips"]
+    assert bench.tonight(2028) == []                       # a decided challenger is never graded again
+
+
+def test_a_strip_scored_by_one_model_only_is_not_frozen():
+    champ = {"bands": [{"band": "37-39", "cutoff": 177, "settles_on": "2027-07-10", "n": 25, "pending_records": 0,
+                        "status": "scored", "miss": 3.0}]}
+    chall = {"bands": [{"band": "37-39", "cutoff": 177, "settles_on": "2027-07-10", "n": 25, "pending_records": 0,
+                        "status": "no_forecast"}]}
+    weekly.only_when_both_scored(champ, chall)
+    assert champ["bands"][0]["status"] == "waiting_for_other" and "miss" not in champ["bands"][0]
+    assert chall["bands"][0]["status"] == "no_forecast"
+
+
+def test_gate_is_read_from_its_number():
+    assert weekly.gate_state("x", {"x": {"d": None}}) is None
+    assert weekly.gate_state("x", {"x": {"d": 0.99}}) is True
+    assert weekly.gate_state("x", {"x": {"d": 1.0}}) is False
+    assert weekly.gate_state("luna~p3.1-v1") is None       # not computed yet (due 31 Aug 2027)
+
+
+def test_a_shrunken_records_pull_is_refused(tmp_path):
+    sp = __import__("live.registry", fromlist=["x"]).get("luna")
+    weekly.weekly_records(tmp_path, SEASON, sp, dt.date(2027, 7, 12), dt.date(2027, 7, 12), lambda *a: raw_records())
+    with pytest.raises(RuntimeError):
+        weekly.weekly_records(tmp_path, SEASON, sp, dt.date(2027, 7, 19), dt.date(2027, 7, 19),
+                              lambda *a: raw_records().head(10))
+    assert not weekly.records_path(tmp_path, SEASON, "luna", dt.date(2027, 7, 19)).exists()
+
+
+def test_a_broken_bench_never_costs_the_night(monkeypatch):
+    from league import bench as B
+    monkeypatch.setattr(B, "tonight", lambda *a, **k: 1 / 0)
+    assert L.shadows({}, SEASON, dt.date(2027, 4, 1), dt.date(2027, 4, 4), ["luna"]) == ({}, ["bench"])
 
 
 def test_scores_stay_frozen_week_to_week(tmp_path):
@@ -200,3 +252,20 @@ def test_scores_stay_frozen_week_to_week(tmp_path):
     a = {r["band"]: r for r in first["layers"]["luna"]["bands"] if r["status"] == "scored"}
     b = {r["band"]: r for r in second["layers"]["luna"]["bands"] if r["status"] == "scored"}
     assert a and all(b[k] == a[k] for k in a)
+
+
+def test_a_new_season_keeps_the_last_table_and_saved_records_are_checked(tmp_path, monkeypatch):
+    (tmp_path / "league.json").write_text(json.dumps({"kind": "league", "season": 2027, "score_date": "2027-09-27",
+                                                      "layers": {"luna": {"challengers": ["decided"]}}}))
+    monkeypatch.setattr(bench, "tonight", lambda season, keys=None: [] if keys == ["none"] else [P31])
+    monkeypatch.setattr(weekly, "run", lambda live, season, today, fetch=None, gates=None:
+                        {"kind": "league", "season": season, "score_date": "2028-03-06", "layers": {}})
+    weekly.run_if_due(tmp_path, 2028, dt.date(2028, 3, 8))
+    t = json.loads((tmp_path / "league.json").read_text())
+    assert t["season"] == 2028 and t["past"]["2027"]["layers"]["luna"]["challengers"] == ["decided"]
+    sp = __import__("live.registry", fromlist=["x"]).get("luna")
+    weekly.weekly_records(tmp_path, SEASON, sp, dt.date(2027, 7, 12), dt.date(2027, 7, 12), lambda *a: raw_records())
+    p = weekly.records_path(tmp_path, SEASON, "luna", dt.date(2027, 7, 12))
+    p.write_bytes(p.read_bytes()[:-1] + b"x")
+    with pytest.raises(RuntimeError):
+        weekly.weekly_records(tmp_path, SEASON, sp, dt.date(2027, 7, 12), dt.date(2027, 7, 12), lambda *a: raw_records())

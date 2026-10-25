@@ -434,9 +434,14 @@ def build_all(season, as_of, use_forecast, today, prev=None, keys=None):
 def shadows(wx, season, as_of, today, keys):
     """Tonight's bench challengers (pipeline/league/bench.py) on the same weather: {slug: strip dates only}, and the
     slugs that failed. A challenger's failure never costs a species' forecast; the scorecard step raises the alarm."""
-    from league import bench
     out, failed = {}, []
-    for ch in bench.tonight(season, keys):
+    try:
+        from league import bench
+        bench_now = bench.tonight(season, keys)
+    except (Exception, SystemExit) as err:  # noqa: BLE001 -- even a broken bench must not cost the night
+        print(f"::error::bench could not be read: {err!r}", flush=True)
+        return out, ["bench"]
+    for ch in bench_now:
         try:
             e = forecast_species(ch.live_species(), wx, season, as_of, today, model_id=ch.id, sightings=False)
             out[ch.slug] = bench.shadow_entry(e, ch)

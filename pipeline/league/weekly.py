@@ -33,20 +33,42 @@ from live import registry, scorecard as S  # noqa: E402
 GATES = HERE / "gates.json"
 
 
+def write_atomic(p: Path, data: bytes):
+    """Write via a temporary file and rename, so a killed run never leaves a half-written file."""
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(p)
+
+
+def sha256(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
 def records_path(live: Path, season, key, monday: dt.date) -> Path:
     base = live / "records" / str(season)
     return (base if key == "luna" else base / key) / f"{monday.isoformat()}.parquet"
 
 
 def weekly_records(live: Path, season, sp, monday: dt.date, today: dt.date, fetch=S.fetch_records):
-    """This week's one pull of the season's records for species `sp` (reused if this week's file exists)."""
+    """This week's one pull of the season's records for species `sp` (reused if this week's file exists). A pull
+    smaller than last week's (a truncated or empty download: records are only ever added) is refused, not saved, so
+    the next night tries again."""
     p = records_path(live, season, sp.key, monday)
-    if p.exists():
+    sidecar = p.with_suffix(".sha256")
+    if p.exists() and sidecar.exists():
+        if sidecar.read_text().split()[0] != sha256(p):
+            raise RuntimeError(f"{p} does not match its sha256; the week's records were changed after saving")
         return pd.read_parquet(p)
     raw = fetch(season, today, sp.taxon)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    raw.to_parquet(p)
-    p.with_suffix(".sha256").write_text(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n")
+    older = sorted(q for q in p.parent.glob("*.parquet") if q.name < p.name)
+    if older and len(raw) < 0.9 * len(pd.read_parquet(older[-1])):
+        raise RuntimeError(f"records pull for {sp.key}: {len(raw)} rows, under 90% of last week's; not saving it")
+    import io
+    buf = io.BytesIO()
+    raw.to_parquet(buf)
+    write_atomic(p, buf.getvalue())
+    write_atomic(sidecar, f"{sha256(p)}  {p.name}\n".encode())   # the file counts as saved only once this exists
     return raw
 
 
@@ -61,25 +83,40 @@ def card_path(live: Path, season, slug) -> Path:
 
 
 def gate_state(slug, gates=None):
+    """True / False once the gate's number is recorded (PREREG_2027.md: passes if D(2026) < +1.0 d), else None."""
     g = (gates if gates is not None else json.loads(GATES.read_text())).get(slug) or {}
-    return g.get("passed")
+    return None if g.get("d") is None else bool(g["d"] < rules.MARGIN)
+
+
+def only_when_both_scored(champ, chall):
+    """Each model's scorecard layer with a strip left unscored (so not frozen, and graded again next week) unless the
+    other model scored it the same week. Both then freeze together, on the same records, so their n always agree."""
+    a = {r["band"]: r for r in champ["bands"] if r.get("status") == "scored"}
+    b = {r["band"]: r for r in chall["bands"] if r.get("status") == "scored"}
+    for layer, other in ((champ, b), (chall, a)):
+        layer["bands"] = [r if r.get("status") != "scored" or r["band"] in other else
+                          {k: r[k] for k in ("band", "cutoff", "settles_on", "n", "pending_records")} | {"status": "waiting_for_other"}
+                          for r in layer["bands"]]
 
 
 def grade_challenger(ch, live: Path, season, today: dt.date, raw, replay, gates=None):
-    """One challenger's row in the league table, writing both models' cards for this week."""
+    """One challenger's row in the league table, writing both models' cards for this week. `today` is never past the
+    challenger's verdict Monday (run() caps it), so nothing scored after the verdict date counts."""
     sp = registry.get(ch.species)
     champ_all = S.load_archive(sp.archive(live / "archive"), season)
     chall_all = S.load_archive(ch.archive_dir(live / "archive"), season)
     champ, chall = common_nights(champ_all, chall_all)
-    cards = {}
+    cards, paths = {}, {}
     for role, entries in (("champion", champ), ("challenger", chall)):
-        p = card_path(live, season, f"{ch.slug}.{role}")      # each model from its own last card (frozen rows)
-        card = S.scorecard(season, raw, entries, today, replay=replay, layer=ch.species, prev=S.read_card(p))
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(card, separators=(",", ":"), allow_nan=False))
-        cards[role] = card["layers"][ch.species]
+        paths[role] = card_path(live, season, f"{ch.slug}.{role}")      # each from its own last card (frozen rows)
+        card = S.scorecard(season, raw, entries, today, replay=replay, layer=ch.species, prev=S.read_card(paths[role]))
+        cards[role] = card
+    only_when_both_scored(cards["champion"]["layers"][ch.species], cards["challenger"]["layers"][ch.species])
+    for role, card in cards.items():
+        write_atomic(paths[role], json.dumps(card, separators=(",", ":"), allow_nan=False).encode())
+    cards = {role: card["layers"][ch.species] for role, card in cards.items()}
     strips = rules.head_to_head(cards["champion"]["bands"], cards["challenger"]["bands"])
-    final = S.week_start(today) >= ch.verdict
+    final = season == ch.verdict.year and S.week_start(today) >= ch.verdict
     gate = gate_state(ch.slug, gates)
     verdict, reason = rules.decide(strips, final, gate)
     return {"id": ch.id, "why": ch.why, "model": cards["challenger"]["model"], "champion_model": cards["champion"]["model"],
@@ -96,10 +133,13 @@ def run(live: Path, season, today: dt.date, fetch=S.fetch_records, gates=None):
     layers = {}
     for key in sorted({c.species for c in bench.tonight(season)}):
         sp = registry.get(key)
-        raw = weekly_records(live, season, sp, monday, today, fetch)
         replay = json.loads(sp.replay.read_text())
-        layers[key] = {"challengers": [grade_challenger(c, live, season, today, raw, replay, gates)
-                                       for c in bench.tonight(season, [key])]}
+        rows = []
+        for c in bench.tonight(season, [key]):
+            day = min(today, c.verdict)                  # after the verdict Monday, the verdict week's table stands
+            raw = weekly_records(live, season, sp, S.week_start(day), day, fetch)
+            rows.append(grade_challenger(c, live, season, day, raw, replay, gates))
+        layers[key] = {"challengers": rows}
     return {"version": 1, "kind": "league", "season": season, "score_date": monday.isoformat(),
             "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "rule": {"margin_days": rules.MARGIN, "min_wins": rules.MIN_WINS, "min_strips": rules.MIN_STRIPS,
@@ -120,7 +160,12 @@ def run_if_due(live: Path, season, today: dt.date, fetch=S.fetch_records, force=
     if not force and old and old.get("season") == season and old.get("score_date") == S.week_start(today).isoformat():
         return None
     table = run(live, season, today, fetch)
-    out.write_text(json.dumps(table, separators=(",", ":"), allow_nan=False) + "\n")
+    # earlier seasons' last tables are carried forward, so a new season never drops a decided verdict
+    past = {str(k): v for k, v in ((old or {}).get("past") or {}).items()}
+    if old and old.get("kind") == "league" and old.get("season") != season:
+        past[str(old["season"])] = {k: old[k] for k in ("score_date", "layers")}
+    table["past"] = dict(sorted(past.items()))
+    write_atomic(out, (json.dumps(table, separators=(",", ":"), allow_nan=False) + "\n").encode())
     return out
 
 

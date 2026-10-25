@@ -321,14 +321,22 @@ def add_all(archive: Path, live, issued=None, rehearsal=False):
         if "bands" in e and e.get("season") == live["season"]:
             folder = registry.BY_KEY[key].archive(archive) if key in registry.BY_KEY else archive / key
             out.append(add_to_archive(folder, e, issued, rehearsal))
-    # bench challengers (pipeline/league): the same rules, each into its own folder beside the archive root
-    from league import bench
-    for slug, e in (live.get("shadows") or {}).items():
-        if slug not in bench.BY_SLUG or e.get("backfill") or str(e.get("generated", ""))[:10] != tonight:
-            continue
-        if "bands" in e and e.get("season") == live["season"]:
-            out.append(add_to_archive(bench.BY_SLUG[slug].archive_dir(archive), e, issued, rehearsal))
+    # bench challengers (pipeline/league): the same rules, each into its own folder beside the archive root. A failure
+    # here never costs the species' archive or scorecard; main() raises the alarm (SHADOW_ERRORS).
+    try:
+        from league import bench
+        for slug, e in (live.get("shadows") or {}).items():
+            if slug not in bench.BY_SLUG or e.get("backfill") or str(e.get("generated", ""))[:10] != tonight:
+                continue
+            if "bands" in e and e.get("season") == live["season"]:
+                out.append(add_to_archive(bench.BY_SLUG[slug].archive_dir(archive), e, issued, rehearsal))
+    except Exception as err:  # noqa: BLE001
+        print(f"::error::archiving the bench challengers failed: {err!r}", flush=True)
+        SHADOW_ERRORS.append(repr(err))
     return out
+
+
+SHADOW_ERRORS = []   # filled by add_all; main() turns it into a failed night (the alarm), after publishing
 
 
 def scorecard_all(season, today: dt.date, archive: Path, records=None, prev=None, keys=None):
@@ -414,12 +422,16 @@ def main(argv=None):
     except Exception as err:  # noqa: BLE001
         print(f"::error::league table failed: {err!r}", flush=True)
         failed.append("league")
+    if SHADOW_ERRORS:
+        failed.append("shadow-archive")
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
     # failed" step). This is also how a species whose forecast failed in build_live.py gets noticed.
     if failed or live_failed:
         why = "; ".join([*(f"the {k} forecast failed in build_live.py (its last good entry was kept)" for k in live_failed),
                          *(["the weekly league table failed (pipeline/league/weekly.py)"] if "league" in failed else []),
-                         *(f"the {k} scorecard failed (its last layer was kept)" for k in failed if k != "league")])
+                         *(["archiving the bench challengers failed"] if "shadow-archive" in failed else []),
+                         *(f"the {k} scorecard failed (its last layer was kept)" for k in failed
+                           if k not in ("league", "shadow-archive"))])
         print(f"::error::{why}. {a.out} WAS written and published with every other species; "
               "this exit code only raises the alarm.", flush=True)
         return 1

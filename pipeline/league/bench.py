@@ -62,8 +62,10 @@ BY_SLUG = {c.slug: c for c in BENCH}
 
 
 def tonight(season, species_keys=None):
-    """The challengers that forecast this season (for the species being run tonight)."""
-    return [c for c in BENCH if c.first_season <= season and (species_keys is None or c.species in species_keys)]
+    """The challengers that forecast this season (for the species being run tonight). A challenger plays from its
+    first season through its verdict's season, then leaves the bench: promoted or retired, never graded again."""
+    return [c for c in BENCH if c.first_season <= season <= c.verdict.year
+            and (species_keys is None or c.species in species_keys)]
 
 
 def shadow_entry(live_entry, ch: Challenger):
