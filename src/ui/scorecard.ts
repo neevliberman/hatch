@@ -31,12 +31,12 @@ function html(f: File, c: Card): string {
   const when = f.rehearsal ? `${f.season} (rebuilt after the fact)` : `${f.season} so far`;
   const line =
     s.scored && s.miss != null && s.calendar_miss != null
-      ? `${when}: counting start and peak dates, the forecast missed by ${days(s.miss)} on average, the usual date by ${days(s.calendar_miss)}. The table shows peaks. ${s.scored} strip${s.scored > 1 ? 's' : ''} scored, ${s.pending || 'none'} pending.`
+      ? `${when}: the forecast missed start and peak dates by ${days(s.miss)} on average, the usual date by ${days(s.calendar_miss)}. ${s.scored} strip${s.scored > 1 ? 's' : ''} scored, ${s.pending || 'none'} pending.`
       : !s.scored && !s.pending
         ? (s.no_forecast ?? 0) > 0
-          ? `${when}: no strip could be scored: too few sightings, or no forecast made early enough.`
-          : `${when}: not enough sightings to score this season.`
-        : `${when}: nothing scored yet, ${s.pending} strip${s.pending === 1 ? '' : 's'} pending. A strip is checked once its first wave is over and its sightings are 2 weeks old.`;
+          ? `${when}: nothing scorable: too few sightings, or no early forecast.`
+          : `${when}: too few sightings to score.`
+        : `${when}: nothing scored yet, ${s.pending} strip${s.pending === 1 ? '' : 's'} pending. A strip is scored once its first wave is over and its sightings are 2 weeks old.`;
   const rows = c.bands
     .map((b) => {
       const p = b.peak;
@@ -45,8 +45,8 @@ function html(f: File, c: Card): string {
           ? `<td>${day(f.season, p.real)}</td><td>${day(f.season, p.forecast)}</td><td>${day(f.season, p.calendar)}</td>`
           : `<td colspan="3">${
               b.status === 'pending' ? `checked from ${md(Date.parse(b.settles_on))}`
-              : b.status === 'no_forecast' ? 'no forecast made early enough'
-              : 'too few sightings to check'
+              : b.status === 'no_forecast' ? 'no early forecast'
+              : 'too few sightings'
             }</td>`;
       return `<tr><th scope="row">${String(b.band).replace(/[^\d-]/g, '')}°N</th>${cells}</tr>`;
     })

@@ -202,8 +202,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 /* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
 #probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link,
   #probe.at-pointer:not(.pinned) .probe-more { display: none; }
-#probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
-#probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); }
+#probe.at-pointer::after { content: 'Click to pin'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+#probe.at-pointer.pinned::after { content: 'Pinned. Esc or \00D7  closes.'; /* two spaces: the first ends the escape */ color: var(--accent); }
 /* In the card's top-right corner, over its padding, so the title keeps its width. */
 #probe { position: relative; }
 .probe-close + .probe-cell, .probe-close + .probe-card .probe-title { padding-right: 22px; }
@@ -479,13 +479,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .date { min-width: 150px; font-size: 16px; }
   .date em { font-size: 15px; }
   .now b { visibility: hidden; } /* the "now" flag would poke up into the legend row; keep just its line, on the ribbon */
-  /* The map gets its height back: the caveat folds into the key chip, which says "test forecast", and comes back as
+  /* The map gets its height back: the caveat folds into the key chip, which says "on trial in 2027", and comes back as
      one short line while the key is open (the full wording would wrap and eat the map). */
   #strip { display: none; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #app:has(#legend:not(.folded)) #strip { display: block; }
   #honesty { display: none; }
-  #strip::before { content: 'Dots: last 10 days. Colors: test forecast.'; }
-  #legend.folded .lg-chip::after { content: '\00B7\00A0 test forecast'; margin-left: 2px; color: var(--warn); }
+  #strip::before { content: 'Dots: last 10 days. Colors: forecast (on trial in 2027).'; }
+  #legend.folded .lg-chip::after { content: '\00B7\00A0 on trial in 2027'; margin-left: 2px; color: var(--warn); }
   /* About opens beside the map and stops above the time bar (main.ts sets --dock-h), so the bar stays whole; the
      button stack and recenter step out to its left edge. */
   #drawer:not(.full), #drawer.full { top: 0; bottom: calc(var(--dock-h, 0px) + env(safe-area-inset-bottom)); height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);

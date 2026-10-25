@@ -627,7 +627,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(1500);
       const keys = await page.locator('#species option').evaluateAll((os) => os.map((o) => o.value));
       if (keys.join() !== listed.join()) fail(`species menu lists ${keys.join(', ')}, src/species.ts has ${listed.join(', ')}`);
-      if (!/Japanese beetle/.test(await page.locator('#tagline').textContent())) fail('the header does not name the Japanese beetle');
+      if (!/insect tracking/.test(await page.locator('#tagline').textContent())) fail('the header lost its site-wide subtitle');
       if ((await page.locator('#dots-what').textContent()) !== 'beetles') fail('the dots line does not count beetles');
       if (!new URL(page.url()).searchParams.get('species')?.startsWith('japanese-beetle')) fail(`the link dropped the species: ${page.url()}`);
       const bad = await page.evaluate(audit);

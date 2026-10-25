@@ -58,8 +58,8 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     // Where the code lives and where to report a problem: the same for every layer, so it closes the list.
     if (credits.length)
       credits.push(
-        { text: 'Code, data pipeline and method notes: github.com/neevliberman/hatch', href: 'https://github.com/neevliberman/hatch' },
-        { text: 'Spotted something wrong? Report it on GitHub', href: 'https://github.com/neevliberman/hatch/issues' },
+        { text: 'Code, data and method notes on GitHub', href: 'https://github.com/neevliberman/hatch' },
+        { text: 'Report a problem', href: 'https://github.com/neevliberman/hatch/issues' },
       );
     const credit = (c: { text: string; href?: string }) =>
       c.href ? `<a href="${esc(c.href)}" target="_blank" rel="noopener noreferrer">${esc(c.text)}<span class="sr"> (opens in a new tab)</span></a>` : esc(c.text);

@@ -373,7 +373,7 @@ function start() {
         .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
     face();
-    picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses; ${cur.seasonCount(TYPICAL).toLocaleString()} in all years)`;
+    picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses)`;
   };
   fillPicker();
   // This season, live: "next real season ... days from now" would contradict the map.
@@ -465,13 +465,12 @@ function start() {
     fillPicker();
     $('season-name').textContent = label(picker.value);
     face();
-    $('tagline').textContent = cur.words.tagline;
     ($('mark') as HTMLImageElement).src = cur.words.mark;
     showMark();
     $('dots-what').textContent = cur.words.plural;
     showCountdown();
     syncCountdown();
-    $('map').setAttribute('aria-label', `Map of the Midwest: ${cur.words.sightingsOf} sightings over hexagons colored by the forecast`);
+    $('map').setAttribute('aria-label', `Midwest map: ${cur.words.sightingsOf} sightings over forecast hexagons`);
     // Live mode opens on this species' own as-of day (each species' live forecast can run to its own), unless a link
     // gave a date; any other season keeps the calendar day.
     const live = picker.value === LIVE;
@@ -702,7 +701,7 @@ function start() {
   // rather than say "Already pinned", which would be wrong.
   const pin = (arrowed = false) => {
     if (radar) return; // the radar replay has the map: no hexagon to walk under it
-    if (pinned && !arrowed) return say('Already pinned. Arrow keys move it, Escape lets go.');
+    if (pinned && !arrowed) return say('Pinned. Arrow keys move it, Escape lets go.');
     const c = startCell();
     if (!c) return say('No forecast in view');
     steps = 0;
@@ -768,12 +767,12 @@ function start() {
         const at = showPlace(coords.latitude, coords.longitude, 'you');
         if (!at) {
           map.setMarker(null);
-          say('You are outside the 7 states Hatch covers so far (IL, IN, IA, MI, MN, OH, WI)', btn);
+          say('Outside Hatch\u2019s 7 states (IL, IN, IA, MI, MN, OH, WI)', btn);
           return;
         }
         map.setMarker([coords.longitude, coords.latitude]);
         // The marker is the accent brown; the pale yellow dots are moths.
-        say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest hexagon on land)', btn);
+        say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest land hexagon)', btn);
       },
       (err) => (
         done(),

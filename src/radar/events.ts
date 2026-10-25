@@ -23,11 +23,11 @@ export const EVENTS: Record<string, RadarEvent> = {
     caption: 'Mayflies rising off the Mississippi',
     tz: { name: 'CDT', offset: -5 },
     more: [
-      'A replay of one evening on the National Weather Service radar at La Crosse, Wisconsin: a weather radar on the ground, one sweep about every 10 minutes. Darker means a stronger echo. The blank centre is left out: up close, echoes off the ground hide insects.',
-      'How we know it’s insects: radar can tell raindrops (round, all alike) from insects (long, all different), and this cloud reads as insects, not rain.',
+      'One evening on the National Weather Service radar at La Crosse, Wisconsin, one sweep about every 10 minutes. Darker means a stronger echo. The blank centre is left out: ground echoes hide insects up close.',
+      'Radar tells raindrops (round, all alike) from insects (long, all different). This cloud reads as insects.',
     ],
     numbers: {
-      lead: 'Weather radars like this one show mayflies declining (Stepanian et al. 2020):',
+      lead: 'Radar shows mayflies declining (Stepanian et al. 2020):',
       items: ['Upper Mississippi: down 52% from 2012 to 2019', 'Western Lake Erie: down 84% from 2015 to 2019'],
     },
     credits: [
@@ -40,11 +40,11 @@ export const EVENTS: Record<string, RadarEvent> = {
     caption: 'Mayflies rising off Lake Erie',
     tz: { name: 'EDT', offset: -4 },
     more: [
-      'A replay of one evening on the National Weather Service radar at Cleveland, Ohio, one sweep about every 7 minutes. After dark the cloud rises over the lake’s western islands and drifts east. Darker means a stronger echo; the blank centre is left out.',
-      'How we know it’s insects: radar can tell raindrops (round, all alike) from insects (long, all different), and this cloud reads as insects, not rain.',
+      'One evening on the National Weather Service radar at Cleveland, Ohio, one sweep about every 7 minutes. After dark the cloud rises over the lake’s western islands and drifts east. Darker means a stronger echo. The blank centre is left out.',
+      'Radar tells raindrops (round, all alike) from insects (long, all different). This cloud reads as insects.',
     ],
     numbers: {
-      lead: 'Weather radars like this one show mayflies declining (Stepanian et al. 2020):',
+      lead: 'Radar shows mayflies declining (Stepanian et al. 2020):',
       items: ['Western Lake Erie: down 84% from 2015 to 2019', 'Upper Mississippi: down 52% from 2012 to 2019'],
     },
     credits: [

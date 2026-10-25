@@ -72,7 +72,7 @@ export function mountScrubber(
       <div class="ribbon" id="t-ribbon" aria-hidden="true"></div>
       <div class="fc-wash" id="t-fc" aria-hidden="true" hidden></div>
       <input id="t-range" type="range" min="0" step="1" aria-label="Date within season"
-        aria-description="Behind the slider: how much of the map is at each stage on each day, and a line of sightings per day." />
+        aria-description="Behind it: the share of the map at each stage per day, and sightings per day." />
       <div class="ticks" id="t-ticks" aria-hidden="true"></div>
     </div>`;
 
@@ -177,7 +177,7 @@ export function mountScrubber(
       asOfEl.title =
         (days > 3
           ? `Real weather ends ${md(a.at)}, ${days} days ago.`
-          : `Weather observed up to ${md(a.at)}.${a.stale ? " Tonight's update looks late, so this may be out of date." : ''}`) + ' Later days are forecast.';
+          : `Weather observed up to ${md(a.at)}.${a.stale ? " Tonight's update looks late, so this may be stale." : ''}`) + ' Later days are forecast.';
     }
     if (af !== null) {
       parts.push(`<span class="now asof-flag" style="left:${(af * 100).toFixed(2)}%" title="Last day of observed weather: ${md(a!.at)}"><b>as of</b></span>`);

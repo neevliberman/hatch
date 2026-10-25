@@ -154,8 +154,6 @@ export interface OffSeasonNote {
 /** A species' own words for the shared page frame, so the header, menus and share sheet never name a species
  * themselves. Each string is used exactly as written. */
 export interface SpeciesWords {
-  /** The header's tagline after "Hatch": "when luna moths fly". */
-  tagline: string;
   /** The animals, counted: the season menu's "2024 (310 moths)" and the dots line "Dots: moths seen ...". */
   plural: string;
   /** Whose sightings the map shows, in its screen-reader label: "luna moth" sightings. */

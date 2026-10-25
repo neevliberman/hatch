@@ -30,5 +30,5 @@ export function countdownParts(now: number, file: ReplayFile, words: SeasonWords
   const next = now < at(y, onset) ? at(y, onset) : at(y + 1, onset);
   const days = Math.ceil((next - now) / DAY);
   // The slider shows a past season, so name the real next one by date, not just "in N days".
-  return [`Next real season: about ${fmt(next)}, ${new Date(next).getUTCFullYear()}`, `, starting in ${words.where}, ${days} days from now.`];
+  return [`Next season: about ${fmt(next)}, ${new Date(next).getUTCFullYear()}`, `, starting in ${words.where} (${days} days).`];
 }

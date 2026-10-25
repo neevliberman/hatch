@@ -33,14 +33,8 @@ export interface SpeciesConfig {
   one: string;
   /** One of them in a sentence: "1 firefly seen". */
   oneLower: string;
-  /** "this firefly" / "Japanese beetles", for "no sightings of this firefly nearby". */
-  thisOne: string;
-  /** The card line on a hexagon with no sightings nearby: "No fireflies of this kind ever seen near here to ...". */
-  noneSeen: string;
   /** Adults, for the dots bullet: "adult common eastern fireflies". */
   adults: string;
-  /** When people see them at their busiest: "nights" (fireflies) or "days". */
-  busyWhen: 'nights' | 'days';
   words: SpeciesWords;
   season: SeasonWords;
   /** Dot colour (its own, so species never read alike when switched). */
@@ -229,7 +223,6 @@ export function createOneGenerationLayer(
     };
   };
 
-  const busiest = `Busiest ${cfg.busyWhen}`;
   const HOME: [number, number] = [-88.0, 41.9];
   const spotStory = (lngLat: [number, number] | null, t: number, name?: string, example = false): SpotStory | null => {
     const hit = lookup(lngLat ?? HOME);
@@ -241,15 +234,15 @@ export function createOneGenerationLayer(
     const doy = dayOfYear(t);
     const place = lngLat ? (name ?? 'this spot') : 'Chicago';
     const sentence = {
-      'not yet': `On ${f(doy)}, the forecast says it is too early near ${place}. First ${plural} about ${f(q05)}, busiest ${f(q25)} to ${f(q75)}.`,
-      starting: `On ${f(doy)}, the forecast says ${plural} are just starting near ${place}. ${busiest} should be ${f(q25)} to ${f(q75)}.`,
-      peak: `On ${f(doy)}, the forecast says it is peak time near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
-      'winding down': `On ${f(doy)}, the forecast says the season is winding down near ${place}. ${busiest} were ${f(q25)} to ${f(q75)}.`,
-      over: `By ${f(doy)}, the forecast says the season is over near ${place}. It started about ${f(q05)}.`,
+      'not yet': `Forecast for ${f(doy)}: too early near ${place}. First ${plural} about ${f(q05)}. Busiest ${f(q25)} to ${f(q75)}.`,
+      starting: `Forecast for ${f(doy)}: ${plural} just starting near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
+      peak: `Forecast for ${f(doy)}: peak time near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
+      'winding down': `Forecast for ${f(doy)}: winding down near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
+      over: `Forecast for ${f(doy)}: season over near ${place}. It started about ${f(q05)}.`,
     }[stageAt(hit.q, doy)];
     const end = q95 ?? 273;
     return {
-      title: !lngLat || example ? `Example: the ${place} area` : name ? `Near ${name}` : 'The spot you picked',
+      title: !lngLat || example ? `Example: the ${place} area` : name ? `Near ${name}` : 'Your spot',
       sentence,
       span: [dayOfYear(Date.UTC(year, 3, 1)), dayOfYear(Date.UTC(year, 8, 30))],
       months: [3, 4, 5, 6, 7, 8].map((m) => {
@@ -283,14 +276,14 @@ export function createOneGenerationLayer(
     const hi = i === undefined ? null : L.hi[i]?.[2];
     if (lo != null && hi != null) lines.push(lo === hi ? `Busiest day likely ${f(lo)}.` : `Busiest day likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Busiest day likely about ${f(q[2])}.`);
-    if (!seen) lines.push(cfg.noneSeen);
+    if (!seen) lines.push('No sightings nearby to check against.');
     const out = i === undefined ? null : L.outNow[i];
     if (out != null && out > 0) more.push(`${Math.round(out)}% of the season\u2019s ${plural} out by ${asOf}.`);
     const dd = i === undefined ? null : L.dd[i];
     if (dd != null && dd > 0) more.push(`${Math.round(dd).toLocaleString()} degree-days banked since Mar 1.`);
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
-    more.push(`${modeLabel(LIVE, L)}: real weather to ${asOf}, then forecast.`);
+    more.push(`Real weather to ${asOf}, then forecast.`);
     return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more };
   };
 
@@ -469,8 +462,8 @@ export function createOneGenerationLayer(
         const s = picked.object as Sighting;
         return {
           title: `${one} seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
-          lines: s.flags & APPROXIMATE ? ['Location is approximate, so the dot is small and dark.'] : [],
-          link: { href: `https://www.inaturalist.org/observations/${s.id}`, label: 'See the photo on iNaturalist' },
+          lines: s.flags & APPROXIMATE ? ['Rough location: small, dark dot.'] : [],
+          link: { href: `https://www.inaturalist.org/observations/${s.id}`, label: 'Photo on iNaturalist' },
         };
       }
       const at = lookup(lngLat);
@@ -487,29 +480,29 @@ export function createOneGenerationLayer(
       if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       // In date order: the first ones, then the busiest stretch.
       else if (q25 != null && q75 != null)
-        lines.push(`${q05 != null ? `First ${plural} about ${fmtDoy(year, q05)}. ` : ''}Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
-      if (!at.seen) lines.push(cfg.noneSeen);
+        lines.push(`${q05 != null ? `First ${plural} about ${fmtDoy(year, q05)}. ` : ''}Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      if (!at.seen) lines.push('No sightings nearby to check against.');
       if (likely && q05 != null && q25 != null && q75 != null)
-        more.push(`First ${plural} about ${fmtDoy(year, q05)}. Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+        more.push(`First ${plural} about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
         const off = sc.heat_peak - sc.obs_peak;
         more.push(
-          `How the forecast did in this strip of the map (${band.label}°N): ${plural} peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
-            (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
+          `Strip at ${band.label}°N: ${plural} peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+            (off ? ` (${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'})` : ' (right on)') +
             `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
       }
       // Sightings are counted on the zoomed-out hexagon: a small one would almost always have none.
       const here = sightingsFor(mode).filter((s) => s.cell === at.parent);
-      const where = shownRes === 5 ? 'the wider area (one zoomed-out hexagon)' : 'this hexagon';
+      const where = shownRes === 5 ? 'the larger hexagon around it' : 'this hexagon';
       more.push(
         here.length
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}.`
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      if (shownRes === 5) more.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
+      if (shownRes === 5) more.push('Small hexagon: uses its own local temperatures. Accuracy is only checked for whole strips.');
       return { title: `${one}: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
@@ -520,41 +513,41 @@ export function createOneGenerationLayer(
       const pk = data.interval?.peak ?? [0, 0];
       const nHold = m?.holdout_band_years ?? cfg.holdoutYears;
       const bullets = [
-        `This is a first try. It is the luna moth’s recipe refit on ${plural}, with nothing tuned for ${plural} yet. The luna moth’s rules were written down before it was scored. These were not.`,
+        `A first try: the luna moth’s recipe refit on ${plural}, nothing tuned yet. The luna moth’s rules were written down before scoring. These were not.`,
         isLive()
-          ? `This is ${live!.season}\u2019s forecast: real weather so far, then guesses for the weeks ahead. Its misses on past years (below) knew the real weather, so expect bigger misses early in the season.`
-          : 'This is a look back. It uses the temperatures that actually happened. A forecast made during spring would have to guess the weather ahead.',
+          ? `This is ${live!.season}\u2019s forecast: real weather so far, then guesses ahead. Past-year misses (below) knew the real weather, so expect bigger early misses.`
+          : 'A look back, using the temperatures that really happened. A live forecast would have to guess the weather ahead.',
         isLive()
-          ? `The dots are this season\u2019s photos of ${cfg.adults} (${data.species.sci}) posted to iNaturalist (${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}). Fainter ones are not confirmed yet. Each dot stays lit for ${GLOW_DAYS} days.`
-          : `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of ${cfg.adults} (${data.species.sci}) that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days.`,
+          ? `Dots: this season\u2019s iNaturalist photos of ${cfg.adults} (${data.species.sci}), ${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}. Fainter ones are unconfirmed. Each stays lit ${GLOW_DAYS} days.`
+          : `Dots: ${c.sightings?.toLocaleString() ?? '?'} iNaturalist photos of ${cfg.adults} (${data.species.sci}), ${data.years[0]}-${data.years[data.years.length - 1]}. Each stays lit ${GLOW_DAYS} days.`,
         cfg.idNote,
         cfg.seasonNote,
         ...(m?.median_dd_at_lat?.['42']
-          ? [`Half the ${plural} came out after about ${Math.round(m.median_dd_at_lat['42'] / 10) * 10} degree-days of warmth (°C above 10, added up from March 1).`]
+          ? [`Half the ${plural} emerged after about ${Math.round(m.median_dd_at_lat['42'] / 10) * 10} degree-days (°C above 10, summed from March 1).`]
           : []),
         cfg.effortNote,
-        'Gray dots mean the photo’s location was blurred or rough, so the dot may sit off its true spot.',
-        `Striped hexagons have no sightings of ${cfg.thisOne} nearby, ever. There is nothing to check the forecast against there.`,
+        'Gray dots: rough location, so the dot may be off.',
+        'Striped hexagons: no sightings nearby, ever, so nothing to check against.',
         ...(isLive()
-          ? ['This year\u2019s forecast has big hexagons only, at every zoom.']
+          ? ['This year\u2019s forecast has big hexagons only.']
           : hasFine
-          ? ['Zoom in and the hexagons get smaller, about 17 km wide. Each uses the temperatures at its own centre. Nobody has checked the forecast at that scale. So a small hexagon’s date is no surer than a big one’s. Its card counts the sightings in the big hexagon around it.']
-          : [`There are no small hexagons for ${plural} here. Zooming in keeps the big ones.`]),
-        `For a single year, a hexagon’s card gives a "peak here likely" window. In the ${data.scores.length} strip-years checked, 8 in 10 peaks were within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast.` +
+          ? ['Zoom in for smaller hexagons, about 17 km wide. Each uses its own centre’s temperatures. Unchecked at that scale, so a small hexagon’s date is no surer than a big one’s. Its card counts the big hexagon’s sightings.']
+          : [`No small hexagons for ${plural}: zooming keeps the big ones.`]),
+        `A hexagon’s card gives a "peak likely" window. In the ${data.scores.length} strip-years checked, 8 in 10 peaks fell within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast.` +
           (data.interval?.checked
-            ? ` Sized without the year being checked, it caught ${data.interval.checked.peak[0]} of ${data.interval.checked.peak[1]}.`
+            ? ` Sized without the year checked, it caught ${data.interval.checked.peak[0]} of ${data.interval.checked.peak[1]}.`
             : '') +
           ' One spot can miss by more.',
         ...(m?.holdout_mae && nHold
-          ? [`When it learned only from Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their own usual dates. That is only ${nHold} strip-years, so it is a hint, not proof.`]
+          ? [`Trained only on Illinois, Indiana and Ohio, it was ${m.holdout_mae.heat.toFixed(1)} days off in Wisconsin and Minnesota, against ${m.holdout_mae.cal.toFixed(1)} for their usual dates. Only ${nHold} strip-years, so a hint, not proof.`]
           : []),
         // Strips of the map where the usual date beat the forecast, said plainly.
         ...(data.scorecard ?? [])
           .filter((b) => b.mae.cal < b.mae.heat)
-          .map((b) => `In the strip at ${b.band}°N the usual date did better than the forecast: ${b.mae.cal.toFixed(1)} days off against ${b.mae.heat.toFixed(1)}, over ${b.band_years} years.`),
+          .map((b) => `Strip at ${b.band}°N: the usual date beat the forecast, ${b.mae.cal.toFixed(1)} days off against ${b.mae.heat.toFixed(1)}, over ${b.band_years} years.`),
         ...(cfg.extra ?? []),
-        `Sightings show where people look as much as where ${plural} are. Towns and backyards get counted too often. An empty spot does not mean no ${plural}.`,
-        'Only openly licensed photos are drawn. The forecast learned from all confirmed records with a precise location, one per person, place and day.',
+        `Sightings show where people look as much as where ${plural} are. Empty does not mean no ${plural}.`,
+        'Only openly licensed photos are drawn. The forecast learned from all confirmed, precisely located records, one per person, place and day.',
       ];
       if (yr && yr.n)
         bullets.push(
@@ -562,8 +555,8 @@ export function createOneGenerationLayer(
             yr.rows.map((r) => `${r.band}°N ${fmtDoy(r.year, r.obs_peak)}, ${fmtDoy(r.year, r.heat_peak)}, ${fmtDoy(r.year, r.cal_peak)}`).join('. ') +
             '.',
         );
-      else if (yr) bullets.push(`${mode} had too few sightings to check. Each strip of the map needs at least 20.`);
-      return { title: `${one} replay: what you are looking at`, severity: 'normal', bullets };
+      else if (yr) bullets.push(`${mode}: too few sightings to check (a strip needs 20).`);
+      return { title: `${one}: fine print`, severity: 'normal', bullets };
     },
 
     explainer(): Explainer {
@@ -578,10 +571,10 @@ export function createOneGenerationLayer(
       const vs = `${p1Days.toFixed(1)} days off against ${all.heat.toFixed(1)}`;
       const simpler = lm && p1.length === all.rows.length
         ? Math.abs(p1Days - all.heat) < 0.5
-          ? `A simpler rule, the warmth at past sightings alone, did about as well: ${vs}.`
+          ? `A simpler rule (warmth at past sightings alone) did about as well: ${vs}.`
           : p1Days < all.heat
-            ? `A simpler rule, the warmth at past sightings alone, did better: ${vs}.`
-            : `A simpler rule, the warmth at past sightings alone, did worse: ${vs}.`
+            ? `A simpler rule (warmth at past sightings alone) did better: ${vs}.`
+            : `A simpler rule (warmth at past sightings alone) did worse: ${vs}.`
         : null;
       return {
         name: cfg.name,
@@ -590,20 +583,20 @@ export function createOneGenerationLayer(
         accent: cfg.ink,
         hook: cfg.hook,
         steps: cfg.steps,
-        spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
+        spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon to see its season.`,
         spot: (lngLat, t, name, example) => spotStory(lngLat, t, name, example),
         score: {
           title: 'How sure is it?',
           points: [
             sc.n
-              ? `It was checked against real sightings: the dates of the first ${plural} and the peak, on ${mode === TYPICAL || isLive() ? 'years' : mode} it never learned from (${cfg.checkedWhere}).`
-              : `${mode} had too few sightings to check, so these numbers are for all years together.`,
+              ? `Checked against real sightings: dates of the first ${plural} and the peak, on ${mode === TYPICAL || isLive() ? 'years' : mode} it never learned from (${cfg.checkedWhere}).`
+              : `${mode} had too few sightings, so these numbers cover all years.`,
             ...(isLive()
-              ? ['Those checks knew the real weather. This year\u2019s forecast has to guess the weeks ahead, so expect bigger misses early in the season.']
+              ? ['Those checks knew the real weather. This year\u2019s forecast guesses ahead, so expect bigger early misses.']
               : []),
             ...(simpler ? [simpler] : []),
             ...[windowCheck(data)].filter((w): w is string => !!w),
-            'It is a first try, not tested as carefully as the luna moth yet.',
+            'A first try, not tested as carefully as the luna moth.',
           ],
           bars: [
             { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
@@ -613,14 +606,14 @@ export function createOneGenerationLayer(
           checks: modelChecks(data, past, cfg.holdoutYears),
           checksThrough: data.years[data.years.length - 1],
         },
-        finePrintLabel: 'Limits and fine print',
+        finePrintLabel: 'Fine print',
         notice: isLive() ? liveNotice(live!) : undefined,
       };
     },
 
     legend(): LegendSpec {
       return {
-        title: `Forecast: when ${plural} come out`,
+        title: 'Forecast',
         items: [
           ...STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
