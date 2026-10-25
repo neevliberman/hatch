@@ -205,6 +205,12 @@ export function liveFineDays(
       const day = b === never || t == null ? l : l + (b + offset - t);
       out[i * 5 + k] = Math.min(never - 1, Math.max(0, Math.round(day) - offset));
     }
+    // Each quantile has its own local lean, so keep them in order (first, busy start, peak, busy end, last).
+    for (let k = 1; k < 5; k++) {
+      const a = out[i * 5 + k - 1]!;
+      const b = out[i * 5 + k]!;
+      if (b !== never && a !== never && b < a) out[i * 5 + k] = a;
+    }
   });
   return out;
 }

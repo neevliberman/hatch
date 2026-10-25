@@ -496,8 +496,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const title = `Luna moth: ${STAGE_LABEL[stage]} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`;
     const lines: string[] = [];
     const more: string[] = [];
-    const lo = i === undefined ? null : L.lo[i]?.[2];
-    const hi = i === undefined ? null : L.hi[i]?.[2];
+    // A small hexagon's peak is the big one's shifted by its local lean; the range shifts with it.
+    const lean = fine && i !== undefined && q[2] != null && L.median[i]?.[2] != null ? q[2] - L.median[i]![2]! : 0;
+    const lo = i === undefined || L.lo[i]?.[2] == null ? null : L.lo[i]![2]! + lean;
+    const hi = i === undefined || L.hi[i]?.[2] == null ? null : L.hi[i]![2]! + lean;
     if (lo != null && hi != null) lines.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Peak likely about ${f(q[2])}.`);
     if (!seen) lines.push('No lunas ever seen near here to check this against.');

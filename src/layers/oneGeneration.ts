@@ -281,8 +281,10 @@ export function createOneGenerationLayer(
     const label = stage === 'over' ? 'over' : STAGE_LABEL[stage];
     const lines: string[] = [];
     const more: string[] = [];
-    const lo = i === undefined ? null : L.lo[i]?.[2];
-    const hi = i === undefined ? null : L.hi[i]?.[2];
+    // A small hexagon's peak is the big one's shifted by its local lean; the range shifts with it.
+    const lean = finer && i !== undefined && q[2] != null && L.median[i]?.[2] != null ? q[2] - L.median[i]![2]! : 0;
+    const lo = i === undefined || L.lo[i]?.[2] == null ? null : L.lo[i]![2]! + lean;
+    const hi = i === undefined || L.hi[i]?.[2] == null ? null : L.hi[i]![2]! + lean;
     if (lo != null && hi != null) lines.push(lo === hi ? `Busiest day likely ${f(lo)}.` : `Busiest day likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Busiest day likely about ${f(q[2])}.`);
     if (!seen) lines.push(cfg.noneSeen);
