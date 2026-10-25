@@ -2,42 +2,50 @@
  "loyo_east": {
   "cal": 6.27,
   "r1": 6.64,
-  "clock": 4.73,
-  "mix": 5.14,
+  "clock": 4.69,
+  "mix": 5.13,
   "n": 215,
   "clock_minus_cal_ci": [
-   -2.76,
-   -0.68
+   -2.73,
+   -0.71
   ],
+  "clock_bias": 0.44,
+  "clock_transfer_k05": 4.75,
   "mix_minus_cal_ci": [
-   -1.79,
-   -0.68
+   -1.74,
+   -0.71
   ]
  },
  "loyo_mw": {
   "cal": 7.31,
   "r1": 6.01,
-  "clock": 4.04,
-  "mix": 5.22,
+  "clock": 4.0,
+  "mix": 5.2,
   "n": 31,
   "clock_minus_cal_ci": [
-   -5.28,
-   -1.31
+   -5.31,
+   -1.3
   ],
+  "clock_bias": 0.48,
+  "clock_transfer_k05": 3.96,
   "mix_minus_cal_ci": [
-   -3.12,
-   -1.08
+   -3.1,
+   -1.09
   ]
  },
  "cold": {
   "slid": 9.7,
   "one": 7.14,
   "r1": 7.36,
-  "clock": 7.99,
+  "clock": 8.0,
   "n": 217,
   "clock_minus_slid_ci": [
-   -2.65,
-   -0.8
+   -2.59,
+   -0.78
+  ],
+  "clock_minus_one_ci": [
+   0.27,
+   1.41
   ]
  }
 }

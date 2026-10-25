@@ -35,8 +35,15 @@ def heat(hx, w, yi):
 
 
 def day_at(curve, dd):
+    """The (fractional) day index at which the cumulative curve reaches dd, interpolating within the day
+    (a whole-day answer would add about half a day of lateness)."""
     i = int(np.searchsorted(curve, dd))
-    return float(G.D0 + min(i, len(curve) - 1))
+    if i == 0:
+        return float(G.D0)
+    if i >= len(curve):
+        return float(G.D0 + len(curve) - 1)
+    lo, hi = curve[i - 1], curve[i]
+    return float(G.D0 + i - 1 + (dd - lo) / (hi - lo))
 
 
 def dd_at(curve, day):
@@ -108,31 +115,38 @@ def cold(c, east):
     return c
 
 
-def learning(ks=(1, 2, 3, 5), seed=0):
-    """East leave-one-year-out with only k past seasons (picked at random) for the clock and the calendar."""
+def learning(ks=(1, 2, 3, 5), seeds=20):
+    """East leave-one-year-out with only k past seasons (picked at random, `seeds` draws) for the clock and the
+    calendar; the clock's hexes are weighted by those k seasons' records only. Intervals resample years."""
     d = pd.read_csv(OUT / "regional_loyo_rows.csv").dropna(subset=["cal_onset"])
     d = d[d.set == "east"]
     y0 = int(G.D.years[0])
     folds = {int(y): fold_targets(int(y)) for y in d.year.unique()}
-    rng = np.random.default_rng(seed)
     res = {}
     for k in ks:
         rows = []
-        for r in d.itertuples():
-            past, train = folds[int(r.year)]
-            past = past[(past.set == "east") & (past.cell == r.cell)]
-            if len(past) < k:
-                continue
-            past = past.iloc[rng.choice(len(past), k, replace=False)]
-            hx, w = G.EV.hex_weights(cell_records("east", r.cell, train))
-            cur = heat(hx, w, int(r.year) - y0)
-            row = {"year": r.year, "onset": r.onset, "peak": r.peak, "one_onset": r.one_onset, "one_peak": r.one_peak}
-            for q in ("onset", "peak"):
-                tgt = np.mean([dd_at(heat(hx, w, int(p.year) - y0), getattr(p, q)) for p in past.itertuples()])
-                row[f"clock_{q}"], row[f"cal_{q}"] = day_at(cur, tgt), past[q].mean()
-            rows.append(row)
+        for seed in range(seeds):
+            rng = np.random.default_rng(seed)
+            for r in d.itertuples():
+                past, train = folds[int(r.year)]
+                past = past[(past.set == "east") & (past.cell == r.cell)]
+                if len(past) < k:
+                    continue
+                past = past.iloc[rng.choice(len(past), k, replace=False)]
+                cr = cell_records("east", r.cell, train)
+                hx, w = G.EV.hex_weights(cr[cr.year.isin(set(past.year))])
+                cur = heat(hx, w, int(r.year) - y0)
+                row = {"seed": seed, "year": r.year, "onset": r.onset, "peak": r.peak, "one_onset": r.one_onset,
+                       "one_peak": r.one_peak}
+                for q in ("onset", "peak"):
+                    tgt = np.mean([dd_at(heat(hx, w, int(p.year) - y0), getattr(p, q)) for p in past.itertuples()])
+                    row[f"clock_{q}"], row[f"cal_{q}"] = day_at(cur, tgt), past[q].mean()
+                rows.append(row)
         x = pd.DataFrame(rows)
-        res[f"past_{k}"] = {"n": len(x), **{m: round(G.mae(x, m), 2) for m in ("clock", "cal", "one")}}
+        res[f"past_{k}"] = {"n_per_draw": int(len(x) / seeds), "draws": seeds,
+                            **{m: round(G.mae(x, m), 2) for m in ("clock", "cal", "one")},
+                            "clock_minus_one_ci": [round(v, 2) for v in G.boot_diff(x, "clock", "one", draws=500)],
+                            "clock_minus_cal_ci": [round(v, 2) for v in G.boot_diff(x, "clock", "cal", draws=500)]}
         print(k, res[f"past_{k}"], flush=True)
     (OUT / "clock_learning.json").write_text(json.dumps(res, indent=1))
 
@@ -148,6 +162,8 @@ def main():
         res[f"loyo_{s}"] = {m: round(G.mae(g, m), 2) for m in ("cal", "r1", "clock", "mix")}
         res[f"loyo_{s}"]["n"] = len(g)
         res[f"loyo_{s}"]["clock_minus_cal_ci"] = [round(v, 2) for v in G.boot_diff(g, "clock", "cal")]
+        res[f"loyo_{s}"]["clock_bias"] = round(float(((g.clock_onset - g.onset) + (g.clock_peak - g.peak)).mean() / 2), 2)
+        res[f"loyo_{s}"]["clock_transfer_k05"] = round(G.mae(G.transfer(g, "clock"), "tr"), 2)
         res[f"loyo_{s}"]["mix_minus_cal_ci"] = [round(v, 2) for v in G.boot_diff(g, "mix", "cal")]
     cf = OUT / "regional_cold_rows.csv"
     if cf.exists():
@@ -156,6 +172,7 @@ def main():
         res["cold"] = {m: round(G.mae(c, m), 2) for m in ("slid", "one", "r1", "clock")}
         res["cold"]["n"] = len(c)
         res["cold"]["clock_minus_slid_ci"] = [round(v, 2) for v in G.boot_diff(c, "clock", "slid")]
+        res["cold"]["clock_minus_one_ci"] = [round(v, 2) for v in G.boot_diff(c, "clock", "one")]
     (OUT / "clock_summary.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res, indent=1))
 
