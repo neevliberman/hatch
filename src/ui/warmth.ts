@@ -9,8 +9,8 @@ interface Site {
 const { years, milestoneDD, sites } = raw as unknown as { years: [number, number]; milestoneDD: number; sites: Site[] };
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-/** A bar of plus or minus 1.96 standard errors is the range that holds the true change 19 times in 20. */
-const Z = 1.96;
+/** A bar of plus or minus 2.02 standard errors (t, 43 degrees of freedom for 45 years) holds the true change 19 times in 20. */
+const Z = 2.02;
 /** Clearly earlier: the whole range sits above zero. */
 const clear = (s: Site) => s.perDecade - Z * s.se > 0;
 
@@ -25,8 +25,8 @@ const x = (v: number) => LEFT + ((v - LO) / (HI - LO)) * (RIGHT - LEFT);
 export function warmthHtml(): string {
   const clearOnes = sites.filter(clear).map((s) => s.name);
   const lead = clearOnes.length
-    ? `Spring warmth arrives earlier in ${clearOnes.join(' and ')}. Elsewhere any change is smaller than the year-to-year swings.`
-    : 'No clear change in when spring warmth arrives. Any change is smaller than the year-to-year swings.';
+    ? `Spring warmth arrives earlier in ${new Intl.ListFormat('en').format(clearOnes)}. Elsewhere any change is too small to tell from the year-to-year swings.`
+    : 'No clear change in when spring warmth arrives. Any change is too small to tell from the year-to-year swings.';
   const h = sites.length * ROW + 26;
   const rows = sites
     .map((s, i) => {
@@ -40,10 +40,10 @@ export function warmthHtml(): string {
     .join('');
   const axisY = sites.length * ROW + 4;
   const ticks = [-2, 0, 2, 4].map((v) => `<text x="${x(v).toFixed(1)}" y="${axisY + 14}" class="wm-tick" text-anchor="middle">${v}</text>`).join('');
-  const summary = sites.map((s) => `${s.name}: ${s.perDecade > 0 ? '+' : ''}${s.perDecade.toFixed(1)} days`).join('; ');
+  const summary = sites.map((s) => `${s.name}: ${Math.abs(s.perDecade).toFixed(1)} days ${s.perDecade < 0 ? 'later' : 'earlier'}`).join('; ');
   return `<details class="ex-fine" data-key="warmth"><summary>Are springs warming?</summary>
     <p class="wm-lead">${esc(lead)}</p>
-    <figure class="wm-fig"><svg viewBox="0 0 ${W} ${h}" role="img" aria-label="Days earlier per decade, ${years[0]} to ${years[1]}. ${esc(summary)}.">
+    <figure class="wm-fig"><svg viewBox="0 0 ${W} ${h}" role="img" aria-label="${esc(lead)} Per decade, ${years[0]} to ${years[1]}. ${esc(summary)}.">
       <line x1="${x(0)}" x2="${x(0)}" y1="0" y2="${axisY}" class="wm-zero"/>${rows}${ticks}</svg></figure>
     <p class="wm-note">Days earlier per decade that a town banks ${Math.round(milestoneDD)} degree-days of warmth (what a luna moth needs), ${years[0]} to ${years[1]}. Hollow dots: the bar crosses zero, so it could be chance.</p></details>`;
 }
