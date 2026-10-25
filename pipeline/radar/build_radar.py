@@ -11,7 +11,7 @@ row per 0.5 degree ray (720, north first, clockwise; each takes the nearest ray 
 250 m gate, the file's native resolution, from 8 km to the reach (80 km unless the event says otherwise: the blind
 centre and the far edge, where the beam is high, are blanked). No gridding and no smoothing: the app draws each bin
 where it really is. Levels: 0 = nothing, 1..15 = 10 dBZ upwards in 2.5 dBZ steps. Rain-like gates (20 dBZ or more with a
-correlation coefficient of 0.95 or more) are dropped. Output: frames.bin.gz (all frames, 4 bits a bin, ray-major, high
+correlation coefficient of 0.97 or more and a ZDR under 3 dB) are dropped. Output: frames.bin.gz (all frames, 4 bits a bin, ray-major, high
 nibble first) and meta.json (times, polar layout, levels, and the insect check below).
 
 The insect check: for the cells of 25 dBZ or more, the median correlation coefficient (rain about 0.99, insects well
@@ -129,6 +129,7 @@ def polar(path: Path, lat: float, lon: float, reach: float) -> tuple[dict[str, n
     want = np.arange(RAYS) * (360.0 / RAYS)
     d = np.abs((az[None, :] - want[:, None] + 180) % 360 - 180)
     pick = d.argmin(axis=1)
+    gap = d.min(axis=1) > 0.5  # a slot the radar never fired at (a partial sweep): left empty, not smeared
     g0 = int(np.ceil((kept_near_m() - r[0]) / GATE_M))
     gates = int(np.floor((reach * 1000 - kept_near_m()) / GATE_M))
     sel = slice(g0, g0 + gates)
@@ -136,6 +137,7 @@ def polar(path: Path, lat: float, lon: float, reach: float) -> tuple[dict[str, n
     for k in ("reflectivity", "cross_correlation_ratio", "differential_reflectivity"):
         a = np.ma.filled(sw.fields[k]["data"].astype(float), np.nan)
         out[k] = a[pick][:, sel]
+        out[k][gap] = np.nan
     out["reflectivity"] = beam_smooth(out["reflectivity"])
     return out, (r[sel] / 1000.0), pick
 
@@ -164,7 +166,26 @@ def levels(d: dict[str, np.ndarray]) -> np.ndarray:
     with np.errstate(invalid="ignore"):
         lvl = np.nan_to_num(np.clip(np.floor((z - DBZ0) / STEP) + 1, 0, LEVELS), nan=0)
         lvl[(z >= RAIN[0]) & (cc >= RAIN[1]) & (d["differential_reflectivity"] < RAIN[2])] = 0
-    return lvl.astype(np.uint8)
+    return tidy(lvl.astype(np.uint8))
+
+
+def tidy(lvl: np.ndarray) -> np.ndarray:
+    """Two small repairs on the polar grid. A lone bin with no echo in any of its 8 neighbours is dropped (a stray gate in
+    empty air); a missing bin (a censored or rain-dropped gate) with echo in 5 or more of its 8 neighbours takes their
+    median, in two passes so a two-bin hole closes too, so swarms don't show pinholes. Rays wrap around; gates do not."""
+    def around(a: np.ndarray) -> np.ndarray:
+        pad = np.pad(np.pad(a, ((1, 1), (0, 0)), mode="wrap"), ((0, 0), (1, 1)))
+        return np.stack([pad[1 + dy : 1 + dy + a.shape[0], 1 + dx : 1 + dx + a.shape[1]]
+                         for dy in (-1, 0, 1) for dx in (-1, 0, 1) if (dy, dx) != (0, 0)])
+
+    out = lvl.copy()
+    nb = around(out)
+    out[(out > 0) & ((nb > 0).sum(axis=0) == 0)] = 0
+    for _ in range(2):
+        nb = around(out)
+        fill = (out == 0) & ((nb > 0).sum(axis=0) >= 5)
+        out[fill] = np.sort(nb, axis=0)[4][fill]  # median of 8 (the upper middle)
+    return out
 
 
 def check(d: dict[str, np.ndarray]) -> dict | None:
@@ -208,7 +229,8 @@ def main() -> None:
     kept = (NEAR, float(ev.get("reach_km", REACH)))
     frames, times, checks = [], [], []
     for t, p in scans:
-        d, _, _ = polar(p, ev["lat"], ev["lon"], kept[1])
+        d, rk, _ = polar(p, ev["lat"], ev["lon"], kept[1])
+        first_m = float(rk[0] * 1000)  # the first kept gate's centre (a gate centre is at 125 m + n x 250 m, not at 8 km)
         frames.append(levels(d))
         times.append(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
         ck = check(d)
@@ -217,6 +239,7 @@ def main() -> None:
               (f"Z>=25: {ck['cells']:4d} cells, CC median {ck['cc']:.2f}, ZDR median {ck['zdr']:.1f} dB, rain-like {ck['rain_like']}" if ck else "Z>=25: too few cells"),
               flush=True)
 
+    assert frames[0].shape[1] % 2 == 0, "an odd gate count breaks the 4-bit packing"
     flat = np.stack(frames).reshape(len(frames), -1)
     packed = (flat[:, 0::2] << 4 | flat[:, 1::2]).astype(np.uint8)
     # mtime 0: the same scans give the same bytes, so a rebuild with no change shows no diff.
@@ -230,7 +253,7 @@ def main() -> None:
         "lon": ev["lon"],
         "times": times,
         "start": start,
-        "polar": {"rays": RAYS, "gates": frames[0].shape[1], "gate_m": GATE_M, "first_m": NEAR * 1000, "first_az": 0, "step_deg": 360 / RAYS,
+        "polar": {"rays": RAYS, "gates": frames[0].shape[1], "gate_m": GATE_M, "first_m": first_m, "first_az": 0, "step_deg": 360 / RAYS,
                   "layout": "ray-major, north first, clockwise; gate centres at first_m + i x gate_m", "packing": "4 bits, high nibble first"},
         "levels": {"none": 0, "dbz_min": DBZ0, "dbz_step": STEP, "count": LEVELS},
         "kept": {"range_km": list(kept), "rain_dropped": f"{RAIN[0]:g} dBZ or more with CC {RAIN[1]} or more and ZDR under {RAIN[2]:g} dB"},

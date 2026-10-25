@@ -38,7 +38,7 @@
   "rays": 720,
   "gates": 448,
   "gate_m": 250.0,
-  "first_m": 8000.0,
+  "first_m": 8125.0,
   "first_az": 0,
   "step_deg": 0.5,
   "layout": "ray-major, north first, clockwise; gate centres at first_m + i x gate_m",

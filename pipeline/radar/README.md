@@ -6,14 +6,14 @@ watched a cloud of burrowing mayflies (*Hexagenia*) come off the water (About, "
 
 | id | Radar | Evening (local) | Pack |
 |---|---|---|---|
-| `karx-2014-07-20` | KARX La Crosse, Wisconsin | Sun 20 July 2014, Mississippi River (CDT) | 198,908 B, 28 scans, 80 km |
-| `kcle-2019-06-26` | KCLE Cleveland, Ohio | Wed 26 June 2019, western Lake Erie (EDT) | 356,307 B, 28 scans, 120 km |
+| `karx-2014-07-20` | KARX La Crosse, Wisconsin | Sun 20 July 2014, Mississippi River (CDT) | 207,426 B, 28 scans, 80 km |
+| `kcle-2019-06-26` | KCLE Cleveland, Ohio | Wed 26 June 2019, western Lake Erie (EDT) | 344,329 B, 28 scans, 120 km |
 
 Their code and frames load only when one is opened (a normal visit carries only the short list of links), and the
 one-file build leaves them out.
 
 `build_radar.py` turns one evening of NOAA NEXRAD Level II scans into the pack the app reads,
-`public/radar/<event>/frames.bin.gz` (200 to 360 KB: 28 scans of 720 rays x 288 to 448 gates, 4 bits each) and `meta.json`
+`public/radar/<event>/frames.bin.gz` (200 to 345 KB: 28 scans of 720 rays x 288 to 448 gates, 4 bits each) and `meta.json`
 (scan times, the grid, the levels, and the insect check below). Run it by hand when an event is added or changed. It is
 not part of the app build and never runs in CI: it needs Py-ART, a large install, and 140 to 200 MB of raw scans an
 event.
@@ -40,10 +40,12 @@ added).
   beam is about 1 degree wide, so two 0.5 degree rays are not independent looks. It removes single-ray noise spokes and
   leaves the 250 m detail along the ray. What the data cannot give: a 1 degree beam is about 0.7 km across at 40 km and
   1.4 km at 80 km, so detail across the beam is never finer than that.
+- Two small repairs after that (`tidy`): a lone bin with no echo in any of its 8 neighbours is dropped, and a missing bin (a
+  censored or rain-dropped gate) with echo in 5 or more of its 8 neighbours takes their median (two passes, so a two-bin hole closes too), so swarms don't show pinholes.
 - 8 km to the reach: the blind centre and the far edge, where the beam is high above the ground, are blanked.
 - Reflectivity in 15 levels, 2.5 dBZ apart from 10 dBZ. Rain-like bins (20 dBZ or more with a correlation
   coefficient of 0.97 or more and a ZDR under 3 dB) are dropped: 160 bins across the La Crosse evening and 1,767 across
-  the Lake Erie one (about 1 in 1,000 of the bins drawn, mostly ground echo near the radar).
+  the Lake Erie one (a small share of the bins drawn, mostly ground echo near the radar).
 
 ## The insect check
 
@@ -82,7 +84,7 @@ land, so they neither confirm nor contradict the NWS post's "inland".)
 The insect test on the raw (polar) gates of 20 dBZ or more, 8 to 120 km out (the replay's whole reach), checked by hand
 alongside the gridded check above:
 
-| UTC (EDT) | Gates of 20 dBZ+ | CC, median | ZDR, median | Depolarisation ratio, median | Rain-like (CC 0.95+, ZDR under 3) |
+| UTC (EDT) | Gates of 20 dBZ+ | CC, median | ZDR, median | Depolarisation ratio, median | Rain-like by hand (CC 0.95+, ZDR under 3) |
 |---|---|---|---|---|---|
 | 02:21 (10:21 pm), before | 509 | 0.83 | 3.3 dB | -7.8 dB | 14% |
 | 03:03 (11:03 pm) | 4,077 | 0.92 | 6.5 dB | -7.7 dB | 1% |
