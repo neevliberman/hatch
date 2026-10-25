@@ -298,9 +298,11 @@ def weather(season, as_of, use_forecast, cells):
             "dd_now": dd_now, "use_forecast": use_forecast}
 
 
-def forecast_species(sp, wx, season, as_of, today, prev=None):
+def forecast_species(sp, wx, season, as_of, today, prev=None, model_id=None, sightings=True):
     """One species' forecast on the shared weather: its 11 frozen fits x the 11 weather endings, summarised as in
-    build() (the live file's layout). prev: that species' last published entry (its sightings if iNat is down)."""
+    build() (the live file's layout). prev: that species' last published entry (its sightings if iNat is down).
+    model_id / sightings=False: a bench challenger's night (pipeline/league), which names its own model and skips the
+    sightings (the champion's entry carries them)."""
     t0 = time.time()
     replay_path, fits_path = _paths(sp)
     replay = json.loads(replay_path.read_text())
@@ -342,15 +344,16 @@ def forecast_species(sp, wx, season, as_of, today, prev=None):
     bands = [{"band": b, "onset": b_med[i][0], "onset_lo": b_lo[i][0], "onset_hi": b_hi[i][0],
               "peak": b_med[i][1], "peak_lo": b_lo[i][1], "peak_hi": b_hi[i][1]} for i, b in enumerate(BAND_LABELS)]
 
-    sightings, sightings_ok = [], True
+    seen, sightings_ok = [], True
     try:   # an iNat outage should not cost the night's forecast: keep the previous file's dots and flag it
-        sightings = season_sightings(season, min(today, dt.date(season, *SEASON[1])), [b["cutoff"] for b in replay["bands"]],
-                                     sp.taxon, sp.last_doy)
+        if sightings:
+            seen = season_sightings(season, min(today, dt.date(season, *SEASON[1])), [b["cutoff"] for b in replay["bands"]],
+                                    sp.taxon, sp.last_doy)
     except Exception as e:  # noqa: BLE001
         print(f"WARNING: iNat {sp.key} sightings failed ({e}); keeping the previous file's", flush=True)
         sightings_ok = False
         if prev is not None and prev.get("season") == season:
-            sightings = prev.get("sightings", [])
+            seen = prev.get("sightings", [])
     now = dt.datetime.now(dt.timezone.utc)
     use_forecast, f_end, start = wx["use_forecast"], wx["f_end"], wx["start"]
     out = {
@@ -359,7 +362,7 @@ def forecast_species(sp, wx, season, as_of, today, prev=None):
         "as_of": as_of.isoformat(), "forecast_through": f_end.isoformat(),
         "backfill": as_of < today - dt.timedelta(days=4),
         "stale_after_hours": 36,
-        "model": {"id": replay["model"]["id"], "spec": spec_name, "hash": mhash,
+        "model": {"id": model_id or replay["model"]["id"], "spec": spec_name, "hash": mhash,
                   "ensemble": f"{len(folds)} leave-one-year-out fits x {len(years)} weather endings ({years[0]}-{years[-1]})",
                   "frozen": "one model for the whole season; never refit in-season"},
         "sources": {
@@ -376,10 +379,10 @@ def forecast_species(sp, wx, season, as_of, today, prev=None):
         "bands": bands,
         "out_now": [int(round(100 * v)) for v in np.median(np.array(out_now), 0)],
         "dd": [int(round(v)) for v in wx["dd_now"]],
-        "sightings": sightings,
+        "sightings": seen,
         "checks": {"cells": len(cells), "observed_days": max(0, (as_of - start).days + 1),
                    "forecast_days": wx["forecast_days"], "members": int(days.shape[0]),
-                   "cells_borrowed_weather": wx["n_borrowed"], "sightings": len(sightings), "sightings_fresh": sightings_ok,
+                   "cells_borrowed_weather": wx["n_borrowed"], "sightings": len(seen), "sightings_fresh": sightings_ok,
                    "seconds": round(time.time() - t0)},
     }
     return out
@@ -423,8 +426,29 @@ def build_all(season, as_of, use_forecast, today, prev=None, keys=None):
     out["species"] = more
     out["checks"]["species"] = sorted(more)
     out["checks"]["species_failed"] = failed
+    out["shadows"], out["checks"]["shadows_failed"] = shadows(wx, season, as_of, today, ["luna", *keys])
     out["checks"]["seconds"] = round(time.time() - t0)
     return out
+
+
+def shadows(wx, season, as_of, today, keys):
+    """Tonight's bench challengers (pipeline/league/bench.py) on the same weather: {slug: strip dates only}, and the
+    slugs that failed. A challenger's failure never costs a species' forecast; the scorecard step raises the alarm."""
+    out, failed = {}, []
+    try:
+        from league import bench
+        bench_now = bench.tonight(season, keys)
+    except (Exception, SystemExit) as err:  # noqa: BLE001 -- even a broken bench must not cost the night
+        print(f"::error::bench could not be read: {err!r}", flush=True)
+        return out, ["bench"]
+    for ch in bench_now:
+        try:
+            e = forecast_species(ch.live_species(), wx, season, as_of, today, model_id=ch.id, sightings=False)
+            out[ch.slug] = bench.shadow_entry(e, ch)
+        except (Exception, SystemExit) as err:  # noqa: BLE001
+            print(f"::error::bench challenger {ch.slug} failed: {err!r}", flush=True)
+            failed.append(ch.slug)
+    return out, failed
 
 
 def in_season(today, season):

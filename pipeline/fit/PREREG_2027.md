@@ -27,6 +27,8 @@
 | `pipeline/live/prism_offsets.json` | `d117d0fc294d7d02400558825709fcc925ef90535f2092cea8f7a7bd15a15617` | shared nightly input |
 | `pipeline/live/records/luna_2026_rg.parquet` | `25e89a667e0502396c31fca17d6b1c0d8e2f637ce93bf6567a087e10d7a28aff` | the 2026 records (1,363 research-grade, pulled 24 Oct 2026) used by the Daymet re-check |
 | `replay:luna-replay.json#scores+cutoffs+sightings` | `2b30c49ba608ff1a8a8b6102518b3d464b2d554b214cc2c720aafcad318e309a` | calendar baseline numbers, per-strip cut-offs and the sightings behind band weights, all read from `src/data/luna-replay.json` |
+| `pipeline/league/rules.py` | `6b519ccfeceea046971ecd69fbe06db987d0b895070caab7330844036f4d076b` | the decision rule below, as code (added 2026-10-25, pre-season) |
+| `pipeline/league/weekly.py` | `5a16a8c9c540244a5d370abede007247343258442416b022ccf9bfe4838e1ae6` | the weekly head-to-head: records pull + sha256, common nights, both scorecards, verdict-week cap (added 2026-10-25). P3.1's bench entry (`pipeline/league/bench.py`) is held to this file by `pipeline/league/test_league.py`; the gate's number (`pipeline/league/gates.json`, unpinned so it can be recorded by 31 Aug 2027) must equal the one written in "Daymet result" below, checked by the same test |
 
 Scorecard commit: `49bfe36` (main). Model commits: P3 `896bef5`, P3.1 `e6256aa`..`4471ec6`. The content hashes are the pin; commit ids are for finding things.
 
@@ -90,6 +92,8 @@ Format: `- date | path | new sha256 | reason=<code> | scored=<strips or none> | 
 
 - 2026-10-25 | pipeline/live/scorecard.py | 6c9f8adf2cf8452ef60ff5f43962ce6d2c7173f5752e6b21b1269d64dff8cfc7 | reason=pre-season | scored=none | added firefly and Japanese beetle layers and per-season history (#57, #60, #63); luna rows of public/live/scorecard.json compared with the registered version: every luna number identical, one note reworded ('moths' to 'peak')
 - 2026-10-25 | pipeline/live/build_live.py | 6c1381d1078b2056cc40b6a0e6a8c7c86b41365ef724d9c078ce56f4252d14ce | reason=pre-season | scored=none | added firefly and Japanese beetle layers and per-season history (#57, #60, #63); luna rows of public/live/scorecard.json compared with the registered version: every luna number identical, one note reworded ('moths' to 'peak')
+- 2026-10-25 | pipeline/live/build_live.py | 88e30feb041332509c76fde2621646d51810ce15b9525b4219cb9f0ae0d2fd15 | reason=pre-season | scored=none | the P3.1 shadow this prereg requires (pipeline/league/bench.py): each night P3.1 runs on the same weather, cells, effort profile and lag as P3 and its strip dates are written under "shadows" in the live file; a 2026-06-01 backfill built with the old and new file is identical in every field except the new "shadows" key and "checks.shadows_failed"
+- 2026-10-25 | pipeline/live/scorecard.py | 80901dfe7b4bb0ff2f94cda15df1f559929deda8a7d08bfcf174898527f54573 | reason=pre-season | scored=none | archives the shadow nightly into live/archive_p31/ (never a backfill) and, once per scoring week, runs pipeline/league/weekly.py: the Monday records pull saved with its sha256 to live/records/2027/, both archives cut to common nights, the unmodified scorecard() run on each from its own last file, and this file's decision rule (pipeline/league/rules.py); no scoring function changed
 
 ## Daymet result
 (to be filled by 31 Aug 2027: date, Daymet 2026 version, D(2026) for both models, gate pass/fail)

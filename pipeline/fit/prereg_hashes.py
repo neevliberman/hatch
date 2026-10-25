@@ -30,6 +30,8 @@ FILES = [
     "pipeline/live/effort_profile.json",           # shared nightly inputs
     "pipeline/live/prism_offsets.json",
     "pipeline/live/records/luna_2026_rg.parquet",  # the 2026 records for the Daymet re-check
+    "pipeline/league/rules.py",                    # the decision rule as code (pipeline/league)
+    "pipeline/league/weekly.py",                   # the weekly head-to-head
 ]
 REPLAY = "replay:luna-replay.json#scores+cutoffs+sightings"   # pseudo-file, see replay_sha
 LATE_REASONS = {"bug-both-models", "feed-outage"}

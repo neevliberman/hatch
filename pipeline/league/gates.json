@@ -1,0 +1,8 @@
+{
+  "luna~p3.1-v1": {
+    "gate": "daymet-2026",
+    "rule": "PREREG_2027.md: rebuild the 2026 rehearsal for both models on Daymet 2026 weather (PRISM if Daymet 2026 is not out by 31 Aug 2027, recorded before 1 Mar 2027); D(2026) = P3.1 minus P3 headline miss. The gate passes if D(2026) < +1.0 d.",
+    "d": null,
+    "source": null
+  }
+}
