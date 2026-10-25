@@ -15,6 +15,7 @@ import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, liveNotice, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
+import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
 
 type RGBA = [number, number, number, number];
 
@@ -276,6 +277,8 @@ export function createOneGenerationLayer(
     const hi = i === undefined ? null : L.hi[i]?.[2];
     if (lo != null && hi != null) lines.push(lo === hi ? `Busiest day likely ${f(lo)}.` : `Busiest day likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Busiest day likely about ${f(q[2])}.`);
+    const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
+    if (vs) lines.push(vs);
     if (!seen) lines.push('No sightings nearby to check against.');
     const out = i === undefined ? null : L.outNow[i];
     if (out != null && out > 0) more.push(`${Math.round(out)}% of the season\u2019s ${plural} out by ${asOf}.`);
@@ -284,7 +287,8 @@ export function createOneGenerationLayer(
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
     more.push(`Real weather to ${asOf}, then forecast.`);
-    return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more };
+    const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar(one, key, y, lo, hi) : undefined;
+    return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
   };
 
   const isDot = (id: string) => id === `${key}-glow` || id === `${key}-dots`;
@@ -481,6 +485,11 @@ export function createOneGenerationLayer(
       // In date order: the first ones, then the busiest stretch.
       else if (q25 != null && q75 != null)
         lines.push(`${q05 != null ? `First ${plural} about ${fmtDoy(year, q05)}. ` : ''}Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      if (mode !== TYPICAL) {
+        const pi = cellIndex.get(at.parent);
+        const vs = vsNormalLine(pi === undefined ? null : forecast()[pi]?.[2], typicalPeak(data.forecast, pi));
+        if (vs) lines.push(vs);
+      }
       if (!at.seen) lines.push('No sightings nearby to check against.');
       if (likely && q05 != null && q25 != null && q75 != null)
         more.push(`First ${plural} about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);

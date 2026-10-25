@@ -23,6 +23,8 @@ export interface ProbeCard {
   more?: string[];
   /** Optional outbound link (e.g. the iNaturalist photo). Linked, never rehosted. */
   link?: { href: string; label: string };
+  /** A downloadable calendar event for the card's peak window (a data: .ics link). */
+  calendar?: { href: string; filename: string; label: string };
 }
 
 export interface LegendSpec {
