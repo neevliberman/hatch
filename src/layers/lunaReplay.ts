@@ -171,7 +171,7 @@ function seasonCheck(): string | null {
   const ss = data.interval?.checked?.season;
   if (!ss) return null;
   const upTo = new Date(`${ss.as_of}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  return `Tried on ${ss.year} with real weather only up to ${upTo}, the window caught the real peak in ${ss.peak[0]} of ${ss.peak[1]} east-west bands of the map. Some bands had already peaked by then.`;
+  return `Tried on ${ss.year} with weather only up to ${upTo}, the window caught the real peak in ${ss.peak[0]} of ${ss.peak[1]} strips. Some had already peaked.`;
 }
 
 /** The live-mode card at the top of the About panel: how this year's map is made, in plain words. */
@@ -179,14 +179,14 @@ export function liveNotice(L: Live): { title: string; bullets: string[] } {
   const f = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const src = (s: string) => (s ? ` (${s})` : '');
   return {
-    title: `${L.season}${L.backfill ? '' : ' live'}: how this forecast is made`,
+    title: `${L.season}${L.backfill ? '' : ' live'}: how it works`,
     bullets: [
-      ...(L.stub ? ['Sample data for testing the page, not a real forecast.'] : []),
-      ...(L.backfill ? [`Rebuilt after the season${Number.isFinite(L.generated) ? `, on ${f(L.generated)},` : ''} the way the nightly forecast would have run. It is not being updated.`] : []),
-      `Real weather up to ${f(L.asOf)}${src(L.sources.observed)}, then the 7-day forecast${src(L.sources.forecast)}, then each past year\u2019s weather run forward from there${src(L.sources.after)}. Each past year gives one way the rest of the season could go.`,
-      'The colours use the middle of those runs. "Peak likely" on a hexagon\u2019s card is their spread plus the model\u2019s past misses: wide early in spring, narrower as real weather comes in.',
-      `Days after ${f(L.asOf)} are forecast; the time bar is paler there.${L.backfill ? '' : ` The map updates every night, ${Number.isFinite(L.generated) ? `last on ${f(L.generated)}` : 'when new weather arrives'}.`}`,
-      `The model (${L.model.id}) is frozen for the season: this year\u2019s sightings are shown to check it, never used to tune it.`,
+      ...(L.stub ? ['Test data, not a real forecast.'] : []),
+      ...(L.backfill ? [`Rebuilt after the season${Number.isFinite(L.generated) ? `, on ${f(L.generated)},` : ''} as the nightly forecast would have run. Not updated.`] : []),
+      `Real weather up to ${f(L.asOf)}${src(L.sources.observed)}, then the 7-day forecast${src(L.sources.forecast)}, then each past year\u2019s weather replayed from there${src(L.sources.after)}. Each is one way the season could go.`,
+      'Colors use the middle of those runs. "Peak likely" adds their spread and the model\u2019s past misses: wide early, narrower as real weather arrives.',
+      `Days after ${f(L.asOf)} are forecast (paler on the time bar).${L.backfill ? '' : ` Updated nightly${Number.isFinite(L.generated) ? `, last on ${f(L.generated)}` : ''}.`}`,
+      `Model ${L.model.id} is frozen for the season. Sightings check it, never tune it.`,
     ],
   };
 }
@@ -447,18 +447,17 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const doy = dayOfYear(t);
     const stage = stageAt(hit.q, doy);
     const place = lngLat ? (name ?? 'this spot') : 'Chicago';
-    const busy = `busiest ${f(q25)} to ${f(q75)}`;
     const sentence = {
-      'not yet': `On ${f(doy)}, the forecast says it is too early near ${place}. First moths about ${f(q05)}, ${busy}.`,
-      starting: `On ${f(doy)}, the forecast says moths are just starting near ${place}. Busiest days should be ${f(q25)} to ${f(q75)}.`,
-      peak: `On ${f(doy)}, the forecast says it is peak time near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
-      'winding down': `On ${f(doy)}, the forecast says the season is winding down near ${place}. Busiest days were ${f(q25)} to ${f(q75)}.`,
-      over: `By ${f(doy)}, the forecast says the first wave is over near ${place}. It started about ${f(q05)}.`,
+      'not yet': `Forecast for ${f(doy)}: too early near ${place}. First moths about ${f(q05)}. Busiest ${f(q25)} to ${f(q75)}.`,
+      starting: `Forecast for ${f(doy)}: moths just starting near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
+      peak: `Forecast for ${f(doy)}: peak time near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
+      'winding down': `Forecast for ${f(doy)}: winding down near ${place}. Busiest ${f(q25)} to ${f(q75)}.`,
+      over: `Forecast for ${f(doy)}: first wave over near ${place}. It started about ${f(q05)}.`,
     }[stage];
     const end = q95 ?? 273;
     const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
     return {
-      title: !lngLat || example ? `Example: the ${place} area` : name ? `Near ${name}` : 'The spot you picked',
+      title: !lngLat || example ? `Example: the ${place} area` : name ? `Near ${name}` : 'Your spot',
       sentence,
       // The slider's range, 1 Apr - 30 Sep, with a label on the first of each month (real days of year, so leap years line up).
       span: [dayOfYear(Date.UTC(year, 3, 1)), dayOfYear(Date.UTC(year, 8, 30))],
@@ -497,7 +496,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const hi = i === undefined ? null : L.hi[i]?.[2];
     if (lo != null && hi != null) lines.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Peak likely about ${f(q[2])}.`);
-    if (!seen) lines.push('No lunas ever seen near here to check this against.');
+    if (!seen) lines.push('No sightings nearby to check against.');
     const out = i === undefined ? null : L.outNow[i];
     // Zeros are the empty state (early spring, or nothing banked yet): say nothing rather than "0% out".
     if (out != null && out > 0) more.push(`${Math.round(out)}% of the first wave out by ${asOf}.`);
@@ -505,7 +504,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     if (dd != null && dd > 0 && L.asOf >= Date.UTC(y, 2, 1)) more.push(`${Math.round(dd).toLocaleString()} degree-days banked since Mar 1.`);
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
-    more.push(`${modeLabel(LIVE)}: real weather to ${asOf}, then forecast.`);
+    more.push(`Real weather to ${asOf}, then forecast.`);
     return { title, swatch: css(STAGE_COLOR[stage]), lines, more };
   };
 
@@ -513,7 +512,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     id: 'luna-replay',
     title: 'Luna moth',
     live: () => live,
-    words: { tagline: 'when luna moths fly', plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths', mark },
+    words: { plural: 'moths', sightingsOf: 'luna moth', countedAs: 'first-wave moths', shareName: 'luna moths', mark },
     mode: () => mode,
     seasonCount: firstBroodCount,
     setMode(m) {
@@ -526,8 +525,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
     newest: (t) => newest(dayOfYear(t)),
     busy: (t) => isBusy(forecast(), dayOfYear(t)),
-    endNote: ['That was the first wave.', 'Press replay to watch it again'],
-    countdown: (now) => countdownParts(now, data, { on: ['Luna season is on', '. The first wave is out somewhere in the Midwest right now.'], where: 'southern Illinois, Indiana and Ohio' }),
+    endNote: ['That was the first wave.', 'Press replay to watch again'],
+    countdown: (now) => countdownParts(now, data, { on: ['Luna season is on', '. The first wave is out in the Midwest now.'], where: 'southern Illinois, Indiana and Ohio' }),
 
     points(t) {
       // Cached per day and season: the same array back means the dots haven't moved (the place names check that).
@@ -726,15 +725,15 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         const s = picked.object as Sighting;
         const lines = [
           s.flags & SECOND_BROOD
-            ? 'Seen after late June or early July here, so counted as the second wave. The map does not forecast this wave.'
-            : 'First wave of the year (the one the map forecasts).',
+            ? 'Seen after late June or early July, so counted as the second wave. Not forecast.'
+            : 'First wave (the one forecast).',
         ];
-        if (s.flags & APPROXIMATE) lines.push('Location is approximate, so the dot is small and dark.');
-        if (s.flags & UNCONFIRMED) lines.push('Not yet confirmed by other iNaturalist users, so drawn a little fainter.');
+        if (s.flags & APPROXIMATE) lines.push('Rough location: small, dark dot.');
+        if (s.flags & UNCONFIRMED) lines.push('Pending: not yet confirmed on iNaturalist. Drawn fainter.');
         return {
           title: `Luna moth seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
           lines,
-          link: { href: `https://www.inaturalist.org/observations/${s.id}`, label: 'See the photo on iNaturalist' },
+          link: { href: `https://www.inaturalist.org/observations/${s.id}`, label: 'Photo on iNaturalist' },
         };
       }
       const at = lookup(lngLat);
@@ -756,17 +755,17 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
       // In date order: the first moths, then the busiest stretch.
       else if (q25 != null && q75 != null)
-        lines.push(`${q05 != null ? `First moths about ${fmtDoy(year, q05)}. ` : ''}Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+        lines.push(`${q05 != null ? `First moths about ${fmtDoy(year, q05)}. ` : ''}Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       if (!at.seen) lines.push('No lunas ever seen near here to check this against.');
       if (likely && q05 != null && q25 != null && q75 != null)
-        more.push(`First moths about ${fmtDoy(year, q05)}. Busiest stretch ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+        more.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
         const off = sc.heat_peak - sc.obs_peak;
         more.push(
-          `How the forecast did in this strip of the map (${band.label}°N): moths peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
-            (off ? `, ${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'}` : ', right on') +
+          `Strip at ${band.label}°N: moths peaked ${fmtDoy(year, sc.obs_peak)}. Forecast ${fmtDoy(year, sc.heat_peak)}` +
+            (off ? ` (${Math.abs(off)} day${Math.abs(off) > 1 ? 's' : ''} ${off < 0 ? 'early' : 'late'})` : ' (right on)') +
             `. Usual date ${fmtDoy(year, sc.cal_peak)}.`,
         );
       }
@@ -775,15 +774,15 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
       const firstDays = here.filter((s) => !(s.flags & SECOND_BROOD)).map(day).sort((a, b) => a - b);
       const median = firstDays.length % 2 ? firstDays[(firstDays.length - 1) / 2]! : (firstDays[firstDays.length / 2 - 1]! + firstDays[firstDays.length / 2]!) / 2;
-      const where = fine ? 'the wider area (one zoomed-out hexagon)' : 'this hexagon';
+      const where = fine ? 'the larger hexagon around it' : 'this hexagon';
       more.push(
         here.length
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}` +
               // A middle date of two or three sightings says little, so it waits for five.
-              (firstDays.length >= 5 ? `. Middle date of the first wave: ${fmtDoy(year, median)}.` : '.')
+              (firstDays.length >= 5 ? `. Middle date, first wave: ${fmtDoy(year, median)}.` : '.')
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      if (fine) more.push('Small hexagon: forecast from its own local temperatures. Accuracy is only checked for whole strips of the map.');
+      if (fine) more.push('Small hexagon: uses its own local temperatures. Accuracy is only checked for whole strips.');
       return { title, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
@@ -792,43 +791,43 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       const c = data.counts;
       const bullets = [
         isLive()
-          ? 'This year\u2019s map is a real forecast: it has to guess the weather ahead, so it is less sure than a replayed year, which knows every day\u2019s temperature.'
-          : 'This is a look back. It uses the temperatures that actually happened. A forecast made during spring would have to guess the weather ahead, so it would be less accurate.',
+          ? 'This year\u2019s map is a real forecast. It guesses the weather ahead, so it is less sure than a replayed year.'
+          : 'A look back, using the temperatures that really happened. A live forecast has to guess the weather ahead, so it would be less accurate.',
         isLive()
-          ? `The dots are this season\u2019s photos of adult luna moths posted to iNaturalist (${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}). Each stays lit for ${GLOW_DAYS} days, about how long an adult lives.`
-          : `The dots are ${c.sightings?.toLocaleString() ?? '?'} photos of adult luna moths that people posted to iNaturalist, ${data.years[0]}-${data.years[data.years.length - 1]}. Each dot stays lit for ${GLOW_DAYS} days, about how long an adult lives.`,
-        'Amber dots are late moths counted as the second wave. Some may be late first wave moths from a cold year.',
-        'Gray dots mean the photo\u2019s location was blurred or rough, so the dot may sit off its true spot.',
-        'Striped hexagons have no luna sightings nearby, ever. There is nothing to check the forecast against there.',
+          ? `Dots: this season\u2019s iNaturalist photos of adult luna moths (${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}). Each stays lit ${GLOW_DAYS} days, about an adult\u2019s lifespan.`
+          : `Dots: ${c.sightings?.toLocaleString() ?? '?'} iNaturalist photos of adult luna moths, ${data.years[0]}-${data.years[data.years.length - 1]}. Each stays lit ${GLOW_DAYS} days, about an adult\u2019s lifespan.`,
+        'Amber dots: late moths, counted as the second wave. Some may be late first-wave moths from a cold year.',
+        'Gray dots: rough location, so the dot may be off.',
+        ...(isLive() ? ['Fainter dots are pending: not yet confirmed on iNaturalist.'] : []),
+        'Striped hexagons: no sightings nearby, ever, so nothing to check against.',
         ...(fineLevels.length && !isLive()
           ? [
-              `Zoom in and the hexagons get smaller, down to about ${fineLevels.includes(6) ? 6 : 17} km across. Each small one uses the temperatures at its own centre, so cool lake shores, warm cities and river valleys show up.`,
-              'Small hexagons use the same model, but nobody has checked it at that scale. Its accuracy was only measured for whole strips of the map. So a small hexagon\u2019s date is no surer than a big one\u2019s.',
-              'A small hexagon is striped when the big hexagon it sits in is. Its card counts the sightings in that big hexagon.',
+              `Zoom in for smaller hexagons, down to about ${fineLevels.includes(6) ? 6 : 17} km across. Each uses its own center\u2019s temperatures, so lake shores, cities and valleys show up.`,
+              'Same model, but unchecked at that scale: accuracy was only measured for whole strips. A small hexagon\u2019s date is no surer than a big one\u2019s.',
+              'A small hexagon is striped when its big hexagon is, and its card counts that big hexagon\u2019s sightings.',
             ]
           : []),
-        'Sightings show where people look as much as where moths are. Towns and porch lights get counted too often. An empty spot does not mean no moths.',
-        'The last version ran about 6 days early in the far south and 4 days late in the north. This one counts the week each moth flies and when people go looking, which fixes most of that. Its peak dates now run 0 to 3 days late in every strip of the map.',
+        'Sightings show where people look as much as where moths are. Empty does not mean no moths.',
+        'The last version ran about 6 days early in the far south and 4 days late in the north. This one also counts when moths fly and when people look, fixing most of that. Peaks now run 0 to 3 days late in every strip. Overall accuracy matches the last version, and both beat each area\u2019s usual date.',
         isLive()
-          ? `This year, a hexagon\u2019s "peak likely" window spans the middle 8 in 10 of the weather runs, widened by how far the model missed on past years.` +
+          ? `This year\u2019s "peak likely" window spans the middle 8 in 10 weather runs, widened by past misses.` +
             (seasonCheck() ? ` ${seasonCheck()}` : '') +
             ' One spot can miss by more.'
-          : `For a single year, a hexagon\u2019s card gives a "peak here likely" window around its forecast. The margin comes from past misses for whole strips of the map: 8 in 10 strip peaks were within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late of the forecast.` +
+          : `A hexagon\u2019s card gives a "peak likely" window around its forecast, sized from past misses: 8 in 10 strip peaks fell within ${-(data.interval?.peak[0] ?? 6)} days early to ${data.interval?.peak[1] ?? 4} days late.` +
             (data.interval?.checked
-              ? ` Sized without the year being checked, it caught ${data.interval.checked.peak[0]} of ${data.interval.checked.peak[1]}.`
+              ? ` Sized without the year checked, it caught ${data.interval.checked.peak[0]} of ${data.interval.checked.peak[1]}.`
               : '') +
-            ' One spot can miss by more. With all years combined there is no one year\u2019s weather, so no window is shown.',
+            ' One spot can miss by more. "All years" has no window.',
         ...(holdoutPass
           ? [
-              `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota about ${Math.round(hoHeat!)} days off. Their own usual dates were about ${Math.round(hoCal!)} days off. That gap is small enough that it could be chance. We also chose this version after seeing that test, so it is a second look, not proof. The version we picked first failed it.`,
+              `Trained only on Illinois, Indiana and Ohio, it was about ${Math.round(hoHeat!)} days off in Wisconsin and Minnesota, against ${Math.round(hoCal!)} for their usual dates. That gap could be chance, and we chose this version after seeing the test, so it is not proof. The first version we picked failed it.`,
             ]
           : Number.isFinite(hoHeat) && Number.isFinite(hoCal)
             ? [
-                `When it learned only from Illinois, Indiana and Ohio, it guessed Wisconsin and Minnesota worse than their own usual dates (${hoHeat!.toFixed(1)} days off on average, against ${hoCal!.toFixed(1)} for their own usual dates, over just ${HOLDOUT_BAND_YEARS} strip-years). So it is not ready for places it has never seen.`,
+                `Trained only on Illinois, Indiana and Ohio, it did worse in Wisconsin and Minnesota than their usual dates (${hoHeat!.toFixed(1)} days off on average, against ${hoCal!.toFixed(1)}, over just ${HOLDOUT_BAND_YEARS} strip-years). It is not ready for places it has never seen.`,
               ]
             : []),
-        'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all records that other iNaturalist users had confirmed. Moths raised in captivity were left out.',
-        'This version is about as accurate as the last one, with much less south/north lean. Both beat each area\u2019s usual date.',
+        'Only openly licensed photos are drawn, about 2 in 3. The forecast learned from all confirmed records, minus captive moths.',
       ];
       if (yr && yr.n)
         bullets.push(
@@ -838,8 +837,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               .join('. ') +
             '.',
         );
-      else if (yr) bullets.push(`${mode} had too few sightings to check. Each strip of the map needs at least 20.`);
-      return { title: 'Luna moth replay: what you are looking at', severity: 'normal', bullets };
+      else if (yr) bullets.push(`${mode}: too few sightings to check (a strip needs 20).`);
+      return { title: 'Luna moth: fine print', severity: 'normal', bullets };
     },
 
     explainer(): Explainer {
@@ -850,30 +849,30 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         sci: data.species.sci,
         creature: MOTH_ART,
         accent: mothInk,
-        hook: 'Luna moths come out in two waves each summer. This map predicts when the first wave comes out across seven Midwest states, based on how warm the spring has been. Photos people posted of real moths show how well it matches.',
+        hook: 'Luna moths fly in two waves each summer. This map forecasts the first wave across seven Midwest states from spring warmth, and checks it against photos of real moths.',
         steps: [
-          { title: 'Winter', text: 'All winter the moth sleeps as a cocoon in fallen leaves.' },
-          { title: 'Warmth wakes it', text: 'From March 1, every day warmer than 50\u00a0°F (10\u00a0°C) adds a little warmth. Hotter days add more.' },
-          { title: 'Warm spring, early moths', text: 'Once it has had enough warmth, out it comes. A warm spring gets there sooner.' },
+          { title: 'Winter', text: 'A cocoon in fallen leaves.' },
+          { title: 'Warmth wakes it', text: 'From March 1, each day above 50\u00a0°F adds warmth. Hotter days add more.' },
+          { title: 'Warm spring, early moths', text: 'With enough warmth it emerges. Warm springs mean earlier moths.' },
         ],
-        spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon on the map to see its season here.`,
+        spotIntro: `${matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Click' : 'Tap'} a hexagon to see its season.`,
         spot: (lngLat, t, name, example) => spotStory(lngLat, t, name, example),
         score: {
           title: 'How sure is it?',
           // Plain sentences, each standing on its own.
           points: [
             !sc.n
-              ? `${mode} had too few sightings to check, so these numbers are for all years together.`
-              : `It was checked against real sightings: the dates of the first moths and the peak, on ${mode === TYPICAL || mode === LIVE ? 'years' : mode} it never learned from.` +
-                (mode !== TYPICAL && sc.n < 3 ? ` Only ${sc.n} part${sc.n > 1 ? 's' : ''} of the map had enough sightings.` : ''),
+              ? `${mode} had too few sightings, so these numbers cover all years.`
+              : `Checked against real sightings: first-moth and peak dates, on ${mode === TYPICAL || mode === LIVE ? 'years' : mode} it never learned from.` +
+                (mode !== TYPICAL && sc.n < 3 ? ` Only ${sc.n} strip${sc.n > 1 ? 's' : ''} of the map had enough sightings.` : ''),
             ...(isLive()
-              ? ['Those checks knew the real weather. This year\u2019s forecast has to guess the weeks ahead, so expect bigger misses early in spring.']
+              ? ['Those checks knew the real weather. This year\u2019s forecast guesses ahead, so expect bigger early misses.']
               : []),
             ...(isLive() ? (seasonCheck() ? [`${seasonCheck()} One season is a rough check.`] : []) : [windowCheck(data)].filter((w): w is string => !!w)),
             holdoutPass
-              ? 'It did well on two states it never learned from, Wisconsin and Minnesota. But this version was picked after seeing that test.'
-              : 'Its weak spot: taught without Wisconsin and Minnesota, it did worse there than a guess from past years.',
-            'The final test is the 2026 season. The live check below is quick; the frozen test waits for 2026\u2019s final weather data, out in mid-2027.',
+              ? 'Good on Wisconsin and Minnesota, which it never learned from, but we picked this version after seeing that test.'
+              : 'Weak spot: without Wisconsin and Minnesota in training, it did worse there than the usual date.',
+            'The final test is 2026, once its final weather data is out in mid-2027. The live check below comes sooner.',
           ],
           bars: [
             { label: 'This forecast', days: all.heat, best: all.heat < all.calendar },
@@ -883,14 +882,14 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           checks: modelChecks(data, scoreSummary(), HOLDOUT_BAND_YEARS),
           checksThrough: data.years[data.years.length - 1],
         },
-        finePrintLabel: 'Limits and fine print',
+        finePrintLabel: 'Fine print',
         notice: isLive() ? liveNotice(live!) : undefined,
       };
     },
 
     legend(): LegendSpec {
       return {
-        title: 'Forecast: when moths come out',
+        title: 'Forecast',
         items: [
           ...STAGES.map((s) => ({
             color: onPaper(STAGE_COLOR[s]),
@@ -899,6 +898,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
           { color: css(MOON), label: 'seen, last 10 days', shape: 'dot' },
+          ...(isLive() ? [{ color: `rgba(${MOON[0]},${MOON[1]},${MOON[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
           { color: css(SECOND), label: 'seen, 2nd wave', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },
         ],
