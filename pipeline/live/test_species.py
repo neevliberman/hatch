@@ -75,7 +75,7 @@ def offline(monkeypatch):
 
 
 def strip(d):
-    return {k: v for k, v in d.items() if k not in ("generated", "checks", "species")}
+    return {k: v for k, v in d.items() if k not in ("generated", "checks", "species", "shadows")}
 
 
 def test_nightly_file_is_luna_on_top_and_the_rest_under_species(offline):
@@ -95,6 +95,11 @@ def test_nightly_file_is_luna_on_top_and_the_rest_under_species(offline):
         assert len(e["median"]) == len(out["cells"]) and len(e["bands"]) == len(out["bands"])
         assert e["median"] != out["median"]                # its own model, not luna's
         assert e["sightings"] == [[1, 2027, 150, 40.0, -88.0, 0]]
+    # the bench (pipeline/league): P3.1's strip dates on the same weather, its own model, no sightings call of its own
+    sh = out["shadows"]["luna~p3.1-v1"]
+    assert out["checks"]["shadows_failed"] == []
+    assert sh["model"]["id"] == "p3.1-v1" and sh["model"]["hash"] == "a9fb5fe06cdb" and "sightings" not in sh
+    assert [b["band"] for b in sh["bands"]] == [b["band"] for b in out["bands"]] and sh["bands"] != out["bands"]
 
 
 def test_one_species_failing_keeps_its_last_entry(offline, monkeypatch):

@@ -1,0 +1,8 @@
+{
+  "luna~p3.1-v1": {
+    "gate": "daymet-2026",
+    "rule": "PREREG_2027.md: rebuild the 2026 rehearsal for both models on Daymet 2026 weather; the gate fails if D(2026) >= +1.0 d. Due 31 Aug 2027.",
+    "d": null,
+    "passed": null
+  }
+}

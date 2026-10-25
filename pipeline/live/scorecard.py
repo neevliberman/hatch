@@ -321,6 +321,13 @@ def add_all(archive: Path, live, issued=None, rehearsal=False):
         if "bands" in e and e.get("season") == live["season"]:
             folder = registry.BY_KEY[key].archive(archive) if key in registry.BY_KEY else archive / key
             out.append(add_to_archive(folder, e, issued, rehearsal))
+    # bench challengers (pipeline/league): the same rules, each into its own folder beside the archive root
+    from league import bench
+    for slug, e in (live.get("shadows") or {}).items():
+        if slug not in bench.BY_SLUG or e.get("backfill") or str(e.get("generated", ""))[:10] != tonight:
+            continue
+        if "bands" in e and e.get("season") == live["season"]:
+            out.append(add_to_archive(bench.BY_SLUG[slug].archive_dir(archive), e, issued, rehearsal))
     return out
 
 
@@ -373,7 +380,8 @@ def main(argv=None):
     live_failed = []
     if a.add:
         live = json.loads(a.add.read_text())
-        live_failed = (live.get("checks") or {}).get("species_failed") or []
+        live_failed = [*((live.get("checks") or {}).get("species_failed") or []),
+                       *((live.get("checks") or {}).get("shadows_failed") or [])]
         if live.get("backfill"):
             print("not archiving a backfill: its weather is older than its issue date")
         elif "bands" in live and live["season"] == season:
@@ -397,11 +405,21 @@ def main(argv=None):
         print(f"wrote {a.out} [{k}]: {json.dumps(layer['summary'])}")
     for e in out["seasons"]:
         print(f"kept season {e['season']}: {', '.join(e['layers'])}")
+    # the weekly league table (pipeline/league/weekly.py): once per scoring week, never at the forecast's expense
+    try:
+        from league import weekly
+        p = weekly.run_if_due(a.archive.parent, season, a.today)
+        if p:
+            print(f"wrote {p}")
+    except Exception as err:  # noqa: BLE001
+        print(f"::error::league table failed: {err!r}", flush=True)
+        failed.append("league")
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
     # failed" step). This is also how a species whose forecast failed in build_live.py gets noticed.
     if failed or live_failed:
         why = "; ".join([*(f"the {k} forecast failed in build_live.py (its last good entry was kept)" for k in live_failed),
-                         *(f"the {k} scorecard failed (its last layer was kept)" for k in failed)])
+                         *(["the weekly league table failed (pipeline/league/weekly.py)"] if "league" in failed else []),
+                         *(f"the {k} scorecard failed (its last layer was kept)" for k in failed if k != "league")])
         print(f"::error::{why}. {a.out} WAS written and published with every other species; "
               "this exit code only raises the alarm.", flush=True)
         return 1

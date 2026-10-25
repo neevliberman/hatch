@@ -19,6 +19,11 @@ that fails keeps last night's entry (the app's "as of" badge then turns amber), 
 issue opens (its log says the scorecard was written and which species failed); luna failing still stops the run
 before writing, as before. A backfilled entry, or one carried over from an earlier night, is never archived.
 
+**Bench challengers** ([`pipeline/league`](../league/README.md)): each night every challenger model (P3.1 in 2027)
+also runs on the same weather; only its strip dates are kept, under `shadows` (about 1 KB each), never on the map. The
+scorecard step seals them in their own archive (`live/archive_p31/`) and once a week grades them against the
+champion (`live/league.json`).
+
 Adding a species: an entry in `registry.py`, then `python3 pipeline/live/build_static.py --effort <key>` (its effort
 profile, from the records its fetch script cached). The app finds the species' part of the file by its key
 (`src/species.ts`), so nothing else changes. The app fetches the file only when live mode is wanted (a link asks
