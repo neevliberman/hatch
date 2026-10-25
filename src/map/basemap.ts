@@ -38,7 +38,14 @@ interface Part {
 const DETAIL_ZOOM = 6.5;
 /** Woods (USGS land cover) show from here, in their own file: tree marks over the whole-Midwest view would be noise. */
 const WOODS_ZOOM = 6;
-const parts: { overview?: Part; detail?: Part; woods?: { version: number; woods: FeatureCollection } } = {};
+/** The shore fix (see shore()), its own file for town-scale views. */
+const SHORE_ZOOM = 7;
+const parts: {
+  overview?: Part;
+  detail?: Part;
+  woods?: { version: number; woods: FeatureCollection };
+  shore?: { version: number; sea: Feature; dry: FeatureCollection; wet: FeatureCollection; ink: Feature };
+} = {};
 const asked = new Set<string>();
 const tries: Record<string, number> = {};
 let onLoad: () => void = () => {};
@@ -54,6 +61,7 @@ function want(zoom: number) {
   const names = ['overview'];
   if (zoom >= WOODS_ZOOM - 0.5) names.push('woods');
   if (zoom >= DETAIL_ZOOM - 0.5) names.push('detail');
+  if (zoom >= SHORE_ZOOM - 0.5) names.push('shore');
   for (const name of names) {
     if (asked.has(name)) continue;
     asked.add(name);
@@ -133,33 +141,49 @@ function woodsLayers(zoom: number): Layer[] {
   ];
 }
 
+// The sea's features: the overview's, or from SHORE_ZOOM, once shore.json is in, the ones with the shore land given back
+// (see shore() below). The same arrays come back, so deck does not re-tessellate them each frame.
+let seaFixed: Feature[] | null = null;
+const seaOf = (p: Part, zoom: number): Feature[] =>
+  zoom >= SHORE_ZOOM && parts.shore ? (seaFixed ??= [parts.shore.sea]) : seaPlain(p);
+let seaOverview: Feature[] | null = null;
+const seaPlain = (p: Part): Feature[] =>
+  (seaOverview ??= (p.outside?.features ?? []).filter((f) => !(f.properties as Props).kind));
+let lakesOverview: Feature[] | null = null;
+const lakesOf = (p: Part): Feature[] =>
+  (lakesOverview ??= p.water.features.filter((f) => (f.properties as Props).great));
+let landLayer: Layer | null = null;
+
 // Over the hexagons: the land around the forecast states (paper, a shade darker), and the sea, so a hexagon poking
-// past a shore or a state line is cut off there. Built once: it never changes.
-let outsideLayer: Layer | null = null;
-const outside = (p: Part): Layer[] =>
+// past a shore or a state line is cut off there. The land never changes, so it is built once.
+const outside = (p: Part, zoom: number): Layer[] =>
   p.outside
     ? [
-        (outsideLayer ??= new GeoJsonLayer({
+        (landLayer ??= new GeoJsonLayer({
           id: 'outside',
-          data: p.outside,
+          data: p.outside.features.filter((f) => (f.properties as Props).kind),
           filled: true,
           stroked: true,
-          getFillColor: (f: Feature) => ((f.properties as Props).kind ? P.landOuter : P.water),
+          getFillColor: P.landOuter,
           getLineColor: (f: Feature) => ((f.properties as Props).kind === 2 ? P.neighbourLine : P.transparent),
           getLineWidth: 1,
           lineWidthUnits: 'pixels',
           pickable: false,
         })),
+        new GeoJsonLayer({ id: 'outside-sea', data: seaOf(p, zoom), filled: true, stroked: false, getFillColor: P.water,
+          pickable: false }),
       ]
     : [];
 
 // Zoomed in, the state outlines' coasts (Census) and the lake shores (Natural Earth) run a little apart, which leaves
 // an ink line floating in the lake or a strip beside it. From SHORE_ZOOM the sea and the Great Lakes are drawn again
-// over the state lines, so the shore is just where the hexagons meet the water.
-const SHORE_ZOOM = 7;
+// over the state lines, so the shore is just where the hexagons meet the water. The Census 1:10m coast is also smoothed
+// over a kilometre or so (Chicago's Streeterville and Navy Pier landfill is lake on it). pipeline/basemap gives that
+// land back in the lakes and the sea mask, so its hexagons show, and ships the rest in shore.json: the water the 1:10m
+// outline keeps dry (`wet`, painted over it) and the state lines without their coast (`ink`), whose old coast would
+// cut through the land given back.
 // The filtered features are kept, not the layers: deck finalizes a layer once it leaves the layer list (zoomed back
 // under SHORE_ZOOM), and handing it the same instance again later fails. Fresh layers on the same data cost nothing.
-let shoreData: [Feature[], Feature[]] | null = null;
 const shore = (zoom: number): Layer[] => {
   const p = parts.overview;
   if (!__BASEMAP__ || !p?.outside || zoom < SHORE_ZOOM) return [];
@@ -167,19 +191,23 @@ const shore = (zoom: number): Layer[] => {
     // A water-coloured edge as well, over the half of the ink line that lies on the land side of the shore.
     new GeoJsonLayer({ id, data: features, filled: true, stroked: true, getFillColor: P.water, getLineColor: P.water,
       getLineWidth: 2, lineWidthUnits: 'pixels', pickable: false });
-  const [sea, lakes] = (shoreData ??= [
-    p.outside.features.filter((f) => !(f.properties as Props).kind),
-    p.water.features.filter((f) => (f.properties as Props).great),
-  ]);
-  return [water('sea-top', sea), water('lakes-top', lakes)];
+  if (!parts.shore) return [water('sea-top', seaOf(p, zoom)), water('lakes-top', lakesOf(p))];
+  return [water('sea-top', seaOf(p, zoom)), water('shore-wet', parts.shore.wet.features)];
 };
 
+let inkData: Feature[] | null = null;
+/** The shore land given back (shore.json), filled like the other land, under the hexagons that now cover it. */
+const dryLayer = (zoom: number): Layer[] =>
+  __BASEMAP__ && parts.shore && zoom >= SHORE_ZOOM
+    ? [new GeoJsonLayer({ id: 'shore-land', data: parts.shore.dry.features, filled: true, stroked: false,
+        getFillColor: P.land, pickable: false })]
+    : [];
 function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {
   const p = parts[name];
   if (!__BASEMAP__ || !p) return [];
   const filter = { extensions: zoomFilter, getFilterValue: getZ, filterRange: [-1, zoom + 1e-3] as [number, number], pickable: false };
   return [
-    ...(name === 'overview' ? outside(p) : []),
+    ...(name === 'overview' ? outside(p, zoom) : []),
     // National forests and parks: an ink outline in leaf green, no fill, so the forecast colours stay readable.
     new GeoJsonLayer({
       id: `green-${name}`,
@@ -202,6 +230,9 @@ function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {
       getLineWidth: 0.8,
       lineWidthUnits: 'pixels',
       ...filter,
+      // From SHORE_ZOOM, once shore.json is in, the Great Lakes (z 0) are left out: the sea mask is cut to the finer
+      // shore (see shore()), and their Natural Earth shapes would only cover the land it gives back.
+      ...(name === 'overview' && zoom >= SHORE_ZOOM && parts.shore ? { filterRange: [0.5, zoom + 1e-3] as [number, number] } : {}),
     }),
     new GeoJsonLayer({
       id: `roads-${name}`,
@@ -240,7 +271,7 @@ function detailLayers(name: 'overview' | 'detail', zoom: number): Layer[] {
 
 // The state shapes never change: build their layers once. Fresh arrays as `data` each frame would make deck
 // re-tessellate every outline on every playback frame.
-let states: { under: Layer; neighbours: Layer; outline: Layer } | null = null;
+let states: { under: Layer; neighbours: Layer; outlineData: Feature[] } | null = null;
 const stateLayers = () =>
   (states ??= {
     under: new GeoJsonLayer({
@@ -261,17 +292,24 @@ const stateLayers = () =>
       lineWidthUnits: 'pixels',
       pickable: false,
     }),
-    outline: new GeoJsonLayer({
-      id: 'states-outline',
-      data: stateCollection.features.filter((f) => f.properties.core),
-      filled: false,
-      stroked: true,
-      getLineColor: P.stateLine,
-      getLineWidth: 1.4,
-      lineWidthUnits: 'pixels',
-      pickable: false,
-    }),
+    outlineData: stateCollection.features.filter((f) => f.properties.core),
   });
+
+/** The core states' outline: from SHORE_ZOOM, once shore.json is in, the one without its coast (see shore()). A fresh
+ *  layer each time, as the other layers that come and go with the zoom. */
+const outlineLayer = (zoom: number, data: Feature[]): Layer => {
+  const inked = __BASEMAP__ && parts.shore && zoom >= SHORE_ZOOM;
+  return new GeoJsonLayer({
+    id: inked ? 'states-outline-ink' : 'states-outline',
+    data: inked ? (inkData ??= [parts.shore!.ink]) : data,
+    filled: false,
+    stroked: true,
+    getLineColor: P.stateLine,
+    getLineWidth: 1.4,
+    lineWidthUnits: 'pixels',
+    pickable: false,
+  });
+};
 
 /**
  * Basemap layers around the data: `under` the hexagons (land), `mid` between the hexagons and the sighting dots
@@ -284,19 +322,19 @@ const stateLayers = () =>
  */
 let built: { key: string; layers: { under: Layer[]; mid: Layer[] } } | null = null;
 export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[] } {
-  const key = `${zoom}|${!!parts.overview}|${!!parts.detail}|${!!parts.woods}`;
+  const key = `${zoom}|${!!parts.overview}|${!!parts.detail}|${!!parts.woods}|${!!parts.shore}`;
   if (built?.key === key) return built.layers;
   want(zoom);
-  const { under, neighbours, outline } = stateLayers();
+  const { under, neighbours, outlineData } = stateLayers();
   const all = [...detailLayers('overview', zoom), ...detailLayers('detail', zoom)];
   const kind = (re: RegExp) => all.filter((l) => re.test(l.id));
   built = {
     key,
     layers: {
-      under: [under],
+      under: [under, ...dryLayer(zoom)],
       // The overview's `outside` mask comes first: woods and everything else go over it.
       mid: [...kind(/^outside/), ...woodsLayers(zoom), ...kind(/^(green|water|roads)-/), ...kind(/^rivers-case-/),
-        neighbours, outline, ...shore(zoom), ...kind(/^rivers-(overview|detail)/)],
+        neighbours, outlineLayer(zoom, outlineData), ...shore(zoom), ...kind(/^rivers-(overview|detail)/)],
     },
   };
   return built.layers;

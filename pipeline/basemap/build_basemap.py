@@ -8,6 +8,9 @@ countries, as quiet land, plus the mask and shore hexagons that trim the forecas
 Run from the repo root: `pip install shapely pyshp numpy scipy matplotlib pillow "h3>=4,<5"`, then
 `python3 pipeline/basemap/build_basemap.py`. Downloads go to notebooks/data/basemap/ (git-ignored); reruns are offline.
 
+Town labels sit at downtown for the bigger cities (CITY_CENTRES), and public/basemap/shore.json gives the Great Lakes
+shore the finer Census 1:500,000 outline at town scale (shore_fix).
+
 Every feature carries `z`, the zoom it shows from (the app's zoom: the whole Midwest is about 4.5 on a phone and 5.5 on
 a laptop, a town fills the screen at 9.5). Labels are [text, lng, lat, z, kind, rank]; the app names higher ranks first
 and skips any label that would overlap one already placed.
@@ -21,6 +24,7 @@ import zipfile
 from pathlib import Path
 
 import shapefile
+import shapely
 from shapely.geometry import box, mapping, shape
 from shapely.ops import unary_union
 
@@ -41,6 +45,8 @@ SOURCES = {
     'usfs': 'https://data.fs.usda.gov/geodata/edw/edw_resources/shp/S_USA.AdministrativeForest.zip',
     'gaz': 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_Gaz_place_national.zip',
     'ne_10m_admin_0_countries_lakes': NE + 'cultural/ne_10m_admin_0_countries_lakes.zip',
+    # Census 1:500,000 state outlines, clipped to the shore: twenty times finer than the 1:10m ones the app draws.
+    'cb_states': 'https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_state_500k.zip',
 }
 # Quiet land around the Midwest (the other US states, Canada, Mexico), so the widest and tallest screens show
 # Pittsburgh on land rather than in water. It reaches past the whole-Midwest view on any screen shape.
@@ -91,8 +97,8 @@ def read(name, stem=None, within=BBOX):
             yield g.intersection(within), sr.record.as_dict()
 
 
-def rounded(geom, tol):
-    """Simplified, coordinates to 3 decimals (about 100 m, a pixel or less at the closest zoom)."""
+def rounded(geom, tol, nd=3):
+    """Simplified, coordinates to 3 decimals (about 100 m, a pixel or less at the closest zoom); `nd` for more."""
     if geom.geom_type == 'GeometryCollection':  # a line clipped at a shore can leave stray points: keep the lines
         geom = unary_union([p for p in geom.geoms if p.geom_type in ('LineString', 'MultiLineString')])
     g = geom.simplify(tol, preserve_topology=True)
@@ -101,7 +107,7 @@ def rounded(geom, tol):
 
     def r(c):
         if isinstance(c, (list, tuple)) and c and isinstance(c[0], (int, float)):
-            return [round(c[0], 3), round(c[1], 3)]
+            return [round(c[0], nd), round(c[1], nd)]
         return [r(x) for x in c]
 
     m = mapping(g)
@@ -279,6 +285,37 @@ def town_name(name):
     return 'Lexington' if name == 'Lexington-Fayette' else name
 
 
+# The gazetteer's point for a place is the middle of its outline, which for a big or oddly shaped city sits kilometres
+# from downtown: Chicago's is 6 km inland of the Loop, Louisville's (a merged city and county) 9 km east of the river.
+# These are downtown points for the larger cities; a smaller place keeps the gazetteer's point, which is within a
+# kilometre or two of it. A name with two entries (Springfield) takes the one near the gazetteer's point.
+CITY_CENTRES = {
+    'Chicago': [(-87.6298, 41.8781)], 'Columbus': [(-82.9988, 39.9612)], 'Indianapolis': [(-86.1581, 39.7684)],
+    'Detroit': [(-83.0458, 42.3314)], 'Louisville': [(-85.7585, 38.2527)], 'Milwaukee': [(-87.9065, 43.0389)],
+    'Kansas City': [(-94.5786, 39.0997)], 'Omaha': [(-95.9345, 41.2565)], 'Minneapolis': [(-93.2650, 44.9778)],
+    'Cleveland': [(-81.6944, 41.4993)], 'Lexington': [(-84.5037, 38.0406)], 'Cincinnati': [(-84.5120, 39.1031)],
+    'St. Paul': [(-93.0900, 44.9537)], 'Pittsburgh': [(-79.9959, 40.4406)], 'Lincoln': [(-96.7026, 40.8136)],
+    'St. Louis': [(-90.1994, 38.6270)], 'Madison': [(-89.4012, 43.0731)], 'Fort Wayne': [(-85.1394, 41.0793)],
+    'Toledo': [(-83.5379, 41.6528)], 'Des Moines': [(-93.6250, 41.5868)], 'Sioux Falls': [(-96.7311, 43.5446)],
+    'Grand Rapids': [(-85.6681, 42.9634)], 'Akron': [(-81.5190, 41.0814)], 'Aurora': [(-88.3201, 41.7606)],
+    'Springfield': [(-93.2923, 37.2089), (-89.6440, 39.7990)], 'Joliet': [(-88.0817, 41.5250)],
+    'Rockford': [(-89.0940, 42.2711)], 'Cedar Rapids': [(-91.6656, 41.9779)], 'Dayton': [(-84.1916, 39.7589)],
+    'Fargo': [(-96.7898, 46.8772)], 'Rochester': [(-92.4802, 44.0121)], 'Ann Arbor': [(-83.7430, 42.2808)],
+    'Evansville': [(-87.5711, 37.9716)], 'Lansing': [(-84.5555, 42.7325)], 'Peoria': [(-89.5890, 40.6936)],
+    'Green Bay': [(-88.0133, 44.5133)], 'South Bend': [(-86.2520, 41.6764)], 'Davenport': [(-90.5776, 41.5236)],
+    'Duluth': [(-92.1005, 46.7867)], 'Gary': [(-87.3464, 41.5934)], 'Racine': [(-87.7829, 42.7261)],
+    'Kenosha': [(-87.8212, 42.5847)], 'Waukegan': [(-87.8448, 42.3636)], 'Evanston': [(-87.6877, 42.0451)],
+    'Sheboygan': [(-87.7145, 43.7508)], 'Muskegon': [(-86.2484, 43.2342)], 'Erie': [(-80.0851, 42.1292)],
+    'Traverse City': [(-85.6206, 44.7631)], 'Independence': [(-94.4155, 39.0911)], 'Rock Island': [(-90.5776, 41.5095)],
+}
+CENTRE_REACH = 0.25  # degrees: a downtown point further than this from the gazetteer's is a different place
+
+
+def downtown(name, lng, lat):
+    near = [c for c in CITY_CENTRES.get(name, []) if abs(c[0] - lng) < CENTRE_REACH and abs(c[1] - lat) < CENTRE_REACH]
+    return min(near, key=lambda c: (c[0] - lng) ** 2 + (c[1] - lat) ** 2) if near else (lng, lat)
+
+
 def towns():
     pop = {}
     d = fetch('popest', POP_URL)
@@ -303,6 +340,7 @@ def towns():
             if not BBOX.contains(box(lng, lat, lng, lat)):
                 continue
             name = town_name(r['NAME'])
+            lng, lat = downtown(name, lng, lat)
             # Big cities from the whole-Midwest view; a town of 2,000 from about town scale.
             z = 4.6 + (6.0 - math.log10(n)) / 0.5
             labels.append([name, round(lng, 3), round(lat, 3), round(max(0.0, z), 1),
@@ -492,7 +530,7 @@ def context():
             f = feature(g, 0.004, z=0, great=1)
             if f:
                 far.append(f)
-    return feats, far
+    return feats, far, sea
 
 
 def exact_feature(geom, **props):
@@ -511,7 +549,7 @@ def exact_feature(geom, **props):
     return {'type': 'Feature', 'geometry': {'type': m['type'], 'coordinates': r(m['coordinates'])}, 'properties': props}
 
 
-def pads(res):
+def pads(res, dry=None):
     """Hexagons just outside the forecast ones, each paired with a forecast neighbour whose colour it takes.
 
     A forecast hexagon is one whose centre is in a forecast state, so up to half a hexagon of bare paper is left along
@@ -526,6 +564,8 @@ def pads(res):
         if f['properties']['core']:
             cells.update(h3.geo_to_cells(f['geometry'], res))
     core = unary_union([shape(f['geometry']) for f in data['features'] if f['properties']['core']])
+    if dry is not None:
+        core = core.union(dry)   # the shore land the Census 1:500,000 outline gives back (see shore_fix)
     out = {}
     for c in sorted(cells):
         for n in sorted(h3.grid_disk(c, 1)):
@@ -534,16 +574,81 @@ def pads(res):
     return sorted([p, c] for p, c in out.items())
 
 
+SHORE_STATES = ('IL', 'IN', 'OH', 'MI', 'WI', 'MN')   # the forecast states on a Great Lake
+SHORE_BAND = 0.25  # degrees: only within ~25 km of a Great Lake; inland the two outlines agree on borders
+SHORE_WIDTH = 0.0015  # degrees: strips thinner than ~0.35 km are left alone
+SHORE_TOL = 0.001  # ~100 m, a pixel at zoom 10; the 1:500,000 outline's own vertices are about this far apart
+
+
+def shore_fix():
+    """(dry, wet): where the map's Great Lakes shore is wrong at town scale (public domain Census data).
+
+    The state outlines the app draws are Census 1:10m, whose shore is smoothed over a kilometre or so: the Streeterville
+    and Navy Pier landfill in Chicago is lake on the map, Milwaukee's harbour is land. The Census 1:500,000 outlines are
+    clipped to the real shore and about twenty times finer, but too big to ship whole (and the 1:10m ones feed the
+    forecast grid, which must not move). So only the difference along the Great Lakes is kept:
+    `dry` is shore land the map shows as water (cut out of the lakes and the sea mask, and given hexagons), `wet` is
+    water it shows as land (painted over it, see shore_file)."""
+    data = json.loads((ROOT / 'src/data/midwest-states.json').read_text())
+    ten = unary_union([shape(f['geometry']).buffer(0) for f in data['features']])
+    great = unary_union([g.buffer(0) for name in ('ne_10m_lakes', 'ne_10m_lakes_north_america') for g, rec in read(name)
+                         if rec.get('scalerank') == 0 and g.geom_type in ('Polygon', 'MultiPolygon')])
+    band = great.buffer(SHORE_BAND, quad_segs=2)
+    fine = unary_union([g.buffer(0) for g, rec in read('cb_states', 'cb_2023_us_state_500k')
+                        if rec['STUSPS'] in SHORE_STATES])
+    drawn = ten.difference(great)   # what the app paints as land beside the lakes
+    def wide(g):
+        # Only the strips wider than SHORE_WIDTH (an error under a couple of pixels at the closest zoom is no news),
+        # simplified like the rest of the basemap.
+        return unary_union([p.simplify(SHORE_TOL, preserve_topology=True) for p in getattr(g, 'geoms', [g])
+                            if p.geom_type == 'Polygon' and not p.buffer(-SHORE_WIDTH).is_empty])
+    return wide(fine.intersection(band).difference(drawn)), wide(drawn.intersection(band).difference(fine))
+
+
+def shore_file(dry, wet, sea):
+    """shore.json, fetched once the map is zoomed in to town scale. From there the app draws the Great Lakes' shore from
+    it instead of from the Natural Earth lakes (which it then leaves out): `sea` is the sea mask as context() made it
+    with the shore land given back (`dry`) cut out; `dry` is that land, filled under the hexagons; `wet` is the water
+    the 1:10m outline keeps dry, painted over it; `ink` is the state lines without their coast, since the old coast now
+    runs inland of the shore, through the land that was given back. `sea` is the sea mask as context() made it."""
+    data = json.loads((ROOT / 'src/data/midwest-states.json').read_text())
+    core = unary_union([shape(f['geometry']).buffer(0) for f in data['features'] if f['properties']['core']])
+    ink = core.boundary.difference(sea.buffer(0.002, quad_segs=1))
+
+    def snapped(geom):
+        # On the 0.001-degree grid the coordinates are written at, so rounding cannot fold a thin strip or a narrow
+        # channel into a self-touching ring, which the map's polygon fill would draw as stray triangles.
+        return shapely.set_precision(geom.buffer(0), 0.001)
+
+    def collection(geom):
+        feats = []
+        for part in getattr(snapped(geom), 'geoms', [geom]):
+            g = rounded(part, SHORE_TOL) if part.geom_type == 'Polygon' and not part.is_empty else None
+            if g:
+                feats.append({'type': 'Feature', 'geometry': g, 'properties': {}})
+        return {'type': 'FeatureCollection', 'features': feats}
+
+    return {'version': 1,
+            'sea': exact_feature(snapped(sea.difference(dry)), z=0, kind=0),
+            'dry': collection(dry), 'wet': collection(wet),
+            'ink': {'type': 'Feature', 'geometry': rounded(ink, SHORE_TOL), 'properties': {}}}
+
+
 def main():
+    dry, wet = shore_fix()
     water, water_labels = lakes()
     green, green_labels = forests()
-    outside, far_lakes = context()
+    outside, far_lakes, sea = context()
     layers = {'water': water + far_lakes, 'rivers': rivers(), 'roads': roads(), 'green': green, 'outside': outside}
     labels = states() + water_labels + green_labels + towns()
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / 'woods.json'
     path.write_text(json.dumps({'version': 1, 'woods': {'type': 'FeatureCollection', 'features': woods()}},
                                separators=(',', ':')))
+    print(path, f'{path.stat().st_size / 1024:.0f} KB')
+    # The shore fix's water and state lines (see shore_file) are their own file: only a town-scale view needs them.
+    path = OUT / 'shore.json'
+    path.write_text(json.dumps(shore_file(dry, wet, sea), separators=(',', ':')))
     print(path, f'{path.stat().st_size / 1024:.0f} KB')
     for part, near in (('overview', False), ('detail', True)):
         keep = lambda z: (z >= DETAIL_ZOOM) == near  # noqa: E731
@@ -552,7 +657,7 @@ def main():
             out[k] = {'type': 'FeatureCollection', 'features': [f for f in feats if keep(f['properties']['z'])]}
         out['labels'] = [lab for lab in labels if keep(lab[3])]
         # The extra shore hexagons (see pads): the whole-Midwest level at start, the finer levels once zoomed in.
-        out['pads'] = {str(r): pads(r) for r in ((5, 6) if near else (4,))}
+        out['pads'] = {str(r): pads(r, dry if near else None) for r in ((5, 6) if near else (4,))}
         path = OUT / f'{part}.json'
         path.write_text(json.dumps(out, separators=(',', ':'), ensure_ascii=False))
         print(path, f'{path.stat().st_size / 1024:.0f} KB,',
