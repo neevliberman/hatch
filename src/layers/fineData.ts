@@ -173,3 +173,38 @@ export function fineQ(days: Uint8Array, i: number, offset = 60, never = 255): (n
 }
 
 export const parentOf = (cell: string) => cellToParent(cell, FINE_PARENT_RES);
+
+/**
+ * Finer days for a live season, which has no finer forecast of its own (the nightly run is at res 4). Each finer hex
+ * takes its res-4 parent's live day plus how far that hex runs ahead of or behind its parent in a typical year, so
+ * lake shores, cities and river valleys keep their usual lean while the season's weather comes from the live run.
+ * Like a regional forecast corrected by a local who knows which side of town is always warmer.
+ * `liveQ` / `typicalQ`: a res-4 cell's five days in the live forecast and in the typical year (null: none).
+ */
+export function liveFineDays(
+  typical: Uint8Array,
+  level: FineLevel,
+  liveQ: (parent: string) => readonly (number | null)[] | null | undefined,
+  typicalQ: (parent: string) => readonly (number | null)[] | null | undefined,
+  offset = 60,
+  never = 255,
+): Uint8Array {
+  const out = new Uint8Array(typical.length).fill(never);
+  const parents = new Map<string, [readonly (number | null)[] | null | undefined, readonly (number | null)[] | null | undefined]>();
+  level.cells.forEach((cell, i) => {
+    const p = parentOf(cell);
+    let q = parents.get(p);
+    if (!q) parents.set(p, (q = [liveQ(p), typicalQ(p)]));
+    const [L, T] = q;
+    if (!L) return;
+    for (let k = 0; k < 5; k++) {
+      const l = L[k];
+      if (l == null) continue;
+      const b = typical[i * 5 + k]!;
+      const t = T?.[k];
+      const day = b === never || t == null ? l : l + (b + offset - t);
+      out[i * 5 + k] = Math.min(never - 1, Math.max(0, Math.round(day) - offset));
+    }
+  });
+  return out;
+}
