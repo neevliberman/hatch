@@ -69,8 +69,8 @@ it, 4.00 vs 3.85) and the 2027 P3 vs P3.1 test is untouched.
 
 - Scores use each season's real weather to the end, as P3's leave-one-year-out did. A real forecast a week ahead
   also has to guess the coming weather; the 2027 track measures that cost.
-- What was tried after R1: the clock and a 50/50 clock-calendar mix (5.13 East), then 4, 8 or 16 hexes per cell
-  (4.69, 4.72, 4.72) for the nightly version. After review, the clock reads the day within the day (it had rounded up
+- What was tried after R1: the clock and a 50/50 clock-calendar mix (5.13 East), then, in a scratch check not kept
+  here (before the fix below), 4, 8 or 16 hexes per cell, which scored alike (4.69-4.72 vs 4.73 with all). After review, the clock reads the day within the day (it had rounded up
   to the next whole day, adding half a day of lateness): 4.73 → 4.69 East, 4.04 → 4.00 Midwest.
 - One small leak, in the clock's favour: its cold-start warmth targets come from the year-test rows, whose brood
   cut-offs were set with the hidden region's 2° band included. It still loses there. The year test has no such leak:
