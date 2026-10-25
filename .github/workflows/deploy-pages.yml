@@ -35,6 +35,7 @@ jobs:
             mkdir -p dist/live
             git show FETCH_HEAD:live/latest.json > dist/live/latest.json
             echo "live forecast from live-data branch"
+            if git cat-file -e FETCH_HEAD:live/species 2>/dev/null; then git archive FETCH_HEAD live/species | tar -x -C dist; fi
             # its scorecard (pipeline/live/scorecard.py), once the nightly job has written one; else main's copy
             if git cat-file -e FETCH_HEAD:live/scorecard.json 2>/dev/null; then
               git show FETCH_HEAD:live/scorecard.json > dist/live/scorecard.json
