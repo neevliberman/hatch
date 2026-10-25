@@ -308,7 +308,7 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
   const pinnedKey = await pinnedAt();
   await page.keyboard.press('Enter');
   await page.waitForTimeout(200);
-  if (!/Already pinned/.test(await page.locator('#action-msg').innerText())) fail('Enter on a pinned hexagon did not say it is already pinned');
+  if (!/Pinned/.test(await page.locator('#action-msg').innerText())) fail('Enter on a pinned hexagon did not say it is already pinned');
   if ((await pinnedAt()) !== pinnedKey) fail('Enter on a pinned hexagon changed it');
   // Left, then right, comes back to the same hexagon.
   const before = await pinnedAt();
@@ -559,7 +559,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.locator('#info-btn').click();
         await page.waitForTimeout(500);
         const about = await page.locator('#drawer').textContent();
-        if (!/how this forecast is made/.test(about)) fail('the About panel has no live-mode card');
+        if (!/how it works/.test(about)) fail('the About panel has no live-mode card');
         if (!/Open-Meteo/.test(about)) fail('the credits do not name Open-Meteo');
         await shotL('3-about');
         // The live scorecard (live/scorecard.json, lazy): a line and a strip table in "How sure is it?".

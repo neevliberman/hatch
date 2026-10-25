@@ -518,7 +518,7 @@ export function createOneGenerationLayer(
           ? `This is ${live!.season}\u2019s forecast: real weather so far, then guesses ahead. Past-year misses (below) knew the real weather, so expect bigger early misses.`
           : 'A look back, using the temperatures that really happened. A live forecast would have to guess the weather ahead.',
         isLive()
-          ? `Dots: this season\u2019s iNaturalist photos of ${cfg.adults} (${data.species.sci}), ${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}. Fainter ones are unconfirmed. Each stays lit ${GLOW_DAYS} days.`
+          ? `Dots: this season\u2019s iNaturalist photos of ${cfg.adults} (${data.species.sci}), ${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}. Fainter dots are pending: not yet confirmed on iNaturalist. Each stays lit ${GLOW_DAYS} days.`
           : `Dots: ${c.sightings?.toLocaleString() ?? '?'} iNaturalist photos of ${cfg.adults} (${data.species.sci}), ${data.years[0]}-${data.years[data.years.length - 1]}. Each stays lit ${GLOW_DAYS} days.`,
         cfg.idNote,
         cfg.seasonNote,
@@ -531,7 +531,7 @@ export function createOneGenerationLayer(
         ...(isLive()
           ? ['This year\u2019s forecast has big hexagons only.']
           : hasFine
-          ? ['Zoom in for smaller hexagons, about 17 km wide. Each uses its own centre’s temperatures. Unchecked at that scale, so a small hexagon’s date is no surer than a big one’s. Its card counts the big hexagon’s sightings.']
+          ? ['Zoom in for smaller hexagons, about 17 km wide. Each uses its own center’s temperatures. Unchecked at that scale, so a small hexagon’s date is no surer than a big one’s. Its card counts the big hexagon’s sightings.']
           : [`No small hexagons for ${plural}: zooming keeps the big ones.`]),
         `A hexagon’s card gives a "peak likely" window. In the ${data.scores.length} strip-years checked, 8 in 10 peaks fell within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast.` +
           (data.interval?.checked
@@ -618,6 +618,7 @@ export function createOneGenerationLayer(
           ...STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
           { color: css(GLOW), label: 'seen, last 10 days', shape: 'dot' },
+          ...(isLive() ? [{ color: `rgba(${GLOW[0]},${GLOW[1]},${GLOW[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
           { color: css(GREY), label: 'rough location', shape: 'dot' },
         ],
       };

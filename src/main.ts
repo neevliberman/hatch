@@ -376,7 +376,7 @@ function start() {
     picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses)`;
   };
   fillPicker();
-  // This season, live: "next real season ... days from now" would contradict the map.
+  // This season, live: "next season ... days" would contradict the map.
   const syncCountdown = () => {
     const L = cur.live();
     $('countdown').hidden = picker.value === LIVE && !!L && inSeason(L, clock);

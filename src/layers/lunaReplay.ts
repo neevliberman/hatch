@@ -725,11 +725,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         const s = picked.object as Sighting;
         const lines = [
           s.flags & SECOND_BROOD
-            ? 'Seen late, so counted as the second wave. Not forecast.'
+            ? 'Seen after late June or early July, so counted as the second wave. Not forecast.'
             : 'First wave (the one forecast).',
         ];
         if (s.flags & APPROXIMATE) lines.push('Rough location: small, dark dot.');
-        if (s.flags & UNCONFIRMED) lines.push('Not yet confirmed on iNaturalist: drawn fainter.');
+        if (s.flags & UNCONFIRMED) lines.push('Pending: not yet confirmed on iNaturalist. Drawn fainter.');
         return {
           title: `Luna moth seen ${fmtDoy(s.year, s.doy)}, ${s.year}`,
           lines,
@@ -798,10 +798,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           : `Dots: ${c.sightings?.toLocaleString() ?? '?'} iNaturalist photos of adult luna moths, ${data.years[0]}-${data.years[data.years.length - 1]}. Each stays lit ${GLOW_DAYS} days, about an adult\u2019s lifespan.`,
         'Amber dots: late moths, counted as the second wave. Some may be late first-wave moths from a cold year.',
         'Gray dots: rough location, so the dot may be off.',
+        ...(isLive() ? ['Fainter dots are pending: not yet confirmed on iNaturalist.'] : []),
         'Striped hexagons: no sightings nearby, ever, so nothing to check against.',
         ...(fineLevels.length && !isLive()
           ? [
-              `Zoom in for smaller hexagons, down to about ${fineLevels.includes(6) ? 6 : 17} km across. Each uses its own centre\u2019s temperatures, so lake shores, cities and valleys show up.`,
+              `Zoom in for smaller hexagons, down to about ${fineLevels.includes(6) ? 6 : 17} km across. Each uses its own center\u2019s temperatures, so lake shores, cities and valleys show up.`,
               'Same model, but unchecked at that scale: accuracy was only measured for whole strips. A small hexagon\u2019s date is no surer than a big one\u2019s.',
               'A small hexagon is striped when its big hexagon is, and its card counts that big hexagon\u2019s sightings.',
             ]
@@ -897,6 +898,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
           { color: css(MOON), label: 'seen, last 10 days', shape: 'dot' },
+          ...(isLive() ? [{ color: `rgba(${MOON[0]},${MOON[1]},${MOON[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
           { color: css(SECOND), label: 'seen, 2nd wave', shape: 'dot' },
           { color: css(GREY), label: 'rough location', shape: 'dot' },
         ],

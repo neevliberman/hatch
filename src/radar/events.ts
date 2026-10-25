@@ -23,7 +23,7 @@ export const EVENTS: Record<string, RadarEvent> = {
     caption: 'Mayflies rising off the Mississippi',
     tz: { name: 'CDT', offset: -5 },
     more: [
-      'One evening on the National Weather Service radar at La Crosse, Wisconsin, one sweep about every 10 minutes. Darker means a stronger echo. The blank centre is left out: ground echoes hide insects up close.',
+      'One evening on the National Weather Service radar at La Crosse, Wisconsin, one sweep about every 10 minutes. Darker means a stronger echo. The blank center is left out: ground echoes hide insects up close.',
       'Radar tells raindrops (round, all alike) from insects (long, all different). This cloud reads as insects.',
     ],
     numbers: {
@@ -40,7 +40,7 @@ export const EVENTS: Record<string, RadarEvent> = {
     caption: 'Mayflies rising off Lake Erie',
     tz: { name: 'EDT', offset: -4 },
     more: [
-      'One evening on the National Weather Service radar at Cleveland, Ohio, one sweep about every 7 minutes. After dark the cloud rises over the lake’s western islands and drifts east. Darker means a stronger echo. The blank centre is left out.',
+      'One evening on the National Weather Service radar at Cleveland, Ohio, one sweep about every 7 minutes. After dark the cloud rises over the lake’s western islands and drifts east. Darker means a stronger echo. The blank center is left out.',
       'Radar tells raindrops (round, all alike) from insects (long, all different). This cloud reads as insects.',
     ],
     numbers: {
