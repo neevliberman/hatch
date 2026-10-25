@@ -144,22 +144,24 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   // Drag the sheet between its stops. At the middle stop the whole sheet is the handle: up for the tall stop, down
   // to close. At the tall stop the title bar always drags; the text drags only once it is scrolled to the top (before
   // that, a downward swipe scrolls it back up). A quick flick counts even when it moved only a little.
-  let drag: { y0: number; t: number; dy: number; v: number; head: boolean; on: boolean } | null = null;
+  let drag: { x0: number; y0: number; t: number; dy: number; v: number; head: boolean; on: boolean } | null = null;
   drawer.addEventListener('touchstart', (e) => {
     if (drag?.on) return; // a second finger mid-drag: keep following the first
     drag = null;
     if (!sheet() || e.touches.length !== 1) return;
     const head = !full() || !!(e.target as Element).closest('.drawer-head');
-    if (head || drawer.scrollTop <= 0) drag = { y0: e.touches[0]!.clientY, t: e.timeStamp, dy: 0, v: 0, head, on: false };
+    if (head || drawer.scrollTop <= 0) drag = { x0: e.touches[0]!.clientX, y0: e.touches[0]!.clientY, t: e.timeStamp, dy: 0, v: 0, head, on: false };
   }, { passive: true });
   drawer.addEventListener('touchmove', (e) => {
     if (!drag) return;
     const dy = e.touches[0]!.clientY - drag.y0;
+    const dx = e.touches[0]!.clientX - drag.x0;
     if (!drag.on) {
       if (!drag.head && (dy < 0 || drawer.scrollTop > 0)) return void (drag = null); // reading on: let the text scroll
-      // At the top a pull down has nothing to scroll, so claim it now: once the browser starts a pan it stops letting us cancel moves.
+      if (Math.hypot(dx, dy) < 8) return; // a tap with a wobble (say on the close button) stays a tap, and a fingertip's first twitch decides nothing
+      // Claim the gesture only now that it is clearly a pull down: cancelling any earlier move (even a 1px jitter at
+      // the top of the text) makes Safari drop the whole gesture, so the text would never scroll.
       if (!drag.head && e.cancelable) e.preventDefault();
-      if (Math.abs(dy) < 8) return; // a tap with a wobble (say on the close button) stays a tap
       drag.on = true;
       drawer.classList.add('dragging');
     }
