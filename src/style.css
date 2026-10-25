@@ -290,9 +290,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #bar { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .btns { display: flex; gap: 6px; flex: none; }
 .play { min-width: 56px; }
-.date { flex: none; min-width: 190px; white-space: nowrap; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.date { flex: none; white-space: nowrap; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
 .date em { font: 600 17px var(--font-note); color: var(--muted); }
-.date small { margin-left: 10px; font-size: 12px; font-weight: 600; color: var(--warn); }
+/* The day gets a fixed slot, and "forecast" / "after today" hangs below it, so nothing beside the date changes width
+   as you scrub and the slider never moves. The pill on a phone floats over the thumb instead, so it frees them. */
+#t-date { display: inline-block; min-width: 7em; }
+.date { position: relative; }
+.date small { position: absolute; left: 0; top: 100%; margin: 0; font-size: 12px; line-height: 1.2; font-weight: 600; color: var(--warn); }
 .date small.fc { color: var(--muted); }
 /* Live mode: when the weather data runs to; amber when the nightly update looks late. */
 .asof { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px; vertical-align: 2px; white-space: nowrap;
@@ -438,7 +442,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .date { position: absolute; top: 4px; min-width: 0; transform: translateX(-50%); pointer-events: none; font-size: 14px;
     left: clamp(var(--half, 70px), calc(66px + var(--thumb) / 2 + var(--p) * (100% - 66px - var(--thumb))), calc(100% - var(--half, 70px)));
     padding: 1px 9px 2px; border-radius: 999px; background: var(--text); color: var(--on-accent); }
+  #t-date { min-width: 0; }
   .date small, .date em { margin-left: 6px; color: inherit; font-size: 13px; }
+  .date small { position: static; }
   .date em { margin-left: 0; font-size: 15px; }
   /* Live mode in the pill: the washed ribbon already says "forecast"; the as-of badge rides along, small. */
   .date small.fc { display: none; }

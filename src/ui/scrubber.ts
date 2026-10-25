@@ -267,6 +267,33 @@ export function mountScrubber(
   $('t-prev').addEventListener('click', () => (touch(), time.pause(), time.step(-1)));
   $('t-next').addEventListener('click', () => (touch(), time.pause(), time.step(1)));
 
+  // Scroll wheel or two-finger swipe over the slider steps the day: down or right is later. Whichever axis moves more
+  // wins (a mouse wheel is vertical, a trackpad swipe is usually horizontal). Small trackpad deltas add up until they
+  // make a whole step, so slow swipes still move. Pinch-zoom (ctrl) and the rest of the page keep their wheel.
+  const WHEEL_PX = 30; // pixels of scroll per day
+  let wheelAcc = 0;
+  let wheelAt = 0;
+  root.querySelector<HTMLElement>('.track')!.addEventListener(
+    'wheel',
+    (e) => {
+      if (e.ctrlKey || e.metaKey) return;
+      const lines = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1; // lines and pages to pixels
+      const d = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * lines;
+      if (!d) return;
+      e.preventDefault();
+      if (Math.sign(d) !== Math.sign(wheelAcc) || e.timeStamp - wheelAt > 300) wheelAcc = 0; // turned around or paused: drop the leftover
+      wheelAt = e.timeStamp;
+      wheelAcc += d;
+      const n = Math.trunc(wheelAcc / WHEEL_PX);
+      if (!n) return;
+      wheelAcc -= n * WHEEL_PX;
+      touch();
+      time.pause();
+      time.step(n);
+    },
+    { passive: false },
+  );
+
   window.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
