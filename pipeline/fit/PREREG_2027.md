@@ -56,7 +56,10 @@ Per strip, the scorecard's `miss` (rounded to 0.1 d, as published; D uses these 
 - A pinned file may change only via an amendment line below; `pipeline/fit/tests/test_prereg.py` fails CI (`.github/workflows/tests.yml` runs `pytest -q pipeline`) otherwise. This is a tripwire, not a lock: a determined edit of the test or table is visible in git history.
 
 ## Amendments
-Format: `- date | path | new sha256 | reason=<code> | scored=<strips or none> | why`. (none yet)
+Format: `- date | path | new sha256 | reason=<code> | scored=<strips or none> | why`.
+
+- 2026-10-25 | pipeline/live/scorecard.py | 6c9f8adf2cf8452ef60ff5f43962ce6d2c7173f5752e6b21b1269d64dff8cfc7 | reason=pre-season | scored=none | added firefly and Japanese beetle layers and per-season history (#57, #60, #63); luna rows of public/live/scorecard.json compared with the registered version: every luna number identical, one note reworded ('moths' to 'peak')
+- 2026-10-25 | pipeline/live/build_live.py | 6c1381d1078b2056cc40b6a0e6a8c7c86b41365ef724d9c078ce56f4252d14ce | reason=pre-season | scored=none | added firefly and Japanese beetle layers and per-season history (#57, #60, #63); luna rows of public/live/scorecard.json compared with the registered version: every luna number identical, one note reworded ('moths' to 'peak')
 
 ## Daymet result
 (to be filled by 31 Aug 2027: date, Daymet 2026 version, D(2026) for both models, gate pass/fail)
