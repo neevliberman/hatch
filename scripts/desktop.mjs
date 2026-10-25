@@ -39,12 +39,26 @@ const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
 const TAB_ORDER = ['season', 'info-btn', 'explore', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
+const chromiumLaunch = { executablePath: process.env.CHROMIUM || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] };
 const problems = [];
 const browsers = {};
+// Independent sections, run by a small pool (two at a time on Chromium-only runs, where a section spends much of its time
+// waiting on software-GL frames and a second keeps the cores busy; one at a time otherwise). Each section has its own context and its own `fail`.
+const units = [];
+// Each worker drives its own browser process: contexts of one browser share its single software-GL process, and two
+// pages drawing through it starve each other into load timeouts.
+const runUnits = async (n) => {
+  const queue = [...units];
+  await Promise.all(Array.from({ length: n }, async (_, i) => {
+    const own = i === 0 ? null : await pw.chromium.launch(chromiumLaunch);
+    for (let u; (u = queue.shift()); ) await u(own ?? browsers.chromium);
+    await own?.close();
+  }));
+};
 for (const e of new Set(screens.map((s) => s[0]))) {
   browsers[e] = await pw[e].launch(
     e === 'chromium'
-      ? { executablePath: process.env.CHROMIUM || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }
+      ? chromiumLaunch
       : e === 'firefox'
         ? { headless: false, firefoxUserPrefs: { 'webgl.force-enabled': true } } // headless Firefox gets no WebGL; xvfb gives it a display
         : {},
@@ -95,11 +109,11 @@ const midwest = (page, png) =>
 
 const drawerOpen = (page) => page.locator('#drawer.open').count().then((n) => n > 0);
 
-for (const [engine, width, height] of screens) {
+const screenUnit = async ([engine, width, height], browser = browsers[engine]) => {
   const tag = `${engine} ${width}x${height}`;
   const name = `${engine}-${width}x${height}`;
   const fail = (m) => problems.push(`${tag}: ${m}`);
-  const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   page.on('request', (r) => !/^(file|data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
   page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
@@ -383,10 +397,10 @@ for (const [engine, width, height] of screens) {
     fail(`stopped: ${e.message.split('\n')[0]}`);
   }
   await ctx.close();
-}
+};
 
 // No WebGL (old GPU driver, hardware acceleration off): the page must say so, not show an empty map.
-if (engines.includes('chromium')) {
+const noWebglUnit = async () => {
   const b = await pw.chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--disable-webgl', '--disable-webgl2'] });
   const page = await b.newPage({ viewport: { width: 1280, height: 720 } });
   await page.goto(file + '?noauto');
@@ -394,7 +408,7 @@ if (engines.includes('chromium')) {
   await page.screenshot({ path: `${out}/chromium-no-webgl.png` });
   if (!(await page.locator('#no-webgl').isVisible())) problems.push('no WebGL: the map is blank with no message');
   await b.close();
-}
+};
 
 // Live mode, over http. The test serves its own copies of latest.json (a real-looking one built from the stub, a late one,
 // a missing one) so the default-season and stale rules can be checked on any day; ?today= fakes the clock.
@@ -420,10 +434,6 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const inSeason = `${stub.season}-06-11T12:00:00Z`;
   // Every species with a part in the file gets live mode; one without (here the beetle) does not.
   const someSpecies = { ...real, species: Object.fromEntries(Object.entries(real.species ?? {}).filter(([k]) => k !== 'japanese-beetle')) };
-  const browser = await pw.chromium.launch({
-    executablePath: process.env.CHROMIUM || undefined,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
-  });
   // [label, query, served file (null = the stub as built, 404 = none), width, height, phone]
   const cases = [
     ['in-season default', `?noauto&today=${inSeason}`, someSpecies, 1440, 900, false],
@@ -439,7 +449,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     ['file as built', '?season=live&noauto', null, 1280, 720, false],
     ['no file', `?noauto&today=${inSeason}`, 404, 1280, 720, false],
   ];
-  for (const [label, query, served, width, height, phone] of cases) {
+  const liveUnit = async ([label, query, served, width, height, phone], browser) => {
     const tag = `live ${label}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
@@ -479,7 +489,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if ((await page.locator('#season').inputValue()) !== 'live') {
         if (!(await page.locator('#t-asof').isHidden())) fail('the "as of" badge shows outside live mode');
         await ctx.close();
-        continue;
+        return;
       }
       // Live: starts on the last observed day, flags it, says how fresh the data is.
       const asOfDate = new Date(Date.parse((served ?? stub).as_of)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
@@ -491,7 +501,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await shotL('1-map');
         await ctx.close();
         console.log(`${tag}: checked`);
-        continue;
+        return;
       }
       if (label === 'small phone') {
         // The date and the badge (stacked here) stay within the buttons' height, so the time bar is no taller than on wider phones.
@@ -591,7 +601,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     await ctx.close();
     console.log(`${tag}: checked`);
-  }
+  };
   // The species menu, from src/species.ts: every species is listed, a ?species= link opens on it, each one loads,
   // names itself in the header and the About panel, keeps the link, and draws a coloured map. Desktop and phones.
   const keyOf = (src) => [...src.matchAll(/key: '([a-z-]+)'/g)].map((m) => m[1]);
@@ -601,7 +611,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     ['phone', 390, 844, true],
     ['small phone', 320, 640, true],
   ];
-  for (const [label, width, height, phone] of speciesCases) {
+  const speciesUnit = async ([label, width, height, phone], browser) => {
     const tag = `species ${label}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
@@ -644,12 +654,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     await ctx.close();
     console.log(`${tag}: checked`);
-  }
+  };
 
   // Find a town (http only: it reads the map's town names), on a desktop and a phone: the box opens at its button, a
   // name several towns share lists them (forecast states first, each with its state), and picking one pins its card.
   // The About panel's "Or find a town" opens the same box in the panel. Share's "Link copied" shows by its button.
-  for (const [w, h, phone] of [[1366, 768, false], [390, 844, true]]) {
+  const findUnit = async ([w, h, phone], browser) => {
     const tag = `find ${phone ? 'phone' : 'desktop'}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
@@ -728,7 +738,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     await ctx.close();
     console.log(`${tag}: checked`);
-  }
+  };
   // The radar replays (src/radar/, http only: their frames are files beside the page). Nothing of one loads until it is
   // opened: About lists every event, its link then fetches that event's code and frames (and no other's), the map glides
   // to the radar and plays, the card gives the local time, "How we know" has the sources, the link names the replay, and
@@ -756,6 +766,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // A case marked `keep` hands its page on to the next one (same kind of screen; a phone turned on its side), which
   // starts from it at the whole Midwest with the replay closed instead of loading the page again; the last desktop one
   // goes on to the switch case.
+  const radarUnit = async (browser) => {
   let carry = null;
   for (const [label, w, h, phone, reduce, id, keep] of [
     ['phone', 390, 844, true, false, 'karx-2014-07-20', true], ['phone on its side', 852, 393, true, false, 'karx-2014-07-20'],
@@ -985,9 +996,20 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   }
-  await browser.close();
+  };
+  const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
+  // Longest first, so the second worker is never left holding the last big one.
+  units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
+    screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
+  await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
   server.close();
-} else if (engines.includes('chromium')) problems.push(`live mode not checked: no ${join(distDir, 'live/latest.json')} (run npm run build first)`);
+} else {
+  if (engines.includes('chromium')) problems.push(`live mode not checked: no ${join(distDir, 'live/latest.json')} (run npm run build first)`);
+  units.push(...screens.map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)), ...(engines.includes('chromium') ? [noWebglUnit] : []));
+  await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
+}
 
 for (const b of Object.values(browsers)) await b.close();
 if (problems.length) {
