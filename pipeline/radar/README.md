@@ -6,14 +6,14 @@ watched a cloud of burrowing mayflies (*Hexagenia*) come off the water (About, "
 
 | id | Radar | Evening (local) | Pack |
 |---|---|---|---|
-| `karx-2014-07-20` | KARX La Crosse, Wisconsin | Sun 20 July 2014, Mississippi River (CDT) | 22,545 B, 28 scans, 80 km |
-| `kcle-2019-06-26` | KCLE Cleveland, Ohio | Wed 26 June 2019, western Lake Erie (EDT) | 15,524 B, 28 scans, 120 km |
+| `karx-2014-07-20` | KARX La Crosse, Wisconsin | Sun 20 July 2014, Mississippi River (CDT) | 207,426 B, 28 scans, 80 km |
+| `kcle-2019-06-26` | KCLE Cleveland, Ohio | Wed 26 June 2019, western Lake Erie (EDT) | 344,329 B, 28 scans, 120 km |
 
 Their code and frames load only when one is opened (a normal visit carries only the short list of links), and the
 one-file build leaves them out.
 
 `build_radar.py` turns one evening of NOAA NEXRAD Level II scans into the pack the app reads,
-`public/radar/<event>/frames.bin.gz` (15 to 25 KB: 28 scans of 160 x 160 cells, 4 bits each) and `meta.json`
+`public/radar/<event>/frames.bin.gz` (200 to 345 KB: 28 scans of 720 rays x 288 to 448 gates, 4 bits each) and `meta.json`
 (scan times, the grid, the levels, and the insect check below). Run it by hand when an event is added or changed. It is
 not part of the app build and never runs in CI: it needs Py-ART, a large install, and 140 to 200 MB of raw scans an
 event.
@@ -31,26 +31,32 @@ added).
 
 ## What it keeps
 
-- The lowest tilt (0.5 degrees), gridded by Py-ART onto 160 x 160 cells centred on the radar, in its azimuthal
-  equidistant frame (sphere, R = 6,370,997 m). Cell centres run from -reach to +reach, so a cell is 2 x reach / 159 wide:
-  about 1 km at La Crosse (80 km), 1.5 km on Lake Erie (120 km, since the swarm leaves the islands 60 to 120 km from
-  Cleveland). The app maps every texture pixel back to this grid (`src/radar/radarReplay.ts`), so the echo lands at its
-  true place, and reads the reach from `meta.json`.
+- The lowest tilt (0.5 degrees) in the radar's own polar bins, not gridded: one row per 0.5 degree ray (720, north first,
+  clockwise; each takes the nearest ray the radar fired) and one column per 250 m gate, the file's native resolution. The
+  app maps every texture pixel to its distance and bearing from the radar (`src/radar/radarReplay.ts`), so each bin is
+  drawn where the radar measured it. (The first version gridded onto 160 x 160 cells of 1 to 1.5 km with Py-ART, which
+  smoothed the echo across several km and looked blurred; the polar pack keeps the detail the radar has.)
+- One smoothing is kept, and it is the beam's: each ray is averaged with its two neighbours (1-2-1, in linear Z), because the
+  beam is about 1 degree wide, so two 0.5 degree rays are not independent looks. It removes single-ray noise spokes and
+  leaves the 250 m detail along the ray. What the data cannot give: a 1 degree beam is about 0.7 km across at 40 km and
+  1.4 km at 80 km, so detail across the beam is never finer than that.
+- Two small repairs after that (`tidy`): a lone bin with no echo in any of its 8 neighbours is dropped, and a missing bin (a
+  censored or rain-dropped gate) with echo in 5 or more of its 8 neighbours takes their median (two passes, so a two-bin hole closes too), so swarms don't show pinholes.
 - 8 km to the reach: the blind centre and the far edge, where the beam is high above the ground, are blanked.
-- Reflectivity in 15 levels, 2.5 dBZ apart from 10 dBZ. Rain-like cells (20 dBZ or more with a correlation coefficient
-  of 0.95 or more) are dropped: 1 cell in the La Crosse evening, 93 (of about 30,000 drawn) on Lake Erie, where the
-  densest swarm reaches a CC of 0.95 but keeps a ZDR of 6 dB or more, so they are insects too, not rain.
+- Reflectivity in 15 levels, 2.5 dBZ apart from 10 dBZ. Rain-like bins (20 dBZ or more with a correlation
+  coefficient of 0.97 or more and a ZDR under 3 dB) are dropped: 160 bins across the La Crosse evening and 1,767 across
+  the Lake Erie one (a small share of the bins drawn, mostly ground echo near the radar).
 
 ## The insect check
 
 Reflectivity alone can't tell insects from rain. Dual polarisation can: raindrops are round and all alike, so the
 correlation coefficient (CC) is near 0.99 and differential reflectivity (ZDR) near 0 to 2 dB; long, tumbling insects give
-a low CC and a high ZDR. For the gridded cells of 25 dBZ or more, in the scans with 100 or more of them (`meta.json`):
+a low CC and a high ZDR. For the bins of 25 dBZ or more, in the scans with 1,000 or more of them (`meta.json`):
 
-| | La Crosse, 20 July 2014 (10 scans) | A rain echo, KARX 22 July 2014 07:42 UTC (by hand) | Lake Erie, 26 June 2019 (3 scans) | A rain echo, KCLE 29 June 2019 11:51 UTC (by hand) |
+| | La Crosse, 20 July 2014 (12 scans) | A rain echo, KARX 22 July 2014 07:42 UTC (by hand) | Lake Erie, 26 June 2019 (10 scans) | A rain echo, KCLE 29 June 2019 11:51 UTC (by hand) |
 |---|---|---|---|---|
-| CC, median | 0.70 to 0.78 | 0.99 | 0.80 to 0.81 | 1.00 |
-| ZDR, median | 7.7 to 7.9 dB | 0.5 dB | 7.3 to 7.4 dB | 0.7 dB |
+| CC, median | 0.71 to 0.80 | 0.99 | 0.82 to 0.92 | 1.00 |
+| ZDR, median | 7.9 dB | 0.5 dB | 6.7 to 7.9 dB | 0.7 dB |
 
 (7.9 dB is the ceiling of ZDR in these files.) Stepanian et al. (below) use the same idea: they drop cells with ZDR under
 5 dB (birds) and remove rain with a polarimetric test (depolarisation ratio under -12.5 dB is rain). A new event should
@@ -78,7 +84,7 @@ land, so they neither confirm nor contradict the NWS post's "inland".)
 The insect test on the raw (polar) gates of 20 dBZ or more, 8 to 120 km out (the replay's whole reach), checked by hand
 alongside the gridded check above:
 
-| UTC (EDT) | Gates of 20 dBZ+ | CC, median | ZDR, median | Depolarisation ratio, median | Rain-like (CC 0.95+, ZDR under 3) |
+| UTC (EDT) | Gates of 20 dBZ+ | CC, median | ZDR, median | Depolarisation ratio, median | Rain-like by hand (CC 0.95+, ZDR under 3) |
 |---|---|---|---|---|---|
 | 02:21 (10:21 pm), before | 509 | 0.83 | 3.3 dB | -7.8 dB | 14% |
 | 03:03 (11:03 pm) | 4,077 | 0.92 | 6.5 dB | -7.7 dB | 1% |

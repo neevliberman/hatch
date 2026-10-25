@@ -34,13 +34,15 @@
   "2014-07-21T05:01:51Z"
  ],
  "start": 8,
- "grid": {
-  "n": 160,
-  "half_m": 80000.0,
-  "spacing_m": 1006.289,
-  "rows": "south to north",
-  "packing": "4 bits, high nibble first",
-  "projection": "azimuthal equidistant on a sphere, R 6370997 m, centred on the radar (Py-ART grid_from_radars)"
+ "polar": {
+  "rays": 720,
+  "gates": 288,
+  "gate_m": 250.0,
+  "first_m": 8125.0,
+  "first_az": 0,
+  "step_deg": 0.5,
+  "layout": "ray-major, north first, clockwise; gate centres at first_m + i x gate_m",
+  "packing": "4 bits, high nibble first"
  },
  "levels": {
   "none": 0,
@@ -53,20 +55,20 @@
    8.0,
    80.0
   ],
-  "rain_dropped": "20 dBZ or more with CC 0.95 or more"
+  "rain_dropped": "20 dBZ or more with CC 0.97 or more and ZDR under 3 dB"
  },
  "insect_check": {
-  "what": "cells of 25 dBZ or more, 8 to 80 km out, in scans with 100 or more of them",
-  "scans": 10,
+  "what": "cells of 25 dBZ or more, 8 to 80 km out, in scans with 1,000 or more of them",
+  "scans": 12,
   "cc_median": [
-   0.7,
-   0.78
+   0.71,
+   0.8
   ],
   "zdr_median_db": [
-   7.7,
+   7.9,
    7.9
   ],
-  "rain_like_cells": 1
+  "rain_like_cells": 160
  },
  "source": "NOAA NEXRAD Level II, KARX, via https://unidata-nexrad-level2.s3.amazonaws.com"
 }

@@ -15,7 +15,7 @@ interface Meta {
   lon: number;
   times: string[];
   start: number;
-  grid: { n: number; half_m: number; spacing_m: number };
+  polar: { rays: number; gates: number; gate_m: number; first_m: number; step_deg: number };
   levels: { dbz_min: number; dbz_step: number; count: number };
   kept: { range_km: [number, number] };
 }
@@ -46,7 +46,7 @@ export interface Radar {
 }
 
 type RGBA = [number, number, number, number];
-// Py-ART grids on a sphere of this radius (its azimuthal equidistant projection); the frames' cells are on that grid.
+// The radar's bins are placed on a sphere of this radius (azimuthal equidistant about the radar, as Py-ART does).
 const R = 6370997;
 const RAD = Math.PI / 180;
 
@@ -76,27 +76,25 @@ const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2))
 const unMercY = (y: number) => (2 * Math.atan(Math.exp(y)) - Math.PI / 2) / RAD;
 
 /**
- * Where each texture pixel samples the radar grid. The frames are cells in the radar's own flat (azimuthal
- * equidistant) frame, which is not the map's: on a Web Mercator map their square is a little bent and its north is
- * not quite the map's north away from the radar's meridian. So the image is drawn on a lng/lat box (which is a true
- * rectangle on the map), and every pixel of it is mapped back to its exact spot on the radar grid.
+ * Where each texture pixel samples the radar. The frames are the radar's own polar bins (one per 0.5 degree ray and
+ * 250 m gate), so every pixel is turned into a distance and a bearing from the radar (azimuthal equidistant, as the radar
+ * measures) and takes the bin it falls in: the echo is drawn as the radar saw it, with no gridding or smoothing of ours.
+ * The image sits on a lng/lat box (a true rectangle on the Web Mercator map).
  */
 function sampler(m: Meta) {
-  const { n, half_m: half, spacing_m: sp } = m.grid;
-  const reach = m.kept.range_km[1] * 1000 + sp; // the outermost kept cell's edge, and a little
+  const { rays, gates, gate_m: gm, first_m: first, step_deg: step } = m.polar;
+  const reach = m.kept.range_km[1] * 1000 + gm; // the outermost kept bin's edge, and a little
   const ring = circle(m, reach);
   const west = Math.min(...ring.map((p) => p[0]));
   const east = Math.max(...ring.map((p) => p[0]));
   const south = Math.min(...ring.map((p) => p[1]));
   const north = Math.max(...ring.map((p) => p[1]));
-  // About two texture pixels to a radar cell: smooth once the GPU filters it, and still small to rebuild mid-fade.
-  const w = Math.round((2 * reach) / (sp / 2));
+  // About 1.5 texture pixels to a gate (the radar's finest detail), but no more than 1100 wide: it is rebuilt mid-fade.
+  const w = Math.min(1100, Math.round((2 * reach) / (gm / 1.5)));
   const yN = mercY(north);
   const yS = mercY(south);
   const h = Math.round((w * (yN - yS)) / ((east - west) * RAD));
   const at = new Int32Array(w * h).fill(-1);
-  const fx = new Float32Array(w * h);
-  const fy = new Float32Array(w * h);
   const p0 = m.lat * RAD;
   for (let j = 0; j < h; j++) {
     const lat = unMercY(yN - ((j + 0.5) / h) * (yN - yS)) * RAD; // row 0 is the north edge
@@ -108,25 +106,21 @@ function sampler(m: Meta) {
       const k = c < 1e-12 ? 1 : c / Math.sin(c);
       const x = R * k * Math.cos(lat) * Math.sin(dl);
       const y = R * k * (Math.cos(p0) * Math.sin(lat) - Math.sin(p0) * Math.cos(lat) * Math.cos(dl));
-      // Grid coordinates: cell centres sit at -half, -half + sp, ... +half; rows run south to north.
-      const gx = (x + half) / sp;
-      const gy = (y + half) / sp;
-      if (gx < 0 || gy < 0 || gx >= n - 1 || gy >= n - 1) continue;
-      const q = j * w + i;
-      at[q] = Math.floor(gy) * n + Math.floor(gx);
-      fx[q] = gx - Math.floor(gx);
-      fy[q] = gy - Math.floor(gy);
+      const g = Math.round((Math.hypot(x, y) - first) / gm);
+      if (g < 0 || g >= gates) continue;
+      const bearing = (Math.atan2(x, y) / RAD + 360) % 360; // clockwise from north
+      at[j * w + i] = (Math.round(bearing / step) % rays) * gates + g;
     }
   }
-  return { w, h, at, fx, fy, n, bounds: [west, south, east, north] as [number, number, number, number] };
+  return { w, h, at, bounds: [west, south, east, north] as [number, number, number, number] };
 }
 
 /** The frames' levels, one byte a cell, from the 4-bit pack (high nibble first). */
-function unpack(bytes: Uint8Array, n: number, count: number): Uint8Array[] {
-  const per = (n * n) / 2;
+function unpack(bytes: Uint8Array, bins: number, count: number): Uint8Array[] {
+  const per = bins / 2;
   if (bytes.length !== per * count) throw new Error(`radar pack: ${bytes.length} bytes, expected ${per * count}`);
   return Array.from({ length: count }, (_, f) => {
-    const out = new Uint8Array(n * n);
+    const out = new Uint8Array(bins);
     for (let i = 0; i < per; i++) {
       const b = bytes[f * per + i]!;
       out[2 * i] = b >> 4;
@@ -165,7 +159,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     const [m, f] = await Promise.all([fetch(`${base}meta.json`), fetch(`${base}frames.bin.gz`)]);
     if (!m.ok || !f.ok) return null;
     meta = (await m.json()) as Meta;
-    frames = unpack(await gunzip(f), meta.grid.n, meta.times.length);
+    frames = unpack(await gunzip(f), meta.polar.rays * meta.polar.gates, meta.times.length);
   } catch {
     return null;
   }
@@ -182,13 +176,12 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   const S = sampler(meta);
   const [r0, g0, b0] = pal[0]!;
 
-  /** Frame `a` blended `f` of the way to frame `b`, bilinear on the radar grid, as a texture-ready image. */
+  /** Frame `a` blended `f` of the way to frame `b`, one radar bin per pixel-patch, as a texture-ready image. */
   const paint = (a: number, b: number, f: number): ImageData => {
     const img = new ImageData(S.w, S.h);
     const px = img.data;
     const A = frames[a]!;
     const B = frames[b]!;
-    const n = S.n;
     for (let q = 0; q < S.at.length; q++) {
       const o = q * 4;
       px[o] = r0;
@@ -196,26 +189,14 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
       px[o + 2] = b0;
       const i = S.at[q]!;
       if (i < 0) continue;
-      const x = S.fx[q]!;
-      const y = S.fy[q]!;
-      const w00 = (1 - x) * (1 - y);
-      const w10 = x * (1 - y);
-      const w01 = (1 - x) * y;
-      const w11 = x * y;
-      let r = 0, g = 0, bl = 0, al = 0;
-      for (const [L, wt] of [[A, 1 - f], [B, f]] as const) {
-        if (!wt) continue;
-        const l00 = L[i]!, l10 = L[i + 1]!, l01 = L[i + n]!, l11 = L[i + n + 1]!;
-        if (!(l00 | l10 | l01 | l11)) continue;
-        r += wt * (w00 * PR[l00]! + w10 * PR[l10]! + w01 * PR[l01]! + w11 * PR[l11]!);
-        g += wt * (w00 * PG[l00]! + w10 * PG[l10]! + w01 * PG[l01]! + w11 * PG[l11]!);
-        bl += wt * (w00 * PB[l00]! + w10 * PB[l10]! + w01 * PB[l01]! + w11 * PB[l11]!);
-        al += wt * (w00 * PA[l00]! + w10 * PA[l10]! + w01 * PA[l01]! + w11 * PA[l11]!);
-      }
+      const la = A[i]!;
+      const lb = B[i]!;
+      if (!(la | lb)) continue;
+      const al = (1 - f) * PA[la]! + f * PA[lb]!;
       if (al < 1) continue;
-      px[o] = (r * 255) / al;
-      px[o + 1] = (g * 255) / al;
-      px[o + 2] = (bl * 255) / al;
+      px[o] = ((1 - f) * PR[la]! + f * PR[lb]!) * 255 / al;
+      px[o + 1] = ((1 - f) * PG[la]! + f * PG[lb]!) * 255 / al;
+      px[o + 2] = ((1 - f) * PB[la]! + f * PB[lb]!) * 255 / al;
       px[o + 3] = al;
     }
     return img;
@@ -227,7 +208,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   const reach = meta.kept.range_km[1] * 1000;
   const sheet = new SolidPolygonLayer<{ ring: [number, number][] }>({
     id: 'radar-sheet',
-    data: [{ ring: circle(meta, reach + meta.grid.spacing_m) }],
+    data: [{ ring: circle(meta, reach + meta.polar.gate_m) }],
     getPolygon: (d) => d.ring,
     getFillColor: [...palette.land.slice(0, 3), 235] as RGBA,
   });
@@ -306,7 +287,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     const p = room();
     const w = window.innerWidth - (p.right ?? 0) - (p.left ?? 0) - 24;
     const h = window.innerHeight - p.top - p.bottom - 16;
-    const metresPerPx = (2 * (reach + meta.grid.spacing_m)) / Math.max(120, Math.min(w, h));
+    const metresPerPx = (2 * (reach + meta.polar.gate_m)) / Math.max(120, Math.min(w, h));
     // Web Mercator, 512 px tiles: metres per pixel = 40075016 cos(lat) / (512 2^zoom).
     const zoom = Math.log2((40075016 * Math.cos(meta.lat * RAD)) / (512 * metresPerPx));
     return { p, zoom };
