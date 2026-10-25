@@ -28,8 +28,7 @@
 | `pipeline/live/records/luna_2026_rg.parquet` | `25e89a667e0502396c31fca17d6b1c0d8e2f637ce93bf6567a087e10d7a28aff` | the 2026 records (1,363 research-grade, pulled 24 Oct 2026) used by the Daymet re-check |
 | `replay:luna-replay.json#scores+cutoffs+sightings` | `2b30c49ba608ff1a8a8b6102518b3d464b2d554b214cc2c720aafcad318e309a` | calendar baseline numbers, per-strip cut-offs and the sightings behind band weights, all read from `src/data/luna-replay.json` |
 | `pipeline/league/rules.py` | `6b519ccfeceea046971ecd69fbe06db987d0b895070caab7330844036f4d076b` | the decision rule below, as code (added 2026-10-25, pre-season) |
-| `pipeline/league/weekly.py` | `5a16a8c9c540244a5d370abede007247343258442416b022ccf9bfe4838e1ae6` | the weekly head-to-head: records pull + sha256, common nights, both scorecards, verdict-week cap (added 2026-10-25) |
-| `pipeline/league/gates.json` | `4e5a7a6f4df5065cbc5bb3f0c64bf577a170e1ee2f3b4871ca1d847c3e94b24a` | the 2026 gate's D(2026), filled by amendment when computed (added 2026-10-25). P3.1's bench entry (`pipeline/league/bench.py`: fits path, archive folder, verdict date, gate) is held to this file by `pipeline/league/test_league.py`, so later challengers can join the bench without touching the pins |
+| `pipeline/league/weekly.py` | `5a16a8c9c540244a5d370abede007247343258442416b022ccf9bfe4838e1ae6` | the weekly head-to-head: records pull + sha256, common nights, both scorecards, verdict-week cap (added 2026-10-25). P3.1's bench entry (`pipeline/league/bench.py`) is held to this file by `pipeline/league/test_league.py`; the gate's number (`pipeline/league/gates.json`, unpinned so it can be recorded by 31 Aug 2027) must equal the one written in "Daymet result" below, checked by the same test |
 
 Scorecard commit: `49bfe36` (main). Model commits: P3 `896bef5`, P3.1 `e6256aa`..`4471ec6`. The content hashes are the pin; commit ids are for finding things.
 

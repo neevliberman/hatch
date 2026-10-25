@@ -269,3 +269,17 @@ def test_a_new_season_keeps_the_last_table_and_saved_records_are_checked(tmp_pat
     p.write_bytes(p.read_bytes()[:-1] + b"x")
     with pytest.raises(RuntimeError):
         weekly.weekly_records(tmp_path, SEASON, sp, dt.date(2027, 7, 12), dt.date(2027, 7, 12), lambda *a: raw_records())
+
+
+def test_the_gate_number_is_the_one_written_in_the_prereg():
+    """gates.json is not pinned (the number arrives by 31 Aug 2027), so it must match PREREG_2027.md's "Daymet result"
+    section, where the number is written in words a reader sees: "D(2026) = +0.4" or similar."""
+    import re
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "pipeline" / "fit" / "PREREG_2027.md").read_text().partition("## Daymet result")[2]
+    found = re.findall(r"D\(2026\)\s*=\s*([+-]?\d+(?:\.\d+)?)", text)
+    d = json.loads((root / "pipeline" / "league" / "gates.json").read_text())["luna~p3.1-v1"]["d"]
+    if d is None:
+        assert not found, "the prereg records D(2026) but gates.json does not"
+    else:
+        assert found and float(found[0]) == d

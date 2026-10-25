@@ -32,7 +32,6 @@ FILES = [
     "pipeline/live/records/luna_2026_rg.parquet",  # the 2026 records for the Daymet re-check
     "pipeline/league/rules.py",                    # the decision rule as code (pipeline/league)
     "pipeline/league/weekly.py",                   # the weekly head-to-head
-    "pipeline/league/gates.json",                  # the 2026 gate's number
 ]
 REPLAY = "replay:luna-replay.json#scores+cutoffs+sightings"   # pseudo-file, see replay_sha
 LATE_REASONS = {"bug-both-models", "feed-outage"}
