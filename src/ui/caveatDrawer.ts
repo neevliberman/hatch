@@ -157,9 +157,10 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     const dy = e.touches[0]!.clientY - drag.y0;
     if (!drag.on) {
       if (!drag.head && (dy < 0 || drawer.scrollTop > 0)) return void (drag = null); // reading on: let the text scroll
-      // At the top a pull down has nothing to scroll, so claim it now: once the browser starts a pan it stops letting us cancel moves.
+      if (Math.abs(dy) < 8) return; // a tap with a wobble (say on the close button) stays a tap, and a fingertip's first twitch decides nothing
+      // Claim the gesture only now that it is clearly a pull down: cancelling any earlier move (even a 1px jitter at
+      // the top of the text) makes Safari drop the whole gesture, so the text would never scroll.
       if (!drag.head && e.cancelable) e.preventDefault();
-      if (Math.abs(dy) < 8) return; // a tap with a wobble (say on the close button) stays a tap
       drag.on = true;
       drawer.classList.add('dragging');
     }

@@ -188,6 +188,20 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       await page.waitForTimeout(300);
       const tall = await page.locator('#drawer').boundingBox();
       if (!(await page.locator('#drawer.open.full').count())) fail('"How sure?" did not open the sheet at its tall stop');
+      // A finger on the text must scroll it, even when the first moves twitch down a pixel or two (a real fingertip does).
+      // Real touch events need Chromium's protocol; WebKit has no equivalent, so it is covered by the shared code path.
+      if (engine === 'chromium') {
+        const cdp = await ctx.newCDPSession(page);
+        const x = Math.round(width / 2), y = Math.round(tall.y + tall.height * 0.6);
+        const touch = (type, yy) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: yy, id: 1 }] });
+        await page.evaluate(() => (document.querySelector('#drawer').scrollTop = 0));
+        await touch('touchStart', y);
+        for (const j of [0, 1, 2, 1]) await touch('touchMove', y + j);
+        for (let i = 1; i <= 12; i++) { await touch('touchMove', y - i * 12); await page.waitForTimeout(16); }
+        await touch('touchEnd', 0);
+        await page.waitForTimeout(500);
+        if (!(await page.evaluate(() => document.querySelector('#drawer').scrollTop > 20))) fail('a swipe that starts on the About text did not scroll it');
+      }
       // Above the sheet at the far left: the header's middle is the season menu, which a tap would open instead.
       await page.touchscreen.tap(12, Math.max(4, tall.y / 2));
       await page.waitForTimeout(400);
