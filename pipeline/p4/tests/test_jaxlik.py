@@ -1,5 +1,8 @@
 """The JAX likelihood must equal the NumPy one, and its gradient must match finite differences."""
 import numpy as np
+import pytest
+
+pytest.importorskip('jax', reason='JAX is an optional dependency (not in notebooks/requirements.txt)')
 
 from fit import model as M
 from p4 import jaxlik, model4 as M4
