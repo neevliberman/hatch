@@ -32,6 +32,7 @@ weather + sightings ─► nightly: champion (map) + challengers (sealed) ─►
 | `weekly.py` | the weekly table: records pull, common nights, both scorecards, head to head, verdict -> `live/league.json` |
 | `drift.py` | the model-drift alarm: weather part vs model part of each miss, issue when a model looks stale -> `live/drift.json` |
 | `build_a1.py`, `a1_envelopes.json` | the A1 shadow's frozen warmth range per fold (the cap, the flag) |
+| `verdicts.py`, `PROMOTE.md` | an issue per final verdict; the between-seasons swap of a winner |
 | `gates.json` | each challenger's gate result once known (P3.1: the Daymet 2026 re-check, due 31 Aug 2027) |
 
 **Where it runs.** No new workflow: `build_live.py` forecasts every bench challenger on the night's weather and writes
@@ -90,8 +91,10 @@ species the line is wide (5 to 12 days for one season in 2026), so this catches 
 forecasting new regions, where a local heat clock beats the local calendar across the East by 1.6 days, found after
 the fact, so it needs 2027 to confirm it ([REGIONAL_RESULT.md](tryouts/REGIONAL_RESULT.md)).
 
-**Not built yet (before the first verdict, September 2027):** the step that swaps a winner onto the map for the next
-season and opens an issue saying what changed and why (the drift alarm shows the nightly job can open issues itself);
-showing the table in the app.
+**When a verdict is given** ([`verdicts.py`](verdicts.py), nightly): the job opens one GitHub issue per final verdict
+(league or eastern) saying what was decided and what happens next. A winner is swapped onto the map between seasons
+by one pull request, following [PROMOTE.md](PROMOTE.md): the map must run exactly the fits the league graded.
+
+**Not built yet (before the first verdict, September 2027):** showing the table in the app.
 
 Run: `python3 -m pytest pipeline/league` (offline) · `python3 pipeline/league/weekly.py --live live --season 2027 --force`
