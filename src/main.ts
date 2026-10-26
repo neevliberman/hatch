@@ -584,12 +584,13 @@ function start() {
     if (urlTimer) return;
     urlTimer = window.setTimeout(() => {
       urlTimer = 0;
+      if (intro?.running) return; // the opening's passing days are not a view to link to; it syncs when it lands
       history.replaceState(null, '', viewUrl());
     }, 400);
   };
   time.subscribe(syncUrl);
   // A reload (the map's Redraw) or leaving must not drop the last move still waiting on the timer.
-  addEventListener('pagehide', () => { clearTimeout(urlTimer); urlTimer = 0; history.replaceState(null, '', viewUrl()); });
+  addEventListener('pagehide', () => { intro?.finish(); clearTimeout(urlTimer); urlTimer = 0; history.replaceState(null, '', viewUrl()); });
   picker.addEventListener('change', syncUrl);
 
   const msg = $('action-msg');
@@ -833,15 +834,21 @@ function start() {
   // A first visit with a plain link opens on the season playing itself, so the forecast is seen moving before anything
   // is read. A link that asks for a view (a day, a year, a place, a species, a radar night) opens on that view instead.
   const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'noauto', 'caveats'].some((k) => params.has(k));
-  if (!seen && plain && !still.matches) {
+  // In season the live forecast becomes the default view once its file arrives, so the opening waits for that and
+  // lands on today; off-season it is set up now, before the first frame. Not if the reader has already touched something.
+  let touched = false;
+  for (const ev of ['pointerdown', 'keydown', 'wheel'] as const) addEventListener(ev, () => (touched = true), { capture: true, once: true });
+  const openIntro = () => {
+    if (seen || !plain || still.matches || document.hidden || touched || intro) return;
+    const opening = (intro = makeIntro(time, time.cursor));
+    opening.begin();
+    // A beat for the loader to bow out, then play. A touch before then lands it on the landing day instead.
     startIntro = () => {
       startIntro = () => {};
-      // A beat for the loader to bow out, then play. Skipped if the visitor already touched something.
-      const landing = time.cursor;
-      setTimeout(() => !time.playing && time.cursor === landing && !document.hidden && (intro = makeIntro(time, landing)).start(), 400);
+      setTimeout(opening.start, 400);
     };
     if (firstDrawn) startIntro();
-  }
+  };
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
@@ -1009,7 +1016,7 @@ function start() {
   const startLive = () => {
     if (liveStarted) return;
     liveStarted = true;
-    void loadLive().then(onLive);
+    void loadLive().then(onLive).finally(() => liveFirst && openIntro()); // in season the opening lands on live's today
   };
   const onLive = (live: Live | null) => {
     livePending = false;
@@ -1026,10 +1033,12 @@ function start() {
     switchMode(LIVE, md ? [month, day] : undefined);
     syncUrl();
   };
-  if (asked === LIVE || inSeason({ season: new Date(clock).getUTCFullYear() }, clock)) startLive();
+  const liveFirst = asked === LIVE || inSeason({ season: new Date(clock).getUTCFullYear() }, clock);
+  if (liveFirst) startLive();
   else if (liveAvailable()) {
     for (const ev of ['pointerenter', 'pointerdown', 'focus', 'keydown'] as const) picker.addEventListener(ev, startLive, { once: true });
   }
+  if (!liveFirst) openIntro();
 }
 
 start();

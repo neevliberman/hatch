@@ -7,9 +7,13 @@ const LEAD_DAYS = 60;
 const SPEED = 14;
 
 export interface Intro {
-  /** Is the opening playing right now? Playback listeners that react to the reader's own Play can ignore it. */
+  /** Is the opening on (set up or playing)? Playback listeners that react to the reader's own Play can ignore it. */
   readonly running: boolean;
-  /** Start playing. Separate from setup so the caller holds the Intro before playback's first listeners run. */
+  /** Go to the opening's first day and listen for input. Separate from making it, so the caller holds the Intro (and
+   * its `running`) before the first day's listeners run. Call it before the map's first frame, so that frame already
+   * shows the first day: no flash of the landing day before it jumps back. */
+  begin(): void;
+  /** Start playing from the first day. Does nothing once finished. */
   start(): void;
   /** Jump to the landing day and stop (any touch, click, key or wheel does this). */
   finish(): void;
@@ -22,33 +26,50 @@ export function makeIntro(time: TimeAxis, target: number): Intro {
   const pace = time.pace;
   let running = false;
   let off = () => {};
+  const swallow = (e: Event) => (e.stopPropagation(), e.preventDefault());
   const stop = () => {
     if (!running) return;
     running = false;
     off();
-    removeEventListener('pointerdown', stop, true);
-    removeEventListener('keydown', stop, true);
+    removeEventListener('pointerdown', onInput, true);
+    removeEventListener('keydown', onInput, true);
     removeEventListener('wheel', stop, true);
     time.pace = pace;
     time.pause();
     time.setCursor(target);
   };
-  const start = () => {
+  // Input lands it; a modifier or Tab alone doesn't count. On Play/Pause, or Space (its shortcut), the press only lands
+  // it: the click or toggle that follows is eaten, or it would start playing again from the landing day.
+  const onInput = (e: Event) => {
+    if (e instanceof KeyboardEvent && ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key)) return;
+    const onPlay = e.target instanceof Element && !!e.target.closest('#t-play');
+    stop();
+    if (e instanceof KeyboardEvent && e.key === ' ') swallow(e);
+    if (onPlay) {
+      addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => removeEventListener('click', swallow, true), 1000); // no click came (a drag off the button)
+    }
+  };
+  const begin = () => {
     if (running) return;
     running = true;
-    addEventListener('pointerdown', stop, true);
-    addEventListener('keydown', stop, true);
+    addEventListener('pointerdown', onInput, true);
+    addEventListener('keydown', onInput, true);
     addEventListener('wheel', stop, true);
     off = time.subscribe(() => running && time.cursor >= target && stop());
+    time.setCursor(Math.max(time.start, target - LEAD_DAYS * DAY));
+  };
+  const start = () => {
+    if (!running || time.playing) return;
     time.pace = () => SPEED;
     time.speed = SPEED;
-    time.setCursor(Math.max(time.start, target - LEAD_DAYS * DAY));
     time.play();
   };
   return {
     get running() {
       return running;
     },
+    begin,
     start,
     finish: stop,
   };
