@@ -422,6 +422,20 @@ def main(argv=None):
     except Exception as err:  # noqa: BLE001
         print(f"::error::league table failed: {err!r}", flush=True)
         failed.append("league")
+    # the eastern shadow track (pipeline/league/east.py, EAST_2027.md): tonight's sealed forecast, then once a week
+    # its table; it never touches the map's files, which are already written
+    try:
+        from league import east
+        if a.add and live["season"] == season:
+            p = east.nightly(a.archive.parent, live, a.today)
+            if p:
+                print(f"archived {p}")
+        p = east.weekly_run(a.archive.parent, season, a.today)
+        if p:
+            print(f"wrote {p}")
+    except Exception as err:  # noqa: BLE001
+        print(f"::error::eastern shadow track failed: {err!r}", flush=True)
+        failed.append("east")
     if SHADOW_ERRORS:
         failed.append("shadow-archive")
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
@@ -430,8 +444,9 @@ def main(argv=None):
         why = "; ".join([*(f"the {k} forecast failed in build_live.py (its last good entry was kept)" for k in live_failed),
                          *(["the weekly league table failed (pipeline/league/weekly.py)"] if "league" in failed else []),
                          *(["archiving the bench challengers failed"] if "shadow-archive" in failed else []),
+                         *(["the eastern shadow track failed (pipeline/league/east.py)"] if "east" in failed else []),
                          *(f"the {k} scorecard failed (its last layer was kept)" for k in failed
-                           if k not in ("league", "shadow-archive"))])
+                           if k not in ("league", "shadow-archive", "east"))])
         print(f"::error::{why}. {a.out} WAS written and published with every other species; "
               "this exit code only raises the alarm.", flush=True)
         return 1

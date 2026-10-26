@@ -12,6 +12,7 @@ The "weather day" rule (one rule for every source): a day is the local calendar 
 - Daymet: (year, yday) -> calendar date, yday 1 = 1 Jan; leap years keep 29 Feb and drop 31 Dec.
 """
 import datetime as dt
+import http.client
 import json
 import time
 import urllib.error
@@ -35,8 +36,8 @@ def _request(url, body=None, timeout=120, tries=5):
             if e.code != 429 and e.code < 500:
                 raise
             time.sleep(2 ** attempt)
-        except (urllib.error.URLError, TimeoutError, ConnectionError):
-            time.sleep(2 ** attempt)
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead, json.JSONDecodeError):
+            time.sleep(2 ** attempt)                  # an empty or cut-off body (ACIS does this now and then) retries too
     raise RuntimeError(f"failed after {tries} tries: {url}")
 
 

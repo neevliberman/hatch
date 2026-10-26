@@ -24,6 +24,10 @@ also runs on the same weather; only its strip dates are kept, under `shadows` (a
 scorecard step seals them in their own archive (`live/archive_p31/`) and once a week grades them against the
 champion (`live/league.json`).
 
+**Eastern shadow track** ([`pipeline/league/east.py`](../league/east.py)): after the scorecard and league are
+written, the same step forecasts 28 eastern places with the heat clock (its own PRISM reads, 198 hexes) and once a
+week grades them; a failure there raises the alarm but never stops the map's files.
+
 Adding a species: an entry in `registry.py`, then `python3 pipeline/live/build_static.py --effort <key>` (its effort
 profile, from the records its fetch script cached). The app finds the species' part of the file by its key
 (`src/species.ts`), so nothing else changes. The app fetches the file only when live mode is wanted (a link asks
