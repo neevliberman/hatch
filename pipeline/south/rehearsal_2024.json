@@ -1,0 +1,173 @@
+{
+ "version": 1,
+ "kind": "league_south",
+ "species": "Christmas beetles (Anoplognathus)",
+ "season": 2024,
+ "score_date": "2025-02-10",
+ "generated": "2026-10-26T06:44:01Z",
+ "model": {
+  "id": "south-clock-v1",
+  "hash": "22786729a80a"
+ },
+ "nights": 138,
+ "cells": [
+  {
+   "band": "-18_144",
+   "status": "scored",
+   "n": 82,
+   "onset": 128.5,
+   "peak": 171.0,
+   "miss": 15.1,
+   "calendar_miss": 14.8
+  },
+  {
+   "band": "-26_152",
+   "status": "scored",
+   "n": 80,
+   "onset": 111.9,
+   "peak": 159.5,
+   "miss": 5.8,
+   "calendar_miss": 9.2
+  },
+  {
+   "band": "-28_152",
+   "status": "scored",
+   "n": 273,
+   "onset": 107.2,
+   "peak": 148.0,
+   "miss": 6.0,
+   "calendar_miss": 10.9
+  },
+  {
+   "band": "-30_152",
+   "status": "scored",
+   "n": 74,
+   "onset": 123.3,
+   "peak": 162.5,
+   "miss": 2.9,
+   "calendar_miss": 6.0
+  },
+  {
+   "band": "-32_150",
+   "status": "scored",
+   "n": 68,
+   "onset": 152.8,
+   "peak": 174.0,
+   "miss": 2.0,
+   "calendar_miss": 12.8
+  },
+  {
+   "band": "-32_152",
+   "status": "scored",
+   "n": 83,
+   "onset": 140.2,
+   "peak": 173.0,
+   "miss": 13.6,
+   "calendar_miss": 8.7
+  },
+  {
+   "band": "-34_148",
+   "status": "scored",
+   "n": 75,
+   "onset": 154.4,
+   "peak": 179.0,
+   "miss": 3.0,
+   "calendar_miss": 9.3
+  },
+  {
+   "band": "-34_150",
+   "status": "scored",
+   "n": 489,
+   "onset": 132.8,
+   "peak": 157.0,
+   "miss": 1.2,
+   "calendar_miss": 6.8
+  },
+  {
+   "band": "-36_138",
+   "status": "scored",
+   "n": 151,
+   "onset": 132.0,
+   "peak": 158.0,
+   "miss": 4.0,
+   "calendar_miss": 12.8
+  },
+  {
+   "band": "-36_148",
+   "status": "scored",
+   "n": 119,
+   "onset": 146.0,
+   "peak": 165.0,
+   "miss": 7.5,
+   "calendar_miss": 18.8
+  },
+  {
+   "band": "-36_150",
+   "status": "scored",
+   "n": 289,
+   "onset": 143.0,
+   "peak": 164.0,
+   "miss": 4.2,
+   "calendar_miss": 9.0
+  },
+  {
+   "band": "-38_144",
+   "status": "scored",
+   "n": 128,
+   "onset": 122.7,
+   "peak": 157.0,
+   "miss": 4.9,
+   "calendar_miss": 12.7
+  },
+  {
+   "band": "-38_146",
+   "status": "scored",
+   "n": 43,
+   "onset": 127.0,
+   "peak": 159.0,
+   "miss": 23.0,
+   "calendar_miss": 29.7
+  },
+  {
+   "band": "-40_144",
+   "status": "scored",
+   "n": 77,
+   "onset": 149.8,
+   "peak": 163.0,
+   "miss": 2.1,
+   "calendar_miss": 12.1
+  },
+  {
+   "band": "-40_146",
+   "status": "scored",
+   "n": 23,
+   "onset": 163.0,
+   "peak": 182.0,
+   "miss": 3.2,
+   "calendar_miss": 15.4
+  }
+ ],
+ "tally": {
+  "cells": 15,
+  "records": 2054,
+  "clock": 4.96,
+  "calendar": 10.68,
+  "D": -5.720983,
+  "clock_wins": 13,
+  "ties": 0,
+  "D_unweighted": -6.03,
+  "D_interval_cells": [
+   -7.34,
+   -4.1
+  ]
+ },
+ "verdict": "in_progress",
+ "reason": "the verdict is given on the week of 15 Feb 2027",
+ "verdict_date": "2026-02-15",
+ "rule": {
+  "margin_days": 1.0,
+  "min_cells": 8,
+  "min_records": 800,
+  "plain": "the clock counts as working in a new region only if its record-weighted miss is at least 1 day lower than each cell's calendar and it wins at least half the scored cells"
+ }
+}
