@@ -6,20 +6,25 @@ and got a heat wave), or it reads the weather wrongly (the moths no longer answe
 second is drift. The archive tells them apart: late in the season the same frozen model is re-run every night on the
 weather as it really was, so the strip's forecast issued once its window is over is the model's answer *in hindsight*.
 1. Per scored strip (scorecard.json) and date (onset, peak): sealed miss = the scorecard's graded forecast - real;
-   model part = hindsight forecast - real; weather part = sealed - model part (what the 7-day forecast and the
+   model part = hindsight forecast - real (the first forecast whose weather reaches the strip's latest fold cut-off,
+   since each fold fit closes the strip's first wave on its own day); weather part = sealed - model part (what the 7-day forecast and the
    typical-year endings got wrong).
 2. Season bias B = the mean model part over the strips that have one (unweighted, as below).
 3. Reference: the same model's leave-one-year-out replay (the replay file's `scores`: whole-season weather, each year
    fitted without itself), one bias per past year with at least MIN_STRIPS strips; its mean m and SD s.
 4. Allowance: the live weather is PRISM, the replay's Daymet; on 2023-2025 that alone moved luna's peak 1.3 days
    earlier (pipeline/fit/SOUTH_BIAS.md), so SOURCE_DAYS = 1.5 is added to every threshold.
-5. **Season alarm** when at least MIN_STRIPS strips have a model part, the reference has at least MIN_YEARS years,
-   |B - m| > Z * s + SOURCE_DAYS, and at least AGREE of those strips miss on the same side of m as B.
-   **Running alarm** (slow drift no single season shows) once two or more live seasons each have a B: their mean
-   B_n against Z * s / sqrt(n) + SOURCE_DAYS.
+5. **Season alarm**, once every strip of the layer is settled (none pending, so a part-season never raises one), when
+   at least MIN_STRIPS strips have a model part, the reference has at least MIN_YEARS years (n), |B - m| is beyond a
+   95% prediction interval for a new season, t(n-1) * s * sqrt(1 + 1/n), plus SOURCE_DAYS, and at least AGREE of
+   those strips miss on the same side of m as B. Before the layer settles the same test is reported as "watch".
+   **Running alarm** (slow drift no single season shows), once this settled season and at least one earlier live
+   season of the same model each have a B: their mean against t(n-1) * s * sqrt(1/seasons + 1/n) + SOURCE_DAYS.
+   One issue per cause: no running issue in a season whose own alarm is raised.
 6. An alarm decides nothing: it opens one GitHub issue saying a refit tryout is due before next season (the league's
    usual rules then apply). Strips whose own model part is beyond every past strip-year's are listed, never an alarm
-   on their own (with ~30 past strip-years, about one in 30 new ones would be by chance).
+   on their own (with ~30 past strip-years, about one in 30 new ones would be by chance). So a failure in one strip,
+   like 2026's far south (SOUTH_BIAS.md), is listed but does not alarm; the A1 shadow (PREREG_2027.md) is for that.
 
 Writes live/drift.json (this season per layer; earlier seasons kept under `past`). Run nightly by
 pipeline/live/scorecard.py after the scorecard; cheap, no network except the issue.
@@ -36,6 +41,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from scipy import stats
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -44,7 +50,7 @@ from live import registry, scorecard as S  # noqa: E402
 
 MIN_STRIPS = 3
 MIN_YEARS = 5
-Z = 2.0
+LEVEL = 0.95           # two-sided prediction interval
 AGREE = 2 / 3
 SOURCE_DAYS = 1.5      # PRISM (live) vs Daymet (replay): see the module notes
 SEED = HERE / "DRIFT_2026.json"   # the 2026 rehearsal season, so 2027 already has a season to run with
@@ -78,9 +84,10 @@ def hindsight(entries, model, season, cut):
     return None
 
 
-def decompose(row, entries, model, season):
-    """One scored strip: {kind: {sealed, model, weather}} plus the hindsight entry's issue date, or None without one."""
-    e = hindsight(entries, model, season, row["cutoff"])
+def decompose(row, entries, model, season, cut=None):
+    """One scored strip: {kind: {sealed, model, weather}} plus the hindsight entry's issue date, or None without one.
+    cut: the strip's latest fold cut-off (default: the scorecard's)."""
+    e = hindsight(entries, model, season, max(row["cutoff"], cut or 0))
     f = next((b for b in (e or {}).get("bands", []) if b["band"] == row["band"]), None)
     if f is None or any(f.get(k) is None for k in KINDS):
         return None
@@ -98,13 +105,19 @@ def plain(name, kind, b, ref, when):
             "a refit tryout is due before next season.")
 
 
-def check_layer(name, layer, entries, replay, season, past_bias=None):
-    """This season's drift check for one scorecard layer. past_bias: {kind: [B of each earlier live season]}."""
+def t_mult(n):
+    return float(stats.t.ppf(0.5 + LEVEL / 2, n - 1))
+
+
+def check_layer(name, layer, entries, replay, season, past_bias=None, cuts=None):
+    """This season's drift check for one scorecard layer. past_bias: {kind: [B of each earlier live season]};
+    cuts: {strip: latest fold cut-off}."""
     ref = reference(replay)
     model = layer.get("model")
     rows = [r for r in layer.get("bands", []) if r.get("status") == "scored"]
-    strips = [d for d in (decompose(r, entries, model, season) for r in rows) if d]
-    out = {"model": model, "strips": strips, "reference": ref, "alarms": [], "beyond_past": []}
+    strips = [d for d in (decompose(r, entries, model, season, (cuts or {}).get(r["band"])) for r in rows) if d]
+    settled = not any(r.get("status") == "pending" for r in layer.get("bands", []))
+    out = {"model": model, "settled": settled, "strips": strips, "reference": ref, "alarms": [], "beyond_past": []}
     for k in KINDS:
         parts = [s[k]["model"] for s in strips]
         r = ref[k]
@@ -118,16 +131,19 @@ def check_layer(name, layer, entries, replay, season, past_bias=None):
             agree = sum(np.sign(p - r["mean"]) == np.sign(dev) for p in parts) / len(parts)
             res["z"] = round(dev / r["sd"], 2)
             res["agree"] = round(float(agree), 2)
-            res["threshold"] = round(Z * r["sd"] + SOURCE_DAYS, 2)
-            res["state"] = "alarm" if abs(dev) > res["threshold"] and agree >= AGREE else "ok"
+            n = len(r["years"])
+            res["threshold"] = round(t_mult(n) * r["sd"] * np.sqrt(1 + 1 / n) + SOURCE_DAYS, 2)
+            beyond = abs(dev) > res["threshold"] and agree >= AGREE
+            res["state"] = ("alarm" if settled else "watch") if beyond else "ok"
             if res["state"] == "alarm":
                 out["alarms"].append(k)
                 res["text"] = plain(name, k, res["bias"], r, "this season")
-        seasons = [*(past_bias or {}).get(k, []), *([res["bias"]] if res["state"] != "too_few" else [])]
-        if usable and len(seasons) >= 2:
-            mb = float(np.mean(seasons))
+        earlier = (past_bias or {}).get(k, [])
+        if usable and settled and res["state"] != "too_few" and earlier:
+            seasons = [*earlier, res["bias"]]
+            mb, n = float(np.mean(seasons)), len(r["years"])
             run_ = {"seasons": len(seasons), "bias": round(mb, 2),
-                    "threshold": round(float(Z * r["sd"] / np.sqrt(len(seasons)) + SOURCE_DAYS), 2)}
+                    "threshold": round(float(t_mult(n) * r["sd"] * np.sqrt(1 / len(seasons) + 1 / n) + SOURCE_DAYS), 2)}
             run_["state"] = "alarm" if abs(mb - r["mean"]) > run_["threshold"] else "ok"
             if run_["state"] == "alarm":
                 out["alarms"].append(f"{k}/running")
@@ -146,6 +162,14 @@ def open_issue(title, body):
         print(f"(no GitHub token here; would open issue: {title})")
         return False
     repo = os.environ["GITHUB_REPOSITORY"]
+    try:
+        return _gh_issue(repo, title, body)
+    except (subprocess.SubprocessError, OSError) as err:      # a GitHub hiccup: try again tomorrow night
+        print(f"::warning::could not open the drift issue: {err!r}", flush=True)
+        return False
+
+
+def _gh_issue(repo, title, body):
     found = subprocess.run(["gh", "issue", "list", "--repo", repo, "--state", "all", "--search", f'"{title}" in:title',
                             "--json", "title", "--jq", ".[].title"], capture_output=True, text=True, timeout=60)
     if found.returncode == 0 and title in found.stdout.splitlines():
@@ -196,20 +220,25 @@ def run(card_path: Path, archive: Path, out: Path, season, notify=True, seed=SEE
                        if key in l and l[key][k].get("state", "too_few") != "too_few"
                        and (l[key].get("model") or {}).get("hash") == (layer.get("model") or {}).get("hash")]
                    for k in KINDS}
+        fold_cuts = sp.folds()[2]
+        cuts = {b: max(int(c[b]) for c in fold_cuts) for b in fold_cuts[0]}
         res = check_layer(sp.name, layer, S.load_archive(sp.archive(archive), season),
-                          json.loads(sp.replay.read_text()), season, earlier)
+                          json.loads(sp.replay.read_text()), season, earlier, cuts)
         layers[key] = res
         for k in res["alarms"]:
             tag = f"{key}/{k}"
             if tag in raised or not notify:
                 continue
             kind, _, running = k.partition("/")
+            if running and (kind in res["alarms"] or f"{key}/{kind}" in raised):
+                continue                       # this season's own alarm already says it: one issue per cause
             when = f"{min(int(y) for y in past)}-{season}" if running else str(season)
             if open_issue(f"Model drift: {sp.name} {kind} ({when})", issue_body(key, season, res, kind, bool(running))):
                 raised[tag] = card["score_date"]
     doc = {"version": 1, "kind": "drift", "season": season, "score_date": card["score_date"],
            "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-           "rule": {"min_strips": MIN_STRIPS, "min_years": MIN_YEARS, "z": Z, "agree": round(AGREE, 3)},
+           "rule": {"min_strips": MIN_STRIPS, "min_years": MIN_YEARS, "level": LEVEL, "source_days": SOURCE_DAYS,
+                    "agree": round(AGREE, 3)},
            "layers": layers, "raised": raised, "past": past}
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")

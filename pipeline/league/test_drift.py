@@ -66,25 +66,35 @@ def test_decompose_splits_the_miss_into_weather_and_model():
     assert D.decompose(r, [entry("2027-06-01", {"37-39": (101, 126)})], MODEL, 2027) is None   # no hindsight yet
 
 
-def layer_with(model_part, n_bands=3, spread=(-1, 0, 1)):
-    """A scored layer whose hindsight peaks miss by model_part + spread (onset: 0 everywhere)."""
+def layer_with(model_part, n_bands=3, spread=(-1, 0, 1), pending=False):
+    """A scored layer whose hindsight peaks miss by model_part + spread (onset: 0 everywhere); the graded (sealed)
+    peaks missed by 2 days more, so the weather part is +2 everywhere."""
     rows, fc = [], {}
     for band, s in zip(BANDS[:n_bands], spread):
-        rows.append(row(band, 100.0, 130.0, 0.0, model_part + s))
+        rows.append(row(band, 100.0, 130.0, 0.0, model_part + s + 2))
         fc[band] = (100, 130 + model_part + s)
-    return {"model": MODEL, "bands": rows}, [entry("2027-07-01", fc)]
+    if pending:
+        rows.append({"band": "43-45", "cutoff": 190, "n": 5, "status": "pending"})
+    return {"model": MODEL, "bands": rows}, [entry("2027-07-10", fc)]       # weather past every luna fold cut-off
 
 
-def test_season_alarm_needs_size_and_agreement():
-    thr = D.Z * np.sqrt(2) + D.SOURCE_DAYS                                      # 2.83 + 1.5
-    lay, ent = layer_with(-5.0)                                                 # -6, -5, -4: all early, past the line
+N_PAST = 6
+T = float(D.stats.t.ppf(0.975, N_PAST - 1))                                     # 2.57
+
+
+def test_season_alarm_needs_size_agreement_and_a_settled_layer():
+    thr = T * np.sqrt(2) * np.sqrt(1 + 1 / N_PAST) + D.SOURCE_DAYS             # 3.93 + 1.5 = 5.43
+    lay, ent = layer_with(-6.0)                                                 # -7, -6, -5: all early, past the line
     res = D.check_layer("Luna moth", lay, ent, PAST, 2027)
-    assert res["peak"]["state"] == "alarm" and res["alarms"] == ["peak"]
-    assert res["peak"]["threshold"] == pytest.approx(thr, abs=0.01) and "5.0 days early" in res["peak"]["text"]
-    assert res["onset"]["state"] == "ok"
-    lay, ent = layer_with(-4.0)                                                 # mean -4: inside 4.33
+    assert res["peak"]["state"] == "alarm" and res["alarms"] == ["peak"] and res["settled"]
+    assert res["peak"]["threshold"] == pytest.approx(thr, abs=0.02) and "6.0 days early" in res["peak"]["text"]
+    assert res["peak"]["weather"] == 2.0 and res["onset"]["state"] == "ok"
+    lay, ent = layer_with(-6.0, pending=True)                                   # one strip still open: only "watch"
+    res = D.check_layer("Luna moth", lay, ent, PAST, 2027)
+    assert res["peak"]["state"] == "watch" and res["alarms"] == []
+    lay, ent = layer_with(-5.0)                                                 # mean -5: inside 5.43
     assert D.check_layer("Luna moth", lay, ent, PAST, 2027)["peak"]["state"] == "ok"
-    lay, ent = layer_with(-5.0, spread=(-14, 6, 8))                             # mean -5, but one strip drives it
+    lay, ent = layer_with(-6.0, spread=(-14, 6, 8))                             # mean -6, but one strip drives it
     assert D.check_layer("Luna moth", lay, ent, PAST, 2027)["peak"]["state"] == "ok"
     lay, ent = layer_with(-9.0, n_bands=2)
     assert D.check_layer("Luna moth", lay, ent, PAST, 2027)["peak"]["state"] == "too_few"
@@ -93,14 +103,30 @@ def test_season_alarm_needs_size_and_agreement():
     assert D.check_layer("Luna moth", lay, ent, few, 2027)["peak"]["state"] == "too_few"
 
 
+def test_hindsight_waits_for_the_latest_fold_cutoff():
+    lay, ent = layer_with(-6.0)
+    cut_day = D.S.doy_date(2027, 191)                                           # the entry's as_of is day 191
+    assert D.check_layer("x", lay, ent, PAST, 2027, cuts={"37-39": 191})["peak"]["strips"] == 3
+    assert D.check_layer("x", lay, ent, PAST, 2027, cuts={"37-39": 192})["peak"]["strips"] == 2
+    assert cut_day.isoformat() == "2027-07-10"
+
+
 def test_running_alarm_catches_slow_drift():
-    lay, ent = layer_with(-3.5)                                                 # not enough for one season
+    lay, ent = layer_with(-4.5)                                                 # not enough for one season
     one = D.check_layer("Luna moth", lay, ent, PAST, 2027)
     assert one["peak"]["state"] == "ok" and "running" not in one["peak"]
-    two = D.check_layer("Luna moth", lay, ent, PAST, 2027, {"peak": [-3.5]})
+    two = D.check_layer("Luna moth", lay, ent, PAST, 2027, {"peak": [-5.0]})
     run = two["peak"]["running"]
-    assert run["seasons"] == 2 and run["threshold"] == pytest.approx(D.Z + D.SOURCE_DAYS, abs=0.02)
+    thr = T * np.sqrt(2) * np.sqrt(1 / 2 + 1 / N_PAST) + D.SOURCE_DAYS          # 2.97 + 1.5 = 4.47
+    assert run["seasons"] == 2 and run["threshold"] == pytest.approx(thr, abs=0.02)
     assert run["state"] == "alarm" and two["alarms"] == ["peak/running"]
+
+
+def test_running_needs_this_season_settled_and_counted():
+    lay, ent = layer_with(-9.0, n_bands=2)                                      # night one of a season: too few strips
+    assert "running" not in D.check_layer("x", lay, ent, PAST, 2027, {"peak": [-9.0, -9.0]})["peak"]
+    lay, ent = layer_with(-4.5, pending=True)
+    assert "running" not in D.check_layer("x", lay, ent, PAST, 2027, {"peak": [-9.0]})["peak"]
 
 
 def test_strips_beyond_every_past_miss_are_listed_not_alarmed():
@@ -123,7 +149,7 @@ def setup_live(tmp_path, model_part, season=2027):
 
 @pytest.fixture
 def luna_past(tmp_path, monkeypatch):
-    """Luna's live entry, reading PAST as its replay."""
+    """Luna's live entry (its real fold cut-offs), reading PAST as its replay."""
     import dataclasses
     from live import registry
     f = tmp_path / "replay.json"
@@ -139,9 +165,9 @@ def test_run_writes_the_file_and_opens_each_issue_once(tmp_path, monkeypatch, lu
     doc = D.run(tmp_path / "scorecard.json", tmp_path / "archive", out, 2027, seed=None)
     assert json.loads(out.read_text())["layers"]["luna"]["peak"]["state"] == "alarm" == doc["layers"]["luna"]["peak"]["state"]
     assert [t for t, _ in opened] == ["Model drift: Luna moth peak (2027)"] and doc["raised"] == {"luna/peak": "2027-08-02"}
-    assert "| 37-39 | 40 |" in opened[0][1]
+    assert "| 37-39 | 40 | -5.0 | -7.0 | +2.0 |" in opened[0][1]
     D.run(tmp_path / "scorecard.json", tmp_path / "archive", out, 2027, seed=None)
-    assert len(opened) == 1                                                     # raised once a season
+    assert len(opened) == 1                                                     # the run's own record: once a season
 
 
 def test_a_failed_issue_is_retried_the_next_night(tmp_path, monkeypatch, luna_past):
@@ -151,12 +177,17 @@ def test_a_failed_issue_is_retried_the_next_night(tmp_path, monkeypatch, luna_pa
     assert D.run(tmp_path / "scorecard.json", tmp_path / "archive", out, 2027, seed=None)["raised"] == {}
 
 
-def test_past_seasons_feed_the_running_check_only_for_the_same_model(tmp_path, monkeypatch, luna_past):
-    monkeypatch.setattr(D, "open_issue", lambda title, body: True)
-    setup_live(tmp_path, -3.5, season=2026)
+def two_seasons(tmp_path, part_2026, part_2027):
+    setup_live(tmp_path, part_2026, season=2026)
     seed = tmp_path / "seed.json"
     D.run(tmp_path / "scorecard.json", tmp_path / "archive", seed, 2026, seed=None)
-    setup_live(tmp_path, -3.5)
+    setup_live(tmp_path, part_2027)
+    return seed
+
+
+def test_past_seasons_feed_the_running_check_only_for_the_same_model(tmp_path, monkeypatch, luna_past):
+    monkeypatch.setattr(D, "open_issue", lambda title, body: True)
+    seed = two_seasons(tmp_path, -5.0, -4.5)
     out = tmp_path / "drift.json"
     doc = D.run(tmp_path / "scorecard.json", tmp_path / "archive", out, 2027, seed=seed)
     assert list(doc["past"]) == ["2026"] and doc["layers"]["luna"]["peak"]["running"]["state"] == "alarm"
@@ -169,11 +200,54 @@ def test_past_seasons_feed_the_running_check_only_for_the_same_model(tmp_path, m
     assert "running" not in doc["layers"]["luna"]["peak"]
 
 
+def test_one_issue_per_cause(tmp_path, monkeypatch, luna_past):
+    opened = []
+    monkeypatch.setattr(D, "open_issue", lambda title, body: opened.append(title) or True)
+    seed = two_seasons(tmp_path, -6.0, -6.0)                                    # both the season and running fire
+    doc = D.run(tmp_path / "scorecard.json", tmp_path / "archive", tmp_path / "drift.json", 2027, seed=seed)
+    assert sorted(doc["layers"]["luna"]["alarms"]) == ["peak", "peak/running"]
+    assert opened == ["Model drift: Luna moth peak (2026)", "Model drift: Luna moth peak (2027)"]   # seed's, then this
+
+
+class FakeGh:
+    def __init__(self, listed="", fail=None):
+        self.calls, self.listed, self.fail = [], listed, fail
+
+    def __call__(self, cmd, **kw):
+        self.calls.append(cmd[:3])
+        if self.fail:
+            raise self.fail
+        import subprocess
+        out = self.listed if cmd[2] == "list" else "https://github.com/o/r/issues/9"
+        return subprocess.CompletedProcess(cmd, 0, out, "")
+
+
+def test_open_issue_searches_first_and_survives_github_hiccups(monkeypatch):
+    import subprocess
+    monkeypatch.setenv("GH_TOKEN", "x")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setattr(D.shutil, "which", lambda name: "/usr/bin/gh")
+    gh = FakeGh(listed="Model drift: Luna moth peak (2027)\n")
+    monkeypatch.setattr(D.subprocess, "run", gh)
+    assert D.open_issue("Model drift: Luna moth peak (2027)", "b") and gh.calls == [["gh", "issue", "list"]]
+    gh = FakeGh(listed="Model drift: Luna moth peak (2027) again\n")      # only an exact title counts
+    monkeypatch.setattr(D.subprocess, "run", gh)
+    assert D.open_issue("Model drift: Luna moth peak (2027)", "b") and gh.calls[-1] == ["gh", "issue", "create"]
+    monkeypatch.setattr(D.subprocess, "run", FakeGh(fail=subprocess.TimeoutExpired("gh", 60)))
+    assert D.open_issue("t", "b") is False
+    monkeypatch.delenv("GH_TOKEN")
+    assert D.open_issue("t", "b") is False
+
+
 def test_the_2026_seed_is_what_the_code_gives_on_the_2026_files(tmp_path):
-    """DRIFT_2026.json (the rehearsal season the 2027 running check starts from) is reproducible from the repo."""
+    """DRIFT_2026.json (the rehearsal season the 2027 running check starts from) is reproducible from the repo while
+    main's bundled scorecard is still the 2026 rehearsal."""
     root = HERE.parents[1]
+    card = json.loads((root / "public" / "live" / "scorecard.json").read_text())
+    if card.get("season") != 2026:
+        pytest.skip("main's bundled scorecard is no longer the 2026 rehearsal")
     doc = D.run(root / "public" / "live" / "scorecard.json", root / "pipeline" / "live" / "archive",
                 tmp_path / "d.json", 2026, notify=False, seed=None)
     seed = json.loads(D.SEED.read_text())
     assert seed["season"] == 2026 and seed["layers"] == doc["layers"]
-    assert seed["layers"]["luna"]["peak"]["state"] == "ok" and not seed["raised"]
+    assert all(l["settled"] and not l["alarms"] for l in seed["layers"].values()) and not seed["raised"]
