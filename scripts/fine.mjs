@@ -188,6 +188,10 @@ for (const [name, width, height, mobile] of shots) {
       await page.goto(`${origin}/?noauto&species=${key}&season=${season}&date=06-20`);
       await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
       await page.waitForTimeout(2500);
+      if (await page.evaluate(() => window.__hatch.current().tracker === true)) {
+        await c.close(); // a tracker (monarch, red admiral) has no hexagons to split
+        continue;
+      }
       if (season === 'live' && (await page.evaluate(() => window.__hatch.current().mode())) !== 'live') {
         await c.close(); // this species has no live forecast (yet)
         continue;
