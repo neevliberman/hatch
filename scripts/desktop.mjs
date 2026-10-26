@@ -50,7 +50,9 @@ const units = [];
 // pages drawing through it starve each other into load timeouts.
 const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
 const runUnits = async (n) => {
-  const queue = units.filter((_, i) => i % shardOf === shardNo - 1);
+  // The first section (the radar replays, as long as all the others put together over a pair of workers) gets shard 1 to itself;
+  // the rest are dealt out round robin over the other shards.
+  const queue = units.filter((_, i) => (shardOf === 1 ? true : i === 0 ? shardNo === 1 : (i - 1) % (shardOf - 1) === shardNo - 2));
   await Promise.all(Array.from({ length: n }, async (_, i) => {
     const own = i === 0 ? null : await pw.chromium.launch(chromiumLaunch);
     for (let u; (u = queue.shift()); ) await u(own ?? browsers.chromium);
@@ -854,20 +856,27 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       }, ev.at, { timeout: 30000 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
       await settled();
       // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and the map's own colours well outside it.
-      const png = await shotR('1-open');
-      const px = await page.evaluate(async ([b64, sheet, off]) => {
-        const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
-        const c = new OffscreenCanvas(bmp.width, bmp.height);
-        const g = c.getContext('2d');
-        g.drawImage(bmp, 0, 0);
-        const k = bmp.width / innerWidth;
-        const at = (lngLat) => {
-          const [x, y] = window.__hatch.map.project(lngLat);
-          return [...g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3)];
-        };
-        return { sheet: at(sheet), off: at(off) };
-      }, [png.toString('base64'), ev.sheet, ev.off]);
+      // The frames arrive and are drawn on their own beat, which can lag the glide on a runner with software GL: look again
+      // for up to 10 s before calling the sheet missing.
       const paper = ([r, g, b]) => r > 225 && g > 220 && b > 200;
+      let px;
+      for (let tries = 0; tries < 20; tries++) {
+        const png = await shotR('1-open');
+        px = await page.evaluate(async ([b64, sheet, off]) => {
+          const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
+          const c = new OffscreenCanvas(bmp.width, bmp.height);
+          const g = c.getContext('2d');
+          g.drawImage(bmp, 0, 0);
+          const k = bmp.width / innerWidth;
+          const at = (lngLat) => {
+            const [x, y] = window.__hatch.map.project(lngLat);
+            return [...g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3)];
+          };
+          return { sheet: at(sheet), off: at(off) };
+        }, [png.toString('base64'), ev.sheet, ev.off]);
+        if (paper(px.sheet) && !paper(px.off)) break;
+        await page.waitForTimeout(500);
+      }
       if (!paper(px.sheet) || paper(px.off)) fail(`no radar sheet at its place (inside ${px.sheet}, outside ${px.off})`);
       const t0 = await page.locator('#radar .rd-time').textContent();
       const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000 })
