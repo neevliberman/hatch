@@ -43,7 +43,7 @@ export interface SpeciesConfig {
   /** Text colour for its name and marks in the About panel. */
   ink: string;
   creature: Creature;
-  /** Folder of res-5 hexes next to the page ('fine-firefly/'), or none. */
+  /** Folder of finer hexes (res 5, 6) next to the page ('fine-firefly/'), or none. */
   fine?: string;
   endNote: [string, string];
   sleep: { title: string; line: string };
