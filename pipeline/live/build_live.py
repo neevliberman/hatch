@@ -323,7 +323,7 @@ def forecast_species(sp, wx, season, as_of, today, prev=None, model_id=None, sig
     envs = None
     if getattr(sp, "envelopes", None):   # the A1 shadow (shadow_rule.py): each fold on banks capped at its fit's range
         from live import shadow_rule as A1
-        envs = A1.load_envelopes(sp.envelopes, json.loads(fits_path.read_text())["folds"])
+        envs = A1.load_envelopes(sp.envelopes, json.loads(fits_path.read_text())["folds"], fits_path)
     eff = json.loads(sp.effort.read_text())
     clat, years, i0, i1 = wx["clat"], wx["years"], wx["i0"], wx["i1"]
     cstate = [eff["states"].index(s) for s in fdata.state_of(clat, wx["clng"])]

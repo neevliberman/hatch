@@ -14,6 +14,8 @@ of a fold) is built from the Daymet cube by pipeline/league/build_a1.py and ship
 On a live night (written 2026-10-26, before any 2027 data, PREREG_2027.md amendment): the cap uses each fold's own E;
 the flag reads only the weather known that night (PRISM to as_of, then the 7-day forecast, never the past-year
 endings) against the widest of the 11 envelopes (outside every fit's range), from 1 April to the strip's A1 peak.
+(The last known day's degree-days are computed, as every night's, from that day's high and the next morning's low,
+so at most half a day of a past-year ending leaks in.)
 """
 import json
 
@@ -64,11 +66,15 @@ def strip_flag(hex_flags, weights):
     return bool(np.any(np.asarray(hex_flags, bool) & (np.asarray(weights, float) > 0)))
 
 
-def load_envelopes(path, folds):
-    """[fold, 365] from a1_envelopes.json; refuses a file built for other folds or fits."""
+def load_envelopes(path, folds, fits_path=None):
+    """[fold, 365] from a1_envelopes.json; refuses a file built for other folds or another fits file."""
     js = json.loads(path.read_text())
     if js["folds"] != list(folds):
         raise ValueError(f"envelopes are for folds {js['folds']}, the fits have {list(folds)}")
+    if fits_path is not None:
+        import hashlib
+        if js.get("fits_sha256") != hashlib.sha256(fits_path.read_bytes()).hexdigest():
+            raise ValueError(f"envelopes were built for another {fits_path.name}; rerun pipeline/league/build_a1.py")
     return np.array([check_envelope(e) for e in js["envelopes"]])
 
 

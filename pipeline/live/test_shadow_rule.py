@@ -68,6 +68,14 @@ def test_load_envelopes_refuses_other_folds(tmp_path):
     assert S.load_envelopes(p, ["2015", "2016"]).shape == (2, 365)
     with pytest.raises(ValueError, match="folds"):
         S.load_envelopes(p, ["2015", "2017"])
+    fits = tmp_path / "fits.json"
+    fits.write_text("{}")
+    with pytest.raises(ValueError, match="another fits.json"):
+        S.load_envelopes(p, ["2015", "2016"], fits)
+    import hashlib
+    p.write_text(json.dumps({"folds": ["2015", "2016"], "envelopes": [ENV.tolist(), ENV.tolist()],
+                             "fits_sha256": hashlib.sha256(b"{}").hexdigest()}))
+    assert S.load_envelopes(p, ["2015", "2016"], fits).shape == (2, 365)
 
 
 def test_live_flags_use_only_known_weather_and_the_widest_envelope():

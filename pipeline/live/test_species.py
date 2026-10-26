@@ -150,6 +150,18 @@ def test_a1_shadow_caps_flags_and_widens(offline):
             assert b[f"{k}_lo"] <= round(c, 1) <= b[f"{k}_hi"]
 
 
+def test_a_broken_a1_file_only_fails_the_shadow(offline, monkeypatch, tmp_path):
+    from league import bench
+    import dataclasses
+    bad = tmp_path / "env.json"
+    bad.write_text("{not json")
+    a1 = dataclasses.replace(bench.BY_SLUG["luna~p3-a1-v1"], envelopes=bad)
+    monkeypatch.setattr(bench, "BENCH", [bench.BY_SLUG["luna~p3.1-v1"], a1])
+    out = L.build_all(2027, dt.date(2027, 5, 31), False, dt.date(2027, 6, 3), keys=["luna"])
+    assert out["checks"]["shadows_failed"] == ["luna~p3-a1-v1"] and list(out["shadows"]) == ["luna~p3.1-v1"]
+    assert out["bands"] and out["checks"]["species_failed"] == []
+
+
 def test_cell_mismatch_is_an_ordinary_error(offline):
     wx = fake_weather(2027, dt.date(2027, 5, 31), False, LUNA_CELLS[:-1])
     with pytest.raises(ValueError):

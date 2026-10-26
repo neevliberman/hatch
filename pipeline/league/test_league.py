@@ -193,6 +193,32 @@ def test_weekly_table_cuts_to_common_nights_and_saves_the_records(tmp_path):
     assert len(calls) == 1
 
 
+def test_a_failing_challenger_keeps_the_others_rows_and_raises_after_writing(tmp_path, monkeypatch):
+    season_files(tmp_path)
+    real = weekly.grade_challenger
+
+    def grade(ch, *a, **k):
+        if ch.id == "p3-a1-v1":
+            raise ValueError("A1 broke")
+        return real(ch, *a, **k)
+    monkeypatch.setattr(weekly, "grade_challenger", grade)
+    with pytest.raises(RuntimeError, match="luna~p3-a1-v1"):
+        weekly.run_if_due(tmp_path, SEASON, dt.date(2027, 7, 21), fetch=lambda *a: raw_records())
+    t = json.loads((tmp_path / "league.json").read_text())                  # written first, P3.1's row intact
+    rows = {c["id"]: c for c in t["layers"]["luna"]["challengers"]}
+    assert rows["p3.1-v1"]["verdict"] == "in_progress" and rows["p3-a1-v1"]["verdict"] == "error"
+    assert t["failed"] == ["luna~p3-a1-v1"]
+
+
+def test_a_report_only_shadow_ignores_any_recorded_gate(tmp_path):
+    season_files(tmp_path)
+    gates = {"luna~p3-a1-v1": {"d": -5.0}, "luna~p3.1-v1": {"d": -5.0}}     # even if someone records a pass
+    t = weekly.run(tmp_path, SEASON, dt.date(2027, 9, 27), fetch=lambda *a: raw_records(), gates=gates)
+    rows = {c["id"]: c for c in t["layers"]["luna"]["challengers"]}
+    assert rows["p3-a1-v1"]["gate"] == {"name": "report-only", "passed": None}
+    assert rows["p3-a1-v1"]["takes_map"] is None and rows["p3.1-v1"]["gate"]["passed"] is True
+
+
 def test_verdict_after_the_verdict_date_needs_the_gate(tmp_path):
     season_files(tmp_path)
 

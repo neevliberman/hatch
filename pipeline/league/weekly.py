@@ -117,7 +117,7 @@ def grade_challenger(ch, live: Path, season, today: dt.date, raw, replay, gates=
     cards = {role: card["layers"][ch.species] for role, card in cards.items()}
     strips = rules.head_to_head(cards["champion"]["bands"], cards["challenger"]["bands"])
     final = season == ch.verdict.year and S.week_start(today) >= ch.verdict
-    gate = gate_state(ch.slug, gates)
+    gate = None if ch.gate == "report-only" else gate_state(ch.slug, gates)   # a report-only shadow never passes
     verdict, reason = rules.decide(strips, final, gate)
     return {"id": ch.id, "why": ch.why, "model": cards["challenger"]["model"], "champion_model": cards["champion"]["model"],
             "nights": {"champion": len(champ_all), "challenger": len(chall_all), "common": len(champ)},
@@ -130,7 +130,7 @@ def grade_challenger(ch, live: Path, season, today: dt.date, raw, replay, gates=
 def run(live: Path, season, today: dt.date, fetch=S.fetch_records, gates=None):
     """This week's league table (every species with challengers this season)."""
     monday = S.week_start(today)
-    layers = {}
+    layers, failed = {}, []
     for key in sorted({c.species for c in bench.tonight(season)}):
         sp = registry.get(key)
         replay = json.loads(sp.replay.read_text())
@@ -138,7 +138,12 @@ def run(live: Path, season, today: dt.date, fetch=S.fetch_records, gates=None):
         for c in bench.tonight(season, [key]):
             day = min(today, c.verdict)                  # after the verdict Monday, the verdict week's table stands
             raw = weekly_records(live, season, sp, S.week_start(day), day, fetch)
-            rows.append(grade_challenger(c, live, season, day, raw, replay, gates))
+            try:                                         # one challenger's failure never costs another's row
+                rows.append(grade_challenger(c, live, season, day, raw, replay, gates))
+            except Exception as err:  # noqa: BLE001
+                print(f"::error::league: grading {c.slug} failed: {err!r}", flush=True)
+                rows.append({"id": c.id, "why": c.why, "verdict": "error", "reason": repr(err)[:300], "nights": None})
+                failed.append(c.slug)
         layers[key] = {"challengers": rows}
     return {"version": 1, "kind": "league", "season": season, "score_date": monday.isoformat(),
             "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -147,7 +152,7 @@ def run(live: Path, season, today: dt.date, fetch=S.fetch_records, gates=None):
                      "plain": "a challenger takes the map next season only if, on nights both forecast and strips both "
                               "had scored, its record-weighted miss is at least 1 day lower, it wins at least 3 strips "
                               "and its gate passed; never mid-season"},
-            "layers": layers}
+            "layers": layers, "failed": failed}
 
 
 def run_if_due(live: Path, season, today: dt.date, fetch=S.fetch_records, force=False):
@@ -166,6 +171,8 @@ def run_if_due(live: Path, season, today: dt.date, fetch=S.fetch_records, force=
         past[str(old["season"])] = {k: old[k] for k in ("score_date", "layers")}
     table["past"] = dict(sorted(past.items()))
     write_atomic(out, (json.dumps(table, separators=(",", ":"), allow_nan=False) + "\n").encode())
+    if table.get("failed"):                             # written with every other row; now raise the night's alarm
+        raise RuntimeError(f"league table written, but grading failed for {', '.join(table['failed'])}")
     return out
 
 
