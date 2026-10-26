@@ -30,6 +30,7 @@ weather + sightings ─► nightly: champion (map) + challengers (sealed) ─►
 | `bench.py` | the challengers: id, frozen fits, archive folder, first season, verdict date, gate |
 | `rules.py` | the promotion rule (pure, tested) |
 | `weekly.py` | the weekly table: records pull, common nights, both scorecards, head to head, verdict -> `live/league.json` |
+| `drift.py` | the model-drift alarm: weather part vs model part of each miss, issue when a model looks stale -> `live/drift.json` |
 | `gates.json` | each challenger's gate result once known (P3.1: the Daymet 2026 re-check, due 31 Aug 2027) |
 
 **Where it runs.** No new workflow: `build_live.py` forecasts every bench challenger on the night's weather and writes
@@ -53,11 +54,34 @@ graded every Monday against each place's calendar (`live/league_east.json`). Its
 season, is [EAST_2027.md](EAST_2027.md); on a 2026 rehearsal (`rehearse_east.py`) it would not have passed (it won 11 of 24 places).
 It never touches the map or the P3 vs P3.1 test.
 
+**Drift alarm** ([`drift.py`](drift.py), every night after the scorecard). A forecast can miss because the weather
+surprised it (a heat wave where it assumed a normal week) or because it reads the weather wrongly. Only the second
+means the model is going stale. Once a strip's first wave is over in every fold fit, the same frozen model has been
+re-run on the real weather, so the archive holds its answer in hindsight: *model part* = hindsight forecast − real,
+*weather part* = the graded miss − model part. A species' season bias (mean model part over its strips) is set against
+the same model's leave-one-year-out replay seasons. An alarm needs every strip settled, at least 3 strips and 5 past
+seasons, a bias outside a 95% prediction interval for a new season (t × SD × √(1 + 1/n)) plus 1.5 days (PRISM live vs
+Daymet replay), and two thirds of strips on that side. A *running* alarm does the same over every settled live season
+of that model, for slow drift no single season shows. An alarm only opens one GitHub issue: a refit tryout is due
+before next season.
+
+On the 2026 rehearsal (`DRIFT_2026.json`; seen while writing the rule; the seed for the 2027 running check) nothing
+fires. Luna's onset forecasts were graded 6.3 days late on average, but 5.8 of that is the weather part and 0.5 the
+model part. Luna's peak model part is −3.6 days, 2.1 SD from its past seasons but inside the 7.8-day line, and it is
+one strip: the far south's −14 (the extrapolation in [SOUTH_BIAS.md](../fit/SOUTH_BIAS.md)); the other four average
+−1.0. So **this alarm is for a model going stale everywhere, not for one strip failing**: that strip is only listed
+(`beyond_past`), and the A1 shadow in PREREG_2027.md is the tool for it. Caveats: the 1.5-day allowance comes from one
+species, one strip and three years, and the three largest 2026 gaps all lean early (luna peak −5.0, Japanese beetle onset −3.3 and
+peak −3.4 against their past means), which may be PRISM rather than drift. Re-measure it when Daymet 2026 is out (due by
+31 Aug 2027, with the P3.1 gate) and change it, if needed, only before a season starts. With 6 to 9 past seasons per
+species the line is wide (5 to 12 days for one season in 2026), so this catches a large or lasting change, not a small one.
+
 **Tryouts so far** (`tryouts/`): learning from this year's first sightings, no gain ([ASSIM_RESULT.md](tryouts/ASSIM_RESULT.md));
 forecasting new regions, where a local heat clock beats the local calendar across the East by 1.6 days, found after
 the fact, so it needs 2027 to confirm it ([REGIONAL_RESULT.md](tryouts/REGIONAL_RESULT.md)).
 
 **Not built yet (before the first verdict, September 2027):** the step that swaps a winner onto the map for the next
-season and opens an issue saying what changed and why; showing the table in the app.
+season and opens an issue saying what changed and why (the drift alarm shows the nightly job can open issues itself);
+showing the table in the app.
 
 Run: `python3 -m pytest pipeline/league` (offline) · `python3 pipeline/league/weekly.py --live live --season 2027 --force`

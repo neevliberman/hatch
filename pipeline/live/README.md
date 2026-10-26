@@ -28,6 +28,10 @@ champion (`live/league.json`).
 written, the same step forecasts 28 eastern places with the heat clock (its own PRISM reads, 198 hexes) and once a
 week grades them; a failure there raises the alarm but never stops the map's files.
 
+**Drift alarm** ([`pipeline/league/drift.py`](../league/drift.py)): last, it splits each scored miss into the part
+the weather caused and the part the model did (`live/drift.json`), and opens a GitHub issue (with the step's
+`GH_TOKEN`) when a species' model looks stale.
+
 Adding a species: an entry in `registry.py`, then `python3 pipeline/live/build_static.py --effort <key>` (its effort
 profile, from the records its fetch script cached). The app finds the species' part of the file by its key
 (`src/species.ts`), so nothing else changes. The app fetches the file only when live mode is wanted (a link asks
