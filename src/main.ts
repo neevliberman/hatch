@@ -1,6 +1,7 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
+import { makeIntro, type Intro } from './ui/intro';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { GROUP_AFTER, SPECIES } from './species';
 import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
@@ -153,8 +154,9 @@ function start() {
     updateProbe();
   };
 
+  let intro: Intro | null = null; // the first visit's opening playback (ui/intro.ts), while it runs
   const colourKey = mountLegend($('legend'), registry);
-  time.subscribe(() => time.playing && colourKey.autoFold());
+  time.subscribe(() => time.playing && !intro?.running && colourKey.autoFold());
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
@@ -190,6 +192,8 @@ function start() {
     const rightFrom = !beside && phone.matches && !slim.matches ? window.innerHeight - Math.max(bottom, dock) - $('actions').offsetHeight - 30 : undefined;
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2), rightFrom, dock: sheet ? 0 : dock };
   };
+  let firstDrawn = false;
+  let startIntro = () => {}; // set once the first-visit check below has run
   const map = createMap({
     container: $<HTMLDivElement>('map'),
     registry,
@@ -202,6 +206,8 @@ function start() {
     },
     // The loading caterpillar bows out as the first frame lands.
     onFirstDraw: () => {
+      firstDrawn = true;
+      startIntro();
       const l = document.getElementById('loader');
       l?.classList.add('done');
       setTimeout(() => l?.remove(), 250);
@@ -823,7 +829,19 @@ function start() {
   if (!seen && !params.has('noauto') && !params.has('caveats')) for (const id of hinted.slice(0, 2)) $(id).classList.add('hint');
   const clearHint = () => hinted.slice(0, 2).forEach((x) => $(x).classList.remove('hint'));
   for (const id of hinted) $(id).addEventListener('click', clearHint);
-  time.subscribe(() => time.playing && clearHint());
+  time.subscribe(() => time.playing && !intro?.running && clearHint());
+  // A first visit with a plain link opens on the season playing itself, so the forecast is seen moving before anything
+  // is read. A link that asks for a view (a day, a year, a place, a species, a radar night) opens on that view instead.
+  const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'noauto', 'caveats'].some((k) => params.has(k));
+  if (!seen && plain && !still.matches) {
+    startIntro = () => {
+      startIntro = () => {};
+      // A beat for the loader to bow out, then play. Skipped if the visitor already touched something.
+      const landing = time.cursor;
+      setTimeout(() => !time.playing && time.cursor === landing && !document.hidden && (intro = makeIntro(time, landing)).start(), 400);
+    };
+    if (firstDrawn) startIntro();
+  }
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
