@@ -132,6 +132,36 @@ def test_a_species_raising_systemexit_does_not_stop_luna(offline, monkeypatch):
     assert out["checks"]["species_failed"] == ["japanese-beetle"] and "firefly" in out["species"] and out["median"]
 
 
+def test_a1_shadow_caps_flags_and_widens(offline):
+    """A spring far warmer than any fitted one (10 degree-days every day from 1 March): A1 runs P3 on banks capped at
+    the fit's range, so its dates are no earlier than P3's; every strip is flagged and its likely range reaches the
+    usual date; P3's own strips are untouched."""
+    from live import scorecard
+    today, as_of = dt.date(2027, 6, 3), dt.date(2027, 5, 31)
+    out = L.build_all(2027, as_of, False, today, keys=["luna"])
+    a1 = out["shadows"]["luna~p3-a1-v1"]
+    assert a1["model"]["id"] == "p3-a1-v1" and a1["model"]["hash"] != out["model"]["hash"]
+    assert "flag" not in out["bands"][0]                   # the map's strips are P3's, unflagged
+    cal = scorecard.calendar(json.loads(registry.LUNA.replay.read_text()))
+    for p3, b in zip(out["bands"], a1["bands"]):
+        assert b["flag"] is True
+        assert b["onset"] >= p3["onset"] and b["peak"] >= p3["peak"]
+        for k, c in zip(("onset", "peak"), cal[b["band"]]):
+            assert b[f"{k}_lo"] <= round(c, 1) <= b[f"{k}_hi"]
+
+
+def test_a_broken_a1_file_only_fails_the_shadow(offline, monkeypatch, tmp_path):
+    from league import bench
+    import dataclasses
+    bad = tmp_path / "env.json"
+    bad.write_text("{not json")
+    a1 = dataclasses.replace(bench.BY_SLUG["luna~p3-a1-v1"], envelopes=bad)
+    monkeypatch.setattr(bench, "BENCH", [bench.BY_SLUG["luna~p3.1-v1"], a1])
+    out = L.build_all(2027, dt.date(2027, 5, 31), False, dt.date(2027, 6, 3), keys=["luna"])
+    assert out["checks"]["shadows_failed"] == ["luna~p3-a1-v1"] and list(out["shadows"]) == ["luna~p3.1-v1"]
+    assert out["bands"] and out["checks"]["species_failed"] == []
+
+
 def test_cell_mismatch_is_an_ordinary_error(offline):
     wx = fake_weather(2027, dt.date(2027, 5, 31), False, LUNA_CELLS[:-1])
     with pytest.raises(ValueError):

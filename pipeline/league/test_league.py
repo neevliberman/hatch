@@ -1,5 +1,6 @@
 """Offline tests for the league: the promotion rule, the weekly table, shadow archiving. python3 -m pytest pipeline/league"""
 import datetime as dt
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -57,7 +58,7 @@ def test_head_to_head_uses_strips_scored_for_both_and_refuses_different_records(
 # ---------------------------------------------------------------- the bench
 def test_bench_is_the_preregistered_p31():
     assert [c.slug for c in bench.tonight(2026)] == []                    # nothing shadows before its first season
-    assert [c.slug for c in bench.tonight(2027)] == ["luna~p3.1-v1"]
+    assert [c.slug for c in bench.tonight(2027)] == ["luna~p3.1-v1", "luna~p3-a1-v1"]
     assert bench.tonight(2027, ["firefly"]) == []
     assert P31.model_hash() == "a9fb5fe06cdb"                             # the hash PREREG_2027.md pins
     # P3.1's entry is PREREG_2027.md's, field by field (bench.py itself is not pinned, so challengers can be added)
@@ -66,7 +67,22 @@ def test_bench_is_the_preregistered_p31():
     assert P31.verdict == dt.date(2027, 9, 27) and P31.verdict.weekday() == 0
     assert P31.archive_dir(Path("live/archive")) == Path("live/archive_p31")
     sp = P31.live_species()
-    assert sp.fits == P31.fits and sp.replay.name == "luna-replay.json" and sp.key != "luna"
+    assert sp.fits == P31.fits and sp.replay.name == "luna-replay.json" and sp.key != "luna" and sp.envelopes is None
+
+
+def test_a1_is_p3_on_capped_banks_and_can_never_take_the_map():
+    """PREREG_2027.md "Second shadow": P3's own fits plus the envelopes; reported, never decided."""
+    a1 = bench.BY_SLUG["luna~p3-a1-v1"]
+    root = Path(__file__).resolve().parents[2]
+    assert a1.fits == root / "pipeline" / "replay" / "fold_fits.json" and a1.archive == "archive_a1"
+    assert a1.live_species().envelopes == a1.envelopes == root / "pipeline" / "league" / "a1_envelopes.json"
+    assert a1.model_hash() not in ("7dc3c4c0887b", P31.model_hash())        # its own model: fits + envelopes
+    env = json.loads(a1.envelopes.read_text())
+    assert env["fits_sha256"] == hashlib.sha256(a1.fits.read_bytes()).hexdigest()
+    assert a1.slug not in json.loads(weekly.GATES.read_text())                # no gate is ever recorded ...
+    assert weekly.gate_state(a1.slug) is None
+    win = [rules.Strip(b, 100, 5.0, 1.0) for b in ("a", "b", "c", "d")]
+    assert rules.decide(win, True, weekly.gate_state(a1.slug))[0] == "tie"   # ... so even a big win is not the map
 
 
 def test_shadow_entry_is_small_and_names_its_model():
@@ -83,20 +99,22 @@ def test_a_failing_challenger_never_costs_the_night(monkeypatch):
         raise RuntimeError("fits unreadable")
     monkeypatch.setattr(L, "forecast_species", boom)
     out, failed = L.shadows({}, SEASON, dt.date(2027, 4, 1), dt.date(2027, 4, 4), ["luna"])
-    assert out == {} and failed == ["luna~p3.1-v1"]
+    assert out == {} and failed == ["luna~p3.1-v1", "luna~p3-a1-v1"]
 
 
 def test_challenger_runs_with_its_own_model_and_no_sightings(monkeypatch):
     seen = {}
 
     def fake(sp, wx, season, as_of, today, prev=None, model_id=None, sightings=True):
-        seen.update(fits=sp.fits, model_id=model_id, sightings=sightings)
+        seen[model_id] = {"fits": sp.fits, "envelopes": sp.envelopes, "sightings": sightings}
         return {"version": 1, "season": season, "generated": "2027-04-04T13:40:00Z", "as_of": as_of.isoformat(),
                 "forecast_through": as_of.isoformat(), "backfill": False, "model": {"id": model_id, "hash": "h"}, "bands": []}
     monkeypatch.setattr(L, "forecast_species", fake)
     out, failed = L.shadows({}, SEASON, dt.date(2027, 4, 1), dt.date(2027, 4, 4), ["luna"])
-    assert failed == [] and list(out) == ["luna~p3.1-v1"]
-    assert seen == {"fits": P31.fits, "model_id": "p3.1-v1", "sightings": False}
+    assert failed == [] and list(out) == ["luna~p3.1-v1", "luna~p3-a1-v1"]
+    a1 = bench.BY_SLUG["luna~p3-a1-v1"]
+    assert seen == {"p3.1-v1": {"fits": P31.fits, "envelopes": None, "sightings": False},
+                    "p3-a1-v1": {"fits": a1.fits, "envelopes": a1.envelopes, "sightings": False}}
 
 
 # ---------------------------------------------------------------- archiving and the weekly table
@@ -173,6 +191,32 @@ def test_weekly_table_cuts_to_common_nights_and_saves_the_records(tmp_path):
     assert rec.exists() and rec.with_suffix(".sha256").read_text().split()[0] == __import__("hashlib").sha256(rec.read_bytes()).hexdigest()
     assert weekly.run_if_due(tmp_path, SEASON, dt.date(2027, 7, 22), fetch=fetch) is None   # once a week
     assert len(calls) == 1
+
+
+def test_a_failing_challenger_keeps_the_others_rows_and_raises_after_writing(tmp_path, monkeypatch):
+    season_files(tmp_path)
+    real = weekly.grade_challenger
+
+    def grade(ch, *a, **k):
+        if ch.id == "p3-a1-v1":
+            raise ValueError("A1 broke")
+        return real(ch, *a, **k)
+    monkeypatch.setattr(weekly, "grade_challenger", grade)
+    with pytest.raises(RuntimeError, match="luna~p3-a1-v1"):
+        weekly.run_if_due(tmp_path, SEASON, dt.date(2027, 7, 21), fetch=lambda *a: raw_records())
+    t = json.loads((tmp_path / "league.json").read_text())                  # written first, P3.1's row intact
+    rows = {c["id"]: c for c in t["layers"]["luna"]["challengers"]}
+    assert rows["p3.1-v1"]["verdict"] == "in_progress" and rows["p3-a1-v1"]["verdict"] == "error"
+    assert t["failed"] == ["luna~p3-a1-v1"]
+
+
+def test_a_report_only_shadow_ignores_any_recorded_gate(tmp_path):
+    season_files(tmp_path)
+    gates = {"luna~p3-a1-v1": {"d": -5.0}, "luna~p3.1-v1": {"d": -5.0}}     # even if someone records a pass
+    t = weekly.run(tmp_path, SEASON, dt.date(2027, 9, 27), fetch=lambda *a: raw_records(), gates=gates)
+    rows = {c["id"]: c for c in t["layers"]["luna"]["challengers"]}
+    assert rows["p3-a1-v1"]["gate"] == {"name": "report-only", "passed": None}
+    assert rows["p3-a1-v1"]["takes_map"] is None and rows["p3.1-v1"]["gate"]["passed"] is True
 
 
 def test_verdict_after_the_verdict_date_needs_the_gate(tmp_path):

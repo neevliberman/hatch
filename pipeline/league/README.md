@@ -31,6 +31,7 @@ weather + sightings ─► nightly: champion (map) + challengers (sealed) ─►
 | `rules.py` | the promotion rule (pure, tested) |
 | `weekly.py` | the weekly table: records pull, common nights, both scorecards, head to head, verdict -> `live/league.json` |
 | `drift.py` | the model-drift alarm: weather part vs model part of each miss, issue when a model looks stale -> `live/drift.json` |
+| `build_a1.py`, `a1_envelopes.json` | the A1 shadow's frozen warmth range per fold (the cap, the flag) |
 | `gates.json` | each challenger's gate result once known (P3.1: the Daymet 2026 re-check, due 31 Aug 2027) |
 
 **Where it runs.** No new workflow: `build_live.py` forecasts every bench challenger on the night's weather and writes
@@ -47,6 +48,15 @@ Each week's records file (about 100 KB for luna) is kept, with its sha256, as th
 
 **Adding a challenger.** Pass its tryout on past seasons (written up beside its code), freeze its fits, add it to
 `BENCH` with a gate before 1 March of its first season. From then on, the league grades it every week.
+
+**A1, "too warm for the model" (2027, report-only).** The second shadow in PREREG_2027.md, now on the bench as
+`luna~p3-a1-v1`: P3's own fits, but no place's warmth bank is believed past the richest one any fitted place-year had
+on that date (`a1_envelopes.json`, from `build_a1.py`). A strip whose real bank has gone past that range (on the weather
+known that night, from 1 April to its peak) is flagged, and its likely range is stretched to its usual date; the date
+itself is not moved. On a 2026 rebuild (PRISM to 15 May, no forecast) the far south's peak moves from day 116 to 120
+and its range from 109-120 to 113-135, which now holds the real day, 130; the middle strip is flagged too (peak range
+126-138 to 126-143, real 129); the three northern strips are untouched. It is graded every week beside P3 but can never
+take the map: its gate is never recorded, so `rules.decide` cannot pass it.
 
 **Eastern shadow track (2027).** The heat clock from tryout 2 forecasts 28 eastern places every night in
 shadow (`east.py`, frozen inputs `east_static.json` from `build_east.py`), sealed in `live/archive_east/`, and is
