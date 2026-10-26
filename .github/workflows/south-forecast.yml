@@ -1,0 +1,66 @@
+# Nightly southern forecast (1 Jul 2026 - 22 Feb 2027): seals tonight's Christmas beetle forecast and re-grades
+# on Mondays. Commits to the live-data branch under live/. Nothing reaches the map. See pipeline/south/SOUTH_2026.md.
+name: south-forecast
+on:
+  schedule:
+    - cron: '45 13 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: south-forecast
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Season gate
+        id: gate
+        run: |
+          D=$(date -u +%Y%m%d)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || { [ "$D" -ge 20260701 ] && [ "$D" -le 20270222 ]; }; then
+            echo "run=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "off-season: nothing to do"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == '1'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == '1'
+        with:
+          python-version: '3.12'
+      - run: pip install numpy pandas
+        if: steps.gate.outputs.run == '1'
+      - name: Seal tonight and grade
+        if: steps.gate.outputs.run == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          cd "$RUNNER_TEMP"
+          git clone -q --depth 1 --branch live-data --single-branch "$REPO" ld
+          cd ld
+          python3 "$GITHUB_WORKSPACE/pipeline/south/south.py" --live live
+          git config user.name "hatch-live-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add live
+          git diff --cached --quiet && { echo "nothing new"; exit 0; }
+          git commit -q -m "south forecast $(date -u +%F)"
+          git push -q origin live-data
+      - name: Failure alarm
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "South forecast failed in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$N" ]; then
+            gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "Failed again $(date -u +%F): $URL"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "South forecast failed" --body "The nightly southern forecast failed on $(date -u +%F): $URL. A missed night is a gap in the sealed archive; close this once a run is green."
+          fi
