@@ -1,6 +1,6 @@
 import type { LunaLayer } from './layers/lunaReplay';
 import type { Mode } from './layers/replayData';
-import { whenLive } from './layers/liveData';
+import { whenFront, whenLive } from './layers/liveData';
 
 /**
  * Every species Hatch can show, in menu order: the one list the species menu, the ?species= link and the loading
@@ -39,6 +39,21 @@ const lazy = (config: () => Promise<{ config: import('./layers/oneGeneration').S
       }
     : undefined;
 
+// A migrant's tracker (sightings so far, no forecast): its data is public/species/<key>/front.json, its live part is
+// `front.<key>` in the nightly file. See pipeline/front.
+const tracker = (config: () => Promise<{ config: import('./layers/frontLayer').FrontConfig }>, file: string): SpeciesEntry['load'] =>
+  __BASEMAP__
+    ? async (mode, _onData, onLive) => {
+        const url = `${import.meta.env.BASE_URL}${file}`;
+        const json = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const [{ config: cfg }, front, data] = await Promise.all([config(), import('./layers/frontLayer'), json]);
+        if (!front.isFront(data)) return null;
+        const layer = front.createFrontLayer(cfg, data, mode);
+        void whenFront(cfg.key).then((live) => live && (layer.setLive?.(live), onLive?.()));
+        return layer;
+      }
+    : undefined;
+
 export const SPECIES: SpeciesEntry[] = [
   { key: 'luna', label: 'Luna moth', group: 'Moths' },
   { key: 'firefly', label: 'Firefly', group: 'Beetles', load: lazy(() => import('./species/firefly'), 'firefly-replay.json') },
@@ -48,6 +63,8 @@ export const SPECIES: SpeciesEntry[] = [
     group: 'Beetles',
     load: lazy(() => import('./species/japaneseBeetle'), 'species/japanese-beetle/replay.json'),
   },
+  { key: 'monarch', label: 'Monarch', group: 'Butterflies', load: tracker(() => import('./species/monarch'), 'species/monarch/front.json') },
+  { key: 'red-admiral', label: 'Red admiral', group: 'Butterflies', load: tracker(() => import('./species/redAdmiral'), 'species/red-admiral/front.json') },
 ];
 
 /** Past this many species the menu lists them under group headings. */

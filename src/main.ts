@@ -366,7 +366,11 @@ function start() {
   /** The season menu's words for a mode, with the species on screen's own live forecast. */
   const label = (m: Mode) => modeLabel(m, cur.live());
   /** A layer's slider for a mode (live mode: from that layer's own live forecast). */
-  const timeFor = (l: LunaLayer, m: Mode, mo?: number, d?: number) => replayTimeSpec(m, mo, d, clock, l.live());
+  // A tracker has no forecast after its last day, so no paler "forecast" stretch on the time bar.
+  const timeFor = (l: LunaLayer, m: Mode, mo?: number, d?: number): TimeSpec => {
+    const s = replayTimeSpec(m, mo, d, clock, l.live());
+    return l.tracker ? { ...s, asOf: undefined } : s;
+  };
   const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : label(picker.value));
   const fillPicker = () => {
     const keep = picker.value || initialMode;
@@ -375,7 +379,7 @@ function start() {
     // menu says "seen", not a number of animals. "All years" goes without one so the closed menu fits a small phone.
     // A species the nightly file has no forecast for (yet): say so at the top of the list rather than drop it silently.
     picker.innerHTML = (__BASEMAP__ && liveFile && !cur.live() ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
-      [...live, TYPICAL, ...[...years].reverse()]
+      [...live, TYPICAL, ...[...years].reverse().filter((y) => !cur.tracker || cur.seasonCount(y) > 0)]
         .map((m) => `<option value="${m}">${m === LIVE ? label(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
         .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
@@ -475,9 +479,11 @@ function start() {
     ($('mark') as HTMLImageElement).src = cur.words.mark;
     showMark();
     $('dots-what').textContent = cur.words.plural;
+    $('app').classList.toggle('tracker', !!cur.tracker);
     showCountdown();
     syncCountdown();
-    $('map').setAttribute('aria-label', `Midwest map: ${cur.words.sightingsOf} sightings over forecast hexagons`);
+    $('map').setAttribute('aria-label', `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
+    $('explore-help').hidden = !!cur.tracker; // a tracker has no hexagons or forecast to read
     // Live mode opens on this species' own as-of day (each species' live forecast can run to its own), unless a link
     // gave a date; any other season keeps the calendar day.
     const live = picker.value === LIVE;

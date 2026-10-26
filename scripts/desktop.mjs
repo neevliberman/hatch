@@ -653,7 +653,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // Every other species from the menu, then back: each loads (its own layer id) and is drawn.
       for (const k of listed.filter((k) => k !== 'japanese-beetle')) {
         await page.locator('#species').selectOption(k);
-        await page.waitForFunction((k) => window.__hatch.current().id === `${k}-replay`, k, { timeout: 30000 }).catch(() => fail(`${k} never loaded`));
+        await page.waitForFunction((k) => /-(replay|front)$/.test(window.__hatch.current().id) && window.__hatch.current().id.startsWith(`${k}-`), k, { timeout: 30000 }).catch(() => fail(`${k} never loaded`));
+        // A tracker (monarch, red admiral) has no forecast: the page drops its "Colors: forecast" caveat; the others keep it.
+        const tracker = await page.evaluate(() => window.__hatch.current().tracker === true);
+        if ((await page.locator('#app.tracker').count()) !== (tracker ? 1 : 0)) fail(`${k}: the page's tracker mode does not match the layer (tracker=${tracker})`);
       }
       await page.waitForTimeout(600);
       await shotS('3-last');

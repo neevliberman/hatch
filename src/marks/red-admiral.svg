@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- The red admiral for the header (24 px): dark wings, a red-orange band, white tips. Heavy ink, like the moth. -->
+  <defs>
+    <g id="w">
+      <path d="M258 220 C300 150 366 96 440 86 C466 84 470 118 452 164 C436 206 404 236 366 246 C330 254 290 244 258 232 Z" fill="#4a3a33" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
+      <path d="M260 238 C316 246 372 262 366 312 C360 354 322 372 296 396 C280 380 268 330 260 238 Z" fill="#4a3a33" stroke="#2b241c" stroke-width="22" stroke-linejoin="round"/>
+      <path d="M278 206 C316 168 368 134 410 124" fill="none" stroke="#d6442b" stroke-width="30" stroke-linecap="round"/>
+      <path d="M300 336 C324 322 340 304 346 284" fill="none" stroke="#d6442b" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="430" cy="112" r="14" fill="#f8f2e3"/>
+    </g>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="#f8f2e3"/>
+  <g transform="translate(256 262) scale(.8) translate(-256 -291)">
+  <use href="#w"/>
+  <use href="#w" transform="translate(512 0) scale(-1 1)"/>
+  <ellipse cx="256" cy="250" rx="22" ry="86" fill="#2b241c"/>
+  </g>
+</svg>

@@ -171,6 +171,8 @@ export interface SpeciesWords {
 
 export interface HatchLayer {
   id: string;
+  /** A tracker (sightings so far, no forecast): the page leaves out its "colors: forecast" caveat. */
+  tracker?: boolean;
   title: string;
   /** The species' words for the page around the map; see SpeciesWords. */
   words: SpeciesWords;

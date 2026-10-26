@@ -195,6 +195,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   background: var(--grain) var(--panel-solid); border-top: 1px solid var(--line); padding: 6px var(--gr) 6px var(--gl); }
 #strip { grid-column: 1 / -1; margin: 0; font-size: 12.5px; line-height: 1.35; }
 #honesty b { font-weight: 600; }
+#app.tracker .forecast-note { display: none; }
 .unconfirmed { font-style: normal; font-weight: 600; color: var(--warn); }
 #why { margin-left: 4px; padding: 10px 8px; margin-block: -10px; margin-inline: -2px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
   font-size: inherit; min-height: 24px; }
@@ -544,6 +545,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   #honesty { display: none; }
   #strip::before { content: 'Dots: last 10 days. Colors: forecast (on trial in 2027).'; }
   #legend.folded .lg-chip::after { content: '\00B7\00A0 on trial in 2027'; margin-left: 2px; color: var(--warn); }
+  #app.tracker #strip::before { content: 'Dots: last 10 days.'; }
+  #app.tracker #legend.folded .lg-chip::after { content: none; }
   /* About opens beside the map and stops above the time bar (main.ts sets --dock-h), so the bar stays whole; the
      button stack and recenter step out to its left edge. */
   #drawer:not(.full), #drawer.full { top: 0; bottom: calc(var(--dock-h, 0px) + env(safe-area-inset-bottom)); height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
