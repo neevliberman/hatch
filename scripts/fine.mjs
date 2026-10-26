@@ -210,7 +210,8 @@ for (const [name, width, height, mobile] of shots) {
         res.push(await page.evaluate(() => window.__hatch.current().res()));
       }
       console.log(`${tag}: res at zoom 7 / 8.6 = ${res.join(' / ')}`);
-      if (res[0] < 5 || res[1] < res[0]) problems.push(`${tag}: hexagons did not split on zoom (res ${res.join(' then ')})`);
+      // Every species ships res 5 and 6 (pipeline/species/build_fine.py --res 5 6), so zoom 8.6 shows the smallest hexagons.
+      if (res[0] < 5 || res[1] < 6) problems.push(`${tag}: hexagons did not split on zoom (res ${res.join(' then ')}, wanted 5 then 6)`);
       await c.close();
     }
   }
