@@ -851,20 +851,27 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       }, ev.at, { timeout: 30000 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
       await settled();
       // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and the map's own colours well outside it.
-      const png = await shotR('1-open');
-      const px = await page.evaluate(async ([b64, sheet, off]) => {
-        const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
-        const c = new OffscreenCanvas(bmp.width, bmp.height);
-        const g = c.getContext('2d');
-        g.drawImage(bmp, 0, 0);
-        const k = bmp.width / innerWidth;
-        const at = (lngLat) => {
-          const [x, y] = window.__hatch.map.project(lngLat);
-          return [...g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3)];
-        };
-        return { sheet: at(sheet), off: at(off) };
-      }, [png.toString('base64'), ev.sheet, ev.off]);
+      // The frames arrive and are drawn on their own beat, which can lag the glide on a runner with software GL: look again
+      // for up to 10 s before calling the sheet missing.
       const paper = ([r, g, b]) => r > 225 && g > 220 && b > 200;
+      let px;
+      for (let tries = 0; tries < 20; tries++) {
+        const png = await shotR('1-open');
+        px = await page.evaluate(async ([b64, sheet, off]) => {
+          const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
+          const c = new OffscreenCanvas(bmp.width, bmp.height);
+          const g = c.getContext('2d');
+          g.drawImage(bmp, 0, 0);
+          const k = bmp.width / innerWidth;
+          const at = (lngLat) => {
+            const [x, y] = window.__hatch.map.project(lngLat);
+            return [...g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3)];
+          };
+          return { sheet: at(sheet), off: at(off) };
+        }, [png.toString('base64'), ev.sheet, ev.off]);
+        if (paper(px.sheet) && !paper(px.off)) break;
+        await page.waitForTimeout(500);
+      }
       if (!paper(px.sheet) || paper(px.off)) fail(`no radar sheet at its place (inside ${px.sheet}, outside ${px.off})`);
       const t0 = await page.locator('#radar .rd-time').textContent();
       const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000 })
