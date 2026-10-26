@@ -202,8 +202,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 /* While the pointer sweeps, keep the card to the title and first two lines so it doesn't hide the map under it. */
 #probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link,
   #probe.at-pointer:not(.pinned) .probe-more { display: none; }
-#probe.at-pointer::after { content: 'Click to keep this open'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
-#probe.at-pointer.pinned::after { content: 'Pinned. Press Esc or \00D7  to close.'; /* two spaces: the first ends the escape */ color: var(--accent); }
+#probe.at-pointer::after { content: 'Click to pin'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+#probe.at-pointer.pinned::after { content: 'Pinned. Esc or \00D7  closes.'; /* two spaces: the first ends the escape */ color: var(--accent); }
 /* In the card's top-right corner, over its padding, so the title keeps its width. */
 #probe { position: relative; }
 .probe-close + .probe-cell, .probe-close + .probe-card .probe-title { padding-right: 22px; }
@@ -290,9 +290,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #bar { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .btns { display: flex; gap: 6px; flex: none; }
 .play { min-width: 56px; }
-.date { flex: none; min-width: 190px; white-space: nowrap; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.date { flex: none; white-space: nowrap; font: 700 21px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
 .date em { font: 600 17px var(--font-note); color: var(--muted); }
-.date small { margin-left: 10px; font-size: 12px; font-weight: 600; color: var(--warn); }
+/* The day gets a fixed slot, and "forecast" / "after today" hangs below it, so nothing beside the date changes width
+   as you scrub and the slider never moves. The pill on a phone floats over the thumb instead, so it frees them. */
+#t-date { display: inline-block; min-width: 7em; }
+.date { position: relative; }
+.date small { position: absolute; left: 0; top: 100%; margin: 0; font-size: 12px; line-height: 1.2; font-weight: 600; color: var(--warn); }
 .date small.fc { color: var(--muted); }
 /* Live mode: when the weather data runs to; amber when the nightly update looks late. */
 .asof { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px; vertical-align: 2px; white-space: nowrap;
@@ -438,7 +442,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .date { position: absolute; top: 4px; min-width: 0; transform: translateX(-50%); pointer-events: none; font-size: 14px;
     left: clamp(var(--half, 70px), calc(66px + var(--thumb) / 2 + var(--p) * (100% - 66px - var(--thumb))), calc(100% - var(--half, 70px)));
     padding: 1px 9px 2px; border-radius: 999px; background: var(--text); color: var(--on-accent); }
+  #t-date { min-width: 0; }
   .date small, .date em { margin-left: 6px; color: inherit; font-size: 13px; }
+  .date small { position: static; }
   .date em { margin-left: 0; font-size: 15px; }
   /* Live mode in the pill: the washed ribbon already says "forecast"; the as-of badge rides along, small. */
   .date small.fc { display: none; }
@@ -479,13 +485,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .date { min-width: 150px; font-size: 16px; }
   .date em { font-size: 15px; }
   .now b { visibility: hidden; } /* the "now" flag would poke up into the legend row; keep just its line, on the ribbon */
-  /* The map gets its height back: the caveat folds into the key chip, which says "test forecast", and comes back as
+  /* The map gets its height back: the caveat folds into the key chip, which says "on trial in 2027", and comes back as
      one short line while the key is open (the full wording would wrap and eat the map). */
   #strip { display: none; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #app:has(#legend:not(.folded)) #strip { display: block; }
   #honesty { display: none; }
-  #strip::before { content: 'Dots: last 10 days. Colors: test forecast.'; }
-  #legend.folded .lg-chip::after { content: '\00B7\00A0 test forecast'; margin-left: 2px; color: var(--warn); }
+  #strip::before { content: 'Dots: last 10 days. Colors: forecast (on trial in 2027).'; }
+  #legend.folded .lg-chip::after { content: '\00B7\00A0 on trial in 2027'; margin-left: 2px; color: var(--warn); }
   /* About opens beside the map and stops above the time bar (main.ts sets --dock-h), so the bar stays whole; the
      button stack and recenter step out to its left edge. */
   #drawer:not(.full), #drawer.full { top: 0; bottom: calc(var(--dock-h, 0px) + env(safe-area-inset-bottom)); height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
@@ -566,6 +572,16 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .spot-key .k-today { width: 3px; background: var(--today); }
 .spot-key .k-seg { width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; box-shadow: inset 0 0 0 1px var(--swatch-rim); }
 .ex-sub { font-size: 12.5px; color: var(--muted); }
+.wm-lead { margin: 0 0 6px; font-size: 13px; }
+.wm-fig { margin: 0 0 4px; }
+.wm-fig svg { display: block; width: 100%; height: auto; }
+.wm-name { font-size: 10.5px; fill: var(--text); }
+.wm-tick { font-size: 9.5px; fill: var(--muted); }
+.wm-zero { stroke: var(--line-strong); stroke-width: 1; }
+.wm-bar { stroke: var(--muted); stroke-width: 1.5; }
+.wm-dot { fill: var(--panel-solid); stroke: var(--text); stroke-width: 1.5; }
+.wm-dot.clear { fill: var(--text); }
+.wm-note { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
 
 /* First visit: the About button and Play glow a few times to show where to start. */
 .hint { animation: hint 1.4s ease-in-out 0.4s 4; }
@@ -656,6 +672,11 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sc-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .sc-tab th, .sc-tab td { padding: 2px 4px; text-align: left; border-top: 1px solid var(--line); font-weight: 400; }
 .sc-tab thead th { color: var(--muted); border-top: 0; } .sc-tab tbody th { font-weight: 600; }
+/* Its model tryouts and drift check (the scorecard's league block), folded under the table. */
+.sc-try { margin-top: 8px; font-size: 13px; }
+.sc-try summary { cursor: pointer; padding: 6px 0; font-weight: 600; min-height: 24px; }
+.sc-try p { margin: 0 0 6px; } .sc-try ul { margin: 0 0 6px; padding-left: 18px; } .sc-try li { margin: 3px 0; }
+.sc-try li::marker { color: var(--ac); }
 
 /* Radar replay (src/radar/): a specimen label in the key's place, with its own play button, so the time bar, key, hex
    cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. */

@@ -19,6 +19,21 @@ that fails keeps last night's entry (the app's "as of" badge then turns amber), 
 issue opens (its log says the scorecard was written and which species failed); luna failing still stops the run
 before writing, as before. A backfilled entry, or one carried over from an earlier night, is never archived.
 
+**Bench challengers** ([`pipeline/league`](../league/README.md)): each night every challenger model (P3.1 and A1 in 2027)
+also runs on the same weather; only its strip dates are kept, under `shadows` (about 1 KB each), never on the map. The
+scorecard step seals them in their own archive (`live/archive_p31/`) and once a week grades them against the
+champion (`live/league.json`).
+
+**Eastern shadow track** ([`pipeline/league/east.py`](../league/east.py)): after the scorecard and league are
+written, the same step forecasts 28 eastern places with the heat clock (its own PRISM reads, 198 hexes) and once a
+week grades them; a failure there raises the alarm but never stops the map's files.
+
+**Drift alarm** ([`pipeline/league/drift.py`](../league/drift.py)): last, it splits each scored miss into the part
+the weather caused and the part the model did (`live/drift.json`), and opens a GitHub issue (with the step's
+`GH_TOKEN`) when a species' model looks stale. Then [`verdicts.py`](../league/verdicts.py) opens one issue per
+league or eastern verdict, once given, and [`summary.py`](../league/summary.py) adds the tryouts and drift state to
+the scorecard for the About panel.
+
 Adding a species: an entry in `registry.py`, then `python3 pipeline/live/build_static.py --effort <key>` (its effort
 profile, from the records its fetch script cached). The app finds the species' part of the file by its key
 (`src/species.ts`), so nothing else changes. The app fetches the file only when live mode is wanted (a link asks

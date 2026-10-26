@@ -2,6 +2,7 @@ import type { Explainer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import { CITIES, explainerHtml, spotHtml } from './explainer';
 import { CROSS } from './icons';
+import { warmthHtml } from './warmth';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -58,8 +59,8 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     // Where the code lives and where to report a problem: the same for every layer, so it closes the list.
     if (credits.length)
       credits.push(
-        { text: 'Code, data pipeline and method notes: github.com/neevliberman/hatch', href: 'https://github.com/neevliberman/hatch' },
-        { text: 'Spotted something wrong? Report it on GitHub', href: 'https://github.com/neevliberman/hatch/issues' },
+        { text: 'Code, data and method notes on GitHub', href: 'https://github.com/neevliberman/hatch' },
+        { text: 'Report a problem', href: 'https://github.com/neevliberman/hatch/issues' },
       );
     const credit = (c: { text: string; href?: string }) =>
       c.href ? `<a href="${esc(c.href)}" target="_blank" rel="noopener noreferrer">${esc(c.text)}<span class="sr"> (opens in a new tab)</span></a>` : esc(c.text);
@@ -88,6 +89,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
               .join('')
           : '<p class="muted">No layers are active.</p>'
       }
+      ${layers.length ? warmthHtml() : ''}
       ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}</div>`;
     drawer.querySelector('#drawer-close')!.addEventListener('click', () => toggle(false));
     // The grip is also a button, for a mouse or a keyboard on a narrow window: it swaps the two stops.
@@ -144,22 +146,24 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   // Drag the sheet between its stops. At the middle stop the whole sheet is the handle: up for the tall stop, down
   // to close. At the tall stop the title bar always drags; the text drags only once it is scrolled to the top (before
   // that, a downward swipe scrolls it back up). A quick flick counts even when it moved only a little.
-  let drag: { y0: number; t: number; dy: number; v: number; head: boolean; on: boolean } | null = null;
+  let drag: { x0: number; y0: number; t: number; dy: number; v: number; head: boolean; on: boolean } | null = null;
   drawer.addEventListener('touchstart', (e) => {
     if (drag?.on) return; // a second finger mid-drag: keep following the first
     drag = null;
     if (!sheet() || e.touches.length !== 1) return;
     const head = !full() || !!(e.target as Element).closest('.drawer-head');
-    if (head || drawer.scrollTop <= 0) drag = { y0: e.touches[0]!.clientY, t: e.timeStamp, dy: 0, v: 0, head, on: false };
+    if (head || drawer.scrollTop <= 0) drag = { x0: e.touches[0]!.clientX, y0: e.touches[0]!.clientY, t: e.timeStamp, dy: 0, v: 0, head, on: false };
   }, { passive: true });
   drawer.addEventListener('touchmove', (e) => {
     if (!drag) return;
     const dy = e.touches[0]!.clientY - drag.y0;
+    const dx = e.touches[0]!.clientX - drag.x0;
     if (!drag.on) {
       if (!drag.head && (dy < 0 || drawer.scrollTop > 0)) return void (drag = null); // reading on: let the text scroll
-      // At the top a pull down has nothing to scroll, so claim it now: once the browser starts a pan it stops letting us cancel moves.
+      if (Math.hypot(dx, dy) < 8) return; // a tap with a wobble (say on the close button) stays a tap, and a fingertip's first twitch decides nothing
+      // Claim the gesture only now that it is clearly a pull down: cancelling any earlier move (even a 1px jitter at
+      // the top of the text) makes Safari drop the whole gesture, so the text would never scroll.
       if (!drag.head && e.cancelable) e.preventDefault();
-      if (Math.abs(dy) < 8) return; // a tap with a wobble (say on the close button) stays a tap
       drag.on = true;
       drawer.classList.add('dragging');
     }

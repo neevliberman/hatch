@@ -32,6 +32,7 @@ class LiveSpecies:
     fits: Path              # the frozen leave-one-year-out fits: luna's fold_fits.json, or a species' result.json
     effort: Path            # typical within-season recording effort per state (build_static.py)
     last_doy: int | None = None   # one generation a year: every strip's window ends here. None = the replay's cut-offs
+    envelopes: Path | None = None  # the A1 shadow only (shadow_rule.py): cap each fold's bank, flag and widen
 
     def folds(self):
         """(spec, [params per fold], [{band: cut-off doy} per fold]), in fold order."""
@@ -45,7 +46,8 @@ class LiveSpecies:
     def model_hash(self):
         """First 12 hex digits of the sha256 of the frozen fits file: the season's model version, written into every
         forecast so the scorecard refuses to grade a forecast made by a different model."""
-        return hashlib.sha256(self.fits.read_bytes()).hexdigest()[:12]
+        extra = self.envelopes.read_bytes() if self.envelopes else b""     # the A1 shadow's model is fits + envelopes
+        return hashlib.sha256(self.fits.read_bytes() + extra).hexdigest()[:12]
 
     def archive(self, root: Path) -> Path:
         """This species' archive folder under the live archive root. Luna keeps the root itself (<season>/<issued>.json,

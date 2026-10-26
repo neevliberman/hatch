@@ -75,7 +75,7 @@ def offline(monkeypatch):
 
 
 def strip(d):
-    return {k: v for k, v in d.items() if k not in ("generated", "checks", "species")}
+    return {k: v for k, v in d.items() if k not in ("generated", "checks", "species", "shadows")}
 
 
 def test_nightly_file_is_luna_on_top_and_the_rest_under_species(offline):
@@ -95,6 +95,11 @@ def test_nightly_file_is_luna_on_top_and_the_rest_under_species(offline):
         assert len(e["median"]) == len(out["cells"]) and len(e["bands"]) == len(out["bands"])
         assert e["median"] != out["median"]                # its own model, not luna's
         assert e["sightings"] == [[1, 2027, 150, 40.0, -88.0, 0]]
+    # the bench (pipeline/league): P3.1's strip dates on the same weather, its own model, no sightings call of its own
+    sh = out["shadows"]["luna~p3.1-v1"]
+    assert out["checks"]["shadows_failed"] == []
+    assert sh["model"]["id"] == "p3.1-v1" and sh["model"]["hash"] == "a9fb5fe06cdb" and "sightings" not in sh
+    assert [b["band"] for b in sh["bands"]] == [b["band"] for b in out["bands"]] and sh["bands"] != out["bands"]
 
 
 def test_one_species_failing_keeps_its_last_entry(offline, monkeypatch):
@@ -125,6 +130,36 @@ def test_a_species_raising_systemexit_does_not_stop_luna(offline, monkeypatch):
     monkeypatch.setattr(L, "forecast_species", exits)
     out = L.build_all(2027, dt.date(2027, 5, 31), False, dt.date(2027, 6, 3))
     assert out["checks"]["species_failed"] == ["japanese-beetle"] and "firefly" in out["species"] and out["median"]
+
+
+def test_a1_shadow_caps_flags_and_widens(offline):
+    """A spring far warmer than any fitted one (10 degree-days every day from 1 March): A1 runs P3 on banks capped at
+    the fit's range, so its dates are no earlier than P3's; every strip is flagged and its likely range reaches the
+    usual date; P3's own strips are untouched."""
+    from live import scorecard
+    today, as_of = dt.date(2027, 6, 3), dt.date(2027, 5, 31)
+    out = L.build_all(2027, as_of, False, today, keys=["luna"])
+    a1 = out["shadows"]["luna~p3-a1-v1"]
+    assert a1["model"]["id"] == "p3-a1-v1" and a1["model"]["hash"] != out["model"]["hash"]
+    assert "flag" not in out["bands"][0]                   # the map's strips are P3's, unflagged
+    cal = scorecard.calendar(json.loads(registry.LUNA.replay.read_text()))
+    for p3, b in zip(out["bands"], a1["bands"]):
+        assert b["flag"] is True
+        assert b["onset"] >= p3["onset"] and b["peak"] >= p3["peak"]
+        for k, c in zip(("onset", "peak"), cal[b["band"]]):
+            assert b[f"{k}_lo"] <= round(c, 1) <= b[f"{k}_hi"]
+
+
+def test_a_broken_a1_file_only_fails_the_shadow(offline, monkeypatch, tmp_path):
+    from league import bench
+    import dataclasses
+    bad = tmp_path / "env.json"
+    bad.write_text("{not json")
+    a1 = dataclasses.replace(bench.BY_SLUG["luna~p3-a1-v1"], envelopes=bad)
+    monkeypatch.setattr(bench, "BENCH", [bench.BY_SLUG["luna~p3.1-v1"], a1])
+    out = L.build_all(2027, dt.date(2027, 5, 31), False, dt.date(2027, 6, 3), keys=["luna"])
+    assert out["checks"]["shadows_failed"] == ["luna~p3-a1-v1"] and list(out["shadows"]) == ["luna~p3.1-v1"]
+    assert out["bands"] and out["checks"]["species_failed"] == []
 
 
 def test_cell_mismatch_is_an_ordinary_error(offline):
@@ -196,7 +231,20 @@ def test_a_corrupt_species_archive_does_not_block_luna(tmp_path):
     assert failed == ["firefly"] and "luna" in out["layers"] and "firefly" not in out["layers"]
 
 
-def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_path, capsys):
+def no_east(monkeypatch, fail=False, calls=None):
+    """The eastern shadow track (pipeline/league/east.py) reads PRISM over the network in its own process: stubbed
+    here, recording how the scorecard calls it."""
+    def run(*a):
+        if calls is not None:
+            calls.append(a)
+        if fail:
+            raise RuntimeError("east down")
+    monkeypatch.setattr(S, "run_east", run)
+
+
+def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_path, capsys, monkeypatch):
+    calls = []
+    no_east(monkeypatch, calls=calls)
     live = live_file(firefly={})
     live["checks"]["species_failed"] = ["japanese-beetle"]
     (tmp_path / "latest.json").write_text(json.dumps(live))
@@ -211,6 +259,34 @@ def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_pa
     live["checks"]["species_failed"] = []
     (tmp_path / "latest.json").write_text(json.dumps(live))
     assert S.main(args) == 0
+    assert calls[-1] == (tmp_path, 2027, dt.date(2027, 10, 1), tmp_path / "latest.json")   # live-data folder, tonight's file
+    no_east(monkeypatch, fail=True)                     # the eastern track failing raises the alarm, after writing
+    capsys.readouterr()
+    assert S.main(args) == 1
+    assert "eastern shadow track failed" in capsys.readouterr().out
+    no_east(monkeypatch)
+    assert json.loads((tmp_path / "drift.json").read_text())["season"] == 2027      # the drift check ran too
+    from league import drift
+    real_drift = drift.run
+    monkeypatch.setattr(drift, "run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("drift down")))
+    assert S.main(args) == 1
+    assert "model-drift check failed" in capsys.readouterr().out
+    monkeypatch.setattr(drift, "run", real_drift)
+    assert S.main(args) == 0 and json.loads((tmp_path / "verdicts.json").read_text())["opened"] == {}
+    from league import verdicts
+    real_verdicts = verdicts.run
+    monkeypatch.setattr(verdicts, "run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    capsys.readouterr()
+    assert S.main(args) == 1 and "verdict notices failed" in capsys.readouterr().out
+    monkeypatch.setattr(verdicts, "run", real_verdicts)
+    assert S.main(args) == 0
+    card = json.loads((tmp_path / "scorecard.json").read_text())       # the app's league block rides in the file
+    assert card["league"]["season"] == 2027 and sorted(card["layers"]) == ["firefly", "luna"]
+    from league import summary
+    monkeypatch.setattr(summary, "attach", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    capsys.readouterr()
+    assert S.main(args) == 1 and "league summary failed" in capsys.readouterr().out
+    assert "layers" in json.loads((tmp_path / "scorecard.json").read_text())       # the scorecard itself still stands
 
 
 def test_importing_the_live_pipeline_patches_nothing():

@@ -1,0 +1,62 @@
+{
+ "past_1": {
+  "n_per_draw": 215,
+  "draws": 20,
+  "clock": 6.19,
+  "cal": 8.34,
+  "one": 7.15,
+  "clock_minus_one_ci": [
+   -1.63,
+   -0.07
+  ],
+  "clock_minus_cal_ci": [
+   -3.06,
+   -1.57
+  ]
+ },
+ "past_2": {
+  "n_per_draw": 213,
+  "draws": 20,
+  "clock": 5.43,
+  "cal": 7.25,
+  "one": 7.11,
+  "clock_minus_one_ci": [
+   -2.22,
+   -0.98
+  ],
+  "clock_minus_cal_ci": [
+   -2.91,
+   -1.1
+  ]
+ },
+ "past_3": {
+  "n_per_draw": 213,
+  "draws": 20,
+  "clock": 5.01,
+  "cal": 6.75,
+  "one": 7.11,
+  "clock_minus_one_ci": [
+   -2.63,
+   -1.4
+  ],
+  "clock_minus_cal_ci": [
+   -2.86,
+   -0.95
+  ]
+ },
+ "past_5": {
+  "n_per_draw": 184,
+  "draws": 20,
+  "clock": 4.85,
+  "cal": 6.42,
+  "one": 6.57,
+  "clock_minus_one_ci": [
+   -2.34,
+   -1.07
+  ],
+  "clock_minus_cal_ci": [
+   -2.79,
+   -0.66
+  ]
+ }
+}

@@ -34,13 +34,15 @@
   "2019-06-27T04:56:44Z"
  ],
  "start": 6,
- "grid": {
-  "n": 160,
-  "half_m": 120000.0,
-  "spacing_m": 1509.434,
-  "rows": "south to north",
-  "packing": "4 bits, high nibble first",
-  "projection": "azimuthal equidistant on a sphere, R 6370997 m, centred on the radar (Py-ART grid_from_radars)"
+ "polar": {
+  "rays": 720,
+  "gates": 448,
+  "gate_m": 250.0,
+  "first_m": 8125.0,
+  "first_az": 0,
+  "step_deg": 0.5,
+  "layout": "ray-major, north first, clockwise; gate centres at first_m + i x gate_m",
+  "packing": "4 bits, high nibble first"
  },
  "levels": {
   "none": 0,
@@ -53,20 +55,20 @@
    8.0,
    120.0
   ],
-  "rain_dropped": "20 dBZ or more with CC 0.95 or more"
+  "rain_dropped": "20 dBZ or more with CC 0.97 or more and ZDR under 3 dB"
  },
  "insect_check": {
-  "what": "cells of 25 dBZ or more, 8 to 120 km out, in scans with 100 or more of them",
-  "scans": 3,
+  "what": "cells of 25 dBZ or more, 8 to 120 km out, in scans with 1,000 or more of them",
+  "scans": 10,
   "cc_median": [
-   0.8,
-   0.81
+   0.82,
+   0.92
   ],
   "zdr_median_db": [
-   7.3,
-   7.4
+   6.7,
+   7.9
   ],
-  "rain_like_cells": 93
+  "rain_like_cells": 1767
  },
  "source": "NOAA NEXRAD Level II, KCLE, via https://unidata-nexrad-level2.s3.amazonaws.com"
 }

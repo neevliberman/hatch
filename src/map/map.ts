@@ -532,7 +532,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     const on = overlay.length > 0;
     const cut = on ? mid.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
     const at = cut < 0 ? mid.length : cut;
-    const dry = mid.reduce((d, l, i) => (/^water-|^(sea|lakes)-top$/.test(l.id) ? i + 1 : d), at);
+    const dry = mid.reduce((d, l, i) => (/^water-|^(sea|lakes)-top$|^shore-wet$/.test(l.id) ? i + 1 : d), at);
     deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid.slice(0, at), ...overlay, ...mid.slice(at, dry), ...(on ? overWater : []),
       ...mid.slice(dry), ...(on ? [] : rest), ...pickedBuilt, ...markerBuilt] });
   };

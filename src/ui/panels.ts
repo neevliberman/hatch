@@ -73,7 +73,7 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
             : '';
           // The fold button floats at the right end of the first card's first row of swatches: inside the card, over
           // nothing, and the rows below run full width.
-          const fold = i === 0 ? `<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the colour key">${CROSS}</button>` : '';
+          const fold = i === 0 ? `<button type="button" id="key-fold" class="lg-fold" aria-expanded="true" aria-label="Hide the key">${CROSS}</button>` : '';
           const items = lg.items?.length
             ? `<ul class="lg-items">${fold && `<li class="lg-x">${fold}</li>`}${lg.items
                 .map((it) => `<li><i class="sw ${it.shape}" style="--c:${it.color}"></i>${esc(it.label)}</li>`)
@@ -83,7 +83,7 @@ export function mountLegend(root: HTMLElement, registry: LayerRegistry): { autoF
           ${lg.note ? `<div class="lg-note">${esc(lg.note)}</div>` : ''}</div>`;
         })
         .join('') +
-      (layers.length ? `<button type="button" id="key-chip" class="lg-chip" aria-expanded="false" aria-label="Show the colour key">${swatches}<span>Key</span></button>` : '');
+      (layers.length ? `<button type="button" id="key-chip" class="lg-chip" aria-expanded="false" aria-label="Show the key">${swatches}<span>Key</span></button>` : '');
   };
   root.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('.lg-fold, .lg-chip');
@@ -138,6 +138,10 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
         }${
           card.link
             ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)}<span aria-hidden="true"> &#8599;</span><span class="sr"> (opens in a new tab)</span></a>`
+            : ''
+        }${
+          card.calendar
+            ? `<a class="probe-link" href="${esc(card.calendar.href)}" download="${esc(card.calendar.filename)}">${esc(card.calendar.label)}<span class="sr"> (downloads a calendar file)</span></a>`
             : ''
         }</div>`,
     )
