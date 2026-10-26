@@ -169,6 +169,41 @@ for (const [name, width, height, mobile] of shots) {
     await ctx.close();
   }
 }
+
+// Every species, in a past season and in the live one: zooming in must split the big hexagons (live once stayed at res 4).
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const probe = await ctx.newPage();
+  await probe.goto(`${origin}/?noauto`);
+  await probe.waitForFunction(() => document.querySelectorAll('#species option').length > 0 && !document.getElementById('loader'), null, { timeout: 15000 });
+  await probe.waitForTimeout(1500);
+  const keys = await probe.evaluate(() => [...document.querySelectorAll('#species option')].map((o) => o.value));
+  await ctx.close();
+  for (const key of keys) {
+    for (const season of ['2021', 'live']) {
+      const tag = `species ${key} ${season}`;
+      const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      const page = await c.newPage();
+      page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
+      await page.goto(`${origin}/?noauto&species=${key}&season=${season}&date=06-20`);
+      await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
+      await page.waitForTimeout(2500);
+      if (season === 'live' && (await page.evaluate(() => window.__hatch.current().mode())) !== 'live') {
+        await c.close(); // this species has no live forecast (yet)
+        continue;
+      }
+      const res = [];
+      for (const [lng, lat, z] of [[-87.9, 43.04, 7], [-87.9, 43.04, 8.6]]) {
+        await page.evaluate(([a, b, zz]) => window.__hatch.map.view([a, b], zz), [lng, lat, z]);
+        await page.waitForTimeout(2500);
+        res.push(await page.evaluate(() => window.__hatch.current().res()));
+      }
+      console.log(`${tag}: res at zoom 7 / 8.6 = ${res.join(' / ')}`);
+      if (res[0] < 5 || res[1] < res[0]) problems.push(`${tag}: hexagons did not split on zoom (res ${res.join(' then ')})`);
+      await c.close();
+    }
+  }
+}
 await browser.close();
 server.close();
 if (problems.length) {

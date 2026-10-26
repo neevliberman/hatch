@@ -12,7 +12,7 @@ import { doyToMs, LIVE, UNCONFIRMED, type ReplayFile } from './lunaData';
 import type { Live } from './liveData';
 import { APPROXIMATE, modelChecks, replayData, TYPICAL, windowCheck, type Mode, type Sighting } from './replayData';
 import { animating, hexFade, ripples } from './motion';
-import { fineQ, fineSource, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
+import { fineQ, fineSource, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, liveNotice, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
@@ -152,7 +152,9 @@ export function createOneGenerationLayer(
     // One request per season, not one per frame while it is on its way; a failed one is asked again later.
     if (!fine || (loading.get(m) ?? 0) > performance.now()) return;
     loading.set(m, Infinity);
-    void Promise.all([fine.fineLevel(5), fine.fineDays(5, m)]).then(([level, days]) => {
+    // Live has no finer forecast of its own: it borrows a typical year's local lean (see liveFineDays).
+    void Promise.all([fine.fineLevel(5), fine.fineDays(5, m === LIVE ? TYPICAL : m)]).then(([level, raw]) => {
+      const days = raw && level && live && m === LIVE ? liveFineDays(raw, level, (p) => live!.median[cellIndex.get(p) ?? -1], (p) => data.forecast[TYPICAL]![cellIndex.get(p) ?? -1]) : raw;
       if (!level || !days || days.length !== level.cells.length * 5) {
         loading.set(m, performance.now() + RETRY_MS); // missing, stale or offline: stay at res 4 for now
         return;
@@ -181,7 +183,7 @@ export function createOneGenerationLayer(
   /** Res 5 from FINE_ZOOM[5]; back to res 4 a little further out, so a zoom resting on the line doesn't flicker. */
   /** The level to draw and its days: res 5 only once the zoom has rested there (SETTLE_MS), not mid fly-to. */
   const resFor = (zoom: number): { res: number; days: Uint8Array | null } => {
-    if (isLive()) return { res: GRID_RES, days: null }; // live has no finer files: big hexagons at every zoom
+    if (mode === LIVE && !live) return { res: GRID_RES, days: null };
     if (fine && !hasFine && zoom >= FINE_ZOOM[5]! && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
     const want = hasFine && zoom >= FINE_ZOOM[5]! - (wantFine ? 0.3 : 0);
     if (want !== wantFine) {
@@ -262,7 +264,7 @@ export function createOneGenerationLayer(
   };
 
   /** Live hex card, as luna's: the stage first, the likely peak, the detail behind "More". Any number may be missing. */
-  const liveProbe = (cell: string, q: (number | null)[], seen: boolean, doy: number): ProbeCard => {
+  const liveProbe = (cell: string, q: (number | null)[], seen: boolean, doy: number, finer = false): ProbeCard => {
     const L = live!;
     const y = L.season;
     const i = cellIndex.get(cell);
@@ -272,8 +274,10 @@ export function createOneGenerationLayer(
     const label = stage === 'over' ? 'over' : STAGE_LABEL[stage];
     const lines: string[] = [];
     const more: string[] = [];
-    const lo = i === undefined ? null : L.lo[i]?.[2];
-    const hi = i === undefined ? null : L.hi[i]?.[2];
+    // A small hexagon's peak is the big one's shifted by its local lean; the range shifts with it.
+    const lean = finer && i !== undefined && q[2] != null && L.median[i]?.[2] != null ? q[2] - L.median[i]![2]! : 0;
+    const lo = i === undefined || L.lo[i]?.[2] == null ? null : L.lo[i]![2]! + lean;
+    const hi = i === undefined || L.hi[i]?.[2] == null ? null : L.hi[i]![2]! + lean;
     if (lo != null && hi != null) lines.push(lo === hi ? `Busiest day likely ${f(lo)}.` : `Busiest day likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Busiest day likely about ${f(q[2])}.`);
     const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
@@ -286,6 +290,7 @@ export function createOneGenerationLayer(
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
     more.push(`Real weather to ${asOf}, then forecast.`);
+    if (finer) more.push('Small hexagons: the forecast for the larger one, shifted by this spot\u2019s usual warmth.');
     const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar(one, key, y, lo, hi) : undefined;
     return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
   };
@@ -298,6 +303,7 @@ export function createOneGenerationLayer(
     setLive(l) {
       live = l;
       profiles.delete(LIVE);
+      fineDays.delete(LIVE);
       if (mode === LIVE) shown = sightingsFor(mode);
     },
     words,
@@ -471,7 +477,7 @@ export function createOneGenerationLayer(
       }
       const at = lookup(lngLat);
       if (!at) return null;
-      if (isLive()) return liveProbe(at.cell, at.q, at.seen, doy);
+      if (isLive()) return liveProbe(at.parent, at.q, at.seen, doy, at.cell !== at.parent);
       const [q05, q25, q50, q75] = at.q;
       // Same shape as the luna card: one answer up front, the detail behind "More".
       const stage = stageAt(at.q, doy);

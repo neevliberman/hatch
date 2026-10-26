@@ -547,13 +547,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         bad.bad.forEach((m) => fail(`with a live card open, ${m}`));
         if (bad.scrolls) fail('page scrolls');
       }
-      // Scrub past "today": the label says forecast. Then zoom in close: live stays on the big hexagons.
+      // Scrub past "today": the label says forecast. Then zoom in close: live splits into finer hexagons too.
       await page.evaluate(() => window.__hatch.time.step(10));
       await page.waitForTimeout(200);
       if (served !== null && (await page.locator('#t-doy').textContent()) !== 'forecast') fail('a day after "today" is not marked forecast');
       await page.evaluate(() => window.__hatch.map.view([-87.9, 42.0], 8.6));
-      await page.waitForTimeout(1200);
-      if ((await page.evaluate(() => window.__hatch.luna.res())) !== 4) fail('live mode switched to finer hexagons');
+      await page.waitForFunction(() => window.__hatch.luna.res() > 4, null, { timeout: 8000 }).catch(() => {});
+      if ((await page.evaluate(() => window.__hatch.luna.res())) <= 4) fail('live mode stayed on the big hexagons when zoomed in');
       if (label === 'in-season default') {
         // About panel: the live card and the weather credits.
         await page.locator('#info-btn').click();

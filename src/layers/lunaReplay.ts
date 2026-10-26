@@ -25,7 +25,7 @@ import {
   type Sighting,
 } from './lunaData';
 import { animating, hexFade, ripples } from './motion';
-import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
+import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
 import { modelChecks, windowCheck } from './replayData';
@@ -369,7 +369,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const key = `${res}/${mode}`;
     if ((loading.get(key) ?? 0) > performance.now()) return;
     loading.set(key, Infinity);
-    void Promise.all([fineLevel(res), fineDays(res, mode)]).then(([level, days]) => {
+    const m = mode;
+    // Live has no finer forecast of its own: it borrows a typical year's local lean (see liveFineDays).
+    void Promise.all([fineLevel(res), fineDays(res, m === LIVE ? TYPICAL : m)]).then(([level, raw]) => {
+      const days = raw && level && live && m === LIVE ? liveFineDays(raw, level, (p) => live!.median[cellIndex.get(p) ?? -1], (p) => data.forecast[TYPICAL]![cellIndex.get(p) ?? -1]) : raw;
       if (!level || !days || days.length !== level.cells.length * 5) {
         loading.set(key, performance.now() + RETRY_MS); // missing, stale or offline: stay coarser, ask again later
         return;
@@ -398,7 +401,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   };
   /** Finest level at or below the wanted one that can be drawn now, and the days to draw it with. */
   const pickRes = (want: number): { res: number; days: Uint8Array | null } => {
-    if (mode === LIVE) return { res: 4, days: null }; // live has no finer files: big hexagons at every zoom
+    if (mode === LIVE && !live) return { res: 4, days: null };
     if (!fineLevels.length && want > 4 && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
     // Going finer waits until the zoom has rested; going coarser (or staying) is immediate.
     if (want > shownRes && performance.now() - wantSince < SETTLE_MS) want = shownRes;
@@ -478,7 +481,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   };
 
   /** Live hex card: kept short (the map comes first). Every number in the file may be missing for a cell. */
-  const liveProbe = (cell: string, q: (number | null)[], seen: boolean, doy: number): ProbeCard => {
+  const liveProbe = (cell: string, q: (number | null)[], seen: boolean, doy: number, fine = false): ProbeCard => {
     const L = live!;
     const y = L.season;
     const i = cellIndex.get(cell);
@@ -489,8 +492,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const title = `Luna moth: ${STAGE_LABEL[stage]} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`;
     const lines: string[] = [];
     const more: string[] = [];
-    const lo = i === undefined ? null : L.lo[i]?.[2];
-    const hi = i === undefined ? null : L.hi[i]?.[2];
+    // A small hexagon's peak is the big one's shifted by its local lean; the range shifts with it.
+    const lean = fine && i !== undefined && q[2] != null && L.median[i]?.[2] != null ? q[2] - L.median[i]![2]! : 0;
+    const lo = i === undefined || L.lo[i]?.[2] == null ? null : L.lo[i]![2]! + lean;
+    const hi = i === undefined || L.hi[i]?.[2] == null ? null : L.hi[i]![2]! + lean;
     if (lo != null && hi != null) lines.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
     else if (q[2] != null) lines.push(`Peak likely about ${f(q[2])}.`);
     const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
@@ -504,6 +509,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const n = shown.filter((s) => s.cell === cell).length;
     if (n) more.push(`${n} sighting${n > 1 ? 's' : ''} here this season.`);
     more.push(`Real weather to ${asOf}, then forecast.`);
+    if (fine) more.push('Small hexagons: the forecast for the larger one, shifted by this spot\u2019s usual warmth.');
     const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar('Luna moth', 'luna-moth', y, lo, hi) : undefined;
     return { title, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
   };
@@ -738,7 +744,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       }
       const at = lookup(lngLat);
       if (!at) return null;
-      if (isLive()) return liveProbe(at.cell, at.q, at.seen, doy);
+      if (isLive()) return liveProbe(at.parent, at.q, at.seen, doy, at.cell !== at.parent);
       const fine = shownRes > 4;
       const q = at.q;
       const [q05, q25, q50, q75] = q;
