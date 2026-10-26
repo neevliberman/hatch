@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   engine:
-    name: desktop (${{ matrix.suite == 'fine' && 'fine' || matrix.engine }})
+    name: desktop (${{ matrix.suite == 'fine' && 'fine' || matrix.engine }}${{ matrix.shard && format(' {0}', matrix.shard) || '' }})
     runs-on: ubuntu-latest
     # Keep the tag in step with the playwright version in package.json: the image's browsers are built for it.
     container: mcr.microsoft.com/playwright:v1.56.1-noble
@@ -27,7 +27,9 @@ jobs:
       matrix:
         include:
           # dist/ for Chromium: the live-mode checks serve it over http. dist-single/ is what the screens load.
-          - { suite: desktop, engine: chromium, build: 'build:all' }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 1 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 2 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 3 }
           - { suite: desktop, engine: firefox, build: 'build:single' }
           - { suite: desktop, engine: webkit, build: 'build:single' }
           # Zoomed in (scripts/fine.mjs, Chromium, dist/ over http): the finer hexagons load, draw, and give a card when
@@ -36,6 +38,7 @@ jobs:
     env:
       HOME: /root        # Firefox refuses to start as root with the runner's HOME
       ENGINES: ${{ matrix.engine }}
+      SHARD: ${{ matrix.shard && format('{0}/3', matrix.shard) || '1/1' }}   # Chromium is split three ways: it is most of the wait
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +52,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-screenshots-${{ matrix.suite }}-${{ matrix.engine }}
+          name: desktop-screenshots-${{ matrix.suite }}-${{ matrix.engine }}${{ matrix.shard && format('-{0}', matrix.shard) || '' }}
           path: |
             screenshots/desktop
             screenshots/fine
