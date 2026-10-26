@@ -152,6 +152,21 @@ def ensure_daymet(cells, cache, workers=4):
     return []
 
 
+def reproduces(got, want, max_share=0.001):
+    """True when `got` is the shipped res-4 forecast `want`, give or take a day in a handful of values (at most
+    `max_share` of them): a refetched iNaturalist background (effort) can move a rare value by one day, and refitting
+    is not what this step does."""
+    n = bad = 0
+    for m in want:
+        for a, b in zip(got[m], want[m]):
+            for x, y in zip(a, b):
+                n += 1
+                if x != y and (x is None or y is None or abs(x - y) > 1):
+                    return False
+                bad += x != y
+    return got.keys() == want.keys() and bad <= max_share * n
+
+
 # ---------------------------------------------------------------- one level
 def level_forecast(cells, years, spec, params, cuts, E, cache, fallback):
     """Forecast for every cell, in chunks. fallback(cell) -> parent's {mode: [q..]} for cells without Daymet."""

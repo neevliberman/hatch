@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Finer firefly hexes (res 5, ~17 km) for zoomed-in views: public/fine-firefly/, same format as public/fine/.
+"""Finer firefly hexes (res 5, ~17 km, and res 6, ~6 km) for zoomed-in views: public/fine-firefly/, same format as public/fine/.
 
 Same idea as pipeline/replay/build_fine.py: nothing is refit. The leave-one-year-out fits come from
 pipeline/firefly/result.json (written by build_firefly.py), with every band's window ending on day 240.
 Each finer hex uses the 1 km Daymet temperatures at its own centre. "Seen" and Daymet gaps come from the res-4
 parent. Refuses to write unless those fits reproduce public/firefly-replay.json's res-4 forecast exactly.
 
-Res 6 (~27,000 cells, hours of Daymet calls) is not built yet; the app stays at res 5 for fireflies.
-Run after build_firefly.py: python3 pipeline/firefly/build_fine_firefly.py
+Res 6 is ~27,000 cells, hours of Daymet calls the first time (cached after).
+Run after build_firefly.py: python3 pipeline/firefly/build_fine_firefly.py [--res 5 6]
 """
 import json
 import sys
@@ -28,10 +28,12 @@ from firefly import build_firefly as FF  # noqa: E402
 from firefly.fetch import EFFORT, RAW  # noqa: E402
 
 OUT = ROOT / "public" / "fine-firefly"
-RES = 5
+RESOLUTIONS = (5, 6)
 
 
 def main():
+    argv = sys.argv[1:]
+    levels = tuple(int(a) for a in argv[argv.index('--res') + 1:] if a.isdigit()) if '--res' in argv else RESOLUTIONS
     import pandas as pd
     from fit import data as fdata, model as M
     t0 = time.time()
@@ -47,14 +49,19 @@ def main():
 
     r4 = replay["cells"]
     f4 = BR.cell_forecasts(r4, BF.daily_dd(r4, cache), years, params, cuts, E, spec)
-    if f4 != replay["forecast"]:
+    if not BF.reproduces(f4, replay["forecast"]):
         raise SystemExit("result.json's fold fits do not reproduce public/firefly-replay.json; rerun build_firefly.py")
     print("res 4 reproduced", flush=True)
 
     rec_hexes = BR.clean(pd.read_parquet(RAW)).hex.unique()
     seen4 = dict(zip(r4, replay["seen"]))
     fc4 = {c: {m: replay["forecast"][m][i] for m in replay["forecast"]} for i, c in enumerate(r4)}
-    _, _, cells = BF.order_cells(BR.core_cells(res=RES))
+    for res in levels:
+        build_level(res, replay, years, params, cuts, E, spec, rec_hexes, seen4, fc4, cache, t0)
+
+
+def build_level(res, replay, years, params, cuts, E, spec, rec_hexes, seen4, fc4, cache, t0):
+    _, _, cells = BF.order_cells(BR.core_cells(res=res))
     parents = sorted({h3.cell_to_parent(c, BF.PARENT_RES) for c in cells})
     extra = [p for p in parents if p not in seen4]
     if extra:
@@ -66,17 +73,20 @@ def main():
     fc, n_bad = BF.level_forecast(cells, years, spec, params, cuts, E, cache,
                                   lambda c: fc4[h3.cell_to_parent(c, BF.PARENT_RES)])
     seen = [seen4[h3.cell_to_parent(c, BF.PARENT_RES)] for c in cells]
-    d = OUT / f"r{RES}"
+    d = OUT / f"r{res}"
     d.mkdir(parents=True, exist_ok=True)
     (d / "cells.bin").write_bytes(BF.encode_cells(cells, seen))
     for m, rows in fc.items():
         (d / f"{m}.bin").write_bytes(BF.encode_mode(rows))
+    old = OUT / "manifest.json"
+    levels = json.loads(old.read_text())["levels"] if old.exists() else {}
+    levels[str(res)] = {"cells": len(cells), "seen_cells": int(sum(seen)), "daymet_filled": n_bad}
     manifest = {"version": 1, "generated": replay["generated"], "model": replay["model"]["id"],
                 "offset": BF.OFFSET, "never": BF.NEVER, "quantiles": replay["quantiles"],
                 "modes": [str(int(y)) for y in years] + ["typical"], "parent_res": BF.PARENT_RES,
-                "levels": {str(RES): {"cells": len(cells), "seen_cells": int(sum(seen)), "daymet_filled": n_bad}}}
+                "levels": dict(sorted(levels.items()))}
     (OUT / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
-    print(f"res {RES}: {len(cells)} cells, {n_bad} took the parent's; done in {time.time() - t0:.0f}s")
+    print(f"res {res}: {len(cells)} cells, {n_bad} took the parent's; done in {time.time() - t0:.0f}s")
 
 
 if __name__ == "__main__":

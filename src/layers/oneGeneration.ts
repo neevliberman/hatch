@@ -124,89 +124,104 @@ export function createOneGenerationLayer(
     return crowd.k + (1 - crowd.k) * Math.min(1, Math.max(0, (zoom - 6) / 1.5));
   };
 
-  // ---- finer hexes (res 5 only), from the species' fine/ folder, loaded when the reader zooms in
+  // ---- finer hexes (res 5, and res 6 where the species has it), from the species' fine/ folder, loaded when the reader zooms in
   type Cell = { id: string; i: number; seen: boolean };
+  interface Shown {
+    level: FineLevel;
+    data: Cell[];
+    unseen: Cell[];
+  }
   const fine = cfg.fine ? fineSource(cfg.fine) : null;
-  let fineLevel: { level: FineLevel; data: Cell[]; unseen: Cell[] } | null = null;
-  const fineDays = new Map<Mode, Uint8Array>();
-  let hasFine = false;
-  let wantFine = false;
+  const fineShown = new Map<number, Shown>();
+  const fineDays = new Map<string, Uint8Array>(); // `${res}/${mode}`
+  let fineLevels: number[] = [];
+  let wantRes = GRID_RES;
   let wantSince = 0;
   let shownRes = GRID_RES;
-  /** The res-5 days drawn last: kept on screen while a season switch loads its own (no flash back to res 4). */
+  /** The days drawn last at shownRes: kept on screen while a season switch loads its own (no flash back to coarse). */
   let shownDays: Uint8Array | null = null;
-  /** Requests on their way or recently failed ('manifest', or a season): no retry before RETRY_MS. */
+  /** Requests on their way or recently failed ('manifest', or `${res}/${mode}`): no retry before RETRY_MS. */
   const loading = new Map<string, number>();
   const loadManifest = () => {
     if (!fine) return;
     loading.set('manifest', Infinity);
     void fine.fineManifest().then((m) => {
-      hasFine = !!m?.levels['5'];
+      fineLevels = m ? Object.keys(m.levels).map(Number).filter((r) => r > GRID_RES) : [];
       loading.set('manifest', m ? Infinity : performance.now() + RETRY_MS);
-      if (hasFine) onData(); // a zoomed-in view drawn before the manifest arrived can sharpen now
+      if (fineLevels.length && wantRes > GRID_RES) onData(); // a zoomed-in view drawn before the manifest arrived can sharpen now
     });
   };
   loadManifest();
-  const loadFine = () => {
+  const loadFine = (res: number) => {
     const m = mode;
-    // One request per season, not one per frame while it is on its way; a failed one is asked again later.
-    if (!fine || (loading.get(m) ?? 0) > performance.now()) return;
-    loading.set(m, Infinity);
+    const k = `${res}/${m}`;
+    // One request per season and level, not one per frame while it is on its way; a failed one is asked again later.
+    if (!fine || (loading.get(k) ?? 0) > performance.now()) return;
+    loading.set(k, Infinity);
     // Live has no finer forecast of its own: it borrows a typical year's local lean (see liveFineDays).
-    void Promise.all([fine.fineLevel(5), fine.fineDays(5, m === LIVE ? TYPICAL : m)]).then(([level, raw]) => {
+    void Promise.all([fine.fineLevel(res), fine.fineDays(res, m === LIVE ? TYPICAL : m)]).then(([level, raw]) => {
       const days = raw && level && live && m === LIVE ? liveFineDays(raw, level, (p) => live!.median[cellIndex.get(p) ?? -1], (p) => data.forecast[TYPICAL]![cellIndex.get(p) ?? -1]) : raw;
       if (!level || !days || days.length !== level.cells.length * 5) {
-        loading.set(m, performance.now() + RETRY_MS); // missing, stale or offline: stay at res 4 for now
+        loading.set(k, performance.now() + RETRY_MS); // missing, stale or offline: stay coarser for now
         return;
       }
-      loading.delete(m);
-      if (!fineLevel) {
-        const data = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
-        fineLevel = { level, data, unseen: data.filter((c) => !c.seen) };
+      loading.delete(k);
+      if (!fineShown.has(res)) {
+        const fc = level.cells.map((id, i) => ({ id, i, seen: level.seen[i] === 1 }));
+        fineShown.set(res, { level, data: fc, unseen: fc.filter((c) => !c.seen) });
       }
-      remember(fineDays, m, days, KEEP_SEASONS, (k) => k === mode || k === m);
-      if (wantFine && m === mode) onData();
+      remember(fineDays, k, days, KEEP_SEASONS * Math.max(1, fineLevels.length), (x) => x.endsWith(`/${mode}`) || x.endsWith(`/${m}`));
+      if (wantRes >= res && m === mode) onData();
     });
   };
-  // Zoomed back out: after RELEASE_MS at res 4, let the res-5 hexes go (see RELEASE_MS).
+  // Zoomed back out: after RELEASE_MS at res 4, let the finer levels go (see RELEASE_MS).
   let releaseTimer = 0;
   const releaseLater = () => {
-    if (releaseTimer || !fineLevel) return;
+    if (releaseTimer || !fineShown.size) return;
     releaseTimer = window.setTimeout(() => {
       releaseTimer = 0;
-      if (shownRes !== GRID_RES || wantFine) return;
-      fineLevel = null;
+      if (shownRes !== GRID_RES || wantRes > GRID_RES) return;
+      fineShown.clear();
       fineDays.clear();
       fine?.forget();
     }, RELEASE_MS);
   };
-  /** Res 5 from FINE_ZOOM[5]; back to res 4 a little further out, so a zoom resting on the line doesn't flicker. */
-  /** The level to draw and its days: res 5 only once the zoom has rested there (SETTLE_MS), not mid fly-to. */
+  /** The level the zoom asks for: finer from FINE_ZOOM[r], coarser a little further out, so a zoom resting on a line doesn't flicker. */
+  const resForZoom = (zoom: number) => {
+    let r = wantRes;
+    while (r < 6 && zoom >= FINE_ZOOM[r + 1]!) r++;
+    while (r > GRID_RES && zoom < FINE_ZOOM[r]! - 0.3) r--;
+    if (r !== wantRes) {
+      wantSince = performance.now();
+      if (r > shownRes) setTimeout(onData, SETTLE_MS + 20); // look again once the zoom has rested
+    }
+    return (wantRes = r);
+  };
+  /** Finest level at or below the wanted one that can be drawn now, and its days: finer only once the zoom has rested (SETTLE_MS). */
   const resFor = (zoom: number): { res: number; days: Uint8Array | null } => {
     if (mode === LIVE && !live) return { res: GRID_RES, days: null };
-    if (fine && !hasFine && zoom >= FINE_ZOOM[5]! && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
-    const want = hasFine && zoom >= FINE_ZOOM[5]! - (wantFine ? 0.3 : 0);
-    if (want !== wantFine) {
-      wantSince = performance.now();
-      if (want) setTimeout(onData, SETTLE_MS + 20); // look again once the zoom has rested
+    let want = resForZoom(zoom);
+    if (fine && !fineLevels.length && want > GRID_RES && (loading.get('manifest') ?? 0) <= performance.now()) loadManifest();
+    if (want > shownRes && performance.now() - wantSince < SETTLE_MS) want = shownRes;
+    for (let r = want; r > GRID_RES; r--) {
+      if (!fineLevels.includes(r)) continue;
+      const days = fineDays.get(`${r}/${mode}`);
+      if (!days) loadFine(r);
+      if (fineShown.has(r) && days) return { res: r, days };
+      // Old colours only while the new season's request is out: after a failure they'd sit under the wrong season.
+      if (r === shownRes && shownDays && loading.get(`${r}/${mode}`) === Infinity) return { res: r, days: shownDays };
     }
-    wantFine = want;
-    if (!wantFine) return { res: GRID_RES, days: null };
-    const days = fineDays.get(mode);
-    if (!(fineLevel && days)) loadFine();
-    if (shownRes !== 5 && performance.now() - wantSince < SETTLE_MS) return { res: GRID_RES, days: null };
-    if (fineLevel && days) return { res: 5, days };
-    // Old colours only while the new season's request is out: after a failure they'd sit under the wrong season.
-    return shownRes === 5 && shownDays && loading.get(mode) === Infinity ? { res: 5, days: shownDays } : { res: GRID_RES, days: null };
+    return { res: GRID_RES, days: null };
   };
 
   /** Forecast quantiles, "seen", the cell id and its res-4 parent at lngLat, on the level on screen. */
   const lookup = (lngLat: [number, number]) => {
     const days = shownDays; // what is drawn (for a moment after a season switch, the last season's colours)
-    if (shownRes === 5 && fineLevel && days) {
-      const cell = latLngToCell(lngLat[1], lngLat[0], 5);
-      const i = fineLevel.level.index.get(cell);
-      return i === undefined ? null : { cell, q: fineQ(days, i), seen: fineLevel.level.seen[i] === 1, parent: parentOf(cell) };
+    const lv = fineShown.get(shownRes);
+    if (shownRes > GRID_RES && lv && days) {
+      const cell = latLngToCell(lngLat[1], lngLat[0], shownRes);
+      const i = lv.level.index.get(cell);
+      return i === undefined ? null : { cell, q: fineQ(days, i), seen: lv.level.seen[i] === 1, parent: parentOf(cell) };
     }
     const cell = latLngToCell(lngLat[1], lngLat[0], GRID_RES);
     const i = cellIndex.get(cell);
@@ -303,7 +318,7 @@ export function createOneGenerationLayer(
     setLive(l) {
       live = l;
       profiles.delete(LIVE);
-      fineDays.delete(LIVE);
+      for (const k of [...fineDays.keys()]) if (k.endsWith(`/${LIVE}`)) fineDays.delete(k);
       if (mode === LIVE) shown = sightingsFor(mode);
     },
     words,
@@ -366,7 +381,7 @@ export function createOneGenerationLayer(
         shownRes = res;
         queueMicrotask(onData); // the card and its outline follow the new level
       }
-      const hexes = days ? fineLevel!.data : cells;
+      const hexes = days ? fineShown.get(res)!.data : cells;
       const radiusScale = dotScale(zoom);
       const qOf = (c: Cell) => (days ? fineQ(days, c.i) : forecast()[c.i]);
       const filter = {
@@ -401,7 +416,7 @@ export function createOneGenerationLayer(
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
           id: `${key}-unseen-r${res}`,
           opacity: wash === undefined ? 1 : Math.min(1, wash / 900),
-          data: days ? fineLevel!.unseen : unseen,
+          data: days ? fineShown.get(res)!.unseen : unseen,
           getHexagon: (c) => c.id,
           getFillColor: palette.stripes,
           stroked: false,
@@ -510,13 +525,13 @@ export function createOneGenerationLayer(
       }
       // Sightings are counted on the zoomed-out hexagon: a small one would almost always have none.
       const here = sightingsFor(mode).filter((s) => s.cell === at.parent);
-      const where = shownRes === 5 ? 'the larger hexagon around it' : 'this hexagon';
+      const where = shownRes > GRID_RES ? 'the larger hexagon around it' : 'this hexagon';
       more.push(
         here.length
           ? `${here.length} sighting${here.length > 1 ? 's' : ''} in ${where}${mode === TYPICAL ? ' (all years)' : ''}.`
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
-      if (shownRes === 5) more.push('Small hexagon: uses its own local temperatures. Accuracy is only checked for whole strips.');
+      if (shownRes > GRID_RES) more.push('Small hexagon: uses its own local temperatures. Accuracy is only checked for whole strips.');
       return { title: `${one}: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
     },
 
@@ -542,10 +557,8 @@ export function createOneGenerationLayer(
         cfg.effortNote,
         'Gray dots: rough location, so the dot may be off.',
         'Striped hexagons: no sightings nearby, ever, so nothing to check against.',
-        ...(isLive()
-          ? ['This year\u2019s forecast has big hexagons only.']
-          : hasFine
-          ? ['Zoom in for smaller hexagons, about 17 km wide. Each uses its own center’s temperatures. Unchecked at that scale, so a small hexagon’s date is no surer than a big one’s. Its card counts the big hexagon’s sightings.']
+        ...(fineLevels.length
+          ? [isLive() ? `Zoom in for smaller hexagons, down to about ${fineLevels.includes(6) ? 6 : 17} km wide. Each is the big one’s forecast shifted by its spot’s usual warmth. Unchecked at that scale. Its card counts the big hexagon’s sightings.` : `Zoom in for smaller hexagons, down to about ${fineLevels.includes(6) ? 6 : 17} km wide. Each uses its own center’s temperatures. Unchecked at that scale, so a small hexagon’s date is no surer than a big one’s. Its card counts the big hexagon’s sightings.`]
           : [`No small hexagons for ${plural}: zooming keeps the big ones.`]),
         `A hexagon’s card gives a "peak likely" window. In the ${data.scores.length} strip-years checked, 8 in 10 peaks fell within ${Math.round(-pk[0])} days early to ${Math.round(pk[1])} days late of the forecast.` +
           (data.interval?.checked
