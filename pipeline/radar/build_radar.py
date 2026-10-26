@@ -62,6 +62,15 @@ EVENTS = {
         # The swarm leaves the western basin 60 to 120 km from the radar, so this one keeps 120 km (1.5 km cells).
         "reach_km": 120,
     },
+    "kdvn-2012-06-23": {
+        "site": "KDVN",
+        "lat": 41.6117,
+        "lon": -90.5808,
+        # Evening of Saturday 23 June 2012, CDT (UTC-5): 8:55 pm to 10:35 pm. NWS La Crosse: the emergence began just after 9 pm.
+        "from": "2012-06-24T01:55:00Z",
+        "to": "2012-06-24T03:35:00Z",
+        "start": "2012-06-24T02:02:00Z",
+    },
 }
 
 RAYS = 720  # one per 0.5 degree, north first, clockwise

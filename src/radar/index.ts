@@ -4,5 +4,6 @@
 export const RADAR_HEAD = 'Mayfly hatches on radar';
 export const RADAR_LINKS: { id: string; label: string; title: string }[] = [
   { id: 'karx-2014-07-20', label: 'Mississippi, 2014', title: 'The Mississippi at La Crosse, Wisconsin, 20 July 2014' },
+  { id: 'kdvn-2012-06-23', label: 'Quad Cities, 2012', title: 'The Mississippi at Davenport, Iowa, on the Quad Cities radar, 23 June 2012' },
   { id: 'kcle-2019-06-26', label: 'Lake Erie, 2019', title: 'Western Lake Erie, on the Cleveland radar, 26 June 2019' },
 ];

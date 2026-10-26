@@ -1,12 +1,13 @@
 # Radar replays
 
-Some evenings a weather radar sees insects. The app replays two evenings when a National Weather Service radar
-watched a cloud of burrowing mayflies (*Hexagenia*) come off the water (About, "Real mayfly hatches on radar"; or
+Some evenings a weather radar sees insects. The app replays three evenings when a National Weather Service radar
+watched a cloud of burrowing mayflies (*Hexagenia*) come off the water (the Quad Cities one is documented as a mayfly emergence by NWS La Crosse, not as a species count) (About, "Real mayfly hatches on radar"; or
 `?radar=<id>`):
 
 | id | Radar | Evening (local) | Pack |
 |---|---|---|---|
 | `karx-2014-07-20` | KARX La Crosse, Wisconsin | Sun 20 July 2014, Mississippi River (CDT) | 207,426 B, 28 scans, 80 km |
+| `kdvn-2012-06-23` | KDVN Davenport, Iowa | Sat 23 June 2012, Mississippi River north of the Quad Cities (CDT) | 493,719 B, 23 scans, 80 km |
 | `kcle-2019-06-26` | KCLE Cleveland, Ohio | Wed 26 June 2019, western Lake Erie (EDT) | 344,329 B, 28 scans, 120 km |
 
 Their code and frames load only when one is opened (a normal visit carries only the short list of links), and the
@@ -22,6 +23,7 @@ event.
 python3 -m venv /tmp/radar-venv && /tmp/radar-venv/bin/pip install arm-pyart==2.3.0
 /tmp/radar-venv/bin/python pipeline/radar/build_radar.py karx-2014-07-20 --cache /tmp/nexrad
 /tmp/radar-venv/bin/python pipeline/radar/build_radar.py kcle-2019-06-26 --cache /tmp/nexrad
+/tmp/radar-venv/bin/python pipeline/radar/build_radar.py kdvn-2012-06-23 --cache /tmp/nexrad
 ```
 
 The scans come from Unidata's public mirror of the NOAA archive (`unidata-nexrad-level2`, no account needed) and are
@@ -106,6 +108,38 @@ doppler radars are both picking up on a huge swarm of Mayflies over the western 
 Detroit, 23 June 2022). The radar agrees (ZDR 6 to 7.5 dB, depolarisation ratio about -7 dB), but the swarm is a narrow
 band near Sandusky with a CC of 0.85 to 0.94, smaller and less clear-cut than 2019.
 
+## The Quad Cities evening: 23 June 2012, KDVN
+
+**What was reported that night.** The NWS La Crosse page "Mayfly radar events" records for 23 June 2012 "a massive mayfly
+emergence ... along the Mississippi River beginning just after 9 pm", echoes carried north at 3,000+ ft, and "the NWS
+radar in Davenport, Iowa detected the emergence as well", along the river up to Bellevue, Illinois (none at Dubuque, too
+far out for the beam): https://www.weather.gov/arx/mayfly_tracking. That page is the only source used; no news report
+or paper was read for this night, and it gives no times for Davenport beyond "just after 9 pm" and a loop to just after 10:30 pm.
+
+**What the radar shows.** KDVN scans 01:55 to 03:35 UTC on 24 June (8:55 to 10:35 pm CDT), 23 scans about 4 minutes apart;
+the replay starts at 9:02 pm. Before 9 pm the river is quiet. From 9:02 pm a narrow plume builds along the Mississippi
+20 to 70 km north-northeast of the radar (bearing 10 to 45 degrees), is largest around 9:40 pm and has thinned to almost nothing by 10:30 pm.
+
+Insect test, by hand, on the plume only (bearing 10 to 45 degrees, 20 to 70 km, gates of 20 dBZ or more; every second scan):
+
+| UTC (CDT) | Gates | CC, median | ZDR, median |
+|---|---|---|---|
+| 02:07 (9:07 pm) | 794 | 0.97 | 7.8 dB |
+| 02:24 (9:24 pm) | 1,357 | 0.96 | 7.9 dB |
+| 02:41 (9:41 pm) | 2,053 | 0.92 | 7.9 dB |
+| 03:08 (10:08 pm) | 431 | 0.93 | 7.9 dB |
+| 03:25 (10:25 pm) | 83 | 0.91 | 7.9 dB |
+
+ZDR sits at the files' ceiling and CC is 0.91 to 0.97, higher than La Crosse and like Lake Erie's young, dense swarm; rain is
+CC 0.99+ and ZDR near 1. So the plume reads as insects. This was not checked against birds or bats.
+
+**Caution: the whole-scan check in `meta.json` is not clean here.** Its median over all 25 dBZ cells goes to CC 1.00 and ZDR about
+1 dB after 9:37 pm (34,843 rain-like gates dropped), because the same scans also carry showers south-west of the radar and
+ground clutter around it, which the replay draws faintly as other echo. Only the plume is read as insects, and the
+card says "Other echoes are not mayflies". The caption is "Echoes consistent with mayflies", not a count. Also: the first
+frames (about 8:55 pm) hold only clutter and showers, so the replay starts at 9:02 pm; the pack is larger (494 KB) than
+the others because of that extra echo.
+
 ## Honest limits
 
 - Each is a replay of one evening, not a count and not live. Echo strength stands for how much is in the air, roughly.
@@ -128,7 +162,8 @@ numbers say. Each pack adds 15 to 25 KB, fetched only by someone who opens it.
 
 ## Sources
 
-- NOAA NEXRAD Level II, KARX, 21 July 2014 00:36 to 05:01 UTC, and KCLE, 27 June 2019 01:46 to 04:56 UTC (public
+- NWS La Crosse, "Mayfly radar events" (23 June 2012): https://www.weather.gov/arx/mayfly_tracking
+- NOAA NEXRAD Level II, KDVN, 24 June 2012 01:55 to 03:35 UTC; KARX, 21 July 2014 00:36 to 05:01 UTC, and KCLE, 27 June 2019 01:46 to 04:56 UTC (public
   domain), via https://unidata-nexrad-level2.s3.amazonaws.com/
 - TribLIVE, "National Weather Service radar detects massive mayfly swarm off of Lake Erie", 27 June 2019:
   https://triblive.com/local/regional/national-weather-service-radar-detects-massive-mayfly-swarm-off-of-lake-erie/

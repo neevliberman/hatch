@@ -35,6 +35,24 @@ export const EVENTS: Record<string, RadarEvent> = {
       { text: 'NOAA NEXRAD data (public domain)', href: 'https://www.ncei.noaa.gov/products/radar/next-generation-weather-radar' },
     ],
   },
+  'kdvn-2012-06-23': {
+    id: 'kdvn-2012-06-23',
+    caption: 'Echoes fit mayflies on the river, not the storms',
+    tz: { name: 'CDT', offset: -5 },
+    more: [
+      'One evening on the National Weather Service radar at Davenport, Iowa, one sweep about every 4 minutes. After 9 pm a narrow cloud forms along the river north of the Quad Cities and drifts north. Darker means a stronger echo. The blank center is left out. Other echoes are not mayflies.',
+      'Radar tells raindrops (round, all alike) from insects (long, all different). Along the river the echo reads as insects, consistent with a mayfly emergence. It is not a count.',
+    ],
+    numbers: {
+      lead: 'Radar shows mayflies declining (Stepanian et al. 2020):',
+      items: ['Upper Mississippi: down 52% from 2012 to 2019', 'Western Lake Erie: down 84% from 2015 to 2019'],
+    },
+    credits: [
+      { text: 'Stepanian et al. 2020, PNAS 117(6): 2987–2992', href: 'https://doi.org/10.1073/pnas.1913598117' },
+      { text: 'NWS La Crosse, mayfly radar events (23 June 2012)', href: 'https://www.weather.gov/arx/mayfly_tracking' },
+      { text: 'NOAA NEXRAD data (public domain)', href: 'https://www.ncei.noaa.gov/products/radar/next-generation-weather-radar' },
+    ],
+  },
   'kcle-2019-06-26': {
     id: 'kcle-2019-06-26',
     caption: 'Mayflies rising off Lake Erie',
