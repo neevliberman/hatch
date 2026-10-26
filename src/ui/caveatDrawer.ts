@@ -143,15 +143,16 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     }, true);
   window.addEventListener('keydown', (e) => e.key === 'Escape' && toggle(false));
 
-  // Drag the sheet between its stops. At the middle stop the whole sheet is the handle: up for the tall stop, down
-  // to close. At the tall stop the title bar always drags; the text drags only once it is scrolled to the top (before
-  // that, a downward swipe scrolls it back up). A quick flick counts even when it moved only a little.
+  // Drag the sheet between its stops. The title bar always drags: up for the tall stop, down for the middle stop or to
+  // close. The text scrolls at both stops, and drags the sheet down only when it is already scrolled to the top (before
+  // that, a downward swipe scrolls it back up). It used to drag at the middle stop too, so the same swipe on the text
+  // scrolled it at one stop and moved the sheet at the other. A quick flick counts even when it moved only a little.
   let drag: { x0: number; y0: number; t: number; dy: number; v: number; head: boolean; on: boolean } | null = null;
   drawer.addEventListener('touchstart', (e) => {
     if (drag?.on) return; // a second finger mid-drag: keep following the first
     drag = null;
     if (!sheet() || e.touches.length !== 1) return;
-    const head = !full() || !!(e.target as Element).closest('.drawer-head');
+    const head = !!(e.target as Element).closest('.drawer-head');
     if (head || drawer.scrollTop <= 0) drag = { x0: e.touches[0]!.clientX, y0: e.touches[0]!.clientY, t: e.timeStamp, dy: 0, v: 0, head, on: false };
   }, { passive: true });
   drawer.addEventListener('touchmove', (e) => {
@@ -194,8 +195,6 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   drawer.addEventListener('touchend', endDrag);
   drawer.addEventListener('touchcancel', endDrag);
   // A hairline under the sticky title bar once text scrolls beneath it.
-  // A wheel or trackpad reading on at the middle stop (where the text doesn't scroll) opens the tall stop.
-  drawer.addEventListener('wheel', (e) => sheet() && !full() && e.deltaY > 0 && toggle(true, true), { passive: true });
   drawer.addEventListener('scroll', () => drawer.classList.toggle('scrolled', drawer.scrollTop > 0), { passive: true });
   registry.subscribe(render);
   render();

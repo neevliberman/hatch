@@ -101,6 +101,24 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     const shot = (step) => page.screenshot({ path: `${out}/${phone}-${orient}-${step}.png` });
+    // A finger on the About text must scroll it at either stop, even when its first moves twitch down a pixel or two
+    // (a real fingertip does). Real touch events need Chromium's protocol; WebKit has no equivalent.
+    const swipeText = async (box, stop) => {
+      const cdp = await ctx.newCDPSession(page);
+      const x = Math.round(width / 2), y = Math.round(box.y + box.height * 0.6);
+      const touch = (type, yy) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: yy, id: 1 }] });
+      const full = await page.locator('#drawer.full').count();
+      await page.evaluate(() => (document.querySelector('#drawer').scrollTop = 0));
+      await touch('touchStart', y);
+      for (const j of [0, 1, 2, 1]) await touch('touchMove', y + j);
+      for (let i = 1; i <= 8; i++) { await touch('touchMove', y - i * 12); await page.waitForTimeout(16); }
+      await touch('touchEnd', 0);
+      const scrolled = await page.waitForFunction(() => document.querySelector('#drawer').scrollTop > 20, null, { timeout: 5000 }).then(() => true, () => false);
+      if (!scrolled) fail(`a swipe on the About text at the ${stop} stop did not scroll it`);
+      await page.waitForTimeout(400);
+      if ((await page.locator('#drawer.full').count()) !== full) fail(`a swipe on the About text at the ${stop} stop moved the sheet instead`);
+      await cdp.detach();
+    };
     // Runs in the page: the centre of `s` if a finger could tap it there (shown, on-screen, on top), else null. With
     // `gone`, true once it can't be tapped any more.
     const reachable = ([s, gone]) => {
@@ -176,6 +194,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       const filled = await page.waitForFunction((t) => document.querySelector('[data-spot] .spot-title')?.textContent !== t, spot0, { timeout: 6000 })
         .then(() => true, () => false);
       if (!filled) fail('a tap on the map at the middle stop did not fill the spot card');
+      if (engine === 'chromium') await swipeText(box, 'middle');
     }
     await shot('1b-drawer-and-map');
     await tap('#drawer-close');
@@ -194,20 +213,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       await page.waitForTimeout(300);
       const tall = await page.locator('#drawer').boundingBox();
       if (!(await page.locator('#drawer.open.full').count())) fail('"How sure?" did not open the sheet at its tall stop');
-      // A finger on the text must scroll it, even when the first moves twitch down a pixel or two (a real fingertip does).
-      // Real touch events need Chromium's protocol; WebKit has no equivalent, so it is covered by the shared code path.
-      if (engine === 'chromium') {
-        const cdp = await ctx.newCDPSession(page);
-        const x = Math.round(width / 2), y = Math.round(tall.y + tall.height * 0.6);
-        const touch = (type, yy) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: yy, id: 1 }] });
-        await page.evaluate(() => (document.querySelector('#drawer').scrollTop = 0));
-        await touch('touchStart', y);
-        for (const j of [0, 1, 2, 1]) await touch('touchMove', y + j);
-        for (let i = 1; i <= 12; i++) { await touch('touchMove', y - i * 12); await page.waitForTimeout(16); }
-        await touch('touchEnd', 0);
-        const scrolled = await page.waitForFunction(() => document.querySelector('#drawer').scrollTop > 20, null, { timeout: 5000 }).then(() => true, () => false);
-        if (!scrolled) fail('a swipe that starts on the About text did not scroll it');
-      }
+      if (engine === 'chromium') await swipeText(tall, 'tall');
       // Above the sheet at the far left: the header's middle is the season menu, which a tap would open instead.
       await page.touchscreen.tap(12, Math.max(4, tall.y / 2));
       await page.waitForTimeout(400);
