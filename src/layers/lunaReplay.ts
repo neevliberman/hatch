@@ -28,6 +28,7 @@ import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
+import { MOTH_NIGHT_NOTE, mothNightLine } from './activity';
 import { modelChecks, windowCheck } from './replayData';
 import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
 
@@ -501,6 +502,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
     if (vs) lines.push(vs);
     if (!seen) lines.push('No sightings nearby to check against.');
+    const [clat, clng] = cellToLatLng(cell);
+    const night = mothNightLine(L, clat, clng, doyToMs(y, doy));
+    if (night) {
+      lines.push(night);
+      more.push(MOTH_NIGHT_NOTE);
+    }
     const out = i === undefined ? null : L.outNow[i];
     // Zeros are the empty state (early spring, or nothing banked yet): say nothing rather than "0% out".
     if (out != null && out > 0) more.push(`${Math.round(out)}% of the first wave out by ${asOf}.`);

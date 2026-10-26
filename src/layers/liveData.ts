@@ -9,6 +9,8 @@ import { data, toSighting, type ReplayFile, type Sighting } from './lunaData';
  * the cells shared from the top level). A species missing from it, or broken in it, just has no live option.
  */
 
+import { parseActivity, type Activity } from './activity';
+
 type Q = (number | null)[] | null;
 
 /** Shape of public/live/latest.json (version 1). */
@@ -38,6 +40,8 @@ interface LiveFile {
   species?: Record<string, Partial<LiveFile>>;
   /** The migrants' trackers, by species key (pipeline/front): this season's sightings so far, no forecast. */
   front?: Record<string, { season: number; as_of: string; sightings?: ReplayFile['sightings'] }>;
+  /** Tonight's moth activity (pipeline/activity); luna's card only. */
+  activity?: unknown;
 }
 
 export interface Live {
@@ -62,6 +66,8 @@ export interface Live {
   dd: (number | null)[];
   /** This season's sightings so far (openly licensed iNaturalist records, flag bit 2 = not yet confirmed). */
   sightings: Sighting[];
+  /** Moth night activity for the next few nights (top-level file only). */
+  activity?: Activity;
 }
 
 const DAY = 86_400_000;
@@ -118,6 +124,7 @@ export function parseLive(f: LiveFile, cells: string[] = data.cells): Live | nul
     hi: align<Q>(f.hi, null),
     outNow: align<number | null>(f.out_now, null),
     dd: align<number | null>(f.dd, null),
+    activity: parseActivity(f.activity),
     sightings: (Array.isArray(f.sightings) ? f.sightings : []).filter((r) => Array.isArray(r) && r.length >= 6).map(toSighting),
   };
 }
