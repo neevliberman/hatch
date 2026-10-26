@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Rehearsal on the 2025 season (July 2025 - June 2026), which a clock frozen on 2018-2024 never saw.
+"""Rehearsal on one season (SEASON env var, default 2025 = July 2025 - June 2026), left out of the clock's training.
 
 Sealed every night from 1 October to 15 February on archive weather to three days before, with no 7-day forecast (the
-archive has no forecast), then graded as 2026 will be. Rows go to REHEARSAL_2025.json.
+archive has no forecast), then graded as 2026 will be. Rows go to rehearsal_<season>.json.
 
     python3 pipeline/south/rehearse_south.py --records records.csv
 """

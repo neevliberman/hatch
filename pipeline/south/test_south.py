@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -38,8 +39,8 @@ def test_cell_and_degree_days():
 def test_forecast_reaches_target_on_the_right_day(tmp_path):
     s = json.loads(static(tmp_path).read_text())
     out = S.forecast(s, {CELL: np.full(30, 20.0)})[0]                # 600 DD after 30 days; 900 after 30 more at 10
-    assert 28 <= out["onset"] <= 30
-    assert abs(out["peak"] - 59.0) <= 1.0
+    assert abs(out["onset"] - 29.0) <= 0.1
+    assert abs(out["peak"] - 59.0) <= 0.1
     assert out["onset_lo"] <= out["onset"] <= out["onset_hi"]
 
 
@@ -52,6 +53,8 @@ def test_nightly_seals_one_file_per_night(tmp_path):
     e = json.loads(path.read_text())
     assert path.name == "2026-10-27.json" and e["as_of"] == "2026-10-24" and e["forecast_through"] == "2026-10-31"
     assert e["model"] == S.model_of(p) and e["bands"][0]["band"] == CELL
+    again = S.nightly(live, 2026, dt.date(2026, 10, 27), p, lambda *a: (np.full(5, 1.0), np.full(5, 1.0)), fc)
+    assert again == path and json.loads(path.read_text()) == e                      # a rerun never rewrites a sealed night
     assert S.nightly(live, 2025, dt.date(2026, 10, 27), p, obs, fc) is None          # not a season the file is frozen for
     assert S.nightly(live, 2026, dt.date(2026, 6, 30), p, obs, fc) is None
 
@@ -111,3 +114,46 @@ def test_doc_matches_frozen_file_and_rule():
     assert (S.MARGIN, S.MIN_CELLS, S.MIN_RECORDS, S.SETTLE) == (1.0, 8, 800, dt.date(2027, 2, 15))
     assert "−1.0** day" in doc and "**8** scored cells" in doc and "**800**" in doc and "15 February 2027" in doc
     assert re.search(r"base 6", doc)
+
+
+def test_newest_observed_days_may_be_empty(tmp_path):
+    p = static(tmp_path)
+    nan = lambda n: np.concatenate([np.full(n - 2, 20.0), [np.nan, np.nan]])                     # noqa: E731
+    obs = lambda la, ln, a, b: (nan((b - a).days + 1), nan((b - a).days + 1))                    # noqa: E731
+    fc = lambda la, ln, a, b: (np.full(7, 15.0), np.full(7, 25.0))                                # noqa: E731
+    e = json.loads(S.nightly(tmp_path / "live", 2026, dt.date(2026, 10, 27), p, obs, fc).read_text())
+    assert e["as_of"] == "2026-10-24" and e["forecast_through"] == "2026-10-29"                  # trimmed to Oct 22, +7
+    hole = lambda la, ln, a, b: (np.array([20.0, np.nan, 20.0]), np.array([20.0, np.nan, 20.0]))   # noqa: E731
+    with pytest.raises(RuntimeError):
+        S.nightly(tmp_path / "live2", 2026, dt.date(2026, 10, 27), p, hole, fc)
+
+
+def raw_records(n, first, last):
+    days = pd.date_range(first, last, periods=n).normalize()
+    return pd.DataFrame({"id": range(n), "date": days, "lat": -33.5, "lng": 151.0,
+                         "created_at": days.strftime("%Y-%m-%d")})
+
+
+def test_weekly_run_grades_once_a_week_and_keeps_a_receipt(tmp_path):
+    p = static(tmp_path)
+    obs = lambda la, ln, a, b: (np.full((b - a).days + 1, 15.0), np.full((b - a).days + 1, 25.0))    # noqa: E731
+    fc = lambda la, ln, a, b: (np.full(7, 15.0), np.full(7, 25.0))                                    # noqa: E731
+    live = tmp_path / "live"
+    for d in range(25, 32):
+        S.nightly(live, 2026, dt.date(2026, 10, d), p, obs, fc)
+    pulls = []
+    fetch = lambda a, b: pulls.append(1) or raw_records(60, "2026-12-01", "2027-01-20")           # noqa: E731
+    today = dt.date(2027, 1, 25)                                                                   # a Monday
+    out = S.weekly_run(live, 2026, today, fetch, static_path=p)
+    table = json.loads(out.read_text())
+    assert table["verdict"] == "in_progress" and table["score_date"] == "2027-01-25" and table["nights"] == 7
+    assert table["cells"][0]["status"] == "no_forecast_in_time" or table["cells"][0]["status"] == "scored"
+    assert (live / "records" / "2026" / "south" / "2027-01-25.csv.sha256").exists()
+    assert S.weekly_run(live, 2026, today, fetch, static_path=p) is None and len(pulls) == 1       # not twice a week
+    # records posted after the Monday do not count
+    late = raw_records(60, "2026-12-01", "2027-01-20").assign(created_at="2027-02-01")
+    g = S.grade(live, 2026, today, late, p)
+    assert g["cells"][0]["status"] == "too_few"
+    # the verdict week is final
+    g = S.grade(live, 2026, dt.date(2027, 2, 15), raw_records(60, "2026-12-01", "2027-01-20"), p)
+    assert g["verdict"] in ("no_verdict", "clock_wins", "calendar_stays")

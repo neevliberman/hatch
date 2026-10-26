@@ -1,4 +1,4 @@
-# Southern heat clock, 2026-27: the rule, written before the season (2026-10-26)
+# Southern heat clock, 2026-27: the rule, written 26 October 2026, a few weeks into the season
 
 **Why.** Hatch is meant to work in new regions. In the East a local heat clock beat each place's calendar by about
 1.6 days on past data ([../league/tryouts/REGIONAL_RESULT.md](../league/tryouts/REGIONAL_RESULT.md)). Australia is in
@@ -6,17 +6,17 @@ spring now, so a southern species gives a real scored season in a new hemisphere
 Midwest start. The species is **Christmas beetles** (*Anoplognathus*, research-grade iNaturalist records): about 2.4k a
 year since 2022, a season from October to January.
 
-**What runs.** Every night from 1 July 2026 to 22 February 2027 (`south.py`, the south-forecast workflow): the clock
+**What runs.** Every night from the first run (no earlier than 26 October 2026; nothing is backdated, because a forecast written later would know the weather) to 22 February 2027 (`south.py`, the south-forecast workflow): the clock
 frozen in `south_static.json` forecasts the onset (10% of records) and peak (median) for each of its 19 cells (2° × 2°,
-each with 3+ seasons of 20+ records in 2018-2025), on Open-Meteo archive weather to three days before, the 7-day
-forecast, then each 2018-2025 season as an ending. Warmth = degree-days above base 6 °C (daily mean of min and max, each
+each with 3+ seasons of 20+ records in 2018-2025), on Open-Meteo archive weather at the cell's record-weighted centre to about three days before, the forecast API
+for the 7 days after that (about 4 still ahead), then each 2018-2025 season as an ending. Warmth = degree-days above base 6 °C (daily mean of min and max, each
 capped at 30 °C) since 1 July. Only the dates are kept, sealed per night in `archive_south/2026/`. Nothing appears
 on the map.
 
 **Grading.** Weekly, once a cell has 20+ records. The real onset and peak are the cell's 10th percentile and median
-of research-grade records (day 60-260 after 1 July, posted by that Monday). The forecast is the newest sealed one issued
+of research-grade records (day 60-260 after 1 July, posted by that Monday; the research grade is read when the pull is made). The forecast is the newest sealed one issued
 at least 7 days before the real date. The rival is the cell's calendar (mean past onset and peak, frozen in the file).
-A cell whose real onset comes before the first sealed forecast is 7 days old is not scored, for either side. Each week's
+A cell whose real onset comes before the first sealed forecast is 7 days old (about 2 November) is not scored, for either side; that drops early northern cells, and if fewer than 8 cells remain there is no verdict. The rehearsal sealed from 1 October, so its cell counts are higher than the live season's will be. Each week's
 records pull is kept with its sha256 (`records/2026/south/`).
 
 **The verdict** (week of Monday 15 February 2027; later records never count):

@@ -7,8 +7,8 @@ whose spring is happening now.
 Analogy: the same kitchen timer as the eastern track, but set in a kitchen on the other side of the world.
 
 Each night (the south-forecast workflow, or by hand):
-1. Weather: Open-Meteo archive Tmin/Tmax at each cell's centre from 1 July to three days ago, then the 7-day
-   forecast; the rest of the season is each 2018-2025 year's warmth as one of 8 endings (south_static.json).
+1. Weather: Open-Meteo archive Tmin/Tmax at each cell's record-weighted centre from 1 July to about three days ago,
+   then the forecast API for the 7 days after that (about 4 of them still ahead); the rest of the season is each 2018-2025 year's warmth as one of 8 endings (south_static.json).
 2. Forecast: per cell, the day the season's warmth reaches the cell's frozen onset / peak pile; the median over the
    endings is the forecast, the 10th-90th percentile its spread. Saved to <live>/archive_south/<season>/<issued>.json.
 3. Grading (Mondays, and whenever no table exists): one pull of the season's research-grade records, each cell scored
@@ -160,7 +160,12 @@ def season_inc(cell_info, season, as_of: dt.date, fetch_obs=None, fetch_fc=None)
     if as_of < start:
         return np.zeros(0), start - dt.timedelta(days=1)
     tmin, tmax = fetch_obs(la, ln, start, as_of)
-    out = inc(tmin, tmax)
+    good = ~(np.isnan(tmin) | np.isnan(tmax))
+    n_obs = int(np.argmin(good)) if not good.all() else len(good)
+    if good[n_obs:].any():
+        raise RuntimeError(f"south: {cell_info['lat']},{cell_info['lng']} has holes inside the observed weather")
+    out = inc(tmin[:n_obs], tmax[:n_obs])               # the archive's newest days can still be empty: drop them
+    as_of = start + dt.timedelta(days=n_obs - 1)
     end = as_of
     f0, f1 = as_of + dt.timedelta(days=1), as_of + dt.timedelta(days=FORECAST_DAYS)
     fmin, fmax = fetch_fc(la, ln, f0, f1)
@@ -203,6 +208,8 @@ def nightly(live: Path, season: int, today: dt.date, static_path=STATIC, fetch_o
     if season not in SEASONS or today < season_start(season) or today > SETTLE + dt.timedelta(days=7):
         return None
     p = live / "archive_south" / str(season) / f"{today.isoformat()}.json"
+    if p.exists():
+        return p                                        # sealed means sealed: a rerun never rewrites a night
     entry = sealed_entry(load_static(static_path), season, today - dt.timedelta(days=ARCHIVE_LAG), today,
                          model_of(static_path), fetch_obs, fetch_fc)
     write_atomic(p, (json.dumps(entry, separators=(",", ":"), allow_nan=False) + "\n").encode())
