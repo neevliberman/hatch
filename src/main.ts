@@ -155,6 +155,17 @@ function start() {
     updateProbe();
   };
 
+  // The colours' track record, beside "Colors: forecast" under the map (and in the folded key's chip on a phone on its
+  // side): how many days off it was in past years it never learned from, against the usual date.
+  const showRecord = () => {
+    const r = cur.record?.();
+    $('fc-try').hidden = !r?.firstTry;
+    $('fc-record').innerHTML = r ? `, typically ${Math.round(r.days)} days off<span class="long"> (calendar guess: ${Math.round(r.calendar)})</span>` : '';
+    const words = r ? `${r.firstTry ? 'experimental ' : ''}forecast, ~${Math.round(r.days)} days off` : 'forecast';
+    document.documentElement.style.setProperty('--fc-words', JSON.stringify(words));
+    document.documentElement.style.setProperty('--fc-chip', JSON.stringify(r?.firstTry ? 'experimental' : r ? `~${Math.round(r.days)} days off` : ''));
+  };
+  showRecord();
   let intro: Intro | null = null; // the first visit's opening playback (ui/intro.ts), while it runs
   const colourKey = mountLegend($('legend'), registry);
   time.subscribe(() => time.playing && !intro?.running && colourKey.autoFold());
@@ -475,6 +486,7 @@ function start() {
     ($('mark') as HTMLImageElement).src = cur.words.mark;
     showMark();
     $('dots-what').textContent = cur.words.plural;
+    showRecord();
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', `Midwest map: ${cur.words.sightingsOf} sightings over forecast hexagons`);

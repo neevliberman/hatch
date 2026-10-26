@@ -37,6 +37,7 @@ const light = {
   // Three clear lightness steps, so the dot types differ without relying on hue: pale moth, orange second wave
   // (3.4:1 against both others), small solid-ink rough location.
   rough: INK,
+  front: [140, 87, 12, 255] as RGBA, // the forecast front (layers/front.ts): the app's amber, so it never reads as a border
   dotRim: INK,
   dotHalo: [248, 242, 227, 255] as RGBA,
   dotShadow: [43, 36, 28, 40] as RGBA,
@@ -79,6 +80,7 @@ const lamp: typeof light = {
   second: [255, 150, 66, 255],
   firefly: [250, 204, 40, 255],
   rough: SOOT,
+  front: [236, 168, 70, 255],
   dotRim: SOOT,
   dotHalo: CHALK,
   dotShadow: [0, 0, 0, 90],
