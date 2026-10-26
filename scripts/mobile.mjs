@@ -344,7 +344,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
 // Every event in the About list, from its ?radar= link: the card's buttons can be tapped, nothing spills off the side,
 // "How we know" opens (on a phone on its side the radar moves to the right of it, upright it stays above the card),
 // the radar sits at the map's centre, and × gives back the time bar.
-const RADARS = { 'karx-2014-07-20': { at: [-91.19, 43.82], tz: 'CDT' }, 'kcle-2019-06-26': { at: [-81.86, 41.41], tz: 'EDT' } };
+const RADARS = { 'karx-2014-07-20': { at: [-91.19, 43.82], tz: 'CDT' }, 'kdvn-2012-06-23': { at: [-90.58, 41.61], tz: 'CDT' }, 'kcle-2019-06-26': { at: [-81.86, 41.41], tz: 'EDT' } };
 const distDir = resolve(process.env.DIST_DIR ?? 'dist');
 // CI builds only the one-file page for this script, so build the http one here rather than skip the replays.
 if (!process.env.DIST_DIR && !existsSync(join(distDir, 'radar'))) execSync('npx vite build --logLevel warn', { stdio: 'inherit' });

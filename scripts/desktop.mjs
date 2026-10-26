@@ -8,7 +8,7 @@
 // Then live mode ("This year", public/live/latest.json), which only loads over http: serves dist/ (DIST_DIR) on a local
 // port in Chromium, desktop and phone, and fails if the season menu lacks it, picking it errors, the hex card has no
 // "Peak likely", hexes go finer when zoomed, the default or stale rules break, or a missing file does anything visible.
-// Also over http: the radar replays (load nothing until opened from About, then play at La Crosse or on Lake Erie and
+// Also over http: the radar replays (load nothing until opened from About, then play at La Crosse, the Quad Cities or on Lake Erie and
 // close cleanly).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
@@ -747,9 +747,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // outside it (on the forecast hexagons).
   const RADARS = {
     'karx-2014-07-20': { at: [-91.19, 43.82], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*July 2014/, sheet: [-91.94, 43.82], off: [-93.0, 43.82] },
+    'kdvn-2012-06-23': { at: [-90.58, 41.61], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*June 2012/, sheet: [-90.58, 41.07], off: [-90.58, 40.2] },
     'kcle-2019-06-26': { at: [-81.86, 41.41], when: /\b\d{1,2}:\d\d (am|pm) EDT\b[\s\S]*June 2019/, sheet: [-81.86, 40.87], off: [-83.78, 41.41] },
   };
   const ERIE = 'kcle-2019-06-26';
+  const QC = 'kdvn-2012-06-23';
   // A screenshot straight from the browser (CDP): page.screenshot first waits for web fonts and quiet frames, which on
   // software GL with a replay playing can take past its timeout. Saved to `path`; the PNG bytes come back.
   const shotCdp = async (page, path) => {
@@ -771,7 +773,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   for (const [label, w, h, phone, reduce, id, keep] of [
     ['phone', 390, 844, true, false, 'karx-2014-07-20', true], ['phone on its side', 852, 393, true, false, 'karx-2014-07-20'],
     ['reduced motion link', 1280, 720, false, true, 'karx-2014-07-20'],
-    ['desktop', 1366, 768, false, false, 'karx-2014-07-20', true], ['desktop, Lake Erie', 1366, 768, false, false, ERIE, true],
+    ['desktop', 1366, 768, false, false, 'karx-2014-07-20', true], ['desktop, Lake Erie', 1366, 768, false, false, ERIE, true], ['desktop, Quad Cities', 1366, 768, false, false, QC, true],
   ]) {
     const ev = RADARS[id];
     const tag = `radar ${label}`;
@@ -950,6 +952,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await about();
       await page.locator('#drawer .ex-radar[data-radar="karx-2014-07-20"]').click();
       if (!(await at('karx-2014-07-20'))) fail('the first replay did not open at La Crosse');
+      await about();
+      await page.locator(`#drawer .ex-radar[data-radar="${QC}"]`).click();
+      if (!(await at(QC))) fail('switching did not go to the Quad Cities');
+      if ((await page.locator('#radar').count()) !== 1) fail('more than one replay card after switching to the Quad Cities');
+      const qcCap = await page.locator('#radar .rd-cap').innerText();
+      if (!/CDT/.test(qcCap) || !/June 2012/.test(qcCap)) fail('the card after switching is not the Quad Cities\'');
       await about();
       await page.locator(`#drawer .ex-radar[data-radar="${ERIE}"]`).click();
       if (!(await at(ERIE))) fail('switching did not go to Lake Erie');
