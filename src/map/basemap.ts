@@ -4,7 +4,7 @@ import type { Layer } from '@deck.gl/core';
 import type { Feature, FeatureCollection } from 'geojson';
 import { stateCollection } from '../core/grid';
 import type { Theme } from '../core/layer';
-import { isDark, onTheme, palette } from '../theme';
+import { isDark, onTheme, palette, recoloured } from '../theme';
 
 const P = palette;
 
@@ -341,10 +341,10 @@ export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[] } {
   built = {
     key,
     layers: {
-      under: [under, ...dryLayer(zoom)],
+      under: [under, ...dryLayer(zoom)].map(recoloured),
       // The overview's `outside` mask comes first: woods and everything else go over it.
       mid: [...kind(/^outside/), ...woodsLayers(zoom), ...kind(/^(green|water|roads)-/), ...kind(/^rivers-case-/),
-        neighbours, outlineLayer(zoom, outlineData), ...shore(zoom), ...kind(/^rivers-(overview|detail)/)],
+        neighbours, outlineLayer(zoom, outlineData), ...shore(zoom), ...kind(/^rivers-(overview|detail)/)].map(recoloured),
     },
   };
   return built.layers;

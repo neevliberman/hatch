@@ -38,7 +38,7 @@ const screens = [
 const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
-const TAB_ORDER = ['season', 'info-btn', 'explore', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
+const TAB_ORDER = ['season', 'theme-btn', 'info-btn', 'explore', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
 const chromiumLaunch = { executablePath: process.env.CHROMIUM || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] };
 const problems = [];
 const browsers = {};

@@ -82,7 +82,6 @@ const bytesToQ = (days: Uint8Array, i: number) =>
 type RGBA = [number, number, number, number];
 // The stage colours and why they are what they are: palette.stages in theme.ts.
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
-// Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
 // One object for every render, so deck.gl doesn't rebuild the pattern each playback frame. The 12px tile is drawn
 // at 1:1: a shrunken tile blurs thin lines and loses their contrast.
 export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 12, height: 12 } };

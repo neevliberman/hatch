@@ -119,6 +119,16 @@ export const palette = clone(mode === 'dark' ? lamp : light);
 /** Text colour for the species name and its marks in the About panel (the moth's own fill is too pale on paper). */
 export let mothInk = inks[mode];
 export const isDark = () => mode === 'dark';
+/** Counts the switches. Layers put it in their update triggers, so deck reads their colour accessors again. */
+export let epoch = 0;
+/** `layer` with the epoch in its colour update triggers (after a switch; before one it comes back as it was). */
+export function recoloured<L extends { props: object; clone(p: never): L }>(layer: L): L {
+  if (!epoch) return layer;
+  const t = ((layer.props as { updateTriggers?: Record<string, unknown[]> }).updateTriggers ?? {});
+  const next = { ...t };
+  for (const k of ['getFillColor', 'getLineColor', 'getColor']) next[k] = [...(t[k] ?? []), epoch];
+  return layer.clone({ updateTriggers: next } as never);
+}
 
 const listeners = new Set<() => void>();
 /** Run after the mode changes (once the palette holds the new colours). */
@@ -127,13 +137,17 @@ export const onTheme = (fn: () => void) => void listeners.add(fn);
 const metaColor = { light: '#f8f2e3', dark: '#241f19' };
 function apply(next: ThemeMode) {
   mode = next;
-  Object.assign(palette, clone(next === 'dark' ? lamp : light));
+  epoch++;
+  const { stages, ...rest } = clone(next === 'dark' ? lamp : light);
+  Object.assign(palette, rest);
+  Object.assign(palette.stages, stages); // in place: layers hold this object as their stage colours
   mothInk = inks[next];
   document.documentElement.dataset.theme = next;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', metaColor[next]);
   listeners.forEach((fn) => fn());
 }
 apply(mode);
+epoch = 0; // the first colours are not a switch
 
 /** Switch modes and remember the choice. */
 export function setMode(next: ThemeMode) {
@@ -142,4 +156,4 @@ export function setMode(next: ThemeMode) {
 }
 export const toggleMode = () => setMode(mode === 'dark' ? 'light' : 'dark');
 // With no saved choice the page follows the system setting as it changes.
-systemDark.addEventListener('change', () => { if (!chosen()) apply(systemDark.matches ? 'dark' : 'light'); });
+try { systemDark.addEventListener('change', () => { if (!chosen()) apply(systemDark.matches ? 'dark' : 'light'); }); } catch { /* an old Safari: no live follow */ }

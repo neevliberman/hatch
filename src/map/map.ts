@@ -9,7 +9,7 @@ import type { LayerRegistry } from '../core/registry';
 import type { TimeAxis } from '../core/timeAxis';
 import { basemapLabels, basemapLayers, loadBasemap, padsFor, resetBasemap, theme } from './basemap';
 import { createLabels } from './labels';
-import { palette } from '../theme';
+import { palette, recoloured } from '../theme';
 
 export interface ProbeHit {
   cell: string;
@@ -523,7 +523,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   const refresh = () => {
     const { under, mid } = basemapLayers(zoom);
     // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
-    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }))
+    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }).map(recoloured))
       .map((l) => (l.props.autoHighlight ? l.clone({ highlightedObjectIndex: hovered?.id === l.id ? hovered.index : -1 }) : l));
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const hexes = dataLayers.filter((l) => isHexes(l.id));
@@ -545,6 +545,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       resetBasemap();
       markerBuilt = markerLayers();
       pickedBuilt = pickedLayers();
+      overlay = overWater = []; // finalized with the rest; an open radar draws its own again
       deck.setProps({ layers: [] });
       refresh();
     },
