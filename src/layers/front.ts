@@ -38,7 +38,11 @@ export function makeFront(ids: readonly string[], id: string) {
         const q05 = qs[i]?.[0];
         return q05 != null && doy >= q05;
       };
-      paths = edges.filter((e) => out(e.a) !== out(e.b)).map((e) => ({ path: e.path }));
+      // A lone hexagon (out among neighbours that aren't, or the reverse) is a blip, not the front: no ring around it.
+      const like = new Uint8Array(qs.length);
+      for (const e of edges) if (out(e.a) === out(e.b)) like[e.a] = like[e.b] = 1;
+      const has = (i: number) => qs[i]?.[0] != null; // a hexagon with no forecast is not the front's other side
+      paths = edges.filter((e) => has(e.a) && has(e.b) && out(e.a) !== out(e.b) && like[e.a] && like[e.b]).map((e) => ({ path: e.path }));
       days.set(doy, paths);
     }
     return paths;
