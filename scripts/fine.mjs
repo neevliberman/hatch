@@ -216,6 +216,66 @@ for (const [name, width, height, mobile] of shots) {
     }
   }
 }
+// How every species looks, in light and dark, on a desktop and a phone: hexagons drawn (a tracker's too), a coloured
+// season ribbon, a species mark with no paper disc in dark mode, a species menu wide enough for its mark and arrow, and
+// one clean focus ring on the menus. (Trackers once shipped with no hexagons, a clear ribbon and a glaring disc.)
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const probe = await ctx.newPage();
+  await probe.goto(`${origin}/?noauto`);
+  await probe.waitForFunction(() => document.querySelectorAll('#species option').length > 0 && !document.getElementById('loader'), null, { timeout: 15000 });
+  const keys = await probe.evaluate(() => [...document.querySelectorAll('#species option')].map((o) => o.value));
+  await ctx.close();
+  for (const key of keys) {
+    for (const scheme of ['light', 'dark']) {
+      for (const [vname, width, height, mobile] of [['desktop', 1440, 900, false], ['phone', 390, 844, true]]) {
+        if (!mine()) continue;
+        const tag = `look ${key} ${scheme} ${vname}`;
+        const c = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile, colorScheme: scheme, reducedMotion: 'reduce' });
+        const page = await c.newPage();
+        page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
+        await page.goto(`${origin}/?noauto&species=${key}&date=06-20`);
+        await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
+        // The species loads after the page does: wait for its own layer, or this would score the luna moth again.
+        await page.waitForFunction((k) => window.__hatch.current().id.startsWith(k + '-'), key, { timeout: 15000 }).catch(() => problems.push(`${tag}: its layer never loaded`));
+        await page.waitForTimeout(2500);
+        const got = await page.evaluate(async () => {
+          const h = window.__hatch;
+          const cur = h.current();
+          const layers = cur.render({ t: h.time.cursor, zoom: 5, theme: { bg: '#000', hexEdge: [0, 0, 0, 0], text: '#000' } });
+          const hexes = layers.filter((l) => /-forecast-r\d/.test(l.id));
+          const bands = [...document.querySelectorAll('#t-ribbon path.band')].map((b) => b.getAttribute('fill'));
+          const sel = document.getElementById('species');
+          const mark = decodeURIComponent(document.getElementById('mark').src);
+          await new Promise((r) => setTimeout(r, 300));
+          return {
+            hexes: hexes.reduce((n, l) => n + (l.props.data?.length ?? 0), 0),
+            bands: bands.filter((f) => f && !/rgba\(0,\s*0,\s*0,\s*0\)|transparent/.test(f)).length,
+            disc: /r=['"]256['"]/.test(mark),
+            menuWidth: sel.getBoundingClientRect().width,
+            speciesShown: !sel.closest('label').hidden,
+          };
+        });
+        if (!got.hexes) problems.push(`${tag}: no hexagons drawn`);
+        if (!got.bands) problems.push(`${tag}: the season ribbon has no colour`);
+        if (scheme === 'dark' && got.disc) problems.push(`${tag}: the species mark still has its paper disc`);
+        if (mobile && got.speciesShown && got.menuWidth < 64) problems.push(`${tag}: species menu ${got.menuWidth}px wide, too narrow for mark and arrow`);
+        // One focus ring: no outline offset from the border (it read as a doubled box), an accent border and hairline instead.
+        await page.keyboard.press('Tab');
+        const ring = await page.evaluate(() => {
+          const sel = document.getElementById('season');
+          sel.focus();
+          const st = getComputedStyle(sel);
+          return { outline: st.outlineStyle === 'none' || parseFloat(st.outlineWidth) === 0, shadow: st.boxShadow !== 'none', focused: sel.matches(':focus-visible') };
+        });
+        if (ring.focused && !(ring.outline && ring.shadow)) problems.push(`${tag}: menu focus is not one clean ring (${JSON.stringify(ring)})`);
+        await page.screenshot({ path: `${out}/look-${key}-${scheme}-${vname}.png` });
+        console.log(`${tag}: hexes ${got.hexes}, ribbon bands ${got.bands}, menu ${Math.round(got.menuWidth)}px`);
+        await c.close();
+      }
+    }
+  }
+}
 await browser.close();
 server.close();
 if (problems.length) {

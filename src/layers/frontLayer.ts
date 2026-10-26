@@ -1,6 +1,7 @@
 import { ScatterplotLayer } from '@deck.gl/layers';
+import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { DataFilterExtension } from '@deck.gl/extensions';
-import { onTheme, palette } from '../theme';
+import { epoch, onTheme, palette } from '../theme';
 import { dayOfYear, TimeAxis } from '../core/timeAxis';
 import type { CaveatCard, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
 import { doyToMs, LIVE, UNCONFIRMED } from './lunaData';
@@ -47,8 +48,9 @@ const fmtDoy = (year: number, doy: number) =>
 
 /**
  * A migrant's spring arrival as a tracker, not a forecast: its sightings so far this spring as dots (the last ten
- * days bright, older ones small), so the bright band moves north as the spring plays. Same seams as
- * the species layers (LunaLayer), without hexagons: a migrant's date is not set by warmth (see pipeline/front).
+ * days bright, older ones small), so the bright band moves north as the spring plays. Same seams as the species
+ * layers (LunaLayer). Its hexagons show where sightings are, not a forecast: a migrant's date is not set by warmth (see
+ * pipeline/front).
  */
 export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mode = TYPICAL, liveIn: Live | null = null): LunaLayer {
   let live = liveIn;
@@ -79,6 +81,32 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
     return crowd.k + (1 - crowd.k) * Math.min(1, Math.max(0, (zoom - 6) / 1.5));
   };
 
+  // Hexagons with a sighting so far: lit while one is under GLOW_DAYS old, faint after. Not-yet hexagons are left out.
+  const ink = (a: number): RGBA => [cfg.glow[0], cfg.glow[1], cfg.glow[2], a];
+  const LIT = 150;
+  const FAINT = 70;
+  type Hex = { id: string; days: number[] };
+  let hexes = { mode: '' as Mode, list: [] as Hex[] };
+  const hexList = (): Hex[] => {
+    if (hexes.mode !== mode || !hexes.list.length) {
+      const by = new Map<string, number[]>();
+      for (const s of shown) (by.get(s.cell) ?? by.set(s.cell, []).get(s.cell)!).push(day(s));
+      hexes = { mode, list: [...by].map(([id, days]) => ({ id, days: days.sort((a, b) => a - b) })) };
+    }
+    return hexes.list;
+  };
+  /** 0 = nothing yet, 1 = seen earlier, 2 = seen in the last GLOW_DAYS. */
+  const hexState = (h: Hex, doy: number) => {
+    let lo = 0;
+    let hi = h.days.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (h.days[mid]! <= doy) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo === 0 ? 0 : h.days[lo - 1]! > doy - GLOW_DAYS ? 2 : 1;
+  };
+
   let fresh = { key: '', list: [] as Sighting[] };
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
   const isDot = (id: string) => id === `${key}-dots` || id === `${key}-glow`;
@@ -92,12 +120,14 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
     setMode(m) {
       mode = m;
       shown = sightingsFor(m);
+      hexes.list = [];
     },
     live: () => live,
     setLive(l) {
       live = l;
       profiles.delete(LIVE);
       if (mode === LIVE) shown = sightingsFor(mode);
+      hexes.list = [];
     },
     res: () => 4,
     cellAt: () => null,
@@ -147,12 +177,31 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
           for (let j = i - 3; j <= i + 3; j++) sum += raw[Math.min(n - 1, Math.max(0, j))]!;
           return sum / 7;
         });
-        profiles.set(mode, (p = { bands: [{ color: 'rgba(0,0,0,0)', share: new Array<number>(n).fill(1) }], seen, notes: [] }));
+        // The share of the hexagons that ever light, per day: lit now (bright), seen earlier (faint), none yet. The
+        // lowest band is the faint one, so the bright ones rise out of it as the spring moves north.
+        const all = hexList();
+        const lit = new Array<number>(n).fill(0);
+        const faint = new Array<number>(n).fill(0);
+        for (let i = 0; i < n; i++) {
+          for (const h of all) {
+            const st = hexState(h, d0 + i);
+            if (st === 2) lit[i]!++;
+            else if (st === 1) faint[i]!++;
+          }
+        }
+        const total = Math.max(1, all.length);
+        const css = (a: RGBA) => `rgba(${a[0]},${a[1]},${a[2]},${(a[3] / 255).toFixed(2)})`;
+        const bands = [
+          { color: css(ink(FAINT)), share: faint.map((v) => v / total) },
+          { color: css(ink(LIT)), share: lit.map((v) => v / total) },
+          { color: 'rgba(0,0,0,0)', share: lit.map((v, i) => 1 - (v + faint[i]!) / total) },
+        ];
+        profiles.set(mode, (p = { bands, seen, notes: [] }));
       }
       return p;
     },
 
-    render({ t, zoom, playing, frac = 0 }) {
+    render({ t, zoom, theme, playing, frac = 0 }) {
       const doy = dayOfYear(t);
       const anim = animating(playing);
       const d = anim ? doy + frac : doy;
@@ -174,6 +223,21 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
         extensions: filterExt,
       };
       return [
+        new H3HexagonLayer<Hex>({
+          // Named like the forecast hexagons so the map draws its lakes and rivers over them.
+          id: `${key}-forecast-r4`,
+          data: hexList(),
+          getHexagon: (h) => h.id,
+          getFillColor: (h) => [ink(0), ink(FAINT), ink(LIT)][hexState(h, doy)]!,
+          getLineColor: theme.hexEdge,
+          stroked: true,
+          filled: true,
+          extruded: false,
+          highPrecision: true,
+          lineWidthMinPixels: 0.6,
+          pickable: false,
+          updateTriggers: { getFillColor: [doy, mode, shown.length], getLineColor: [epoch] },
+        }),
         new ScatterplotLayer<Sighting>({
           id: `${key}-older`,
           data: shown,
@@ -255,6 +319,7 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
           isLive()
             ? `Dots: this spring’s iNaturalist photos of ${cfg.adults} (${file.species.sci}), ${shown.length ? `${shown.length.toLocaleString()} so far` : 'none yet'}. Fainter dots are pending: not yet confirmed. Updated nightly.`
             : `Dots: ${past.length.toLocaleString()} iNaturalist photos of ${cfg.adults} (${file.species.sci}), 1 March to 15 July, ${ys[0]}-${ys[ys.length - 1]}. Bright for ${GLOW_DAYS} days, then small.`,
+          'Hexagons: lit where a photo was seen in the last 10 days, faint where earlier.',
           `Sightings show where people look as much as where ${plural} are. A late first dot may only mean nobody looked sooner.`,
           'Only openly licensed photos are drawn. Gray dots: rough location, so the dot may be off.',
         ],
@@ -266,8 +331,8 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
       return {
         title: 'Seen',
         items: [
-          { color: `rgb(${c[0]},${c[1]},${c[2]})`, label: 'last 10 days', shape: 'dot' },
-          { color: `rgba(${c[0]},${c[1]},${c[2]},0.47)`, label: 'earlier', shape: 'dot' },
+          { color: `rgba(${c[0]},${c[1]},${c[2]},${LIT / 255})`, label: 'last 10 days', shape: 'hex' },
+          { color: `rgba(${c[0]},${c[1]},${c[2]},${FAINT / 255})`, label: 'earlier', shape: 'hex' },
           ...(isLive() ? [{ color: `rgba(${c[0]},${c[1]},${c[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
         ],
       };

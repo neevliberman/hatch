@@ -152,13 +152,16 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
   background: var(--panel); color: var(--text); cursor: pointer; display: inline-grid; place-items: center;
   font-size: 15px; -webkit-tap-highlight-color: transparent; }
 .icon-btn:hover { border-color: var(--line-strong); }
+/* A menu's focus is its own border turned accent, with one hairline beside it: an outline offset from the border
+   read as a second, doubled box (yellow in dark mode). */
+select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* A press shows at once, before the map catches up. */
 .icon-btn:active { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
 @media (prefers-reduced-motion: no-preference) {
   .icon-btn { transition: transform 90ms ease-out, background-color 120ms; }
   .icon-btn:active { transform: scale(0.94); }
 }
-.icon-btn:focus-visible, select:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
+.icon-btn:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
   details summary:focus-visible, .lg-fold:focus-visible, .lg-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
 #theme-btn .i-sun, :root[data-theme="dark"] #theme-btn .i-moon { display: none; }
@@ -189,7 +192,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .species[hidden], #countdown[hidden] { display: none !important; }
 .species select { flex: none; }
 .season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--edge);
-  padding: 0 10px; color: var(--text); }
+  padding: 0 28px 0 10px; color: var(--text); appearance: none; -webkit-appearance: none;
+  background: var(--chev-img) no-repeat right 10px center / 10px 6px, var(--panel); }
 /* One paper band off the map: the caveat line, then one row of [prev play next] [date] [slider] [My area] [Share]. */
 #dock { pointer-events: auto; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 14px;
   background: var(--grain) var(--panel-solid); border-top: 1px solid var(--line); padding: 6px var(--gr) 6px var(--gl); }
@@ -461,7 +465,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .probe-more p { margin-top: 2px; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
-  .season select { font-size: 16px; padding: 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
+  .season select { font-size: 16px; padding: 0 26px 0 6px; } /* under 16px, iOS Safari zooms the page when the menu opens */
   @media (max-width: 359px) { .brand { font-size: 0; } } /* smallest phones: the moth mark alone, so both menus stay readable */
   /* A bottom sheet with two stops (src/ui/caveatDrawer.ts): the middle one leaves the map above it in use, the tall
      one is for reading. The text scrolls at both; the title bar moves the sheet. */
@@ -711,9 +715,11 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
    however long the list grows; opening it lists the full names. The header's mark steps aside so it isn't doubled. */
 @media (max-width: 430px) {
   /* Both menus draw their own arrow: their text is see-through (a face drawn over it), and so would the native one be. */
-  .season select { --chev: var(--chev-img) no-repeat right 8px center / 10px 6px;
-    appearance: none; -webkit-appearance: none; color: transparent; background: var(--chev), var(--panel); }
-  .season.species select { width: 60px; padding: 0; background: var(--mark) no-repeat 7px 50% / 28px 28px, var(--chev), var(--panel); }
+  .season select { --chev: var(--chev-img) no-repeat right 10px center / 10px 6px;
+    color: transparent; background: var(--chev), var(--panel); }
+  /* Mark and arrow sit 10px in from either edge with 14px between them. */
+  .season.species { flex: none; } /* the label shrinking would cap the select's width (max-width: 100%) */
+  .season.species select { width: 72px; padding: 0; background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev), var(--panel); }
   .season.species option, .season.species optgroup { color: var(--text); background: var(--panel-solid); }
   #top:has(.species:not([hidden])) .brand .mark { display: none; }
   /* The season menu's face shows just the season (main.ts sets data-face); the open menu keeps the counts. */

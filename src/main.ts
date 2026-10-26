@@ -16,6 +16,7 @@ import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
 import { isDark, onTheme, toggleMode } from './theme';
+import { markFor } from './ui/mark';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
 import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
@@ -476,7 +477,6 @@ function start() {
     fillPicker();
     $('season-name').textContent = label(picker.value);
     face();
-    ($('mark') as HTMLImageElement).src = cur.words.mark;
     showMark();
     $('dots-what').textContent = cur.words.plural;
     $('app').classList.toggle('tracker', !!cur.tracker);
@@ -502,7 +502,15 @@ function start() {
   // The one-file preview has no species files next to it, so it offers luna only.
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
   // On narrow phones the closed menu shows just the species' sketch mark (style.css), so it stays one small square.
-  const showMark = () => speciesSel.style.setProperty('--mark', `url("${cur.words.mark}")`);
+  const markImg = $('mark') as HTMLImageElement;
+  const showMark = () => {
+    const sketch = cur.words.mark;
+    void markFor(sketch).then((url) => {
+      if (cur.words.mark !== sketch) return; // the species changed meanwhile
+      markImg.src = url;
+      speciesSel.style.setProperty('--mark', `url("${url}")`);
+    });
+  };
   showMark();
   speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value));
   // ?species=<key> opens on that species (?species=firefly links from before the list still work).
@@ -1022,6 +1030,7 @@ function start() {
     themeBtn.setAttribute('aria-pressed', String(isDark()));
     document.documentElement.style.setProperty('--bg', theme.bg);
     map.recolor();
+    showMark();
     registry.refresh(); // legend, ribbon and About panel hold colours too
     updateProbe();
     // An open radar replay baked its colours into its picture: open it again.
