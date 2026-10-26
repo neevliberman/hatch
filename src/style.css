@@ -672,6 +672,11 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sc-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .sc-tab th, .sc-tab td { padding: 2px 4px; text-align: left; border-top: 1px solid var(--line); font-weight: 400; }
 .sc-tab thead th { color: var(--muted); border-top: 0; } .sc-tab tbody th { font-weight: 600; }
+/* Its model tryouts and drift check (the scorecard's league block), folded under the table. */
+.sc-try { margin-top: 8px; font-size: 13px; }
+.sc-try summary { cursor: pointer; padding: 6px 0; font-weight: 600; min-height: 24px; }
+.sc-try p { margin: 0 0 6px; } .sc-try ul { margin: 0 0 6px; padding-left: 18px; } .sc-try li { margin: 3px 0; }
+.sc-try li::marker { color: var(--ac); }
 
 /* Radar replay (src/radar/): a specimen label in the key's place, with its own play button, so the time bar, key, hex
    cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. */

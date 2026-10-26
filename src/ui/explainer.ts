@@ -166,7 +166,8 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
           )
           .join('')}
         <ul class="ex-pts">${score.points.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-        <div data-score="${esc(id)}" hidden></div></div>`
+        <div data-score="${esc(id)}" hidden></div>
+        ${__BASEMAP__ ? `<details class="sc-try" data-key="try-${esc(id)}" data-tryouts="${esc(id)}" hidden><summary>Model tryouts</summary><div></div></details>` : ''}</div>`
         : ''
     }
     <details class="ex-fine" data-key="fine-${esc(id)}"><summary>${esc(ex.finePrintLabel)}</summary>
