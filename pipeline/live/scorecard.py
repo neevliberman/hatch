@@ -452,6 +452,13 @@ def main(argv=None):
     except Exception as err:  # noqa: BLE001
         print(f"::error::drift alarm failed: {err!r}", flush=True)
         failed.append("drift")
+    # verdict notices (pipeline/league/verdicts.py): one issue per league or eastern verdict, once given
+    try:
+        from league import verdicts
+        verdicts.run(a.archive.parent)
+    except Exception as err:  # noqa: BLE001
+        print(f"::error::verdict notices failed: {err!r}", flush=True)
+        failed.append("verdicts")
     if SHADOW_ERRORS:
         failed.append("shadow-archive")
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
@@ -462,8 +469,9 @@ def main(argv=None):
                          *(["archiving the bench challengers failed"] if "shadow-archive" in failed else []),
                          *(["the eastern shadow track failed (pipeline/league/east.py)"] if "east" in failed else []),
                          *(["the model-drift check failed (pipeline/league/drift.py)"] if "drift" in failed else []),
+                         *(["the verdict notices failed (pipeline/league/verdicts.py)"] if "verdicts" in failed else []),
                          *(f"the {k} scorecard failed (its last layer was kept)" for k in failed
-                           if k not in ("league", "shadow-archive", "east", "drift"))])
+                           if k not in ("league", "shadow-archive", "east", "drift", "verdicts"))])
         print(f"::error::{why}. {a.out} WAS written and published with every other species; "
               "this exit code only raises the alarm.", flush=True)
         return 1

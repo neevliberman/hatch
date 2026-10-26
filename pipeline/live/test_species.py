@@ -267,9 +267,16 @@ def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_pa
     no_east(monkeypatch)
     assert json.loads((tmp_path / "drift.json").read_text())["season"] == 2027      # the drift check ran too
     from league import drift
+    real_drift = drift.run
     monkeypatch.setattr(drift, "run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("drift down")))
     assert S.main(args) == 1
     assert "model-drift check failed" in capsys.readouterr().out
+    monkeypatch.setattr(drift, "run", real_drift)
+    assert S.main(args) == 0 and json.loads((tmp_path / "verdicts.json").read_text())["opened"] == {}
+    from league import verdicts
+    monkeypatch.setattr(verdicts, "run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    capsys.readouterr()
+    assert S.main(args) == 1 and "verdict notices failed" in capsys.readouterr().out
 
 
 def test_importing_the_live_pipeline_patches_nothing():
