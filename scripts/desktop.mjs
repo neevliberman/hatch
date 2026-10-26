@@ -124,10 +124,14 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
   // A step that throws (a click on a covered control waits, then gives up) fails this screen, not the whole run.
   try {
 
-  // First visit: the map comes first and the About button glows; i opens the drawer and Escape closes it.
+  // First visit: the season plays itself up to 10 June, the map comes first and the About button glows; i opens the
+  // drawer (and any click lands the opening on 10 June) and Escape closes it.
   await page.goto(file);
+  const opened = page.waitForFunction(() => /^(Apr|May)/.test(document.getElementById('t-date')?.textContent ?? ''), null, { timeout: 8000 })
+    .then(() => true, () => false);
   await page.waitForTimeout(2500);
   await shot('1-first-visit');
+  if (!(await opened)) fail('the season did not play itself on first visit');
   // Opened from disk there is nothing to fetch, so no live option (and no request: the external-request check above).
   if (await page.locator('#season option[value=live]').count()) fail('the one-file build offers live mode');
   if (await drawerOpen(page)) fail('the drawer covers the map on first visit');
@@ -135,6 +139,8 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
   await page.locator('#info-btn').click();
   await page.waitForTimeout(400);
   if (!(await drawerOpen(page))) fail('the i button did not open the drawer');
+  if (!/^Jun 10\b/.test((await page.textContent('#t-date')) ?? '') || (await page.getAttribute('#t-play', 'aria-label'))?.startsWith('Pause'))
+    fail(`a click did not land the opening on Jun 10 (shows ${await page.textContent('#t-date')})`);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
   if (await drawerOpen(page)) fail('Escape did not close the drawer');

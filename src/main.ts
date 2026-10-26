@@ -1,6 +1,7 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
+import { makeIntro, type Intro } from './ui/intro';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { GROUP_AFTER, SPECIES } from './species';
 import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
@@ -154,8 +155,9 @@ function start() {
     updateProbe();
   };
 
+  let intro: Intro | null = null; // the first visit's opening playback (ui/intro.ts), while it runs
   const colourKey = mountLegend($('legend'), registry);
-  time.subscribe(() => time.playing && colourKey.autoFold());
+  time.subscribe(() => time.playing && !intro?.running && colourKey.autoFold());
 
   // Space the panels leave for the Midwest. On a short screen (a phone on its side) they can add up to more than the
   // window, which makes the map fit throw, so shrink both edges to always leave at least 80px of map.
@@ -191,6 +193,8 @@ function start() {
     const rightFrom = !beside && phone.matches && !slim.matches ? window.innerHeight - Math.max(bottom, dock) - $('actions').offsetHeight - 30 : undefined;
     return { top: Math.max(0, top * k), bottom: Math.max(0, bottom * k), right: Math.min(right, window.innerWidth / 2), rightFrom, dock: sheet ? 0 : dock };
   };
+  let firstDrawn = false;
+  let startIntro = () => {}; // set once the first-visit check below has run
   const map = createMap({
     container: $<HTMLDivElement>('map'),
     registry,
@@ -203,6 +207,8 @@ function start() {
     },
     // The loading caterpillar bows out as the first frame lands.
     onFirstDraw: () => {
+      firstDrawn = true;
+      startIntro();
       const l = document.getElementById('loader');
       l?.classList.add('done');
       setTimeout(() => l?.remove(), 250);
@@ -579,12 +585,13 @@ function start() {
     if (urlTimer) return;
     urlTimer = window.setTimeout(() => {
       urlTimer = 0;
+      if (intro?.running) return; // the opening's passing days are not a view to link to; it syncs when it lands
       history.replaceState(null, '', viewUrl());
     }, 400);
   };
   time.subscribe(syncUrl);
   // A reload (the map's Redraw) or leaving must not drop the last move still waiting on the timer.
-  addEventListener('pagehide', () => { clearTimeout(urlTimer); urlTimer = 0; history.replaceState(null, '', viewUrl()); });
+  addEventListener('pagehide', () => { intro?.finish(); clearTimeout(urlTimer); urlTimer = 0; history.replaceState(null, '', viewUrl()); });
   picker.addEventListener('change', syncUrl);
 
   const msg = $('action-msg');
@@ -824,7 +831,30 @@ function start() {
   if (!seen && !params.has('noauto') && !params.has('caveats')) for (const id of hinted.slice(0, 2)) $(id).classList.add('hint');
   const clearHint = () => hinted.slice(0, 2).forEach((x) => $(x).classList.remove('hint'));
   for (const id of hinted) $(id).addEventListener('click', clearHint);
-  time.subscribe(() => time.playing && clearHint());
+  time.subscribe(() => time.playing && !intro?.running && clearHint());
+  // A first visit with a plain link opens on the season playing itself, so the forecast is seen moving before anything
+  // is read. A link that asks for a view (a day, a year, a place, a species, a radar night) opens on that view instead.
+  const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'noauto', 'caveats'].some((k) => params.has(k));
+  // In season the live forecast becomes the default view once its file arrives, so the opening waits for that and
+  // lands on today; off-season it is set up now, before the first frame. Not if the reader has already touched something.
+  let touched = false;
+  const touch = (e: Event) => {
+    if (e instanceof KeyboardEvent && ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key)) return; // as intro.ts
+    touched = true;
+    for (const ev of ['pointerdown', 'keydown', 'wheel']) removeEventListener(ev, touch, true);
+  };
+  for (const ev of ['pointerdown', 'keydown', 'wheel']) addEventListener(ev, touch, true);
+  const openIntro = () => {
+    if (seen || !plain || still.matches || document.hidden || touched || intro) return;
+    const opening = (intro = makeIntro(time, time.cursor));
+    opening.begin();
+    // A beat for the loader to bow out, then play. A touch before then lands it on the landing day instead.
+    startIntro = () => {
+      startIntro = () => {};
+      setTimeout(opening.start, 400);
+    };
+    if (firstDrawn) startIntro();
+  };
 
   document.documentElement.style.setProperty('--bg', theme.bg);
   map.fit(padding());
@@ -1013,7 +1043,7 @@ function start() {
   const startLive = () => {
     if (liveStarted) return;
     liveStarted = true;
-    void loadLive().then(onLive);
+    void loadLive().then(onLive).finally(() => liveFirst && openIntro()); // in season the opening lands on live's today
   };
   const onLive = (live: Live | null) => {
     livePending = false;
@@ -1030,10 +1060,12 @@ function start() {
     switchMode(LIVE, md ? [month, day] : undefined);
     syncUrl();
   };
-  if (asked === LIVE || inSeason({ season: new Date(clock).getUTCFullYear() }, clock)) startLive();
+  const liveFirst = asked === LIVE || inSeason({ season: new Date(clock).getUTCFullYear() }, clock);
+  if (liveFirst) startLive();
   else if (liveAvailable()) {
     for (const ev of ['pointerenter', 'pointerdown', 'focus', 'keydown'] as const) picker.addEventListener(ev, startLive, { once: true });
   }
+  if (!liveFirst) openIntro();
 }
 
 start();
