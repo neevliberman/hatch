@@ -5,7 +5,7 @@ type RGBA = [number, number, number, number];
 
 const INK: RGBA = [43, 36, 28, 255];
 
-export const palette = {
+const light = {
   bg: '#cfdcd8', // water and everything outside the land polygons
   land: [248, 242, 227, 255] as RGBA, // the seven forecast states
   landOuter: [236, 228, 210, 255] as RGBA,
@@ -53,5 +53,93 @@ export const palette = {
   transparent: [0, 0, 0, 0] as RGBA,
 };
 
+// The same notebook by lamplight: warm dark paper, chalky ink. Lightness still carries the stages (a dim "not yet", a
+// bright "starting", a deep emerald peak), the dots are a bright fill in a near-black rim and a chalk halo (the light
+// map's pale fill, ink rim and paper halo, inverted so the rim still separates the fill from bright hexes and the halo
+// from dark ones), and the stripes are near-black on the emerald peak.
+const CHALK: RGBA = [236, 227, 205, 255];
+const SOOT: RGBA = [20, 16, 12, 255];
+const lamp: typeof light = {
+  bg: '#18252a',
+  land: [44, 38, 31, 255],
+  landOuter: [35, 30, 25, 255],
+  neighbourLine: [225, 205, 170, 60],
+  stateLine: CHALK,
+  hexEdge: [235, 215, 180, 30],
+  hoverTint: [255, 244, 214, 55],
+  stages: {
+    'not yet': [130, 146, 124, 70],
+    starting: [116, 154, 80, 235],
+    peak: [38, 134, 82, 240],
+    'winding down': [204, 130, 44, 235],
+    over: [150, 122, 98, 120],
+  },
+  stripes: SOOT,
+  moth: [226, 246, 150, 255],
+  second: [255, 150, 66, 255],
+  firefly: [250, 204, 40, 255],
+  rough: SOOT,
+  dotRim: SOOT,
+  dotHalo: CHALK,
+  dotShadow: [0, 0, 0, 90],
+  marker: [236, 168, 70, 255],
+  pick: CHALK,
+  water: [24, 37, 42, 255],
+  riverInk: [118, 170, 206, 235],
+  riverCase: [44, 38, 31, 170],
+  road: [120, 108, 88, 200],
+  forest: [118, 186, 126, 210],
+  trees: [118, 186, 126, 110],
+  transparent: [0, 0, 0, 0],
+};
+
+export type ThemeMode = 'light' | 'dark';
+const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o));
+const inks = { light: '#2f6a45', dark: '#8fd09a' };
+
+const KEY = 'hatch-theme';
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+/** The reader's saved choice, if any; otherwise the system setting. */
+function chosen(): ThemeMode | null {
+  try {
+    const v = localStorage.getItem(KEY);
+    return v === 'dark' || v === 'light' ? v : null;
+  } catch {
+    return null;
+  }
+}
+const start = (): ThemeMode => document.documentElement.dataset.theme === 'dark' || document.documentElement.dataset.theme === 'light'
+  ? (document.documentElement.dataset.theme as ThemeMode) // set before first paint by the script in index.html
+  : chosen() ?? (systemDark.matches ? 'dark' : 'light');
+
+let mode: ThemeMode = start();
+/** The map's colours for the current mode. Mutated in place on a switch (layers hold references to it), so read it
+ * when drawing and never keep one of its colours in a module-level constant. */
+export const palette = clone(mode === 'dark' ? lamp : light);
 /** Text colour for the species name and its marks in the About panel (the moth's own fill is too pale on paper). */
-export const mothInk = '#2f6a45';
+export let mothInk = inks[mode];
+export const isDark = () => mode === 'dark';
+
+const listeners = new Set<() => void>();
+/** Run after the mode changes (once the palette holds the new colours). */
+export const onTheme = (fn: () => void) => void listeners.add(fn);
+
+const metaColor = { light: '#f8f2e3', dark: '#241f19' };
+function apply(next: ThemeMode) {
+  mode = next;
+  Object.assign(palette, clone(next === 'dark' ? lamp : light));
+  mothInk = inks[next];
+  document.documentElement.dataset.theme = next;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', metaColor[next]);
+  listeners.forEach((fn) => fn());
+}
+apply(mode);
+
+/** Switch modes and remember the choice. */
+export function setMode(next: ThemeMode) {
+  try { localStorage.setItem(KEY, next); } catch { /* storage blocked: the choice lasts until reload */ }
+  if (next !== mode) apply(next);
+}
+export const toggleMode = () => setMode(mode === 'dark' ? 'light' : 'dark');
+// With no saved choice the page follows the system setting as it changes.
+systemDark.addEventListener('change', () => { if (!chosen()) apply(systemDark.matches ? 'dark' : 'light'); });

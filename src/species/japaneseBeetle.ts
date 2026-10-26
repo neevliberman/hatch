@@ -2,6 +2,7 @@ import type { Creature } from '../core/layer';
 import { blob, loop, pen, place, type P } from '../ui/sketch';
 import type { SpeciesConfig } from '../layers/oneGeneration';
 import mark from '../marks/japanese-beetle.svg';
+import { isDark } from '../theme';
 
 /** The Japanese beetle as the About panel draws it: a C-shaped white grub curled in the soil, and the adult from
  * above, its wing covers parted (they lift as it takes off), six legs and clubbed feelers. */
@@ -53,7 +54,7 @@ export const config: SpeciesConfig = {
   season: { on: ['Japanese beetle season is on', '. Beetles are out in the Midwest now.'], where: 'southern Illinois, Indiana and Ohio' },
   // Copper, like its wing covers: apart from the luna's pale green and the firefly's yellow.
   glow: [238, 134, 62, 255],
-  ink: '#9a4a1c',
+  get ink() { return isDark() ? '#f0a070' : '#9a4a1c'; },
   creature: art,
   fine: 'species/japanese-beetle/fine/',
   endNote: ['That was the beetle season.', 'Press replay to watch again'],

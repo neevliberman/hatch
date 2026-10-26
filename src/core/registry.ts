@@ -54,6 +54,11 @@ export class LayerRegistry {
     return () => this.listeners.delete(fn);
   }
 
+  /** Tell listeners to redraw without a change of layers (a light/dark switch). */
+  refresh(): void {
+    this.emit();
+  }
+
   private emit(): void {
     this.listeners.forEach((fn) => fn());
   }

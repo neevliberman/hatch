@@ -1,6 +1,6 @@
 import type { Creature } from '../core/layer';
 import { blob, loop, pen, place, type P } from '../ui/sketch';
-import { palette } from '../theme';
+import { isDark, palette } from '../theme';
 import type { SpeciesConfig } from '../layers/oneGeneration';
 import mark from '../marks/firefly.svg';
 
@@ -37,8 +37,8 @@ export const config: SpeciesConfig = {
   words: { plural: 'fireflies', sightingsOf: 'firefly', countedAs: 'fireflies', shareName: 'fireflies', mark },
   season: { on: ['Firefly season is on', '. Fireflies are flashing in the Midwest now.'], where: 'the central Midwest' },
   // Firefly light is yellow-green; a warm yellow keeps it apart from the luna's pale green.
-  glow: palette.firefly,
-  ink: '#8a5a00',
+  get glow() { return palette.firefly; },
+  get ink() { return isDark() ? '#f2c25a' : '#8a5a00'; },
   creature: art,
   fine: 'fine-firefly/',
   endNote: ['That was the firefly season.', 'Press replay to watch again'],

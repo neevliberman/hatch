@@ -7,7 +7,7 @@ import { GRID_RES, MIDWEST_BOUNDS } from '../core/grid';
 import { isForecast, isHexes } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import type { TimeAxis } from '../core/timeAxis';
-import { basemapLabels, basemapLayers, loadBasemap, padsFor, theme } from './basemap';
+import { basemapLabels, basemapLayers, loadBasemap, padsFor, resetBasemap, theme } from './basemap';
 import { createLabels } from './labels';
 import { palette } from '../theme';
 
@@ -53,6 +53,8 @@ export interface MapHandle {
    * state lines until the zoomed-in shore draws the lakes over those (then over them, never under a lake).
    * While any are set the sighting dots stand down, so nothing but the overlay's own story sits on it. [] clears it. */
   setOverlay(layers: Layer[], overWater?: Layer[]): void;
+  /** After a light/dark switch: drop every layer and draw them again, so none keeps its old colours on the GPU. */
+  recolor(): void;
 }
 
 export interface Padding {
@@ -96,7 +98,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     onFirstDraw?.();
-    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {} };
+    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {}, recolor() {} };
   }
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   // The size the last fit was worked out for. Before layout (an in-app browser still sliding in) the map can be 0 x 0,
@@ -539,6 +541,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
 
   const handle: MapHandle = {
     refresh,
+    recolor() {
+      resetBasemap();
+      markerBuilt = markerLayers();
+      pickedBuilt = pickedLayers();
+      deck.setProps({ layers: [] });
+      refresh();
+    },
     fit(p, smooth) {
       const v = fitState(p);
       // Already gliding to this very view (two refits in one tick, say a closing panel and the resize it causes): let the

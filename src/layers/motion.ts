@@ -26,7 +26,7 @@ type Ring<T> = { s: T; at: number };
  * `seen(from, to)` gives the sightings from day `from` to day `to`, both included: a slow frame that moves the clock
  * several days still rings every one of them.
  */
-export function ripples<T>(id: string, pos: (s: T) => [number, number], color: readonly number[]) {
+export function ripples<T>(id: string, pos: (s: T) => [number, number], color: () => readonly number[]) {
   let rings: Ring<T>[] = [];
   let ringDay = -1;
   return (anim: boolean, doy: number, seen: (from: number, to: number) => T[]): Layer[] => {
@@ -53,7 +53,10 @@ export function ripples<T>(id: string, pos: (s: T) => [number, number], color: r
             getLineWidth: 2,
             // A new array every frame, so these are re-read each frame (40 rings at most).
             getRadius: (r) => 4 + 14 * age(r),
-            getLineColor: (r) => [color[0]!, color[1]!, color[2]!, 204 - 204 * age(r)],
+            getLineColor: (r) => {
+              const c = color();
+              return [c[0]!, c[1]!, c[2]!, 204 - 204 * age(r)];
+            },
           }),
         ]
       : [];
