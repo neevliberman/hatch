@@ -195,8 +195,6 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
   drawer.addEventListener('touchend', endDrag);
   drawer.addEventListener('touchcancel', endDrag);
   // A hairline under the sticky title bar once text scrolls beneath it.
-  // A wheel or trackpad reading on at the middle stop (where the text doesn't scroll) opens the tall stop.
-  drawer.addEventListener('wheel', (e) => sheet() && !full() && e.deltaY > 0 && toggle(true, true), { passive: true });
   drawer.addEventListener('scroll', () => drawer.classList.toggle('scrolled', drawer.scrollTop > 0), { passive: true });
   registry.subscribe(render);
   render();
