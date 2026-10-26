@@ -1,7 +1,8 @@
 // Mobile smoke test: real phone sizes, touch, both orientations, Safari's engine (WebKit) and Chrome's (Chromium).
 // Usage: node scripts/mobile.mjs [outDir]
 // Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST (html file, default dist-single/index.html),
-//      ENGINES (comma list, default "chromium,webkit").
+//      ENGINES (comma list, default "chromium,webkit"), SHARD ("2/3" = the 2nd of 3 equal slices of the phone and radar
+//      cases; unset = all of them).
 // FAILS (exit 1) on errors, a map squeezed out by the panels, controls that are covered or off-screen, or a broken
 // tap flow (hex card, play, My area, Share, drawer).
 // Then, when dist/ (DIST_DIR) has been built, the radar replays over http on the smallest phone of each engine, both
@@ -33,6 +34,10 @@ const MIN_MAP = 0.3; // share of the screen height the map must keep between the
 const MIN_TARGET = 24; // px, WCAG 2.2 AA target size
 const problems = [];
 const browsers = {};
+// Each phone-and-orientation case, and each radar case, takes the next number; a shard runs every SHARD-of-th one.
+const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
+let caseNo = 0;
+const mine = () => caseNo++ % shardOf === shardNo - 1;
 for (const e of new Set(phones.map((p) => p[1]))) {
   browsers[e] = await pw[e].launch(
     e === 'chromium'
@@ -83,6 +88,7 @@ const blank = async (page) => {
 
 for (const [phone, engine, pw0, ph0, dpr] of phones) {
   for (const orient of ['portrait', 'landscape']) {
+    if (!mine()) continue;
     const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
     const tag = `${phone} ${orient}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
@@ -364,6 +370,7 @@ if (existsSync(join(distDir, 'radar'))) {
   for (const [phone, engine, pw0, ph0, dpr] of small) {
     for (const orient of ['portrait', 'landscape']) {
       for (const [id, ev] of Object.entries(RADARS)) {
+        if (!mine()) continue;
         const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
         const tag = `radar ${id} ${phone} ${orient}`;
         const fail = (m) => problems.push(`${tag}: ${m}`);
