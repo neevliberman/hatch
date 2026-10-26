@@ -475,6 +475,7 @@ function start() {
     ($('mark') as HTMLImageElement).src = cur.words.mark;
     showMark();
     $('dots-what').textContent = cur.words.plural;
+    $('app').classList.toggle('tracker', !!cur.tracker);
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', `Midwest map: ${cur.words.sightingsOf} sightings over forecast hexagons`);

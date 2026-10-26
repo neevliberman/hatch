@@ -18,7 +18,7 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 
 - **Press play** and watch a season: the forecast wave (hexagons) and the real sightings (dots) move north together.
 - **Pick a year** from 2015 to 2025, or "all years" pooled into one typical season.
-- **Pick a species** from the menu by the title: the luna moth, the common eastern firefly or the Japanese beetle (an invasive beetle, so knowing when it comes out lets gardeners hand-pick the first ones instead of spraying). The firefly and the beetle are exploratory first tries with luna's model: leave-one-year-out, the beetle's forecast is 2.9 days off against 3.8 for its usual date ([pipeline/species](pipeline/species/README.md)), the firefly's 3.7 against 5.4 ([pipeline/firefly](pipeline/firefly/README.md)). Each one's data loads only when picked.
+- **Pick a species** from the menu by the title: the luna moth, the common eastern firefly or the Japanese beetle (an invasive beetle, so knowing when it comes out lets gardeners hand-pick the first ones instead of spraying). The firefly and the beetle are exploratory first tries with luna's model: leave-one-year-out, the beetle's forecast is 2.9 days off against 3.8 for its usual date ([pipeline/species](pipeline/species/README.md)), the firefly's 3.7 against 5.4 ([pipeline/firefly](pipeline/firefly/README.md)). Each one's data loads only when picked. The monarch and red admiral are trackers, not forecasts: where they have been seen this spring, since migrants arrive from the south rather than emerge with warmth ([pipeline/front](pipeline/front/README.md)).
 - **Hover or tap a hexagon** for its forecast: when the first moths show up and the busiest days.
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
 - **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
@@ -123,6 +123,7 @@ pipeline/fit/     the model, its tests and the scored result
 pipeline/replay/  builds the forecast files the app reads
 pipeline/firefly/ the firefly's data and fit
 pipeline/species/ every further species (Japanese beetle so far): one list, one fetch/fit/fine-hex recipe
+pipeline/front/   migrant trackers (monarch, red admiral): sightings so far, no forecast
 pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
 pipeline/radar/   radar replays: NEXRAD scans -> public/radar/<event>/ (run by hand, needs Py-ART)
 pipeline/live/    nightly live forecast -> live/latest.json, every species in registry.py (PRISM + Open-Meteo + Daymet, frozen fits)

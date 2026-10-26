@@ -36,6 +36,8 @@ interface LiveFile {
   sightings?: ReplayFile['sightings'];
   /** Every other species' forecast, by species key (src/species.ts), same layout; `cells` may be left to the top level. */
   species?: Record<string, Partial<LiveFile>>;
+  /** The migrants' trackers, by species key (pipeline/front): this season's sightings so far, no forecast. */
+  front?: Record<string, { season: number; as_of: string; sightings?: ReplayFile['sightings'] }>;
 }
 
 export interface Live {
@@ -161,3 +163,31 @@ export const loadLive = (key = 'luna', cells: string[] = data.cells): Promise<Li
  * arrived (a species picked off-season does not pull the file in; it gets its part if live mode is wanted later). */
 export const whenLive = (key: string, cells: string[]): Promise<Live | null> =>
   liveAvailable() ? asked.then(() => loaded!).then((f) => parsed(f, key, cells)) : Promise.resolve(null);
+
+/** A tracker's season so far (`front.<key>` in the file) as a Live with nothing forecast; null when the file has none. */
+function frontLive(f: LiveFile | null, key: string): Live | null {
+  const e = f?.front?.[key];
+  const asOf = day(e?.as_of);
+  if (!f || !e || !Number.isInteger(e.season) || !Number.isFinite(asOf)) return null;
+  return {
+    season: e.season,
+    stub: f.stub === true,
+    backfill: f.backfill === true,
+    generated: Date.parse(f.generated),
+    asOf,
+    forecastThrough: null,
+    staleAfterHours: Number.isFinite(f.stale_after_hours) ? f.stale_after_hours : 36,
+    model: { id: 'tracker', spec: '', ensemble: '' },
+    sources: { observed: '', forecast: '', after: '' },
+    median: [],
+    lo: [],
+    hi: [],
+    outNow: [],
+    dd: [],
+    sightings: (Array.isArray(e.sightings) ? e.sightings : []).filter((r) => Array.isArray(r) && r.length >= 6).map(toSighting),
+  };
+}
+
+/** The same as whenLive, for a tracker: never starts the fetch, resolves once the file has arrived. */
+export const whenFront = (key: string): Promise<Live | null> =>
+  liveAvailable() ? asked.then(() => loaded!).then((f) => frontLive(f, key)) : Promise.resolve(null);
