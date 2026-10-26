@@ -16,7 +16,7 @@ Each night (scorecard.py calls nightly(), after the champion's files are written
    score_band (20+ records, settled 14 days, forecast issued 7+ days before the real date, frozen once scored) and
    the table written to live/league_east.json with the EAST_2027.md verdict.
 
-Run by hand: python3 pipeline/league/east.py --live live --season 2027 [--today 2027-07-12] [--force]
+Run by hand: python3 pipeline/league/east.py --live live --season 2027 [--add live/latest.json] [--today 2027-07-12] [--force]
 """
 import argparse
 import datetime as dt
@@ -41,10 +41,13 @@ from live import scorecard as S, sources  # noqa: E402
 
 STATIC = HERE / "east_static.json"
 LAYER = "east"
-MARGIN, MIN_PLACES, MIN_RECORDS = 1.0, 5, 300          # EAST_2027.md
+MARGIN, MIN_PLACES, MIN_RECORDS = 1.0, 10, 1000        # EAST_2027.md
 VERDICT = dt.date(2027, 9, 27)
 SEASONS = (2027,)                                       # the track runs only in seasons it was frozen for
 FORECAST_DAYS, MIN_FORECAST_DAYS = 7, 5
+OPEN_METEO_PAUSE = 60                                   # s between build_live's Open-Meteo call and ours
+KEEP = ["id", "observed_on", "created_at", "lat", "lng", "accuracy_m", "obscured", "quality_grade", "captive",
+        "user_id", "life_stage"]                        # the columns grading reads; the weekly receipt keeps only these
 
 
 def load_static(path=STATIC):
@@ -69,35 +72,44 @@ def place_inc(static, tmin, tmax):
             for c, p in static["places"].items()}
 
 
-def season_weather(static, season, as_of: dt.date, use_forecast, fetch_obs=None, fetch_fc=None):
-    """Observed (+ forecast) degree-days per place from 1 March: {place: array}, and the last day covered."""
+def season_weather(static, season, as_of: dt.date, use_forecast, fetch_obs=None, fetch_fc=None, pause=0):
+    """Observed (+ forecast) degree-days per place from 1 March: {place: array}, and the last day covered.
+    Observed weather is read as the champion reads it (build_live.observed: same gap filling, a hex with no data
+    borrows its nearest neighbour's, fails past 2% bad hexes); fetch_obs(lat, lng) -> (tmin, tmax) replaces the
+    PRISM reads (tests, rehearsal). An as_of before 1 March (the first nights) has no observed days."""
     import h3
+    from live import build_live
     hexes = static["offsets"]["hexes"]
-    off = np.array(static["offsets"]["offsets"])                # [hex, month, (tmin, tmax)]
+    off = np.array(static["offsets"]["offsets"], float)        # [hex, month, (tmin, tmax)]
     start = dt.date(season, 1, 1) + dt.timedelta(days=static["first_day_index"])
     ll = [h3.cell_to_latlng(h) for h in hexes]
-    fetch_obs = fetch_obs or (lambda lat, lng: sources.prism_point(lat, lng, start, as_of))
-    with ThreadPoolExecutor(6) as ex:
-        got = list(ex.map(lambda p: fetch_obs(*p), ll))
-    tmin, tmax = np.array([g[0] for g in got], float), np.array([g[1] for g in got], float)
-    months = np.array([d.month - 1 for d in sources.dates(start, as_of)])
-    tmin, tmax = tmin + off[:, months, 0], tmax + off[:, months, 1]
-    from live.build_live import fill_gaps
-    tmin, tmax = fill_gaps(tmin), fill_gaps(tmax)
+    if fetch_obs is None:
+        tmin, tmax, _ = build_live.observed(hexes, start, as_of, off)
+    elif as_of < start:
+        tmin = tmax = np.zeros((len(hexes), 0))
+    else:
+        with ThreadPoolExecutor(6) as ex:
+            got = list(ex.map(lambda p: fetch_obs(*p), ll))
+        tmin, tmax = np.array([g[0] for g in got], float), np.array([g[1] for g in got], float)
+        months = np.array([d.month - 1 for d in sources.dates(start, as_of)], dtype=int)
+        tmin, tmax = build_live.fill_gaps(tmin + off[:, months, 0]), build_live.fill_gaps(tmax + off[:, months, 1])
     if np.isnan(tmin).any() or np.isnan(tmax).any():
         raise RuntimeError("east: observed weather has holes that could not be filled")
-    end = as_of
+    end = max(as_of, start - dt.timedelta(days=1))
     if use_forecast:
         f0, f1 = as_of + dt.timedelta(days=1), as_of + dt.timedelta(days=FORECAST_DAYS)
+        time.sleep(pause)                       # build_live asked Open-Meteo for 551 places a minute ago
         fetch_fc = fetch_fc or (lambda la, ln: sources.open_meteo(la, ln, f0, f1))
         fmin, fmax = fetch_fc(np.array([p[0] for p in ll]), np.array([p[1] for p in ll]))
-        fm = np.array([d.month - 1 for d in sources.dates(f0, f1)])
+        fm = np.array([d.month - 1 for d in sources.dates(f0, f1)], dtype=int)
         fmin, fmax = fmin + off[:, fm, 0], fmax + off[:, fm, 1]
         keep = ~(np.isnan(fmin).any(0) | np.isnan(fmax).any(0))
         n_ok = int(np.argmin(keep)) if not keep.all() else len(keep)
         if n_ok < MIN_FORECAST_DAYS:
             raise RuntimeError(f"east: only {n_ok} complete forecast days")
-        tmin, tmax = np.hstack([tmin, fmin[:, :n_ok]]), np.hstack([tmax, fmax[:, :n_ok]])
+        skip = max(0, (start - f0).days)        # forecast days before 1 March do not count
+        tmin = np.hstack([tmin, fmin[:, skip:n_ok]])
+        tmax = np.hstack([tmax, fmax[:, skip:n_ok]])
         end = as_of + dt.timedelta(days=n_ok)
     return place_inc(static, tmin, tmax), end
 
@@ -133,8 +145,8 @@ def forecast(static, inc_so_far):
 
 
 def sealed_entry(static, season, as_of: dt.date, issued: dt.date, model, use_forecast=True, fetch_obs=None,
-                 fetch_fc=None):
-    inc, end = season_weather(static, season, as_of, use_forecast, fetch_obs, fetch_fc)
+                 fetch_fc=None, pause=0):
+    inc, end = season_weather(static, season, as_of, use_forecast, fetch_obs, fetch_fc, pause)
     return {"version": 1, "season": season, "issued": issued.isoformat(), "as_of": as_of.isoformat(),
             "forecast_through": end.isoformat(), "model": model, "bands": forecast(static, inc)}
 
@@ -145,9 +157,9 @@ def nightly(live: Path, live_file: dict, today: dt.date, static_path=STATIC, fet
     if season not in SEASONS or live_file.get("backfill") or live_file.get("carried_over"):
         return None
     entry = sealed_entry(load_static(static_path), season, dt.date.fromisoformat(live_file["as_of"]), today,
-                         model_of(static_path), True, fetch_obs, fetch_fc)
+                         model_of(static_path), True, fetch_obs, fetch_fc, pause=0 if fetch_fc else OPEN_METEO_PAUSE)
     p = live / "archive_east" / str(season) / f"{entry['issued']}.json"
-    weekly.write_atomic(p, (json.dumps(entry, separators=(",", ":")) + "\n").encode())
+    weekly.write_atomic(p, (json.dumps(entry, separators=(",", ":"), allow_nan=False) + "\n").encode())
     return p
 
 
@@ -186,16 +198,25 @@ def first_brood(raw, season, static, score_date: dt.date):
     return d[d.doy <= d.band.map(cuts)][["band", "doy", "date"]]
 
 
-def tally(rows):
-    """n-weighted mean miss of the clock and the calendar over scored places; D = clock - calendar."""
+def tally(rows, draws=2000):
+    """Over scored places: the record-weighted mean miss of the clock and the calendar and D = clock - calendar (the
+    verdict's number), plus, reported beside it and never deciding: the unweighted place mean D, a 95% interval of D
+    resampling places, ties (equal misses at the scorecard's 0.1 d rounding, not clock wins)."""
     sc = [r for r in rows if r.get("status") == "scored"]
     n = sum(r["n"] for r in sc)
     if not sc:
-        return {"places": 0, "records": 0, "clock": None, "calendar": None, "D": None, "clock_wins": 0}
-    hx = sum(r["n"] * r["miss"] for r in sc) / n
-    hc = sum(r["n"] * r["calendar_miss"] for r in sc) / n
+        return {"places": 0, "records": 0, "clock": None, "calendar": None, "D": None, "clock_wins": 0, "ties": 0,
+                "D_unweighted": None, "D_interval_places": None}
+    w = np.array([r["n"] for r in sc], float)
+    x = np.array([r["miss"] for r in sc], float)
+    c = np.array([r["calendar_miss"] for r in sc], float)
+    hx, hc = float((w * x).sum() / n), float((w * c).sum() / n)
+    rng = np.random.default_rng(0)
+    boot = [float((w[i] * (x[i] - c[i])).sum() / w[i].sum()) for i in rng.integers(0, len(sc), (draws, len(sc)))]
     return {"places": len(sc), "records": n, "clock": round(hx, 2), "calendar": round(hc, 2),
-            "D": round(hx - hc, 6), "clock_wins": sum(r["miss"] < r["calendar_miss"] for r in sc)}
+            "D": round(hx - hc, 6), "clock_wins": int((x < c).sum()), "ties": int((x == c).sum()),
+            "D_unweighted": round(float((x - c).mean()), 2),
+            "D_interval_places": [round(float(v), 2) for v in np.percentile(boot, [2.5, 97.5])]}
 
 
 def decide(t, final):
@@ -211,8 +232,8 @@ def decide(t, final):
 
 def grade(live: Path, season, today: dt.date, raw, static_path=STATIC):
     static = load_static(static_path)
-    entries = S.load_archive(live / "archive_east", season)
-    model = S.frozen_model(entries)
+    model = model_of(static_path)                       # only envelopes sealed by the frozen file are graded
+    entries = [e for e in S.load_archive(live / "archive_east", season) if e.get("model") == model]
     monday = S.week_start(today)
     card = live / "league" / str(season) / "east.json"
     prev = S.read_card(card)
@@ -260,6 +281,7 @@ def weekly_run(live: Path, season, today: dt.date, fetch=fetch_east, force=False
         raw = pd.read_parquet(p)
     else:
         raw = fetch(season, today)
+        raw = raw[[c for c in KEEP if c in raw.columns]]
         older = sorted(q for q in p.parent.glob("*.parquet") if q.name < p.name)
         if older and len(raw) < 0.9 * len(pd.read_parquet(older[-1])):
             raise RuntimeError(f"east records pull: {len(raw)} rows, under 90% of last week's; not saving it")
@@ -273,14 +295,23 @@ def weekly_run(live: Path, season, today: dt.date, fetch=fetch_east, force=False
 
 
 def main(argv=None):
+    """The nightly entry point (scorecard.py runs it in its own process, with a time limit): tonight's sealed forecast
+    if --add names tonight's live file, then this week's table if it is due. Any failure exits non-zero."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--live", type=Path, required=True)
+    ap.add_argument("--live", type=Path, required=True, help="the live-data folder")
     ap.add_argument("--season", type=int)
+    ap.add_argument("--add", type=Path, help="tonight's live/latest.json: seal tonight's eastern forecast")
     ap.add_argument("--today", type=dt.date.fromisoformat, default=dt.datetime.now(dt.timezone.utc).date())
-    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--force", action="store_true", help="rerun this week's table even if it exists")
     a = ap.parse_args(argv)
-    p = weekly_run(a.live, a.season or a.today.year, a.today, force=a.force)
-    print(f"east: {p or 'nothing to do'}")
+    season = a.season or a.today.year
+    if a.add:
+        live = json.loads(a.add.read_text())
+        if int(live["season"]) == season:
+            p = nightly(a.live, live, a.today)
+            print(f"east: {'archived ' + str(p) if p else 'no forecast tonight'}")
+    p = weekly_run(a.live, season, a.today, force=a.force)
+    print(f"east: {'wrote ' + str(p) if p else 'no table due'}")
     return 0
 
 

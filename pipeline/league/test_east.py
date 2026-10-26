@@ -75,6 +75,42 @@ def test_nightly_writes_a_sealed_entry_and_skips_backfills(tmp_path):
     assert E.nightly(tmp_path, {**live, "season": 2028}, dt.date(2028, 5, 3), p) is None
 
 
+def test_first_nights_before_1_march_use_only_the_forecast(tmp_path):
+    """build_live clamps as_of to 28 Feb on the first nights (2-3 March): no observed day, the forecast from 1 March."""
+    p = static(tmp_path)
+    live = {"season": 2027, "as_of": "2027-02-28"}
+    out = E.nightly(tmp_path, live, dt.date(2027, 3, 2), p, lambda la, ln: pytest.fail("no PRISM day to read"), fake_fc)
+    e = json.loads(out.read_text())
+    assert e["forecast_through"] == "2027-03-07"
+    # 7 forecast days at 10 DD, then the flat 10 DD/day endings: 600 DD on the 60th day
+    assert e["bands"][0]["onset"] == pytest.approx(59 + 59 + 1, abs=0.01)
+
+
+def test_place_weather_is_the_weighted_mean_of_its_hexes(tmp_path):
+    s = json.loads(static(tmp_path).read_text())
+    hot = s["offsets"]["hexes"].index(HEXES[0])                     # weight 0.75
+    tmin, tmax = np.full((2, 3), 10.0), np.full((2, 3), 10.0)       # 0 DD everywhere ...
+    tmin[hot], tmax[hot] = 20.0, 20.0                               # ... except 10 DD a day at the heavy hex
+    assert E.place_inc(s, tmin, tmax)[CELL] == pytest.approx([7.5, 7.5, 7.5])
+
+
+def test_a_short_forecast_fails_the_night(tmp_path):
+    p = static(tmp_path)
+    short = lambda la, ln: (np.full((len(la), 7), np.nan), np.full((len(la), 7), np.nan))   # noqa: E731
+    start = dt.date(2027, 3, 1)
+    with pytest.raises(RuntimeError, match="forecast days"):
+        E.nightly(tmp_path, {"season": 2027, "as_of": "2027-05-01"}, dt.date(2027, 5, 3), p,
+                  fake_obs(start, dt.date(2027, 5, 1)), short)
+
+
+def test_the_weekly_table_stops_at_the_verdict_week(tmp_path):
+    p = static(tmp_path)
+    seal(tmp_path, p, 156.0, 165.0)
+    out = E.weekly_run(tmp_path, 2027, dt.date(2027, 10, 6), lambda s, t: records(40, 150), static_path=p)
+    t = json.loads(out.read_text())
+    assert t["score_date"] == "2027-09-27" and t["verdict"] == "no_verdict"     # one place: under the floor
+
+
 def records(n, doy0, season=2027):
     """n clean first-brood records at the place, one observer each, days doy0..doy0+n-1."""
     days = [dt.date(season, 1, 1) + dt.timedelta(days=doy0 - 1 + i) for i in range(n)]
@@ -122,12 +158,24 @@ def tally(places, records, d, wins):
 
 
 def test_decide_follows_the_written_rule():
-    assert E.decide(tally(9, 900, -2.0, 9), False)[0] == "in_progress"
-    assert E.decide(tally(4, 900, -2.0, 4), True)[0] == "no_verdict"
-    assert E.decide(tally(9, 299, -2.0, 9), True)[0] == "no_verdict"
-    assert E.decide(tally(8, 900, -1.0, 4), True)[0] == "clock_wins"
-    assert E.decide(tally(8, 900, -1.0, 3), True)[0] == "calendar_stays"
-    assert E.decide(tally(8, 900, -0.99, 8), True)[0] == "calendar_stays"
+    assert E.decide(tally(19, 1900, -2.0, 19), False)[0] == "in_progress"
+    assert E.decide(tally(9, 1900, -2.0, 9), True)[0] == "no_verdict"
+    assert E.decide(tally(19, 999, -2.0, 19), True)[0] == "no_verdict"
+    assert E.decide(tally(18, 1900, -1.0, 9), True)[0] == "clock_wins"
+    assert E.decide(tally(18, 1900, -1.0, 8), True)[0] == "calendar_stays"
+    assert E.decide(tally(18, 1900, -0.99, 18), True)[0] == "calendar_stays"
+
+
+def test_tally_reports_beside_the_verdict_number():
+    rows = [{"status": "scored", "n": 100, "miss": 2.0, "calendar_miss": 5.0},
+            {"status": "scored", "n": 10, "miss": 6.0, "calendar_miss": 4.0},
+            {"status": "scored", "n": 10, "miss": 3.0, "calendar_miss": 3.0}, {"status": "pending", "n": 5}]
+    t = E.tally(rows)
+    assert t["places"] == 3 and t["records"] == 120 and t["clock_wins"] == 1 and t["ties"] == 1
+    assert t["D"] == pytest.approx((100 * -3 + 10 * 2) / 120)
+    assert t["D_unweighted"] == pytest.approx(-1 / 3, abs=0.01)
+    lo, hi = t["D_interval_places"]
+    assert lo <= t["D"] <= hi
 
 
 def test_weekly_run_keeps_a_receipt_and_refuses_tampering(tmp_path):
@@ -149,7 +197,7 @@ def test_weekly_run_keeps_a_receipt_and_refuses_tampering(tmp_path):
 def test_rule_numbers_and_frozen_file_match_the_written_rule():
     text = (HERE / "EAST_2027.md").read_text()
     assert "**−1.0** day" in text and E.MARGIN == 1.0
-    assert f"**{E.MIN_PLACES}** scored places" in text and f"**{E.MIN_RECORDS}** records" in text
+    assert f"**{E.MIN_PLACES}** scored places" in text and f"**{E.MIN_RECORDS:,}** records" in text
     assert "27 September 2027" in text and E.VERDICT == dt.date(2027, 9, 27)
     m = re.search(r"`east_static.json` sha256 prefix: `([0-9a-f]{12})`", text)
     assert m and E.model_of()["hash"] == m.group(1)

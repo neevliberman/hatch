@@ -29,6 +29,7 @@ import regional as G  # noqa: E402
 OUT = HERE / "east_static.json"
 ACIS = "https://data.rcc-acis.org/GridData"
 TOP_HEXES = 8
+FIRST_DOY = 60                                   # live/scorecard.py
 
 
 def prism_ok(h, tries=3):
@@ -61,6 +62,7 @@ def places(usable=None):
     rec = G.D.rec
     cuts = G.R4._wide_cuts(rec)                                 # doy, from every season
     fb = G.R4._with_cut(rec[rec.region != "mw"], {}, cuts)
+    fb = fb[fb.doy >= FIRST_DOY]                 # as the grader (scorecard.FIRST_DOY): nothing before 1 March counts
     out = {}
     for cell, g in fb.groupby("region"):
         years = [(int(y), t) for y, t in g.groupby("year").t if len(t) >= G.EV.MIN_N]

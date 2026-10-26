@@ -2,7 +2,7 @@
  "season": 2026,
  "model": {
   "id": "east-clock-v1",
-  "hash": "d09be1f01c8e"
+  "hash": "19febf953230"
  },
  "lag_days": 2,
  "forecast_days": 0,
@@ -11,10 +11,16 @@
   "score_date": "2026-10-05",
   "places": 24,
   "records": 4088,
-  "clock": 6.37,
-  "calendar": 7.74,
-  "D": -1.376932,
-  "clock_wins": 11
+  "clock": 6.24,
+  "calendar": 7.89,
+  "D": -1.649119,
+  "clock_wins": 11,
+  "ties": 0,
+  "D_unweighted": -1.16,
+  "D_interval_places": [
+   -4.13,
+   0.72
+  ]
  },
  "places": [
   {
@@ -58,16 +64,16 @@
    "status": "scored",
    "onset": {
     "real": 76.5,
-    "forecast": 75.2,
+    "forecast": 75.4,
     "likely": [
-     72.2,
-     78.6
+     72.5,
+     78.8
     ],
-    "calendar": 83.6,
+    "calendar": 83.8,
     "issued": "2026-03-10",
     "as_of": "2026-03-08",
-    "error": -1.3,
-    "calendar_error": 7.1,
+    "error": -1.1,
+    "calendar_error": 7.3,
     "inside": true
    },
    "peak": {
@@ -84,8 +90,8 @@
     "calendar_error": -40.9,
     "inside": false
    },
-   "miss": 29.4,
-   "calendar_miss": 24.0,
+   "miss": 29.3,
+   "calendar_miss": 24.1,
    "note": "peak 58 days later than forecast",
    "scored_on": "2026-07-13"
   },
@@ -98,35 +104,35 @@
    "status": "scored",
    "onset": {
     "real": 71.2,
-    "forecast": 75.1,
+    "forecast": 76.9,
     "likely": [
-     73.4,
-     82.2
+     74.4,
+     83.4
     ],
-    "calendar": 74.4,
+    "calendar": 76.0,
     "issued": "2026-03-05",
     "as_of": "2026-03-03",
-    "error": 3.9,
-    "calendar_error": 3.2,
+    "error": 5.7,
+    "calendar_error": 4.8,
     "inside": false
    },
    "peak": {
     "real": 107.0,
-    "forecast": 94.7,
+    "forecast": 95.9,
     "likely": [
-     94.7,
-     94.7
+     95.9,
+     95.9
     ],
-    "calendar": 104.9,
+    "calendar": 105.6,
     "issued": "2026-04-10",
     "as_of": "2026-04-08",
-    "error": -12.3,
-    "calendar_error": -2.1,
+    "error": -11.1,
+    "calendar_error": -1.4,
     "inside": false
    },
-   "miss": 8.1,
-   "calendar_miss": 2.6,
-   "note": "peak 12 days later than forecast",
+   "miss": 8.4,
+   "calendar_miss": 3.1,
+   "note": "peak 11 days later than forecast",
    "scored_on": "2026-07-13"
   },
   {
@@ -138,35 +144,35 @@
    "status": "scored",
    "onset": {
     "real": 80.0,
-    "forecast": 78.3,
+    "forecast": 79.3,
     "likely": [
-     76.4,
-     82.2
+     76.7,
+     82.6
     ],
-    "calendar": 89.7,
+    "calendar": 89.9,
     "issued": "2026-03-14",
     "as_of": "2026-03-12",
-    "error": -1.7,
-    "calendar_error": 9.7,
+    "error": -0.7,
+    "calendar_error": 9.9,
     "inside": true
    },
    "peak": {
     "real": 110.0,
-    "forecast": 112.2,
+    "forecast": 112.6,
     "likely": [
-     109.6,
-     114.9
+     109.8,
+     115.4
     ],
-    "calendar": 122.5,
+    "calendar": 122.8,
     "issued": "2026-04-13",
     "as_of": "2026-04-11",
-    "error": 2.2,
-    "calendar_error": 12.5,
+    "error": 2.6,
+    "calendar_error": 12.8,
     "inside": true
    },
-   "miss": 2.0,
-   "calendar_miss": 11.1,
-   "note": "peak 2 days earlier than forecast",
+   "miss": 1.6,
+   "calendar_miss": 11.3,
+   "note": "peak 3 days earlier than forecast",
    "scored_on": "2026-07-13"
   },
   {
@@ -178,34 +184,34 @@
    "status": "scored",
    "onset": {
     "real": 79.0,
-    "forecast": 69.3,
+    "forecast": 69.6,
     "likely": [
-     69.3,
-     69.3
+     69.6,
+     69.6
     ],
-    "calendar": 82.6,
+    "calendar": 84.4,
     "issued": "2026-03-13",
     "as_of": "2026-03-11",
-    "error": -9.7,
-    "calendar_error": 3.6,
+    "error": -9.4,
+    "calendar_error": 5.4,
     "inside": false
    },
    "peak": {
     "real": 112.5,
-    "forecast": 108.2,
+    "forecast": 108.8,
     "likely": [
-     106.4,
-     112.1
+     106.8,
+     113.1
     ],
-    "calendar": 123.4,
+    "calendar": 124.0,
     "issued": "2026-04-15",
     "as_of": "2026-04-13",
-    "error": -4.3,
-    "calendar_error": 10.9,
-    "inside": false
+    "error": -3.7,
+    "calendar_error": 11.5,
+    "inside": true
    },
-   "miss": 7.0,
-   "calendar_miss": 7.3,
+   "miss": 6.6,
+   "calendar_miss": 8.5,
    "note": "peak 4 days later than forecast",
    "scored_on": "2026-07-13"
   },
@@ -258,34 +264,34 @@
    "status": "scored",
    "onset": {
     "real": 90.0,
-    "forecast": 84.2,
+    "forecast": 85.4,
     "likely": [
-     83.0,
-     87.5
+     84.0,
+     88.1
     ],
-    "calendar": 96.9,
+    "calendar": 97.6,
     "issued": "2026-03-24",
     "as_of": "2026-03-22",
-    "error": -5.8,
-    "calendar_error": 6.9,
+    "error": -4.6,
+    "calendar_error": 7.6,
     "inside": false
    },
    "peak": {
     "real": 131.5,
-    "forecast": 122.1,
+    "forecast": 122.5,
     "likely": [
-     122.1,
-     122.2
+     122.4,
+     122.8
     ],
-    "calendar": 135.3,
+    "calendar": 135.7,
     "issued": "2026-05-04",
     "as_of": "2026-05-02",
-    "error": -9.4,
-    "calendar_error": 3.8,
+    "error": -9.0,
+    "calendar_error": 4.2,
     "inside": false
    },
-   "miss": 7.6,
-   "calendar_miss": 5.3,
+   "miss": 6.8,
+   "calendar_miss": 5.9,
    "note": "peak 9 days later than forecast",
    "scored_on": "2026-07-13"
   },
@@ -298,34 +304,34 @@
    "status": "scored",
    "onset": {
     "real": 86.3,
-    "forecast": 92.1,
+    "forecast": 92.2,
     "likely": [
      87.7,
      96.1
     ],
-    "calendar": 98.9,
+    "calendar": 99.0,
     "issued": "2026-03-20",
     "as_of": "2026-03-18",
-    "error": 5.8,
-    "calendar_error": 12.6,
+    "error": 5.9,
+    "calendar_error": 12.7,
     "inside": false
    },
    "peak": {
     "real": 123.0,
-    "forecast": 114.8,
+    "forecast": 114.9,
     "likely": [
-     114.5,
-     115.6
+     114.6,
+     115.9
     ],
     "calendar": 133.4,
     "issued": "2026-04-26",
     "as_of": "2026-04-24",
-    "error": -8.2,
+    "error": -8.1,
     "calendar_error": 10.4,
     "inside": false
    },
    "miss": 7.0,
-   "calendar_miss": 11.5,
+   "calendar_miss": 11.6,
    "note": "peak 8 days later than forecast",
    "scored_on": "2026-07-13"
   },
@@ -418,16 +424,16 @@
    "status": "scored",
    "onset": {
     "real": 101.0,
-    "forecast": 95.3,
+    "forecast": 95.6,
     "likely": [
-     93.6,
-     96.4
+     93.8,
+     98.4
     ],
-    "calendar": 108.5,
+    "calendar": 108.7,
     "issued": "2026-04-04",
     "as_of": "2026-04-02",
-    "error": -5.7,
-    "calendar_error": 7.5,
+    "error": -5.4,
+    "calendar_error": 7.7,
     "inside": false
    },
    "peak": {
@@ -444,8 +450,8 @@
     "calendar_error": 6.4,
     "inside": false
    },
-   "miss": 4.1,
-   "calendar_miss": 6.9,
+   "miss": 4.0,
+   "calendar_miss": 7.0,
    "note": "peak 3 days later than forecast",
    "scored_on": "2026-07-20"
   },
@@ -618,16 +624,16 @@
    "status": "scored",
    "onset": {
     "real": 106.0,
-    "forecast": 107.9,
+    "forecast": 108.0,
     "likely": [
-     104.1,
-     112.2
+     104.2,
+     112.3
     ],
-    "calendar": 117.3,
+    "calendar": 117.5,
     "issued": "2026-04-09",
     "as_of": "2026-04-07",
-    "error": 1.9,
-    "calendar_error": 11.3,
+    "error": 2.0,
+    "calendar_error": 11.5,
     "inside": true
    },
    "peak": {
@@ -645,7 +651,7 @@
     "inside": false
    },
    "miss": 6.5,
-   "calendar_miss": 14.4,
+   "calendar_miss": 14.5,
    "note": "peak 11 days earlier than forecast",
    "scored_on": "2026-07-27"
   },
@@ -1018,7 +1024,10 @@
    "clock": null,
    "calendar": null,
    "D": null,
-   "clock_wins": 0
+   "clock_wins": 0,
+   "ties": 0,
+   "D_unweighted": null,
+   "D_interval_places": null
   },
   {
    "score_date": "2026-06-08",
@@ -1027,7 +1036,10 @@
    "clock": null,
    "calendar": null,
    "D": null,
-   "clock_wins": 0
+   "clock_wins": 0,
+   "ties": 0,
+   "D_unweighted": null,
+   "D_interval_places": null
   },
   {
    "score_date": "2026-06-15",
@@ -1036,7 +1048,10 @@
    "clock": null,
    "calendar": null,
    "D": null,
-   "clock_wins": 0
+   "clock_wins": 0,
+   "ties": 0,
+   "D_unweighted": null,
+   "D_interval_places": null
   },
   {
    "score_date": "2026-06-22",
@@ -1045,7 +1060,10 @@
    "clock": null,
    "calendar": null,
    "D": null,
-   "clock_wins": 0
+   "clock_wins": 0,
+   "ties": 0,
+   "D_unweighted": null,
+   "D_interval_places": null
   },
   {
    "score_date": "2026-06-29",
@@ -1054,7 +1072,10 @@
    "clock": null,
    "calendar": null,
    "D": null,
-   "clock_wins": 0
+   "clock_wins": 0,
+   "ties": 0,
+   "D_unweighted": null,
+   "D_interval_places": null
   },
   {
    "score_date": "2026-07-06",
@@ -1063,124 +1084,205 @@
    "clock": null,
    "calendar": null,
    "D": null,
-   "clock_wins": 0
+   "clock_wins": 0,
+   "ties": 0,
+   "D_unweighted": null,
+   "D_interval_places": null
   },
   {
    "score_date": "2026-07-13",
    "places": 8,
    "records": 1612,
-   "clock": 7.01,
-   "calendar": 9.45,
-   "D": -2.431017,
-   "clock_wins": 4
+   "clock": 6.71,
+   "calendar": 9.77,
+   "D": -3.053846,
+   "clock_wins": 4,
+   "ties": 0,
+   "D_unweighted": -1.58,
+   "D_interval_places": [
+    -7.1,
+    1.79
+   ]
   },
   {
    "score_date": "2026-07-20",
    "places": 12,
    "records": 2191,
-   "clock": 6.7,
-   "calendar": 9.44,
-   "D": -2.739115,
-   "clock_wins": 7
+   "clock": 6.46,
+   "calendar": 9.69,
+   "D": -3.234779,
+   "clock_wins": 7,
+   "ties": 0,
+   "D_unweighted": -2.37,
+   "D_interval_places": [
+    -6.42,
+    0.46
+   ]
   },
   {
    "score_date": "2026-07-27",
    "places": 15,
    "records": 2650,
-   "clock": 6.53,
-   "calendar": 9.71,
-   "D": -3.177472,
-   "clock_wins": 9
+   "clock": 6.33,
+   "calendar": 9.93,
+   "D": -3.597358,
+   "clock_wins": 9,
+   "ties": 0,
+   "D_unweighted": -2.4,
+   "D_interval_places": [
+    -6.42,
+    -0.53
+   ]
   },
   {
    "score_date": "2026-08-03",
    "places": 15,
    "records": 2650,
-   "clock": 6.53,
-   "calendar": 9.71,
-   "D": -3.177472,
-   "clock_wins": 9
+   "clock": 6.33,
+   "calendar": 9.93,
+   "D": -3.597358,
+   "clock_wins": 9,
+   "ties": 0,
+   "D_unweighted": -2.4,
+   "D_interval_places": [
+    -6.42,
+    -0.53
+   ]
   },
   {
    "score_date": "2026-08-10",
    "places": 15,
    "records": 2650,
-   "clock": 6.53,
-   "calendar": 9.71,
-   "D": -3.177472,
-   "clock_wins": 9
+   "clock": 6.33,
+   "calendar": 9.93,
+   "D": -3.597358,
+   "clock_wins": 9,
+   "ties": 0,
+   "D_unweighted": -2.4,
+   "D_interval_places": [
+    -6.42,
+    -0.53
+   ]
   },
   {
    "score_date": "2026-08-17",
    "places": 15,
    "records": 2650,
-   "clock": 6.53,
-   "calendar": 9.71,
-   "D": -3.177472,
-   "clock_wins": 9
+   "clock": 6.33,
+   "calendar": 9.93,
+   "D": -3.597358,
+   "clock_wins": 9,
+   "ties": 0,
+   "D_unweighted": -2.4,
+   "D_interval_places": [
+    -6.42,
+    -0.53
+   ]
   },
   {
    "score_date": "2026-08-24",
    "places": 15,
    "records": 2650,
-   "clock": 6.53,
-   "calendar": 9.71,
-   "D": -3.177472,
-   "clock_wins": 9
+   "clock": 6.33,
+   "calendar": 9.93,
+   "D": -3.597358,
+   "clock_wins": 9,
+   "ties": 0,
+   "D_unweighted": -2.4,
+   "D_interval_places": [
+    -6.42,
+    -0.53
+   ]
   },
   {
    "score_date": "2026-08-31",
    "places": 16,
    "records": 2680,
-   "clock": 6.58,
-   "calendar": 9.72,
-   "D": -3.140784,
-   "clock_wins": 9
+   "clock": 6.38,
+   "calendar": 9.94,
+   "D": -3.55597,
+   "clock_wins": 9,
+   "ties": 0,
+   "D_unweighted": -2.24,
+   "D_interval_places": [
+    -6.29,
+    -0.47
+   ]
   },
   {
    "score_date": "2026-09-07",
    "places": 16,
    "records": 2680,
-   "clock": 6.58,
-   "calendar": 9.72,
-   "D": -3.140784,
-   "clock_wins": 9
+   "clock": 6.38,
+   "calendar": 9.94,
+   "D": -3.55597,
+   "clock_wins": 9,
+   "ties": 0,
+   "D_unweighted": -2.24,
+   "D_interval_places": [
+    -6.29,
+    -0.47
+   ]
   },
   {
    "score_date": "2026-09-14",
    "places": 24,
    "records": 4088,
-   "clock": 6.37,
-   "calendar": 7.74,
-   "D": -1.376932,
-   "clock_wins": 11
+   "clock": 6.24,
+   "calendar": 7.89,
+   "D": -1.649119,
+   "clock_wins": 11,
+   "ties": 0,
+   "D_unweighted": -1.16,
+   "D_interval_places": [
+    -4.13,
+    0.72
+   ]
   },
   {
    "score_date": "2026-09-21",
    "places": 24,
    "records": 4088,
-   "clock": 6.37,
-   "calendar": 7.74,
-   "D": -1.376932,
-   "clock_wins": 11
+   "clock": 6.24,
+   "calendar": 7.89,
+   "D": -1.649119,
+   "clock_wins": 11,
+   "ties": 0,
+   "D_unweighted": -1.16,
+   "D_interval_places": [
+    -4.13,
+    0.72
+   ]
   },
   {
    "score_date": "2026-09-28",
    "places": 24,
    "records": 4088,
-   "clock": 6.37,
-   "calendar": 7.74,
-   "D": -1.376932,
-   "clock_wins": 11
+   "clock": 6.24,
+   "calendar": 7.89,
+   "D": -1.649119,
+   "clock_wins": 11,
+   "ties": 0,
+   "D_unweighted": -1.16,
+   "D_interval_places": [
+    -4.13,
+    0.72
+   ]
   },
   {
    "score_date": "2026-10-05",
    "places": 24,
    "records": 4088,
-   "clock": 6.37,
-   "calendar": 7.74,
-   "D": -1.376932,
-   "clock_wins": 11
+   "clock": 6.24,
+   "calendar": 7.89,
+   "D": -1.649119,
+   "clock_wins": 11,
+   "ties": 0,
+   "D_unweighted": -1.16,
+   "D_interval_places": [
+    -4.13,
+    0.72
+   ]
   }
  ]
 }

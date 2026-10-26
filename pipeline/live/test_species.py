@@ -201,18 +201,20 @@ def test_a_corrupt_species_archive_does_not_block_luna(tmp_path):
     assert failed == ["firefly"] and "luna" in out["layers"] and "firefly" not in out["layers"]
 
 
-def no_east(monkeypatch, fail=False):
-    """The eastern shadow track (pipeline/league/east.py) reads PRISM over the network: stubbed here."""
-    from league import east
-
-    def boom(*a, **k):
-        raise RuntimeError("east down")
-    monkeypatch.setattr(east, "nightly", boom if fail else (lambda *a, **k: None))
-    monkeypatch.setattr(east, "weekly_run", lambda *a, **k: None)
+def no_east(monkeypatch, fail=False, calls=None):
+    """The eastern shadow track (pipeline/league/east.py) reads PRISM over the network in its own process: stubbed
+    here, recording how the scorecard calls it."""
+    def run(*a):
+        if calls is not None:
+            calls.append(a)
+        if fail:
+            raise RuntimeError("east down")
+    monkeypatch.setattr(S, "run_east", run)
 
 
 def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_path, capsys, monkeypatch):
-    no_east(monkeypatch)
+    calls = []
+    no_east(monkeypatch, calls=calls)
     live = live_file(firefly={})
     live["checks"]["species_failed"] = ["japanese-beetle"]
     (tmp_path / "latest.json").write_text(json.dumps(live))
@@ -227,6 +229,7 @@ def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_pa
     live["checks"]["species_failed"] = []
     (tmp_path / "latest.json").write_text(json.dumps(live))
     assert S.main(args) == 0
+    assert calls[-1] == (tmp_path, 2027, dt.date(2027, 10, 1), tmp_path / "latest.json")   # live-data folder, tonight's file
     no_east(monkeypatch, fail=True)                     # the eastern track failing raises the alarm, after writing
     capsys.readouterr()
     assert S.main(args) == 1

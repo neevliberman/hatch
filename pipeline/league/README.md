@@ -50,7 +50,7 @@ Each week's records file (about 100 KB for luna) is kept, with its sha256, as th
 **Eastern shadow track (2027).** The heat clock from tryout 2 forecasts 28 eastern places every night in
 shadow (`east.py`, frozen inputs `east_static.json` from `build_east.py`), sealed in `live/archive_east/`, and is
 graded every Monday against each place's calendar (`live/league_east.json`). Its own rule, written before the
-season, is [EAST_2027.md](EAST_2027.md); on a 2026 rehearsal (`rehearse_east.py`) it would have narrowly missed it.
+season, is [EAST_2027.md](EAST_2027.md); on a 2026 rehearsal (`rehearse_east.py`) it would not have passed (it won 11 of 24 places).
 It never touches the map or the P3 vs P3.1 test.
 
 **Tryouts so far** (`tryouts/`): learning from this year's first sightings, no gain ([ASSIM_RESULT.md](tryouts/ASSIM_RESULT.md));

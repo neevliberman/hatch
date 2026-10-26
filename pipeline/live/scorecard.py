@@ -371,6 +371,20 @@ def scorecard_all(season, today: dt.date, archive: Path, records=None, prev=None
     return out, failed
 
 
+EAST_TIMEOUT = 15 * 60   # seconds; the nightly job has 60 minutes for everything
+
+
+def run_east(live_dir: Path, season, today: dt.date, add: Path | None):
+    """Run pipeline/league/east.py for tonight; raises if it fails or runs past EAST_TIMEOUT (then it is killed)."""
+    import subprocess
+    cmd = [sys.executable, str(ROOT / "pipeline" / "league" / "east.py"), "--live", str(live_dir),
+           "--season", str(season), "--today", today.isoformat(), *(["--add", str(add)] if add else [])]
+    r = subprocess.run(cmd, timeout=EAST_TIMEOUT, capture_output=True, text=True)
+    print(r.stdout.strip(), flush=True)
+    if r.returncode:
+        raise RuntimeError(f"east.py exited {r.returncode}: {r.stderr.strip()[-500:]}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--archive", type=Path, required=True,
@@ -422,17 +436,10 @@ def main(argv=None):
     except Exception as err:  # noqa: BLE001
         print(f"::error::league table failed: {err!r}", flush=True)
         failed.append("league")
-    # the eastern shadow track (pipeline/league/east.py, EAST_2027.md): tonight's sealed forecast, then once a week
-    # its table; it never touches the map's files, which are already written
+    # the eastern shadow track (pipeline/league/east.py, EAST_2027.md), in its own process with a time limit, so a
+    # hung weather or iNaturalist call can never hold up committing the files above
     try:
-        from league import east
-        if a.add and live["season"] == season:
-            p = east.nightly(a.archive.parent, live, a.today)
-            if p:
-                print(f"archived {p}")
-        p = east.weekly_run(a.archive.parent, season, a.today)
-        if p:
-            print(f"wrote {p}")
+        run_east(a.archive.parent, season, a.today, a.add)
     except Exception as err:  # noqa: BLE001
         print(f"::error::eastern shadow track failed: {err!r}", flush=True)
         failed.append("east")
