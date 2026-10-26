@@ -371,6 +371,20 @@ def scorecard_all(season, today: dt.date, archive: Path, records=None, prev=None
     return out, failed
 
 
+EAST_TIMEOUT = 15 * 60   # seconds; the nightly job has 60 minutes for everything
+
+
+def run_east(live_dir: Path, season, today: dt.date, add: Path | None):
+    """Run pipeline/league/east.py for tonight; raises if it fails or runs past EAST_TIMEOUT (then it is killed)."""
+    import subprocess
+    cmd = [sys.executable, str(ROOT / "pipeline" / "league" / "east.py"), "--live", str(live_dir),
+           "--season", str(season), "--today", today.isoformat(), *(["--add", str(add)] if add else [])]
+    r = subprocess.run(cmd, timeout=EAST_TIMEOUT, capture_output=True, text=True)
+    print(r.stdout.strip(), flush=True)
+    if r.returncode:
+        raise RuntimeError(f"east.py exited {r.returncode}: {r.stderr.strip()[-500:]}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--archive", type=Path, required=True,
@@ -422,6 +436,13 @@ def main(argv=None):
     except Exception as err:  # noqa: BLE001
         print(f"::error::league table failed: {err!r}", flush=True)
         failed.append("league")
+    # the eastern shadow track (pipeline/league/east.py, EAST_2027.md), in its own process with a time limit, so a
+    # hung weather or iNaturalist call can never hold up committing the files above
+    try:
+        run_east(a.archive.parent, season, a.today, a.add)
+    except Exception as err:  # noqa: BLE001
+        print(f"::error::eastern shadow track failed: {err!r}", flush=True)
+        failed.append("east")
     if SHADOW_ERRORS:
         failed.append("shadow-archive")
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
@@ -430,8 +451,9 @@ def main(argv=None):
         why = "; ".join([*(f"the {k} forecast failed in build_live.py (its last good entry was kept)" for k in live_failed),
                          *(["the weekly league table failed (pipeline/league/weekly.py)"] if "league" in failed else []),
                          *(["archiving the bench challengers failed"] if "shadow-archive" in failed else []),
+                         *(["the eastern shadow track failed (pipeline/league/east.py)"] if "east" in failed else []),
                          *(f"the {k} scorecard failed (its last layer was kept)" for k in failed
-                           if k not in ("league", "shadow-archive"))])
+                           if k not in ("league", "shadow-archive", "east"))])
         print(f"::error::{why}. {a.out} WAS written and published with every other species; "
               "this exit code only raises the alarm.", flush=True)
         return 1
