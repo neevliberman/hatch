@@ -238,7 +238,7 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
   const key = (await page.locator('#key-fold').isVisible()) ? 'key-fold' : (await page.locator('#key-chip').isVisible()) ? 'key-chip' : null;
   // Find a town needs the map's town names, so the one-file build leaves it out.
   const tabs = (await page.locator('#find').isVisible()) ? TAB_ORDER : TAB_ORDER.filter((id) => id !== 'find');
-  const want = key ? [...tabs.slice(0, 3), key, ...tabs.slice(3)] : tabs;
+  const want = key ? [...tabs.slice(0, 4), key, ...tabs.slice(4)] : tabs;
   for (let i = 0; i < want.length + 3 && order.length < want.length; i++) {
     await page.keyboard.press('Tab');
     const f = await page.evaluate(() => {
