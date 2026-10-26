@@ -59,3 +59,23 @@ def test_widen_reaches_calendar_and_never_moves_inside():
 def test_strip_flag_any_weighted_hex():
     assert S.strip_flag([False, True, False], [1, 2, 3])
     assert not S.strip_flag([False, True], [1, 0])
+
+
+def test_load_envelopes_refuses_other_folds(tmp_path):
+    import json
+    p = tmp_path / "env.json"
+    p.write_text(json.dumps({"folds": ["2015", "2016"], "envelopes": [ENV.tolist(), ENV.tolist()]}))
+    assert S.load_envelopes(p, ["2015", "2016"]).shape == (2, 365)
+    with pytest.raises(ValueError, match="folds"):
+        S.load_envelopes(p, ["2015", "2017"])
+
+
+def test_live_flags_use_only_known_weather_and_the_widest_envelope():
+    envs = np.array([ENV, np.minimum(ENV + 5, 205.0)])     # the widest is ENV + 5 (capped at 205)
+    known = np.zeros((2, 120))                             # 120 known days (index 0..119)
+    known[0, 100] = 204.0                                  # one hex: 204 banked from index 100 (< 205 there)
+    known[1, 100] = 210.0                                  # the other: past the widest envelope
+    w = np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
+    assert S.live_flags(known, envs, w, [150, 150, 150]) == [False, True, False]
+    assert S.live_flags(known, envs, w, [100, 100, None]) == [False, False, False]   # peak before the bank jumps
+    assert S.live_flags(known, envs, np.array([[0.0, 1.0]]), [float("inf")]) == [True]  # "never": all known days

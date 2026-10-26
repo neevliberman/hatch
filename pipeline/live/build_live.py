@@ -320,6 +320,10 @@ def forecast_species(sp, wx, season, as_of, today, prev=None, model_id=None, sig
         folds = [dict(p, u=np.array([])) for p in params]
         mhash = sp.model_hash()
     spec = M.SPECS[spec_name]
+    envs = None
+    if getattr(sp, "envelopes", None):   # the A1 shadow (shadow_rule.py): each fold on banks capped at its fit's range
+        from live import shadow_rule as A1
+        envs = A1.load_envelopes(sp.envelopes, json.loads(fits_path.read_text())["folds"])
     eff = json.loads(sp.effort.read_text())
     clat, years, i0, i1 = wx["clat"], wx["years"], wx["i0"], wx["i1"]
     cstate = [eff["states"].index(s) for s in fdata.state_of(clat, wx["clng"])]
@@ -331,9 +335,9 @@ def forecast_species(sp, wx, season, as_of, today, prev=None, model_id=None, sig
     # past real-minus-forecast errors per scored band-year: onset errors for q05/q25, peak errors for q50 onward
     resid = [[s["obs_onset"] - s["heat_onset"]] * 2 + [s["obs_peak"] - s["heat_peak"]] * 3 for s in replay["scores"]]
     for inc in wx["incs"]:
-        for p, cut in zip(folds, cuts):
+        for f, (p, cut) in enumerate(zip(folds, cuts)):
             cut_idx = np.array([cut[b] - 1 for b in cband])
-            share = M.cell_sighting_share(p, spec, inc, clat, cut_idx, eprof)
+            share = M.cell_sighting_share(p, spec, inc if envs is None else A1.cap_inc(inc, envs[f]), clat, cut_idx, eprof)
             members.append([[np.inf if v is None else v for v in first_reach(s)] for s in share])
             band_members.append(band_reach(share, bw))
             out_now.append(share[:, i1 - 1] if i1 > i0 else np.zeros(len(cells)))
@@ -343,6 +347,16 @@ def forecast_species(sp, wx, season, as_of, today, prev=None, model_id=None, sig
                                          [[s["obs_onset"] - s["heat_onset"], s["obs_peak"] - s["heat_peak"]] for s in replay["scores"]])
     bands = [{"band": b, "onset": b_med[i][0], "onset_lo": b_lo[i][0], "onset_hi": b_hi[i][0],
               "peak": b_med[i][1], "peak_lo": b_lo[i][1], "peak_hi": b_hi[i][1]} for i, b in enumerate(BAND_LABELS)]
+    if envs is not None:                 # flag on the weather known tonight; widen a flagged strip to its usual dates
+        from live import scorecard
+        known = wx["incs"][0][:, :wx["i1"] + wx["forecast_days"]]
+        cal = scorecard.calendar(replay)
+        for b, flag in zip(bands, A1.live_flags(known, envs, bw, [x["peak"] for x in bands])):
+            b["flag"] = flag
+            for k, c in zip(("onset", "peak"), cal.get(b["band"], (np.nan, np.nan))):
+                if b[f"{k}_lo"] is not None and b[f"{k}_hi"] is not None and np.isfinite(c):
+                    lo, hi = A1.widen(b[f"{k}_lo"], b[f"{k}_hi"], round(float(c), 1), flag)
+                    b[f"{k}_lo"], b[f"{k}_hi"] = lo, hi
 
     seen, sightings_ok = [], True
     try:   # an iNat outage should not cost the night's forecast: keep the previous file's dots and flag it

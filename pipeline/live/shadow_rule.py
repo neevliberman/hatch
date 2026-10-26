@@ -3,13 +3,20 @@
 Analogy: a rain gauge that only ever read up to 250 mm. When the sky delivers more, the safe reading is "at least 250",
 not 400 extrapolated from a scale nobody calibrated, and the forecaster adds "this is off our chart" to the card.
 
-Pure functions, no I/O, nothing here is called by build_live.py yet, so the map and every scored output are unchanged.
-Same maths as notebooks/southbias/sb.py (cap_inc, flagged) and run.py (the widening), where it was scored; day index
+Pure functions (plus `load_envelopes`). build_live.py calls them only for a bench challenger that carries envelopes
+(pipeline/league/bench.py, "luna~p3-a1-v1"), so the map and every scored P3 / P3.1 output are unchanged. Same maths as notebooks/southbias/sb.py (cap_inc, flagged) and run.py (the widening), where it was scored; day index
 t = day of year - 1, so 1 April is index 90.
 
 The envelope E[t] (largest banked Daymet degree-days, base 10 C from 1 March, on day t at any training place-year
-of a fold) has to be built from the Daymet cube and shipped as data before 1 March 2027; `check_envelope` is the gate.
+of a fold) is built from the Daymet cube by pipeline/league/build_a1.py and shipped as pipeline/league/a1_envelopes.json;
+`check_envelope` is the gate.
+
+On a live night (written 2026-10-26, before any 2027 data, PREREG_2027.md amendment): the cap uses each fold's own E;
+the flag reads only the weather known that night (PRISM to as_of, then the 7-day forecast, never the past-year
+endings) against the widest of the 11 envelopes (outside every fit's range), from 1 April to the strip's A1 peak.
 """
+import json
+
 import numpy as np
 
 FLAG_FROM = 90        # 1 April
@@ -55,3 +62,22 @@ def widen(lo, hi, calendar, flag):
 def strip_flag(hex_flags, weights):
     """A strip is flagged if any hexagon with positive strip weight is (not a share; the middle strip's 29% counted)."""
     return bool(np.any(np.asarray(hex_flags, bool) & (np.asarray(weights, float) > 0)))
+
+
+def load_envelopes(path, folds):
+    """[fold, 365] from a1_envelopes.json; refuses a file built for other folds or fits."""
+    js = json.loads(path.read_text())
+    if js["folds"] != list(folds):
+        raise ValueError(f"envelopes are for folds {js['folds']}, the fits have {list(folds)}")
+    return np.array([check_envelope(e) for e in js["envelopes"]])
+
+
+def live_flags(inc_known, envs, w, peaks):
+    """Per strip: flagged on the known weather (inc_known: [cell, day] up to the last known day) against the widest
+    envelope. w: [strip, cell] weights; peaks: each strip's A1 forecast peak (day of year; inf/None = never)."""
+    env = np.asarray(envs, float).max(0)
+    out = []
+    for wb, pk in zip(w, peaks):
+        pk = inc_known.shape[-1] if pk is None or not np.isfinite(pk) else pk
+        out.append(strip_flag(flagged(inc_known, env, pk), wb))
+    return out
