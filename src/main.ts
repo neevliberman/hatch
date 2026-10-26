@@ -837,7 +837,12 @@ function start() {
   // In season the live forecast becomes the default view once its file arrives, so the opening waits for that and
   // lands on today; off-season it is set up now, before the first frame. Not if the reader has already touched something.
   let touched = false;
-  for (const ev of ['pointerdown', 'keydown', 'wheel'] as const) addEventListener(ev, () => (touched = true), { capture: true, once: true });
+  const touch = (e: Event) => {
+    if (e instanceof KeyboardEvent && ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key)) return; // as intro.ts
+    touched = true;
+    for (const ev of ['pointerdown', 'keydown', 'wheel']) removeEventListener(ev, touch, true);
+  };
+  for (const ev of ['pointerdown', 'keydown', 'wheel']) addEventListener(ev, touch, true);
   const openIntro = () => {
     if (seen || !plain || still.matches || document.hidden || touched || intro) return;
     const opening = (intro = makeIntro(time, time.cursor));
