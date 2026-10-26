@@ -87,7 +87,7 @@ def soil_cube(hexes, years):
         tmin[i], tmax[i] = tmin[d.argmin()], tmax[d.argmin()]
     gaps = np.isnan(tmin[:, :, 59:243]).sum()
     if gaps:
-        print(f"filling {gaps} missing soil days by carrying the last value forward")
+        print(f"filling {gaps} missing soil days from the nearest earlier (else later) day")
         for arr in (tmin, tmax):
             s = pd.DataFrame(arr.reshape(-1, 365)).ffill(axis=1).bfill(axis=1).to_numpy()
             arr[:] = s.reshape(arr.shape)

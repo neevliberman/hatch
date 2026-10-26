@@ -89,7 +89,7 @@ peak −3.4 against their past means), which may be PRISM rather than drift. Re-
 species the line is wide (5 to 12 days for one season in 2026), so this catches a large or lasting change, not a small one.
 
 **Tryouts so far** (`tryouts/`): learning from this year's first sightings, no gain ([ASSIM_RESULT.md](tryouts/ASSIM_RESULT.md)); ground (soil)
-temperature instead of air, worse by 0.8-0.9 days ([SOIL_RESULT.md](tryouts/SOIL_RESULT.md));
+temperature instead of air, worse on average (0.7-0.9 days) ([SOIL_RESULT.md](tryouts/SOIL_RESULT.md));
 forecasting new regions, where a local heat clock beats the local calendar across the East by 1.6 days, found after
 the fact, so it needs 2027 to confirm it ([REGIONAL_RESULT.md](tryouts/REGIONAL_RESULT.md)).
 
