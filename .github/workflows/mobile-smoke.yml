@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   engine:
-    name: mobile (${{ matrix.engine }})
+    name: mobile (${{ matrix.engine }}${{ matrix.engine == 'chromium' && format(' {0}', matrix.shard) || '' }})
     runs-on: ubuntu-latest
     # Keep the tag in step with the playwright version in package.json: the image's browsers are built for it.
     container: mcr.microsoft.com/playwright:v1.56.1-noble
@@ -25,10 +25,14 @@ jobs:
     strategy:
       fail-fast: false   # one engine failing still lets the other report
       matrix:
-        engine: [chromium, webkit]
+        include:
+          - { engine: chromium, shard: 1 }
+          - { engine: chromium, shard: 2 }
+          - { engine: webkit, shard: 1 }
     env:
       HOME: /root
       ENGINES: ${{ matrix.engine }}
+      SHARD: ${{ matrix.engine == 'chromium' && format('{0}/2', matrix.shard) || '1/1' }}   # Chromium is split two ways: it is most of the wait
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,7 +51,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-screenshots-${{ matrix.engine }}
+          name: mobile-screenshots-${{ matrix.engine }}-${{ matrix.shard }}
           path: |
             screenshots/mobile
             screenshots/firstframes
