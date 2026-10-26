@@ -2,6 +2,7 @@
 // Usage: node scripts/fine.mjs [outDir]   (after `npm run build`; serves dist/ on a local port)
 // Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (default dist), SHARD ("2/3" = the 2nd of 3 equal
 //      slices of the cases; unset = all of them).
+// Also, per species x light/dark x desktop/phone: cut-off text, luna-only words in the shared frame, and axe accessibility.
 // FAILS (exit 1) on any page or console error, a failed or non-local request, a level that never appears,
 // a blank map, or a tap that shows no card.
 import { createRequire } from 'node:module';
@@ -9,6 +10,7 @@ import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, resolve, normalize } from 'node:path';
 const require = createRequire(import.meta.url);
+const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const { chromium } = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 
 const out = process.argv[2] ?? 'screenshots/fine';
@@ -274,6 +276,47 @@ for (const [name, width, height, mobile] of shots) {
         }
         if (!ring) problems.push(`${tag}: Tab never reached the season menu`);
         else if (!ring.visible || !ring.outline || !ring.shadow || !ring.accent) problems.push(`${tag}: menu focus is not one clean ring (${JSON.stringify(ring)})`);
+        // Words that do not fit: a control or line of chrome whose text is cut off (ellipsis or hidden overflow), or pushed off the screen.
+        const clipped = await page.evaluate(() => {
+          const bad = [];
+          for (const el of document.querySelectorAll('#top *, #strip *, #bar *, #actions *, #legend *, #probe *')) {
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden' || el.closest('[hidden], .sr, select')) continue;
+            if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+            const cs = getComputedStyle(el);
+            const cut = (cs.overflowX !== 'visible' || cs.textOverflow === 'ellipsis') && el.scrollWidth > el.clientWidth + 1;
+            const off = r.right > innerWidth + 1 || r.left < -1;
+            if (cut || off) bad.push(`${el.id || el.className || el.tagName} "${el.textContent.trim().slice(0, 30)}"`);
+          }
+          return bad;
+        });
+        if (clipped.length) problems.push(`${tag}: text cut off or off-screen: ${clipped.slice(0, 3).join('; ')}`);
+        // Other species must not wear the luna moth's name in the site's frame (header, strip, key, time bar, tab title, map label).
+        if (key !== 'luna') {
+          const leak = await page.evaluate(() => {
+            // The species menu lists every species by name, so leave it out.
+            const words = ['#top', '#strip', '#legend', '#bar', '#actions'].map((q) => [...(document.querySelector(q)?.querySelectorAll('*') ?? [])].filter((e) => !e.closest('select') && !e.closest('.sr')).map((e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('')).join(' ')).join(' ');
+            if (['#top', '#strip', '#legend', '#bar', '#actions'].some((q) => !document.querySelector(q))) return 'a frame container is missing, so this check saw nothing';
+            const hit = `${words} ${document.title} ${document.getElementById('map').getAttribute('aria-label')}`.match(/\b(luna|moths?)\b/i);
+            return hit ? hit[0] : null;
+          });
+          if (leak) problems.push(`${tag}: the page still says "${leak}" (a luna-only word in the shared frame)`);
+        }
+        // Accessibility (axe: WCAG 2 A/AA, contrast included) on the page as first seen, then with the About sheet open.
+        const axe = async (what) => {
+          const res = await page.evaluate(async () => {
+            const r = await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'], rules: { region: { enabled: false } } });
+            return r.violations.map((v) => `${v.id} (${v.nodes.length}): ${v.nodes[0].target.join(' ')}`);
+          });
+          for (const v of res) problems.push(`${tag}: axe ${what}: ${v}`);
+        };
+        await page.evaluate(axeSource);
+        await axe('on load');
+        // Clicked from the page: whether the button can be reached is the other smoke tests' job, and a slow frame must not fail this one.
+        await page.evaluate(() => document.getElementById('info-btn').click());
+        await page.waitForSelector('#info-btn[aria-expanded=true]', { timeout: 5000 }).catch(() => problems.push(`${tag}: the About sheet never opened`));
+        await page.waitForTimeout(600);
+        await axe('with About open');
         await page.screenshot({ path: `${out}/look-${key}-${scheme}-${vname}.png` });
         console.log(`${tag}: hexes ${got.hexes}, ribbon bands ${got.bands}, menu ${Math.round(got.menuWidth)}px`);
         await c.close();
