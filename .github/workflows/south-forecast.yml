@@ -51,7 +51,12 @@ jobs:
           git add live
           git diff --cached --quiet && { echo "nothing new"; exit 0; }
           git commit -q -m "south forecast $(date -u +%F)"
-          git push -q origin live-data
+          # live-forecast also pushes live-data (13:30 UTC); if it got there first, rebase onto it and try again
+          for i in 1 2 3 4; do
+            git push -q origin live-data && exit 0
+            git pull -q --rebase origin live-data
+          done
+          exit 1
       - name: Failure alarm
         if: failure()
         env:
