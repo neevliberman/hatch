@@ -296,7 +296,8 @@ for (const [name, width, height, mobile] of shots) {
           const leak = await page.evaluate(() => {
             // The species menu lists every species by name, so leave it out.
             const words = ['#top', '#strip', '#legend', '#bar', '#actions'].map((q) => [...(document.querySelector(q)?.querySelectorAll('*') ?? [])].filter((e) => !e.closest('select') && !e.closest('.sr')).map((e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('')).join(' ')).join(' ');
-            const hit = `${words} ${document.title} ${document.getElementById('map').getAttribute('aria-label')}`.match(/luna|moth/i);
+            if (['#top', '#strip', '#legend', '#bar', '#actions'].some((q) => !document.querySelector(q))) return 'a frame container is missing, so this check saw nothing';
+            const hit = `${words} ${document.title} ${document.getElementById('map').getAttribute('aria-label')}`.match(/\b(luna|moths?)\b/i);
             return hit ? hit[0] : null;
           });
           if (leak) problems.push(`${tag}: the page still says "${leak}" (a luna-only word in the shared frame)`);
@@ -313,6 +314,7 @@ for (const [name, width, height, mobile] of shots) {
         await axe('on load');
         // Clicked from the page: whether the button can be reached is the other smoke tests' job, and a slow frame must not fail this one.
         await page.evaluate(() => document.getElementById('info-btn').click());
+        await page.waitForSelector('#info-btn[aria-expanded=true]', { timeout: 5000 }).catch(() => problems.push(`${tag}: the About sheet never opened`));
         await page.waitForTimeout(600);
         await axe('with About open');
         await page.screenshot({ path: `${out}/look-${key}-${scheme}-${vname}.png` });
