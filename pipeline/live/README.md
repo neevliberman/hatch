@@ -31,7 +31,8 @@ week grades them; a failure there raises the alarm but never stops the map's fil
 **Drift alarm** ([`pipeline/league/drift.py`](../league/drift.py)): last, it splits each scored miss into the part
 the weather caused and the part the model did (`live/drift.json`), and opens a GitHub issue (with the step's
 `GH_TOKEN`) when a species' model looks stale. Then [`verdicts.py`](../league/verdicts.py) opens one issue per
-league or eastern verdict, once given.
+league or eastern verdict, once given, and [`summary.py`](../league/summary.py) adds the tryouts and drift state to
+the scorecard for the About panel.
 
 Adding a species: an entry in `registry.py`, then `python3 pipeline/live/build_static.py --effort <key>` (its effort
 profile, from the records its fetch script cached). The app finds the species' part of the file by its key

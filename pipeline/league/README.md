@@ -33,6 +33,7 @@ weather + sightings ─► nightly: champion (map) + challengers (sealed) ─►
 | `drift.py` | the model-drift alarm: weather part vs model part of each miss, issue when a model looks stale -> `live/drift.json` |
 | `build_a1.py`, `a1_envelopes.json` | the A1 shadow's frozen warmth range per fold (the cap, the flag) |
 | `verdicts.py`, `PROMOTE.md` | an issue per final verdict; the between-seasons swap of a winner |
+| `summary.py` | the app's view: each tryout's status and the drift state, added to the published scorecard |
 | `gates.json` | each challenger's gate result once known (P3.1: the Daymet 2026 re-check, due 31 Aug 2027) |
 
 **Where it runs.** No new workflow: `build_live.py` forecasts every bench challenger on the night's weather and writes
@@ -95,6 +96,9 @@ the fact, so it needs 2027 to confirm it ([REGIONAL_RESULT.md](tryouts/REGIONAL_
 (league or eastern) saying what was decided and what happens next. A winner is swapped onto the map between seasons
 by one pull request, following [PROMOTE.md](PROMOTE.md): the map must run exactly the fits the league graded.
 
-**Not built yet (before the first verdict, September 2027):** showing the table in the app.
+**In the app** ([`summary.py`](summary.py), nightly, last): a `league` block in `live/scorecard.json` (the one league
+file the site is deployed with) lists each tryout and the drift check's state; the About panel shows it, folded, as
+"Model tryouts" under the live check. After rerunning `rehearse.py`, re-add it to main's copy:
+`python3 pipeline/league/summary.py --card public/live/scorecard.json --live /nonexistent --drift pipeline/league/DRIFT_2026.json`.
 
 Run: `python3 -m pytest pipeline/league` (offline) · `python3 pipeline/league/weekly.py --live live --season 2027 --force`

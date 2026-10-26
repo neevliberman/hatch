@@ -274,9 +274,19 @@ def test_scorecard_main_fails_loudly_after_writing_when_a_forecast_failed(tmp_pa
     monkeypatch.setattr(drift, "run", real_drift)
     assert S.main(args) == 0 and json.loads((tmp_path / "verdicts.json").read_text())["opened"] == {}
     from league import verdicts
+    real_verdicts = verdicts.run
     monkeypatch.setattr(verdicts, "run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
     capsys.readouterr()
     assert S.main(args) == 1 and "verdict notices failed" in capsys.readouterr().out
+    monkeypatch.setattr(verdicts, "run", real_verdicts)
+    assert S.main(args) == 0
+    card = json.loads((tmp_path / "scorecard.json").read_text())       # the app's league block rides in the file
+    assert card["league"]["season"] == 2027 and sorted(card["layers"]) == ["firefly", "luna"]
+    from league import summary
+    monkeypatch.setattr(summary, "attach", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    capsys.readouterr()
+    assert S.main(args) == 1 and "league summary failed" in capsys.readouterr().out
+    assert "layers" in json.loads((tmp_path / "scorecard.json").read_text())       # the scorecard itself still stands
 
 
 def test_importing_the_live_pipeline_patches_nothing():
