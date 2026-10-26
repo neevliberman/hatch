@@ -98,3 +98,4 @@ Format: `- date | path | new sha256 | reason=<code> | scored=<strips or none> | 
 
 ## Daymet result
 (to be filled by 31 Aug 2027: date, Daymet 2026 version, D(2026) for both models, gate pass/fail)
+- 2026-10-26 | pipeline/live/scorecard.py | d6b6d81fe15a8ccff3fa400e38ea8982f9c2af476c17bac664f2dc9e269733de | reason=pre-season | scored=none | after the eastern track, runs the model-drift check (pipeline/league/drift.py): reads the scorecard and archive just written, writes live/drift.json, and opens a GitHub issue when a species' model looks stale; a failure only raises the alarm; no scoring function, input or output of the P3 vs P3.1 test changed

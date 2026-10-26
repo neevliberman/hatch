@@ -443,6 +443,15 @@ def main(argv=None):
     except Exception as err:  # noqa: BLE001
         print(f"::error::eastern shadow track failed: {err!r}", flush=True)
         failed.append("east")
+    # the model-drift alarm (pipeline/league/drift.py): splits each scored miss into weather and model, and opens an
+    # issue when the model itself looks stale; it reads only the files above
+    try:
+        from league import drift
+        if drift.run(a.out, a.archive, a.archive.parent / "drift.json", season):
+            print(f"wrote {a.archive.parent / 'drift.json'}")
+    except Exception as err:  # noqa: BLE001
+        print(f"::error::drift alarm failed: {err!r}", flush=True)
+        failed.append("drift")
     if SHADOW_ERRORS:
         failed.append("shadow-archive")
     # Written and published, but the night is not clean: fail, so the nightly job's alarm opens (its "Scorecard
@@ -452,8 +461,9 @@ def main(argv=None):
                          *(["the weekly league table failed (pipeline/league/weekly.py)"] if "league" in failed else []),
                          *(["archiving the bench challengers failed"] if "shadow-archive" in failed else []),
                          *(["the eastern shadow track failed (pipeline/league/east.py)"] if "east" in failed else []),
+                         *(["the model-drift check failed (pipeline/league/drift.py)"] if "drift" in failed else []),
                          *(f"the {k} scorecard failed (its last layer was kept)" for k in failed
-                           if k not in ("league", "shadow-archive", "east"))])
+                           if k not in ("league", "shadow-archive", "east", "drift"))])
         print(f"::error::{why}. {a.out} WAS written and published with every other species; "
               "this exit code only raises the alarm.", flush=True)
         return 1

@@ -30,6 +30,7 @@ weather + sightings ─► nightly: champion (map) + challengers (sealed) ─►
 | `bench.py` | the challengers: id, frozen fits, archive folder, first season, verdict date, gate |
 | `rules.py` | the promotion rule (pure, tested) |
 | `weekly.py` | the weekly table: records pull, common nights, both scorecards, head to head, verdict -> `live/league.json` |
+| `drift.py` | the model-drift alarm: weather part vs model part of each miss, issue when a model looks stale -> `live/drift.json` |
 | `gates.json` | each challenger's gate result once known (P3.1: the Daymet 2026 re-check, due 31 Aug 2027) |
 
 **Where it runs.** No new workflow: `build_live.py` forecasts every bench challenger on the night's weather and writes
@@ -53,11 +54,26 @@ graded every Monday against each place's calendar (`live/league_east.json`). Its
 season, is [EAST_2027.md](EAST_2027.md); on a 2026 rehearsal (`rehearse_east.py`) it would not have passed (it won 11 of 24 places).
 It never touches the map or the P3 vs P3.1 test.
 
+**Drift alarm** ([`drift.py`](drift.py), every night after the scorecard). A forecast can miss because the weather
+surprised it (a heat wave where it assumed a normal week) or because it reads the weather wrongly. Only the second
+means the model is going stale. Once a strip's window is over, the same frozen model has been re-run on the real
+weather, so the archive holds its answer in hindsight: *model part* = hindsight forecast − real, *weather part* =
+the graded miss − model part. A species' season bias (mean model part over its strips) is set against the same model's
+leave-one-year-out replay seasons: an alarm needs at least 3 strips and 5 past seasons, a bias more than 2 SD from
+the past mean plus 1.5 days (PRISM live vs Daymet replay), and two thirds of strips on that side. A *running* alarm
+does the same over every live season so far (2 SD / √n), for slow drift no single season shows. An alarm only opens a
+GitHub issue: a refit tryout is due before next season. On the 2026 rehearsal (`DRIFT_2026.json`; seen while writing the rule; the
+seed for the 2027 running check): no alarm. Luna's onset forecasts ran 6.3 days late as graded, but 5.8 of that was
+the weather (a hot late March) and 0.5 the model; luna's peak ran 3.6 days early on the real weather (z = −2.05, 1.4
+days inside the line), and if 2027 does the same the running alarm fires. Japanese beetle's peak, −2.4 (z = −2.25), is also
+just inside.
+
 **Tryouts so far** (`tryouts/`): learning from this year's first sightings, no gain ([ASSIM_RESULT.md](tryouts/ASSIM_RESULT.md));
 forecasting new regions, where a local heat clock beats the local calendar across the East by 1.6 days, found after
 the fact, so it needs 2027 to confirm it ([REGIONAL_RESULT.md](tryouts/REGIONAL_RESULT.md)).
 
 **Not built yet (before the first verdict, September 2027):** the step that swaps a winner onto the map for the next
-season and opens an issue saying what changed and why; showing the table in the app.
+season and opens an issue saying what changed and why (the drift alarm shows the nightly job can open issues itself);
+showing the table in the app.
 
 Run: `python3 -m pytest pipeline/league` (offline) · `python3 pipeline/league/weekly.py --live live --season 2027 --force`
