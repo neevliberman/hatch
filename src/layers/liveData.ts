@@ -168,7 +168,7 @@ export const whenLive = (key: string, cells: string[]): Promise<Live | null> =>
 function frontLive(f: LiveFile | null, key: string): Live | null {
   const e = f?.front?.[key];
   const asOf = day(e?.as_of);
-  if (!f || !e || !Number.isInteger(e.season) || !Number.isFinite(asOf)) return null;
+  if (!f || f.version !== 1 || f.kind !== 'live' || !e || !Number.isInteger(e.season) || !Number.isFinite(asOf)) return null;
   return {
     season: e.season,
     stub: f.stub === true,

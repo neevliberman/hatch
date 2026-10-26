@@ -18,8 +18,9 @@ export interface FrontConfig {
   name: string;
   /** "Monarch seen Jun 3". */
   one: string;
-  /** Capitalised plural for the summary and the dots bullet: "monarchs". */
+  /** The animals in the page's words (header, menus, share sheet). */
   words: SpeciesWords;
+  /** Adults, for the dots bullet: "adult monarchs". */
   adults: string;
   glow: RGBA;
   /** The species' own fine-print bullets: why it is a tracker and how well the usual date does. */
@@ -103,8 +104,9 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
     seasonCount: (m: Mode) => sightingsFor(m).length,
     endNote: ['That was the spring arrival.', 'Press replay to watch again'],
     countdown(now) {
-      const m = new Date(now).getUTCMonth();
-      return m >= 3 && m <= 6 ? ['Arriving now', ''] : ['Next arrivals: about April', ''];
+      const d = new Date(now);
+      const m = d.getUTCMonth();
+      return m >= 3 && m <= 6 ? ['Arriving now', ''] : [`Next arrivals: about April ${d.getUTCFullYear() + (m > 6 ? 1 : 0)}`, ''];
     },
 
     newest(t) {

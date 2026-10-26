@@ -21,14 +21,14 @@ def test_spring_stops_at_the_wave_end_and_drops_the_band_cutoffs(monkeypatch):
 
 def test_live_front_uses_today_before_the_wave_ends(monkeypatch):
     got = {}
-    monkeypatch.setattr(build_front, "spring", lambda key, year, as_of: got.setdefault(key, as_of) and [])
+    monkeypatch.setattr(build_front, "spring", lambda key, year, as_of, fetch=None: got.setdefault(key, as_of) and [])
     out = build_front.live_front(2027, dt.date(2027, 5, 1))
     assert set(out) == {"monarch", "red-admiral"}
     assert out["monarch"] == {"season": 2027, "as_of": "2027-05-01", "sightings": []}
 
 
 def test_a_failing_species_keeps_last_nights_entry_and_never_raises(monkeypatch):
-    def spring(key, year, as_of):
+    def spring(key, year, as_of, fetch=None):
         if key == "monarch":
             raise RuntimeError("iNat down")
         return [[2, year, 120, 42.0, -88.0, 0]]
@@ -39,3 +39,9 @@ def test_a_failing_species_keeps_last_nights_entry_and_never_raises(monkeypatch)
     assert out["monarch"] == prev["monarch"]
     assert out["red-admiral"]["sightings"] == [[2, 2027, 120, 42.0, -88.0, 0]]
     assert "monarch" not in build_front.live_front(2027, dt.date(2027, 5, 1), None)
+
+
+def test_the_nightly_job_hands_over_its_own_fetch(monkeypatch):
+    calls = []
+    out = build_front.live_front(2027, dt.date(2027, 5, 1), None, lambda *a, **k: calls.append(a) or [])
+    assert len(calls) == 2 and out["monarch"]["sightings"] == []

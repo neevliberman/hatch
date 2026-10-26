@@ -30,20 +30,23 @@ SPECIES = {
 }
 
 
-def spring(key: str, year: int, as_of: dt.date) -> list:
-    """The year's sightings so far: [id, year, doy, lat, lng, flags], by day."""
-    from live import build_live  # here, not above: build_live imports this module for the nightly file
+def spring(key: str, year: int, as_of: dt.date, fetch=None) -> list:
+    """The year's sightings so far: [id, year, doy, lat, lng, flags], by day. `fetch` is build_live.season_sightings;
+    the nightly job hands over its own copy (it runs as __main__, so importing it here would load a second one)."""
+    if fetch is None:
+        from live import build_live  # here, not above: build_live imports this module for the nightly file
+        fetch = build_live.season_sightings
     end = min(as_of, dt.date(year, 1, 1) + dt.timedelta(days=FRONT_END - 1))
-    return build_live.season_sightings(year, end, [None] * len(BANDS), SPECIES[key]["taxon"], last_doy=FRONT_END)
+    return fetch(year, end, [None] * len(BANDS), SPECIES[key]["taxon"], last_doy=FRONT_END)
 
 
-def live_front(season: int, as_of: dt.date, prev: dict | None = None) -> dict:
+def live_front(season: int, as_of: dt.date, prev: dict | None = None, fetch=None) -> dict:
     """What the nightly file's `front` holds: per species, this season's sightings so far. A species whose iNat pull
     fails keeps its entry from `prev` (last night's) so a dead night never empties the map."""
     out = {}
     for key in SPECIES:
         try:
-            rows = spring(key, season, as_of)
+            rows = spring(key, season, as_of, fetch)
         except Exception as e:  # noqa: BLE001 - one species must never stop the forecast
             print(f"WARNING: front {key} failed ({e}); keeping the previous file's", flush=True)
             if prev and key in prev:

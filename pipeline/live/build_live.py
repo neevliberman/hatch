@@ -503,7 +503,8 @@ def main(argv=None):
             prev = None
     out = build_all(season, as_of, use_forecast, today, prev, a.species)
     # The migrants' trackers (pipeline/front): sightings so far, no forecast. Never holds the forecast back.
-    out["front"] = build_front.live_front(season, min(today, dt.date(season, 12, 31)), (prev or {}).get("front"))
+    # A backfill (--as-of) stops its sightings there too.
+    out["front"] = build_front.live_front(season, min(today, a.as_of or dt.date(season, 12, 31)), (prev or {}).get("front"), season_sightings)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
     tmp.write_text(json.dumps(out, separators=(",", ":")))
