@@ -2,7 +2,8 @@
 // (WebKit) engines, driven with a mouse and a keyboard.
 // Usage: node scripts/desktop.mjs [outDir]   (Firefox needs a display for WebGL: run under xvfb-run on Linux)
 // Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST (html file, default dist-single/index.html),
-//      ENGINES (comma list, default "chromium,firefox,webkit").
+//      ENGINES (comma list, default "chromium,firefox,webkit"), SHARD ("2/3" = the 2nd of 3 equal slices of the sections;
+//      unset = all of them, which is what CI's other legs and a local run do).
 // FAILS (exit 1) on errors, a blank or shrunken Midwest, controls that are covered or off-screen, a broken mouse flow
 // (hover card, click to pin, wheel zoom, "why?", drawer) or a broken keyboard flow (Tab order, focus rings, arrows, Space).
 // Then live mode ("This year", public/live/latest.json), which only loads over http: serves dist/ (DIST_DIR) on a local
@@ -47,8 +48,9 @@ const browsers = {};
 const units = [];
 // Each worker drives its own browser process: contexts of one browser share its single software-GL process, and two
 // pages drawing through it starve each other into load timeouts.
+const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
 const runUnits = async (n) => {
-  const queue = [...units];
+  const queue = units.filter((_, i) => i % shardOf === shardNo - 1);
   await Promise.all(Array.from({ length: n }, async (_, i) => {
     const own = i === 0 ? null : await pw.chromium.launch(chromiumLaunch);
     for (let u; (u = queue.shift()); ) await u(own ?? browsers.chromium);
