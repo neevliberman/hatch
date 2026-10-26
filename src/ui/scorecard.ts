@@ -94,11 +94,14 @@ const DRIFT = {
 
 function tryoutsHtml(l: League, key: string): string {
   const entry = l.layers?.[key];
-  const ts = (entry?.tryouts ?? []).filter((t) => t && typeof t.name === 'string');
-  const drift = entry?.drift && DRIFT[entry.drift];
+  const ts = (Array.isArray(entry?.tryouts) ? entry.tryouts : []).filter((t) => t && typeof t.name === 'string');
+  const drift = entry?.drift && Object.hasOwn(DRIFT, entry.drift) ? DRIFT[entry.drift] : '';
   if (!ts.length && !drift) return '';
-  return `${ts.length ? `<p>Rival models forecast every night, unseen. One takes the map only by beating it over a season.</p>
-    <ul>${ts.map((t) => `<li><b>${esc(t.name)}</b>${t.report_only ? ' (report only)' : ''}: ${esc(tryoutText(t))}</li>`).join('')}</ul>` : ''}
+  // Tryouts that have not started and share their dates say them once, in the intro.
+  const same = ts.every((t) => t.status === 'upcoming' && t.first_season === ts[0]!.first_season && t.verdict_date === ts[0]!.verdict_date);
+  const when = same ? ` ${ts.length > 1 ? 'All start' : 'Starts'} ${esc(ts[0]!.first_season)}, decided ${md(Date.parse(ts[0]!.verdict_date))}.` : '';
+  return `${ts.length ? `<p>Rival models forecast nightly, unseen; one takes the map only by beating it over a season.${when}</p>
+    <ul>${ts.map((t) => `<li><b>${esc(t.name)}</b>${t.report_only ? ' (report only)' : ''}${same ? '' : `: ${esc(tryoutText(t))}`}</li>`).join('')}</ul>` : ''}
     ${drift ? `<p>Drift check, ${esc(l.season)}: ${drift}.</p>` : ''}`;
 }
 
@@ -150,7 +153,12 @@ export function fillScores(root: HTMLElement): void {
       el.hidden = !el.textContent;
     });
     root.querySelectorAll<HTMLElement>('[data-tryouts]').forEach((el) => {
-      const body = f.league && Number.isInteger(f.league.season) ? tryoutsHtml(f.league, el.dataset.tryouts!.replace(/-replay$/, '')) : '';
+      let body = '';
+      try {
+        if (f.league && Number.isInteger(f.league.season)) body = tryoutsHtml(f.league, el.dataset.tryouts!.replace(/-replay$/, ''));
+      } catch {
+        return; // an odd league block just means no tryouts
+      }
       if (!body) return;
       el.querySelector('div')!.innerHTML = body;
       el.hidden = false;
