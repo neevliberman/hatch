@@ -38,7 +38,7 @@ const screens = [
 const MIN_MIDWEST = 0.45;
 const WIDE = 0.9;
 // Every one of these must be reachable with Tab, in this order, and show a focus ring.
-const TAB_ORDER = ['season', 'info-btn', 'explore', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
+const TAB_ORDER = ['season', 'theme-btn', 'info-btn', 'explore', 'why', 't-prev', 't-play', 't-next', 't-range', 'locate', 'find', 'share'];
 const chromiumLaunch = { executablePath: process.env.CHROMIUM || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] };
 const problems = [];
 const browsers = {};
@@ -238,7 +238,7 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
   const key = (await page.locator('#key-fold').isVisible()) ? 'key-fold' : (await page.locator('#key-chip').isVisible()) ? 'key-chip' : null;
   // Find a town needs the map's town names, so the one-file build leaves it out.
   const tabs = (await page.locator('#find').isVisible()) ? TAB_ORDER : TAB_ORDER.filter((id) => id !== 'find');
-  const want = key ? [...tabs.slice(0, 3), key, ...tabs.slice(3)] : tabs;
+  const want = key ? [...tabs.slice(0, 4), key, ...tabs.slice(4)] : tabs;
   for (let i = 0; i < want.length + 3 && order.length < want.length; i++) {
     await page.keyboard.press('Tab');
     const f = await page.evaluate(() => {

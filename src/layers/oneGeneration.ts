@@ -2,7 +2,7 @@ import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps } from '@deck.gl/extensions';
 import { latLngToCell } from 'h3-js';
-import { palette } from '../theme';
+import { onTheme, palette } from '../theme';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear } from '../core/timeAxis';
 import type { CaveatCard, Creature, Explainer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpeciesWords, SpotStory } from '../core/layer';
@@ -62,7 +62,6 @@ export interface SpeciesConfig {
 }
 
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
-const GREY: RGBA = palette.rough;
 const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const TYPICAL_AXIS_YEAR = 2025;
 
@@ -90,13 +89,13 @@ export function createOneGenerationLayer(
   let live = liveIn;
   const { key, one, words } = cfg;
   const plural = words.plural;
-  const GLOW = cfg.glow;
   const { data, sightingsFor: pastSightings, bandOf } = replayData(file);
   /** Sightings in a mode: past years from the replay file, this season's from the live file. */
   const sightingsFor = (m: Mode): Sighting[] => (m === LIVE ? (live?.sightings ?? []) : pastSightings(m));
   let mode = initial === LIVE && !live ? TYPICAL : initial;
   let shown = sightingsFor(mode);
-  const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode
+  const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode (and the colours)
+  onTheme(() => profiles.clear());
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
   const washed = washer(data.cells);
@@ -105,7 +104,7 @@ export function createOneGenerationLayer(
   const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : isLive() ? live!.season : Number(mode));
   const forecast = () => (isLive() ? live!.median : (data.forecast[mode] ?? data.forecast[TYPICAL]!)) as ((number | null)[] | null)[];
   const day = (s: Sighting) => (mode === TYPICAL ? s.pdoy : s.doy);
-  const rings = ripples<Sighting>(`${key}-ripples`, (s) => [s.lng, s.lat], palette.dotRim);
+  const rings = ripples<Sighting>(`${key}-ripples`, (s) => [s.lng, s.lat], () => palette.dotRim);
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
   let lit: { key: string; pts: [number, number][] } = { key: '', pts: [] };
   let fresh = { key: '', list: [] as Sighting[] };
@@ -440,7 +439,7 @@ export function createOneGenerationLayer(
           data: shown,
           getPosition: (s) => [s.lng, s.lat],
           getFillColor: (s) => {
-            const c = s.flags & APPROXIMATE ? GREY : GLOW;
+            const c = s.flags & APPROXIMATE ? palette.rough : cfg.glow;
             return s.flags & UNCONFIRMED ? [c[0], c[1], c[2], 150] : c; // live: not yet confirmed, a little fainter
           },
           stroked: true,
@@ -626,9 +625,9 @@ export function createOneGenerationLayer(
         items: [
           ...STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
-          { color: css(GLOW), label: 'seen, last 10 days', shape: 'dot' },
-          ...(isLive() ? [{ color: `rgba(${GLOW[0]},${GLOW[1]},${GLOW[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
-          { color: css(GREY), label: 'rough location', shape: 'dot' },
+          { color: css(cfg.glow), label: 'seen, last 10 days', shape: 'dot' },
+          ...(isLive() ? [{ color: `rgba(${cfg.glow[0]},${cfg.glow[1]},${cfg.glow[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
+          { color: css(palette.rough), label: 'rough location', shape: 'dot' },
         ],
       };
     },

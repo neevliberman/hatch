@@ -14,6 +14,7 @@ import { mountFinder } from './ui/finder';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
+import { isDark, onTheme, toggleMode } from './theme';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { MIDWEST_MARGIN } from './layers/stages';
 import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
@@ -977,6 +978,27 @@ function start() {
   });
   const askedRadar = params.get('radar');
   if (askedRadar && !document.getElementById('no-webgl') && RADAR_LINKS.some((r) => r.id === askedRadar)) void openRadar(askedRadar);
+
+  // Light or dark (src/theme.ts): the button flips it; the map's colours are then redrawn from the new palette.
+  const themeBtn = $('theme-btn');
+  themeBtn.addEventListener('click', toggleMode);
+  onTheme(() => {
+    themeBtn.setAttribute('aria-pressed', String(isDark()));
+    document.documentElement.style.setProperty('--bg', theme.bg);
+    map.recolor();
+    registry.refresh(); // legend, ribbon and About panel hold colours too
+    updateProbe();
+    // An open radar replay baked its colours into its picture: open it again.
+    if (radar) {
+      const id = radar.id;
+      const old = radar;
+      radar = null;
+      radarBack = old.before;
+      old.close(false);
+      void openRadar(id);
+    }
+  });
+  themeBtn.setAttribute('aria-pressed', String(isDark()));
 
   refresh();
   (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };

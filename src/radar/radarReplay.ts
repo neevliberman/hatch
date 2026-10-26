@@ -4,7 +4,7 @@
 import { BitmapLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import type { MapHandle, Padding } from '../map/map';
-import { palette } from '../theme';
+import { isDark, palette } from '../theme';
 import { CROSS, PAUSE, PLAY } from '../ui/icons';
 import { EVENTS, type RadarEvent } from './events';
 import './radar.css';
@@ -53,13 +53,14 @@ const RAD = Math.PI / 180;
 // Echo strength ramp, light to dark, in the map's own colours (theme.ts): the pale "not yet" sage, the leaf greens,
 // the ochre of "winding down", the page's terracotta warning colour (style.css --warn), then ink. The pale end is
 // see-through like the map's washes.
-const ANCHORS: RGBA[] = [palette.stages['not yet'], palette.stages.starting, palette.stages.peak, palette.stages['winding down'], [166, 63, 25, 235], palette.stripes];
+const anchors = (): RGBA[] => [palette.stages['not yet'], palette.stages.starting, palette.stages.peak, palette.stages['winding down'], isDark() ? [214, 96, 52, 240] : [166, 63, 25, 235], palette.stripes];
 function ramp(n: number): RGBA[] {
+  const A = anchors();
   return Array.from({ length: n }, (_, i) => {
-    const p = (i / (n - 1)) * (ANCHORS.length - 1);
-    const k = Math.min(Math.floor(p), ANCHORS.length - 2);
+    const p = (i / (n - 1)) * (A.length - 1);
+    const k = Math.min(Math.floor(p), A.length - 2);
     const f = p - k;
-    return ANCHORS[k]!.map((v, j) => Math.round(v * (1 - f) + ANCHORS[k + 1]![j]! * f)) as RGBA;
+    return A[k]!.map((v, j) => Math.round(v * (1 - f) + A[k + 1]![j]! * f)) as RGBA;
   });
 }
 

@@ -52,10 +52,61 @@
   --rib: 34px; /* season ribbon height; the slider is 8px taller (--rh) */
   --rh: calc(var(--rib) + 8px);
   --ink-wash: rgba(43, 36, 28, 0.1);
+  --halo: #f8f2e3; /* the paper-coloured outline round map names and dots */
+  --margin-line: rgba(166, 63, 25, 0.28);
+  --rule-line: rgba(60, 90, 140, 0.11);
+  --index-card: 1px 2px 0 rgba(60, 40, 20, 0.1), 0 6px 14px -8px rgba(60, 40, 20, 0.25);
+  --tape: rgba(214, 196, 150, 0.55);
+  --place-state: #776a55;
+  --place-water: #2c5873;
+  --place-park: #24542e;
+  --chev-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%232b241c' stroke-width='1.6'/%3E%3C/svg%3E");
   /* Side gutters that also clear a landscape iPhone's notch (viewport-fit=cover lets the page run under it). */
   --gl: max(var(--gutter), env(safe-area-inset-left));
   --gr: max(var(--gutter), env(safe-area-inset-right));
   color-scheme: light;
+}
+
+/* Dark: the same notebook read by lamplight. Warm dark paper, chalky ink, an amber lamp for accents; the watercolours
+   dim and the washes stay washes. Contrast bars as in light (text 4.5:1 on the paper and the panels over any hex). */
+:root[data-theme="dark"] {
+  --bg: #18252a;
+  --panel: rgba(36, 31, 25, 0.94);
+  --panel-solid: #241f19;
+  --line: rgba(235, 215, 180, 0.2);
+  --line-strong: rgba(235, 215, 180, 0.5);
+  --text: #eadfc8;
+  --muted: #b8ab92;
+  --accent: #eba94b;
+  --moon: #8fd09a;
+  --warn: #f2987a;
+  --warn-bg: rgba(242, 152, 122, 0.12);
+  --on-accent: #1f1a14;
+  --accent-glow: rgba(235, 169, 75, 0.4);
+  --track: rgba(235, 215, 180, 0.55);
+  --track-faint: rgba(235, 215, 180, 0.1);
+  --thumb-fill: #f3e8d0;
+  --swatch-rim: rgba(235, 215, 180, 0.45);
+  --shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --today: #eadfc8;
+  --edge: rgba(235, 215, 180, 0.4);
+  --label-rule: rgba(235, 215, 180, 0.6);
+  --label: inset 0 0 0 3px var(--panel-solid), inset 0 0 0 4px rgba(235, 215, 180, 0.25), 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --grain: none;
+  --sun: #e8a838;
+  --wash-tan: #8a7048;
+  --wash-leaf: #5f8f58;
+  --ink-wash: rgba(235, 215, 180, 0.1);
+  --halo: #1e1a15;
+  --margin-line: rgba(242, 152, 122, 0.3);
+  --rule-line: rgba(150, 185, 235, 0.1);
+  --index-card: 1px 2px 0 rgba(0, 0, 0, 0.35), 0 6px 14px -8px rgba(0, 0, 0, 0.6);
+  --tape: rgba(200, 175, 120, 0.3);
+  --place-state: #bdb095;
+  --place-water: #8fbad6;
+  --place-park: #9bd3a4;
+  --chev-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23eadfc8' stroke-width='1.6'/%3E%3C/svg%3E");
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
@@ -110,6 +161,8 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .icon-btn:focus-visible, select:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
   details summary:focus-visible, .lg-fold:focus-visible, .lg-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
+#theme-btn .i-sun, :root[data-theme="dark"] #theme-btn .i-moon { display: none; }
+:root[data-theme="dark"] #theme-btn .i-sun { display: block; }
 #info-btn { font-family: var(--font-display); font-weight: 700; font-size: 20px; }
 
 #top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
@@ -598,16 +651,16 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
    sketches' animation repainted the whole sheet and slow phones dropped to a frame or two a second. */
 #drawer { line-height: 24px; }
 .sheet { box-sizing: border-box; min-height: 100%; margin: 0 calc(-1 * var(--gutter)) -24px; padding: 0 var(--gutter) 24px;
-  background: linear-gradient(90deg, transparent calc(var(--gutter) - 6px), rgba(166, 63, 25, 0.28) 0 calc(var(--gutter) - 5px), transparent 0),
-    repeating-linear-gradient(transparent 0 23px, rgba(60, 90, 140, 0.11) 23px 24px) 0 4px, var(--panel-solid); }
+  background: linear-gradient(90deg, transparent calc(var(--gutter) - 6px), var(--margin-line) 0 calc(var(--gutter) - 5px), transparent 0),
+    repeating-linear-gradient(transparent 0 23px, var(--rule-line) 23px 24px) 0 4px, var(--panel-solid); }
 /* The cards in it are plain index cards pasted onto the page: solid paper, so the rules stop at their edge and the
    card text keeps its own, tighter lines. Square corners and a paper shadow. Each main card is held down by a strip of
    washi tape over its top edge; the fold-open ones (fine print, credits) are not. */
 .ex-spot, .ex-score, .ex-fine, .cav { position: relative; background: var(--panel-solid); border: 1px solid var(--line);
-  border-radius: 2px; box-shadow: 1px 2px 0 rgba(60, 40, 20, 0.1), 0 6px 14px -8px rgba(60, 40, 20, 0.25); line-height: 1.45; }
+  border-radius: 2px; box-shadow: var(--index-card); line-height: 1.45; }
 .ex-spot, .ex-score, .cav:not(.credits) { margin-top: 22px; padding-top: 14px; }
 .ex-spot::before, .ex-score::before, .cav:not(.credits)::before { content: ''; position: absolute; top: -12px; right: 28px;
-  width: 58px; height: 16px; background: rgba(214, 196, 150, 0.55); transform: rotate(3deg); pointer-events: none; }
+  width: 58px; height: 16px; background: var(--tape); transform: rotate(3deg); pointer-events: none; }
 .ex-score::before { right: auto; left: 34px; transform: rotate(-2deg); }
 .drawer-head h2 { font-family: var(--font-display); font-size: 22px; }
 .brand small { font-family: var(--font-note); font-size: 18px; color: var(--moon); font-weight: 600; }
@@ -641,22 +694,22 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .place { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; white-space: nowrap;
   color: var(--text); font: 400 12px/15px var(--font-body);
   /* A solid paper halo: eight 1.5px offsets fill the gaps a blur alone leaves on the dark peak green. */
-  text-shadow: 1.5px 0 #f8f2e3, -1.5px 0 #f8f2e3, 0 1.5px #f8f2e3, 0 -1.5px #f8f2e3, 1px 1px #f8f2e3, -1px -1px #f8f2e3,
-    1px -1px #f8f2e3, -1px 1px #f8f2e3, 0 0 4px #f8f2e3; }
+  text-shadow: 1.5px 0 var(--halo), -1.5px 0 var(--halo), 0 1.5px var(--halo), 0 -1.5px var(--halo), 1px 1px var(--halo), -1px -1px var(--halo),
+    1px -1px var(--halo), -1px 1px var(--halo), 0 0 4px var(--halo); }
 .place-town::before, .place-city::before { content: ''; flex: none; width: 4px; height: 4px; border-radius: 50%;
-  background: var(--text); box-shadow: 0 0 0 1.5px #f8f2e3; }
+  background: var(--text); box-shadow: 0 0 0 1.5px var(--halo); }
 .place.flip { flex-direction: row-reverse; }
 .place-city { font: 700 13px/16px var(--font-body); }
 .place-city::before { width: 5px; height: 5px; }
-.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: #776a55; }
-.place-water { font: 600 17px/18px var(--font-note); color: #2c5873; }
-.place-park { font: 600 16px/18px var(--font-note); color: #24542e; }
+.place-state { font: 700 12px/15px var(--font-display); letter-spacing: 2.5px; color: var(--place-state); }
+.place-water { font: 600 17px/18px var(--font-note); color: var(--place-water); }
+.place-park { font: 600 16px/18px var(--font-note); color: var(--place-park); }
 
 /* Phones: the species menu shows just the species' own sketch mark (src/species.ts sets --mark), one small square
    however long the list grows; opening it lists the full names. The header's mark steps aside so it isn't doubled. */
 @media (max-width: 430px) {
   /* Both menus draw their own arrow: their text is see-through (a face drawn over it), and so would the native one be. */
-  .season select { --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%232b241c' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 8px center / 10px 6px;
+  .season select { --chev: var(--chev-img) no-repeat right 8px center / 10px 6px;
     appearance: none; -webkit-appearance: none; color: transparent; background: var(--chev), var(--panel); }
   .season.species select { width: 60px; padding: 0; background: var(--mark) no-repeat 7px 50% / 28px 28px, var(--chev), var(--panel); }
   .season.species option, .season.species optgroup { color: var(--text); background: var(--panel-solid); }

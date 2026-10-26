@@ -4,6 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f8f2e3" />
+  <!-- Light or dark before first paint: the saved choice, else the system setting (src/theme.ts keeps both in step). -->
+  <script>
+    try {
+      var t = localStorage.getItem('hatch-theme');
+      if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+      if (t === 'dark') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#241f19');
+    } catch (e) {}
+  </script>
   <title>Hatch · Historical and predictive insect tracking</title>
   <meta name="description" content="Historical and predictive insect tracking across the Midwest, checked against real iNaturalist sightings." />
   <link rel="canonical" href="https://neevliberman.github.io/hatch/" />
@@ -44,6 +53,10 @@
       <h1 class="brand"><img id="mark" class="mark" src="/src/marks/moth.svg" alt="" width="24" height="24" />Hatch <small id="tagline">Historical and predictive insect tracking</small></h1>
       <label class="season species"><span class="sr">Species</span><select id="species"><option value="luna">Luna moth</option></select></label>
       <label class="season"><span class="sr">Season to replay</span><select id="season"><option value="">All years</option></select></label>
+      <button id="theme-btn" class="icon-btn" type="button" aria-label="Dark mode" aria-pressed="false" title="Dark mode">
+        <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.6 14.6A8 8 0 0 1 9.4 4.4a8.2 8.2 0 1 0 10.2 10.2z"/><path fill="currentColor" d="M17 3.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></g></svg>
+      </button>
       <button id="info-btn" class="icon-btn" aria-label="About this map" aria-expanded="false" aria-controls="drawer">i</button>
       <div id="explore" class="sr explore icon-btn" role="application" tabindex="0" aria-roledescription="map explorer" aria-label="Explore map with keys" aria-describedby="explore-help">Explore map with keys</div>
       <span id="explore-help" class="sr">Arrow keys move between hexagons and read the forecast. Escape exits.</span>

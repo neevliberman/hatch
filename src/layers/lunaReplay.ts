@@ -1,5 +1,5 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
-import { mothInk, palette } from '../theme';
+import { mothInk, onTheme, palette } from '../theme';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps } from '@deck.gl/extensions';
 import { cellToLatLng, latLngToCell } from 'h3-js';
@@ -82,8 +82,6 @@ const bytesToQ = (days: Uint8Array, i: number) =>
 type RGBA = [number, number, number, number];
 // The stage colours and why they are what they are: palette.stages in theme.ts.
 const STAGE_COLOR: Record<Stage, RGBA> = palette.stages;
-// Hexes with no sightings nearby keep their stage colour (fading it made it look like another stage) under dark stripes.
-const STRIPES: RGBA = palette.stripes;
 // One object for every render, so deck.gl doesn't rebuild the pattern each playback frame. The 12px tile is drawn
 // at 1:1: a shrunken tile blurs thin lines and loses their contrast.
 export const STRIPE_MAPPING = { stripes: { x: 0, y: 0, width: 12, height: 12 } };
@@ -103,13 +101,10 @@ export const stripes = () => {
   }
   return (stripeAtlas = c);
 };
-const MOON: RGBA = palette.moth;
-const SECOND: RGBA = palette.second;
-const GREY: RGBA = palette.rough;
 const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
 
 const dotColor = (s: Sighting): RGBA => {
-  const c = s.flags & APPROXIMATE ? GREY : s.flags & SECOND_BROOD ? SECOND : MOON;
+  const c = s.flags & APPROXIMATE ? palette.rough : s.flags & SECOND_BROOD ? palette.second : palette.moth;
   return s.flags & UNCONFIRMED ? [c[0], c[1], c[2], 150] : c;
 };
 
@@ -317,7 +312,8 @@ interface Shown {
 export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = () => {}): LunaLayer {
   let mode = initial;
   let shown = sightingsFor(mode);
-  const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode
+  const profiles = new Map<Mode, SeasonProfile>(); // the ribbon depends only on the mode (and the colours)
+  onTheme(() => profiles.clear());
   const cellIndex = new Map(data.cells.map((c, i) => [c, i] as const));
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
   const isLive = () => mode === LIVE && live !== null;
@@ -327,7 +323,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
 
   const unseen = cells.filter((c) => !c.seen);
   // An ink ring spreads from each moth on the day it is seen, while playing.
-  const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], palette.dotRim);
+  const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], () => palette.dotRim);
   let sleepNote: OffSeasonNote | undefined;
   const cellColor = (i: number, doy: number): RGBA => STAGE_COLOR[stageAt(forecast()[i], doy)];
   // Today's sightings, which breathe while paused (map.ts). Cached per day and season.
@@ -563,7 +559,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
         p = seasonProfile(forecast().map((q) => q ?? []), shown, (s) => (mode === TYPICAL ? s.pdoy : s.doy), yearOf(), [
           ['1st wave', (s) => !(s.flags & SECOND_BROOD)],
           // Not forecast (the model covers the first wave only): washed in the 2nd-wave dots' colour.
-          ['2nd wave (seen)', (s) => !!(s.flags & SECOND_BROOD), css(SECOND)],
+          ['2nd wave (seen)', (s) => !!(s.flags & SECOND_BROOD), css(palette.second)],
         ]);
         profiles.set(mode, p);
       }
@@ -623,7 +619,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
               id: `luna-unseen-r${res}`,
               data: fine.unseen,
               getHexagon: (c) => c.id,
-              getFillColor: STRIPES,
+              getFillColor: palette.stripes,
               stroked: false,
               filled: true,
               extruded: false,
@@ -662,7 +658,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           opacity: wash === undefined ? 1 : Math.min(1, wash / 900),
           data: unseen,
           getHexagon: (c) => c.id,
-          getFillColor: STRIPES,
+          getFillColor: palette.stripes,
           stroked: false,
           filled: true,
           extruded: false,
@@ -906,10 +902,10 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             shape: 'hex' as const,
           })),
           { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
-          { color: css(MOON), label: 'seen, last 10 days', shape: 'dot' },
-          ...(isLive() ? [{ color: `rgba(${MOON[0]},${MOON[1]},${MOON[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
-          { color: css(SECOND), label: 'seen, 2nd wave', shape: 'dot' },
-          { color: css(GREY), label: 'rough location', shape: 'dot' },
+          { color: css(palette.moth), label: 'seen, last 10 days', shape: 'dot' },
+          ...(isLive() ? [{ color: `rgba(${palette.moth[0]},${palette.moth[1]},${palette.moth[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
+          { color: css(palette.second), label: 'seen, 2nd wave', shape: 'dot' },
+          { color: css(palette.rough), label: 'rough location', shape: 'dot' },
         ],
       };
     },

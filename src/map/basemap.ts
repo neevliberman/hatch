@@ -4,15 +4,16 @@ import type { Layer } from '@deck.gl/core';
 import type { Feature, FeatureCollection } from 'geojson';
 import { stateCollection } from '../core/grid';
 import type { Theme } from '../core/layer';
-import { palette } from '../theme';
+import { isDark, onTheme, palette, recoloured } from '../theme';
 
 const P = palette;
 
 export const theme: Theme = {
   bg: P.bg,
   hexEdge: P.hexEdge,
-  text: '#2b241c',
+  text: isDark() ? '#eadfc8' : '#2b241c',
 };
+onTheme(() => Object.assign(theme, { bg: P.bg, hexEdge: P.hexEdge, text: isDark() ? '#eadfc8' : '#2b241c' }));
 
 /** [text, lng, lat, zoom it shows from, kind, rank (population for towns; bigger names first)]. */
 export type Label = [string, number, number, number, 'state' | 'water' | 'park' | 'city' | 'town', number, number?, number?];
@@ -323,6 +324,13 @@ const outlineLayer = (zoom: number, data: Feature[]): Layer => {
  * beside an ink line; a river crossing a state line shows as a blue dot on it.
  */
 let built: { key: string; layers: { under: Layer[]; mid: Layer[] } } | null = null;
+/** After a light/dark switch: the layers above hold the old colours, so build them again (and again for deck, which
+ *  finalizes the old instances once they leave the layer list). */
+export const resetBasemap = () => {
+  landLayer = null;
+  states = null;
+  built = null;
+};
 export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[] } {
   const key = `${zoom}|${!!parts.overview}|${!!parts.detail}|${!!parts.woods}|${!!parts.shore}`;
   if (built?.key === key) return built.layers;
@@ -333,10 +341,10 @@ export function basemapLayers(zoom: number): { under: Layer[]; mid: Layer[] } {
   built = {
     key,
     layers: {
-      under: [under, ...dryLayer(zoom)],
+      under: [under, ...dryLayer(zoom)].map(recoloured),
       // The overview's `outside` mask comes first: woods and everything else go over it.
       mid: [...kind(/^outside/), ...woodsLayers(zoom), ...kind(/^(green|water|roads)-/), ...kind(/^rivers-case-/),
-        neighbours, outlineLayer(zoom, outlineData), ...shore(zoom), ...kind(/^rivers-(overview|detail)/)],
+        neighbours, outlineLayer(zoom, outlineData), ...shore(zoom), ...kind(/^rivers-(overview|detail)/)].map(recoloured),
     },
   };
   return built.layers;
