@@ -33,7 +33,7 @@ export function mothNightLine(live: Pick<Live, 'activity'>, lat: number, lng: nu
 }
 
 export const MOTH_NIGHT_NOTE =
-  'Moth night: from the forecast for warmth, wind and moon, against nights of the same week in 2017-2025. In held-out years, busy nights logged about 1.6x the sightings of slow ones.';
+  'Moth night: from the forecast for warmth, wind and moon, against nights of the same week in 2017-2025. In held-out years, busy nights had about 1.6x the moth share of all sightings that slow ones had. Not yet checked on forecast weather.';
 
 /** Parse the file's block defensively: anything off just means no line. */
 export function parseActivity(a: unknown): Activity | undefined {

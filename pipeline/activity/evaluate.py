@@ -43,7 +43,7 @@ def lift(te, group, boot=1000):
     te["wk"] = te.doy // 7
     te["tercile"] = te.groupby(["region", "wk"]).pred_lift.transform(
         lambda s: np.digitize(s.rank(pct=True), [1 / 3, 2 / 3]) if len(s) >= 3 else 1)
-    te["block"] = te.region + te.year.astype(str)
+    te["block"] = te.year   # the independent unit is the year: boxes in one year share weather and iNat growth
     g = te.groupby(["block", "tercile"]).agg(y=("y", "sum"), mu=("mu_base", "sum")).unstack(fill_value=0)
 
     def ratio(blocks):
@@ -68,7 +68,6 @@ def run(groups):
             rows=int(len(te)), folds_won=int((gain > 0).sum()), folds=int(len(gain)),
             loglik_gain_per_day_by_year={int(k): float(v / n[k]) for k, v in gain.items()},
             lift=lift(te, group), alpha_full=full.alpha,
-            coef={k: float(v) for k, v in full.res.params.items() if not k.startswith(("C(", "bs("))},
         )
         res["ships"] = res["folds_won"] >= GATE_YEARS and res["lift"]["top_over_bottom"] >= GATE_LIFT and res["lift"]["ci90"][0] > 1.0
         out[group] = res

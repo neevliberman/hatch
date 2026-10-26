@@ -18,7 +18,7 @@ from .features import moon_illum, weather_features
 from .terms import add_terms, lift_from
 
 STATIC = Path(__file__).parent / "moth_static.json"
-NIGHTS = 4
+NIGHTS = 2   # tonight and tomorrow: the model was only checked on weather as it happened, so no further out
 
 
 def fetch_forecast():
@@ -29,42 +29,41 @@ def fetch_forecast():
                                  headers={"User-Agent": "hatch-live/0.1 (github.com/neevliberman/hatch)"})
     with urllib.request.urlopen(req, timeout=90) as r:
         out = json.load(r)
-    return dict(zip(names, out if isinstance(out, list) else [out]))
+    out = out if isinstance(out, list) else [out]
+    if len(out) != len(names):
+        raise ValueError(f"forecast for {len(out)} places, asked for {len(names)}")
+    return dict(zip(names, out))
 
 
 def night_classes(wx, region, static, today):
     """Classes for `today` and the nights after it, from one place's hourly forecast."""
-    import pandas as pd
-    f = weather_features(wx["hourly"])
-    f = f[f.date.apply(lambda d: d >= today)].head(NIGHTS)
-    rows = []
-    for _, r in f.iterrows():
-        d = r.date
-        row = r.to_dict()
-        row.update(moon=moon_illum(d), total=1)
-        rows.append(row)
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return []
-    df = add_terms(df.dropna(subset=["n_tmin", "n_rh", "n_wind", "n_cloud", "n_rain", "e_rain"]))
+    f = weather_features(wx["hourly"]).set_index("date")
     out = []
-    for (_, r), lift in zip(df.iterrows(), lift_from(static["coef"], df)):
-        doy = r.date.timetuple().tm_yday
+    for i in range(NIGHTS):
+        d = today + dt.timedelta(days=i)
+        doy = d.timetuple().tm_yday
         lo, hi = static["window"]
         cut = static["cuts"][region].get(str(doy // 7))
-        out.append(None if not cut or not lo <= doy <= hi else int(lift > cut[0]) + int(lift > cut[1]))
+        need = ["n_tmin", "n_rh", "n_wind", "n_cloud", "n_rain", "e_rain"]
+        # a night needs all of 21:00-04:59 (8 hours) and every value; otherwise no call (None), never a shifted one
+        if d not in f.index or not cut or not lo <= doy <= hi or f.loc[d, "n_hours"] < 8 or f.loc[d, need].isna().any():
+            out.append(None)
+            continue
+        row = add_terms(f.loc[[d]].reset_index().assign(moon=moon_illum(d), total=1))
+        lift = float(lift_from(static["coef"], row).iloc[0])
+        out.append(int(lift > cut[0]) + int(lift > cut[1]))
     return out
 
 
 def build(today=None, forecast=None):
     static = json.loads(STATIC.read_text())
-    today = today or dt.datetime.now(dt.timezone.utc).date()
+    today = today or (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=5)).date()   # the Midwest's date, not UTC's
     forecast = forecast or fetch_forecast()
     rows = []
     for name, wx in forecast.items():
         lat, lng = ANCHORS[name]
         cls = night_classes(wx, nearest_region(lat, lng, static["cuts"]), static, today)
         if cls:
-            rows.append([lat, lng] + cls + [None] * (NIGHTS - len(cls)))
+            rows.append([lat, lng] + cls)
     return {"asof": today.isoformat(), "nights": [(today + dt.timedelta(days=i)).isoformat() for i in range(NIGHTS)],
             "moth": rows}

@@ -47,6 +47,15 @@ def test_night_classes_follow_the_cut_offs():
               "cuts": {"chicago": {str(dt.date(2024, 7, 2).timetuple().tm_yday // 7): [1.0, 1.4]}}}
     wx = {"hourly": _hourly(4, 15)}
     out = night_classes(wx, "chicago", static, dt.date(2024, 7, 2))
-    assert out and all(c in (0, 1, 2, None) for c in out)
+    assert len(out) == 2 and all(c in (0, 1, 2, None) for c in out)
     static["cuts"]["chicago"] = {k: [0.0, 0.5] for k in static["cuts"]["chicago"]}
     assert night_classes(wx, "chicago", static, dt.date(2024, 7, 2))[0] == 2
+
+
+def test_a_missing_night_is_none_not_a_shift():
+    static = {"coef": {"tmin": 0.33, "tmin2": -0.05}, "window": [121, 288], "cuts": {"chicago": {
+        str(dt.date(2024, 7, 2).timetuple().tm_yday // 7): [0.0, 0.5], str(dt.date(2024, 7, 3).timetuple().tm_yday // 7): [0.0, 0.5]}}}
+    hourly = _hourly(4, 15)
+    hourly["temperature_2m"][24 + 23] = None   # a missing evening hour on 2 Jul
+    out = night_classes({"hourly": hourly}, "chicago", static, dt.date(2024, 7, 2))
+    assert len(out) == 2 and out[0] is None and out[1] in (0, 1, 2)

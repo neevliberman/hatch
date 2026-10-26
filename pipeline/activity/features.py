@@ -49,7 +49,7 @@ def weather_features(wx):
         "n_tmin": g.temperature_2m.min(), "n_tmean": g.temperature_2m.mean(),
         "n_rh": g.relative_humidity_2m.mean(), "n_dew": g.dew_point_2m.mean(),
         "n_wind": g.wind_speed_10m.mean(), "n_gust": g.wind_gusts_10m.max(),
-        "n_cloud": g.cloud_cover.mean(), "n_rain": g.precipitation.sum(),
+        "n_cloud": g.cloud_cover.mean(), "n_rain": g.precipitation.sum(), "n_hours": g.temperature_2m.count(),
     })
     dayh = h[(h.hour >= 10) & (h.hour <= 17)].groupby("date")
     day = pd.DataFrame({
@@ -57,7 +57,7 @@ def weather_features(wx):
         "d_cloud": dayh.cloud_cover.mean(), "d_sun": dayh.shortwave_radiation.mean(),
         "d_rain": dayh.precipitation.sum(),
     })
-    dusk = h[(h.hour >= 18) & (h.hour <= 22)].groupby("date")
+    dusk = h[(h.hour >= 18) & (h.hour <= 20)].groupby("date")
     dusk = pd.DataFrame({"e_temp": dusk.temperature_2m.mean(), "e_wind": dusk.wind_speed_10m.mean(),
                          "e_rh": dusk.relative_humidity_2m.mean(), "e_rain": dusk.precipitation.sum()})
     out = day.join(night, how="outer").join(dusk, how="outer")
