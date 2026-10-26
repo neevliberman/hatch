@@ -83,8 +83,10 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
 
   // Hexagons with a sighting so far: lit while one is under GLOW_DAYS old, faint after. Not-yet hexagons are left out.
   const ink = (a: number): RGBA => [cfg.glow[0], cfg.glow[1], cfg.glow[2], a];
-  const LIT = 150;
-  const FAINT = 70;
+  const LIT = 190;
+  const FAINT = 55;
+  // The two hexagon shades as opaque colours (over the land), for the ribbon and legend: a translucent band would blend with the one under it.
+  const onLand = (a: number) => `rgb(${[0, 1, 2].map((i) => Math.round((cfg.glow[i]! * a + palette.land[i]! * (255 - a)) / 255)).join(',')})`;
   type Hex = { id: string; days: number[] };
   let hexes = { mode: '' as Mode, list: [] as Hex[] };
   const hexList = (): Hex[] => {
@@ -190,10 +192,9 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
           }
         }
         const total = Math.max(1, all.length);
-        const css = (a: RGBA) => `rgba(${a[0]},${a[1]},${a[2]},${(a[3] / 255).toFixed(2)})`;
         const bands = [
-          { color: css(ink(FAINT)), share: faint.map((v) => v / total) },
-          { color: css(ink(LIT)), share: lit.map((v) => v / total) },
+          { color: onLand(FAINT), share: faint.map((v) => v / total) },
+          { color: onLand(LIT), share: lit.map((v) => v / total) },
           { color: 'rgba(0,0,0,0)', share: lit.map((v, i) => 1 - (v + faint[i]!) / total) },
         ];
         profiles.set(mode, (p = { bands, seen, notes: [] }));
@@ -229,14 +230,14 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
           data: hexList(),
           getHexagon: (h) => h.id,
           getFillColor: (h) => [ink(0), ink(FAINT), ink(LIT)][hexState(h, doy)]!,
-          getLineColor: theme.hexEdge,
+          getLineColor: (h) => (hexState(h, doy) ? theme.hexEdge : ink(0)), // none yet: no outline either
           stroked: true,
           filled: true,
           extruded: false,
           highPrecision: true,
           lineWidthMinPixels: 0.6,
           pickable: false,
-          updateTriggers: { getFillColor: [doy, mode, shown.length], getLineColor: [epoch] },
+          updateTriggers: { getFillColor: [doy, mode, shown.length], getLineColor: [doy, mode, shown.length, epoch] },
         }),
         new ScatterplotLayer<Sighting>({
           id: `${key}-older`,
@@ -331,8 +332,8 @@ export function createFrontLayer(cfg: FrontConfig, file: FrontFile, initial: Mod
       return {
         title: 'Seen',
         items: [
-          { color: `rgba(${c[0]},${c[1]},${c[2]},${LIT / 255})`, label: 'last 10 days', shape: 'hex' },
-          { color: `rgba(${c[0]},${c[1]},${c[2]},${FAINT / 255})`, label: 'earlier', shape: 'hex' },
+          { color: onLand(LIT), label: 'last 10 days', shape: 'hex' },
+          { color: onLand(FAINT), label: 'earlier', shape: 'hex' },
           ...(isLive() ? [{ color: `rgba(${c[0]},${c[1]},${c[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
         ],
       };

@@ -261,14 +261,19 @@ for (const [name, width, height, mobile] of shots) {
         if (scheme === 'dark' && got.disc) problems.push(`${tag}: the species mark still has its paper disc`);
         if (mobile && got.speciesShown && got.menuWidth < 64) problems.push(`${tag}: species menu ${got.menuWidth}px wide, too narrow for mark and arrow`);
         // One focus ring: no outline offset from the border (it read as a doubled box), an accent border and hairline instead.
-        await page.keyboard.press('Tab');
-        const ring = await page.evaluate(() => {
-          const sel = document.getElementById('season');
-          sel.focus();
-          const st = getComputedStyle(sel);
-          return { outline: st.outlineStyle === 'none' || parseFloat(st.outlineWidth) === 0, shadow: st.boxShadow !== 'none', focused: sel.matches(':focus-visible') };
-        });
-        if (ring.focused && !(ring.outline && ring.shadow)) problems.push(`${tag}: menu focus is not one clean ring (${JSON.stringify(ring)})`);
+        let ring = null;
+        for (let i = 0; i < 40 && !ring; i++) {
+          await page.keyboard.press('Tab');
+          ring = await page.evaluate(() => {
+            const sel = document.activeElement;
+            if (sel?.id !== 'season') return null;
+            const st = getComputedStyle(sel);
+            const edge = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+            return { outline: st.outlineStyle === 'none' || parseFloat(st.outlineWidth) === 0, shadow: st.boxShadow !== 'none', visible: sel.matches(':focus-visible'), accent: !!edge && st.borderTopColor !== getComputedStyle(document.body).color };
+          });
+        }
+        if (!ring) problems.push(`${tag}: Tab never reached the season menu`);
+        else if (!ring.visible || !ring.outline || !ring.shadow || !ring.accent) problems.push(`${tag}: menu focus is not one clean ring (${JSON.stringify(ring)})`);
         await page.screenshot({ path: `${out}/look-${key}-${scheme}-${vname}.png` });
         console.log(`${tag}: hexes ${got.hexes}, ribbon bands ${got.bands}, menu ${Math.round(got.menuWidth)}px`);
         await c.close();

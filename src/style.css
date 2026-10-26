@@ -154,7 +154,7 @@ button, select { font: inherit; color: inherit; touch-action: manipulation; }
 .icon-btn:hover { border-color: var(--line-strong); }
 /* A menu's focus is its own border turned accent, with one hairline beside it: an outline offset from the border
    read as a second, doubled box (yellow in dark mode). */
-select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+select:focus-visible, .season select:focus-visible, .year select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* A press shows at once, before the map catches up. */
 .icon-btn:active { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
 @media (prefers-reduced-motion: no-preference) {

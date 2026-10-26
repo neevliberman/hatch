@@ -503,10 +503,12 @@ function start() {
   if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
   // On narrow phones the closed menu shows just the species' sketch mark (style.css), so it stays one small square.
   const markImg = $('mark') as HTMLImageElement;
+  let markSeq = 0;
   const showMark = () => {
     const sketch = cur.words.mark;
+    const seq = ++markSeq;
     void markFor(sketch).then((url) => {
-      if (cur.words.mark !== sketch) return; // the species changed meanwhile
+      if (seq !== markSeq) return; // the species or the theme changed meanwhile
       markImg.src = url;
       speciesSel.style.setProperty('--mark', `url("${url}")`);
     });

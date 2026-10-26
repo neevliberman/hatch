@@ -18,7 +18,10 @@ export function markFor(url: string): Promise<string> {
         const inverted = svg.replace(/<circle cx=["']256["'] cy=["']256["'] r=["']256["'][^>]*\/>/, '').replaceAll('#2b241c', '#eadfc8');
         return `data:image/svg+xml,${encodeURIComponent(inverted)}`;
       })
-      .catch(() => url);
+      .catch(() => {
+        dark.delete(url); // a failed read is tried again next time
+        return url;
+      });
     dark.set(url, p);
   }
   return p;
