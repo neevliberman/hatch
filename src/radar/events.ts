@@ -37,7 +37,7 @@ export const EVENTS: Record<string, RadarEvent> = {
   },
   'kdvn-2012-06-23': {
     id: 'kdvn-2012-06-23',
-    caption: 'Echoes consistent with mayflies on the Mississippi',
+    caption: 'Echoes consistent with mayflies on the river; storms and clutter elsewhere',
     tz: { name: 'CDT', offset: -5 },
     more: [
       'One evening on the National Weather Service radar at Davenport, Iowa, one sweep about every 4 minutes. After 9 pm a narrow cloud forms along the river north of the Quad Cities and drifts north. Darker means a stronger echo. The blank center is left out. Other echoes are not mayflies.',
