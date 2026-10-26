@@ -1,6 +1,7 @@
 // Zoomed-in smoke test for the finer hexagons (res 5 and 6), which only load over http(s).
 // Usage: node scripts/fine.mjs [outDir]   (after `npm run build`; serves dist/ on a local port)
-// Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (default dist).
+// Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (default dist), SHARD ("2/3" = the 2nd of 3 equal
+//      slices of the cases; unset = all of them).
 // FAILS (exit 1) on any page or console error, a failed or non-local request, a level that never appears,
 // a blank map, or a tap that shows no card.
 import { createRequire } from 'node:module';
@@ -72,6 +73,10 @@ const cases = [
   ['mississippi-z8.2', '?date=05-24&noauto', -91.2, 43.2, 8.2, 6],
   ['wheel-back-out', '?noauto', -88.5, 42.5, 5.0, 4],
 ];
+// Each screen case and each species case takes the next number; a shard runs every SHARD-of-th one.
+const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
+let caseNo = 0;
+const mine = () => caseNo++ % shardOf === shardNo - 1;
 const shots = [
   ['desktop', 1440, 900, false],
   ['mobile', 390, 844, true],
@@ -79,6 +84,7 @@ const shots = [
 
 for (const [name, width, height, mobile] of shots) {
   for (const [label, query, lng, lat, zoom, want] of cases) {
+    if (!mine()) continue;
     const res = Math.min(want, finest);
     const tag = `${name} ${label}`;
     // Reduced motion: no first-frame wash or glides, so the back-out comparison isn't racing an animation on a slow runner.
@@ -181,6 +187,7 @@ for (const [name, width, height, mobile] of shots) {
   await ctx.close();
   for (const key of keys) {
     for (const season of ['2021', 'live']) {
+      if (!mine()) continue;
       const tag = `species ${key} ${season}`;
       const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
       const page = await c.newPage();

@@ -50,7 +50,9 @@ const units = [];
 // pages drawing through it starve each other into load timeouts.
 const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
 const runUnits = async (n) => {
-  const queue = units.filter((_, i) => i % shardOf === shardNo - 1);
+  // The first section (the radar replays, as long as all the others put together over a pair of workers) gets shard 1 to itself;
+  // the rest are dealt out round robin over the other shards.
+  const queue = units.filter((_, i) => (shardOf === 1 ? true : i === 0 ? shardNo === 1 : (i - 1) % (shardOf - 1) === shardNo - 2));
   await Promise.all(Array.from({ length: n }, async (_, i) => {
     const own = i === 0 ? null : await pw.chromium.launch(chromiumLaunch);
     for (let u; (u = queue.shift()); ) await u(own ?? browsers.chromium);
