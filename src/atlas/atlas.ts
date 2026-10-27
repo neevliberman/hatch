@@ -96,7 +96,8 @@ export function loadAtlas(): Promise<Atlas | null> {
 export class Field {
   private done = new Map<number, Float32Array>();
   private queue: number[] = [];
-  private busy = false;
+  /** The day being worked out now, if any. */
+  private doing: number | null = null;
 
   constructor(
     private readonly atlas: Atlas,
@@ -111,7 +112,7 @@ export class Field {
     const d = Math.round(day);
     const have = this.done.get(d);
     if (have) return have;
-    if (!this.queue.includes(d)) this.queue.unshift(d);
+    if (d !== this.doing && !this.queue.includes(d)) this.queue.unshift(d);
     this.queue.length = Math.min(this.queue.length, 3); // only the latest few asks: a fast scrub skips the days between
     this.pump();
     let best: Float32Array | undefined;
@@ -129,24 +130,31 @@ export class Field {
   }
 
   private pump(): void {
-    if (this.busy || !this.queue.length) return;
-    this.busy = true;
-    const d = this.queue.shift()!;
+    if (this.doing !== null) return;
+    while (this.queue.length && this.done.has(this.queue[0]!)) this.queue.shift();
+    if (!this.queue.length) return;
+    const d = (this.doing = this.queue.shift()!);
     const finish = (v: Float32Array) => {
       this.done.set(d, v);
-      this.busy = false;
+      this.doing = null;
       this.onReady();
       this.pump();
     };
     const { gpu, net, cells, places } = this.atlas;
     const ahead = this.aheadOn(d);
-    if (gpu) {
+    // The graphics card, unless its context was lost (it would read back zeros); then the plain network.
+    if (gpu && !gpu.lost) {
       setTimeout(() => {
+        let v: Float32Array | null = null;
         try {
-          finish(gpu.run(places, d, ahead, [this.sp])[0]!.map(Math.exp));
+          v = gpu.run(places, d, ahead, [this.sp])[0]!.map(Math.exp);
         } catch {
-          this.busy = false;
+          /* falls through to the plain network */
         }
+        if (v && !gpu.lost) return finish(v);
+        this.doing = null;
+        this.queue.unshift(d);
+        this.pump();
       }, 0);
       return;
     }

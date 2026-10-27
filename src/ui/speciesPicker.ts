@@ -36,22 +36,24 @@ export function mountSpeciesPicker(
   let all: AtlasSpecies[] | null = null;
   let path: Path = {};
   let q = '';
+  let refocus = false;
 
-  sheet.innerHTML = `<div class="sp-head"><input id="sp-q" type="search" role="combobox" aria-autocomplete="list" aria-controls="sp-list"
-      aria-expanded="true" placeholder="Search insects" autocomplete="off" enterkeyhint="search" aria-label="Search insects">
+  // A plain list of buttons (Tab or the arrow keys walk it), not a listbox: each row is an action, not a selection.
+  sheet.innerHTML = `<div class="sp-head"><input id="sp-q" type="search" aria-controls="sp-list"
+      placeholder="Search insects" autocomplete="off" enterkeyhint="search" aria-label="Search insects">
     <button type="button" class="sp-x icon-btn" aria-label="Close">${CROSS}</button></div>
-    <nav class="sp-crumbs" aria-label="Tree of life"></nav>
-    <ul id="sp-list" role="listbox" aria-label="Species"></ul>`;
+    <nav class="sp-crumbs" aria-label="Tree of life" aria-live="polite"></nav>
+    <ul id="sp-list" aria-label="Species"></ul>`;
   const input = sheet.querySelector<HTMLInputElement>('#sp-q')!;
   const crumbs = sheet.querySelector<HTMLElement>('.sp-crumbs')!;
   const list = sheet.querySelector<HTMLUListElement>('#sp-list')!;
 
   const row = (s: AtlasSpecies) =>
-    `<li role="option" aria-selected="false"><button type="button" class="sp-row" data-key="${esc(keyOf(s))}">${s.photo
+    `<li><button type="button" class="sp-row" data-key="${esc(keyOf(s))}">${s.photo
       ? `<img src="${esc(s.photo)}" alt="" width="36" height="36" loading="lazy" referrerpolicy="no-referrer">`
       : '<i class="sp-blank"></i>'}<span class="sp-name">${esc(nameOf(s))}${s.common ? `<i>${esc(s.name)}</i>` : ''}</span></button></li>`;
   const group = (label: string, sub: string, data: string) =>
-    `<li role="option" aria-selected="false"><button type="button" class="sp-group" ${data}><span class="sp-name">${esc(label)}${sub ? `<i>${esc(sub)}</i>` : ''}</span><span class="sp-n"></span></button></li>`;
+    `<li><button type="button" class="sp-group" ${data}><span class="sp-name">${esc(label)}${sub ? `<i>${esc(sub)}</i>` : ''}</span><span class="sp-n"></span></button></li>`;
   const counted = (html: string, n: number) => html.replace('<span class="sp-n"></span>', `<span class="sp-n">${n.toLocaleString()}</span>`);
   const tally = (xs: AtlasSpecies[], k: 'order' | 'family') => {
     const m = new Map<string, number>();
@@ -83,7 +85,7 @@ export function mountSpeciesPicker(
     featured
       .map((e) => {
         const s = all?.find((x) => x.name === e.sci);
-        return `<li role="option" aria-selected="false"><button type="button" class="sp-row sp-feat" data-key="${esc(e.key)}">${s?.photo
+        return `<li><button type="button" class="sp-row sp-feat" data-key="${esc(e.key)}">${s?.photo
           ? `<img src="${esc(s.photo)}" alt="" width="36" height="36" loading="lazy" referrerpolicy="no-referrer">`
           : '<i class="sp-blank"></i>'}<span class="sp-name">${esc(e.label)}${e.sci ? `<i>${esc(e.sci)}</i>` : ''}</span></button></li>`;
       })
@@ -96,7 +98,7 @@ export function mountSpeciesPicker(
     }
     if (q.trim()) {
       const hits = search(q.trim());
-      crumbs.innerHTML = `<span>${hits.length ? `${hits.length === 60 ? 'Top 60' : hits.length} matches` : 'No matches'}</span>`;
+      crumbs.innerHTML = `<span>${hits.length ? hits.length === 1 ? '1 match' : `${hits.length === 60 ? 'Top 60' : hits.length} matches` : 'No matches'}</span>`;
       list.innerHTML = hits.map(row).join('');
       return;
     }
@@ -124,8 +126,9 @@ export function mountSpeciesPicker(
     input.focus();
     if (!all)
       void loadIndex().then((s) => {
-        all = s ?? [];
-        render();
+        if (s) all = s;
+        else list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Couldn’t load the other insects. Close and try again.</li>`;
+        if (s) render();
       });
   };
   button.addEventListener('click', () => open(sheet.hidden));
@@ -140,6 +143,7 @@ export function mountSpeciesPicker(
     if (b.dataset.key) {
       open(false);
       button.focus();
+      refocus = true; // the button is disabled while the species loads, which drops focus: hand it back after
       onPick(b.dataset.key);
     } else if (b.dataset.order) (path = { order: b.dataset.order }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.family) (path = { ...path, family: b.dataset.family }), render(), list.scrollTo?.(0, 0);
@@ -149,6 +153,7 @@ export function mountSpeciesPicker(
   sheet.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation(); // the page's own Escape would also unpin the card on the map
       open(false);
       button.focus();
       return;
@@ -163,7 +168,13 @@ export function mountSpeciesPicker(
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    list.querySelector<HTMLButtonElement>('.sp-row')?.click();
+    // The top match, once there are matches: never a featured row standing in while the list loads.
+    if (all && q.trim()) list.querySelector<HTMLButtonElement>('.sp-row')?.click();
+  });
+  // Tabbing out of it closes it, as a tap outside does.
+  sheet.addEventListener('focusout', (e) => {
+    const to = e.relatedTarget as Node | null;
+    if (to && !sheet.contains(to) && to !== button) open(false);
   });
   // A tap outside closes it.
   document.addEventListener('pointerdown', (e) => {
@@ -178,6 +189,10 @@ export function mountSpeciesPicker(
     },
     set disabled(on: boolean) {
       button.disabled = on;
+      if (!on && refocus) {
+        refocus = false;
+        if (document.activeElement === document.body) button.focus();
+      }
     },
   };
 }

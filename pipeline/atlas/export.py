@@ -153,6 +153,8 @@ def main():
     rows = []
     for i, s in enumerate(sp):
         t = tax.get(s, {})
+        if t.get("taxon") is not None and pd.isna(t["taxon"]):
+            t = {**t, "taxon": None}
         common, photo, credit = names.get(int(t["taxon"]) if t.get("taxon") else -1, (None, None, None))
         rows.append({"i": i, "name": s, "common": common, "order": t.get("ord"), "family": t.get("family"),
                      "genus": t.get("genus"), "n": int(n.get(s, 0)), "taxon": int(t["taxon"]) if t.get("taxon") else None,

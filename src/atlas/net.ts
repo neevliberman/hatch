@@ -142,12 +142,14 @@ export class AtlasNet {
     const H = this.hidden;
     const M = this.meta.lambdas.length;
     const z = new Float32Array(this.nOut);
+    // A typical year (no days ahead) puts every clock at the same time: one pass of the trunk does for all three.
+    let h = ahead === 0 ? this.trunk(place, day) : null;
     for (let m = 0; m < M; m++) {
-      const h = this.trunk(place, day + this.meta.lambdas[m]! * ahead);
+      if (ahead !== 0) h = this.trunk(place, day + this.meta.lambdas[m]! * ahead);
       for (let s = 0; s < this.nOut; s++) {
         let acc = B[s]!;
         const row = s * H;
-        for (let j = 0; j < H; j++) acc += W[row + j]! * h[j]!;
+        for (let j = 0; j < H; j++) acc += W[row + j]! * h![j]!;
         z[s] = z[s]! + this.clockMix[s * M + m]! * acc;
       }
     }

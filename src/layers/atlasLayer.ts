@@ -43,7 +43,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const key = atlasKey(sp.name);
   const name = nameOf(sp);
   const many = plural(sp);
-  const words: SpeciesWords = { plural: many, sightingsOf: name.toLowerCase(), countedAs: many, shareName: many, mark: markOf(sp) };
+  const words: SpeciesWords = { plural: many, sightingsOf: name, countedAs: many, shareName: many, mark: markOf(sp) };
   const other = atlas.net.nOut - 1;
   let mode: Mode = initial === String(ATLAS_YEAR) ? initial : TYPICAL;
   const fields = new Map<Mode, Field>([[TYPICAL, new Field(atlas, sp.i, null, onData)]]);
@@ -58,6 +58,8 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const peakDay = (c: number[]) => SEASON[0] + STEP * c.indexOf(Math.max(...c));
   let aheadYear: Float32Array | null = null;
   const field = () => fields.get(mode) ?? fields.get(TYPICAL)!;
+  /** The season the numbers are for: 2026 only once its warmth file is in (until then the typical year stands in). */
+  const drawn = (): Mode => (mode === TYPICAL || !aheadYear ? TYPICAL : mode);
   const setYear = (m: Mode) => {
     if (m === TYPICAL || fields.has(m)) return;
     void atlas.ahead(ATLAS_YEAR).then((a) => {
@@ -86,7 +88,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   // "Also out here": the species most likely in a photo at a cell on a day, worked out on the CPU (milliseconds).
   const near = new Map<string, { i: number; s: number }[]>();
   const ranked = (c: number, doy: number) => {
-    const k = `${c}|${doy}|${mode}`;
+    const k = `${c}|${doy}|${drawn()}`;
     let r = near.get(k);
     if (!r) {
       const ahead = mode === TYPICAL || !aheadYear ? 0 : aheadYear[c * 365 + doy - 1]!;
@@ -101,7 +103,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   // season's worth of days in one pass on the graphics card.
   const peaks = new Map<string, number>();
   const peakHere = (c: number): number | null => {
-    const k = `${c}|${mode}`;
+    const k = `${c}|${drawn()}`;
     if (peaks.has(k)) return peaks.get(k)!;
     if (!atlas.gpu) return null;
     const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
@@ -265,6 +267,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return {
         title: 'Share of insect photos',
         stops: [0, 0.5, 1].map((g) => ({ color: css(color(lo * 10 ** (g * DECADES) * 1.0001)), label: g === 0 ? oneIn(lo) : oneIn(sp.peak) })),
+        note: 'Blank: rarer still.',
       };
     },
 

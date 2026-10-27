@@ -5,6 +5,7 @@ import { makeIntro, type Intro } from './ui/intro';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { findSpecies, SPECIES } from './species';
 import { mountSpeciesPicker } from './ui/speciesPicker';
+import { atlasKey } from './atlas/index';
 import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
 import { inSeason, liveAvailable, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
@@ -428,27 +429,41 @@ function start() {
   // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
   // keeps the season and the calendar day, and drops any pinned card.
   const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, (k) => void setSpecies(k));
-  let asking = 0; // the latest pick: a slow load that finishes after a newer pick must not switch to its species
+  let asking = 0;
+  const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
   const setSpecies = async (want: string) => {
     const ticket = ++asking;
     const entry = (await findSpecies(want)) ?? SPECIES[0]!;
     if (ticket !== asking) return;
     if (!loaded.has(entry.key)) {
       if (!entry.load) return;
-      speciesPick.disabled = true;
-      const mode0 = picker.value === LIVE ? TYPICAL : picker.value;
-      // Its live forecast can arrive after the layer (src/species.ts): refill the menu, and go live if that was wanted.
-      const layer = await entry.load(mode0, () => onLunaData(), () => {
-        if (loaded.get(entry.key) !== cur) return;
-        fillPicker();
-        goLiveIfWanted();
-      });
-      speciesPick.disabled = false;
-      if (!layer) {
-        return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
+      // One load per species, however many times it is picked meanwhile (a slow Atlas load, a double tap on a card).
+      let pending = loading.get(entry.key);
+      if (!pending) {
+        const mode0 = picker.value === LIVE ? TYPICAL : picker.value;
+        // Its live forecast can arrive after the layer (src/species.ts): refill the menu, and go live if that was wanted.
+        pending = entry
+          .load(mode0, () => onLunaData(), () => {
+            if (loaded.get(entry.key) !== cur) return;
+            fillPicker();
+            goLiveIfWanted();
+          })
+          .catch(() => null)
+          .then((layer) => {
+            if (layer && !loaded.has(entry.key)) {
+              loaded.set(entry.key, layer);
+              registry.register(layer, fitSeason(layer, timeFor(layer, mode0, 5, 10)), false);
+            }
+            return layer;
+          })
+          .finally(() => loading.delete(entry.key));
+        loading.set(entry.key, pending);
       }
-      loaded.set(entry.key, layer);
-      registry.register(layer, fitSeason(layer, timeFor(layer, mode0, 5, 10)), false);
+      speciesPick.disabled = true;
+      const layer = await pending;
+      speciesPick.disabled = loading.size > 0; // still waiting on another species' load
+      if (ticket !== asking) return; // a newer pick won
+      if (!layer) return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
@@ -469,7 +484,9 @@ function start() {
     // Keep the season if the new species has it (an Atlas species has a typical year and 2026), else all years; a
     // link's own season wins while its species loads.
     const offers = next.seasons?.() ?? [...(next.live() ? [LIVE] : []), TYPICAL, ...years];
-    const mode = speciesPending === entry.key && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
+    // (A link may name a hand-built species by its Latin key, ?species=photinus-pyralis.)
+    const fromThisLink = speciesPending === entry.key || (!!entry.sci && speciesPending === atlasKey(entry.sci));
+    const mode = fromThisLink && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
     next.setMode(mode);
     const prev = cur;
     cur = next;

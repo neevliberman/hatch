@@ -108,7 +108,13 @@ export class AtlasGpu {
   private readonly prog: Record<'linear' | 'norm' | 'score' | 'pick', WebGLProgram>;
   private readonly w = new Map<string, WebGLTexture>();
   private readonly fb: WebGLFramebuffer;
-  private bufs: { rows: number; m: number; tex: Map<string, { t: WebGLTexture; l: Layout }> } | null = null;
+  /** Scratch sheets by size (rows x clocks): the map's day and a place's season each keep their own. */
+  private bufs = new Map<string, Map<string, { t: WebGLTexture; l: Layout }>>();
+
+  /** The context was lost (the system reclaimed the graphics card): results would be zeros, so use net.ts. */
+  get lost(): boolean {
+    return this.gl.isContextLost();
+  }
 
   /** null: no WebGL2 or no float render targets here (use net.ts). */
   static create(net: AtlasNet): AtlasGpu | null {
@@ -192,10 +198,16 @@ export class AtlasGpu {
     return { rows, width, perLine, w: Math.min(rows, perLine) * width, h: Math.ceil(rows / perLine) };
   }
 
-  /** Scratch sheets for `rows` places at `m` clocks each, kept until the size changes. */
+  /** Scratch sheets for `rows` places at `m` clocks each, kept for reuse (a few sizes at most). */
   private buffers(rows: number, m: number) {
-    if (this.bufs?.rows === rows && this.bufs.m === m) return this.bufs.tex;
-    this.bufs?.tex.forEach(({ t }) => this.gl.deleteTexture(t));
+    const key = `${rows}x${m}`;
+    const have = this.bufs.get(key);
+    if (have) return have;
+    if (this.bufs.size >= 4) {
+      const [old, t] = this.bufs.entries().next().value!;
+      t.forEach(({ t }) => this.gl.deleteTexture(t));
+      this.bufs.delete(old);
+    }
     const tex = new Map<string, { t: WebGLTexture; l: Layout }>();
     const add = (name: string, l: Layout) => tex.set(name, { t: this.texture(l.w, l.h, null), l });
     const hW = this.net.hidden / 4;
@@ -203,7 +215,7 @@ export class AtlasGpu {
     for (const k of ['a', 'b', 'c']) add(k, this.layout(rows * m, hW));
     add('z', this.layout(rows, Math.ceil(this.net.nOut / 4)));
     add('p', this.layout(rows, 1));
-    this.bufs = { rows, m, tex };
+    this.bufs.set(key, tex);
     return tex;
   }
 
