@@ -15,7 +15,7 @@ import { APPROXIMATE, modelChecks, replayData, TYPICAL, windowCheck, type Mode, 
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, liveNotice, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
-import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
+import { dueOf, isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
 
 type RGBA = [number, number, number, number];
@@ -331,6 +331,14 @@ export function createOneGenerationLayer(
     },
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
+    // This year's live forecast where it covers the place and its season isn't over, else the typical year.
+    due(lngLat, now) {
+      const i = cellIndex.get(latLngToCell(lngLat[1], lngLat[0], GRID_RES));
+      if (i === undefined) return null;
+      const q = live && live.season === new Date(now).getUTCFullYear() ? live.median[i] : null;
+      const on = dueOf(q, live?.season);
+      return on && dayOfYear(now) <= on.end ? on : dueOf(data.forecast[TYPICAL]![i]);
+    },
     busy: (t) => isBusy(forecast(), dayOfYear(t)),
     endNote: cfg.endNote,
     seasonCount: (m: Mode) => sightingsFor(m).length,

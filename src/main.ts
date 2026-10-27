@@ -15,6 +15,8 @@ import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { mountFinder } from './ui/finder';
 import { mountWarmSlider } from './ui/warmSlider';
+import { loadPlace, nearLine, savePlace, type Place } from './ui/near';
+import type { Due } from './core/layer';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
@@ -104,6 +106,8 @@ function start() {
   let speciesPending: string | null = null;
   /** A ?warm= link's "Warm the spring", until its Atlas species has loaded. */
   let askedWarm = Number(params.get('warm')) || 0;
+  /** "Coming out near you": the line for the remembered place (set up with My area and Find, below). */
+  let showNear = () => {};
   let warmed = false; // the map last drawn was warmed, so going back to "as it was" redraws the ribbon too
   const warmth = mountWarmSlider($('warm') as HTMLButtonElement, $('warm-row'), (degF) => {
     cur.setWarmth?.(degF);
@@ -373,6 +377,7 @@ function start() {
   onLunaData = () => {
     refresh();
     onRerun();
+    showNear(); // a live forecast arriving changes it
   };
   registry.subscribe(() => {
     const next = registry.activeTime();
@@ -532,6 +537,7 @@ function start() {
     if (cur.setWarmth && askedWarm) warmth.set(askedWarm), (askedWarm = 0);
     cur.setWarmth?.(warmth.value);
     onRerun(); // its own note (a cached run lands no new data to say it)
+    showNear();
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', cur.seasons ? `Midwest map: expected share of ${cur.words.sightingsOf} in insect photos` : `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
@@ -827,6 +833,7 @@ function start() {
       // On a phone, drop the About sheet to its middle stop first, so the place lands in the map above it.
       if ($('drawer').classList.contains('open') && phone.matches && !slim.matches) toggleDrawer(true);
       if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
+      else remember({ name, lat, lng });
     }, say);
     $('drawer').addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-find]');
@@ -838,7 +845,30 @@ function start() {
     toggleDrawer.onLeave(finder.leave);
   } else $('find').hidden = true;
 
-  // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
+  // "Coming out near you": the last place found (My area or Find), kept in this browser, gets one line under the map
+  // for the species on screen, from today. Tapping it brings the place back; the cross forgets it.
+  let home = loadPlace();
+  showNear = () => {
+    const now = clock;
+    // A lakeshore town's own hexagon can be water: the nearest land one within two rings speaks for it, as on the map.
+    const d = home && cur.due ? [[home.lng, home.lat] as [number, number], ...nearby(home.lat, home.lng, 2).map((h) => h.lngLat)].reduce<Due | null>((got, at) => got ?? cur.due!(at, now), null) : null;
+    $('near').hidden = !d;
+    $('countdown').classList.toggle('by-near', !!d);
+    if (d) $('near-go').textContent = nearLine(home!.name, cur.words.shareName, d, now);
+  };
+  const remember = (p: Place | null) => {
+    home = p;
+    savePlace(p);
+    showNear();
+  };
+  $('near-go').addEventListener('click', () => {
+    if (home && !showPlace(home.lat, home.lng, home.name)) say(`No forecast for ${home.name}`, $('near-go'));
+  });
+  $('near-x').addEventListener('click', () => remember(null));
+  showNear();
+
+  // "My area": one location fix (kept rounded in this browser for the line above, never sent anywhere), then the
+  // forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
     if (!navigator.geolocation) return say('Location is not available in this browser', $('locate'));
     const btn = $<HTMLButtonElement>('locate');
@@ -859,6 +889,7 @@ function start() {
           return;
         }
         map.setMarker([coords.longitude, coords.latitude]);
+        remember({ name: 'you', lat: coords.latitude, lng: coords.longitude });
         // The marker is the accent brown; the pale yellow dots are moths.
         say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest land hexagon)', btn);
       },

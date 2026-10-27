@@ -1,7 +1,7 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
-import type { CaveatCard, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
+import type { CaveatCard, Due, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
 import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
@@ -137,27 +137,41 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   };
   // The species' best day at a cell: the most photos of it expected (its share times the day's usual photos), from a
   // season's worth of days in one pass on the graphics card.
+  /** Its share at a cell every STEP days from SEASON[0] (on the graphics card in one pass; else the plain network). */
+  const sharesHere = (c: number, on: ((day: number) => Float32Array) | null): number[] => {
+    const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
+    const days = Array.from({ length: n }, (_, j) => SEASON[0] + STEP * j);
+    if (!atlas.gpu) return days.map((d) => Math.exp(atlas.net.logShares(atlas.cells[c]!, d, on ? on(d)[c]! : 0)[sp.i]!));
+    const P = atlas.net.placeDim;
+    const places = new Float32Array(n * P);
+    for (let j = 0; j < n; j++) places.set(atlas.places.subarray(c * P, (c + 1) * P), j * P);
+    const ahead = on ? Float32Array.from(days, (d) => on(d)[c]!) : null;
+    return [...atlas.gpu.run(places, Float32Array.from(days), ahead, [sp.i])[0]!].map(Math.exp);
+  };
   const peaks = new Map<string, number>();
   const peakHere = (c: number): number | null => {
     const k = `${c}|${drawn()}`;
     if (peaks.has(k)) return peaks.get(k)!;
     if (!atlas.gpu) return null;
-    const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
-    const P = atlas.net.placeDim;
-    const places = new Float32Array(n * P);
-    const days = new Float32Array(n);
-    const on = run().on;
-    const ahead = on ? new Float32Array(n) : null;
-    for (let j = 0; j < n; j++) {
-      places.set(atlas.places.subarray(c * P, (c + 1) * P), j * P);
-      days[j] = SEASON[0] + STEP * j;
-      if (ahead) ahead[j] = on!(days[j]!)[c]!;
-    }
-    const v = atlas.gpu.run(places, days, ahead, [sp.i])[0]!;
-    const photos = [...v].map((x, j) => Math.exp(x) * atlas.volume[j]!);
+    const photos = sharesHere(c, run().on).map((x, j) => x * atlas.volume[j]!);
     const best = SEASON[0] + STEP * photos.indexOf(Math.max(...photos));
     peaks.set(k, best);
     return best;
+  };
+  // "Coming out near you": a typical year's expected photos of it at the cell; its season is the days with at least a
+  // twentieth of its best day's (so a spring brood counts, not just the bigger summer one). None where it is hardly
+  // expected even then.
+  const dues = new Map<number, Due | null>();
+  const dueHere = (c: number): Due | null => {
+    if (dues.has(c)) return dues.get(c)!;
+    const shares = sharesHere(c, null);
+    const photos = shares.map((x, j) => x * atlas.volume[j]!);
+    const top = Math.max(...photos);
+    const best = photos.indexOf(top);
+    const on = photos.map((p, j) => (p >= top / 20 ? j : -1)).filter((j) => j >= 0);
+    const d = shares[best]! < 1e-4 ? null : { start: SEASON[0] + STEP * on[0]!, peak: SEASON[0] + STEP * best, end: SEASON[0] + STEP * on[on.length - 1]! };
+    dues.set(c, d);
+    return d;
   };
   const shareAt = (c: number, doy: number) => field().get(doy)?.[c] ?? ranked(c, doy).find((r) => r.i === sp.i)!.s;
 
@@ -185,6 +199,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     seasons: () => [TYPICAL, String(ATLAS_YEAR)],
     live: () => null,
     res: () => 4,
+    due([lng, lat]) {
+      const c = atlas.cellAt(lat, lng);
+      return c === null ? null : dueHere(c);
+    },
     cellAt: ([lng, lat]) => {
       const c = atlas.cellAt(lat, lng);
       return c === null ? null : atlas.cells[c]!.h;
