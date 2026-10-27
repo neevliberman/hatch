@@ -1,0 +1,124 @@
+"""Bulk-pull research-grade iNaturalist insect records for the Atlas box from GBIF, into Parquet files by year.
+
+GBIF's search API pages 300 records at a time and stops at offset 100,000, so the box is split into date ranges small
+enough to stay under that, halving a range until it fits (July in a recent year is ~115k, so it splits in two).
+Each finished range is written to its own Parquet file, so a killed run resumes where it stopped. Then `combine()`
+writes one file per year into notebooks/data/atlas/records/year=YYYY/ for DuckDB.
+
+No GBIF account needed. When the account's password is available, a monthly GBIF *download* (one zip) replaces this.
+Run from the repo root (about an hour, ~20 GB of JSON on the wire):
+  python3 pipeline/atlas/fetch_gbif.py
+"""
+import datetime as dt
+import json
+import sys
+import time
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from pipeline.atlas.config import BOX, DATA, FIRST_YEAR, LAST_YEAR  # noqa: E402
+
+INAT_DATASET = "50c9509d-22c7-4a22-a47d-8c48425ef4a7"  # iNaturalist research-grade observations
+INSECTA = 216
+API = "https://api.gbif.org/v1/occurrence/search"
+PAGE = 300
+CAP = 99_000  # GBIF refuses offset + limit > 100,000
+INNER = 6  # parallel pages per range; 3 ranges at once = 18 requests in flight
+CHUNKS = DATA / "gbif_chunks"
+FIELDS = ["key", "taxonID", "taxonRank", "speciesKey", "species", "genus", "family", "order", "decimalLatitude",
+          "decimalLongitude", "coordinateUncertaintyInMeters", "eventDate", "eventTime", "year", "month", "day",
+          "recordedBy", "stateProvince", "catalogNumber"]
+
+
+def _params(d0, d1, offset=0, limit=PAGE):
+    return {"datasetKey": INAT_DATASET, "classKey": INSECTA, "eventDate": f"{d0},{d1}",
+            "decimalLatitude": f"{BOX['s']},{BOX['n']}", "decimalLongitude": f"{BOX['w']},{BOX['e']}",
+            "hasGeospatialIssue": "false", "offset": offset, "limit": limit}
+
+
+def _get(params):
+    url = API + "?" + urllib.parse.urlencode(params)
+    for attempt in range(6):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "hatch-atlas (github.com/neevliberman/hatch)"})
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return json.load(r)
+        except Exception:
+            time.sleep(2 ** attempt)
+    raise RuntimeError(f"GBIF kept failing: {url}")
+
+
+def ranges():
+    """Date ranges (inclusive ISO days), each holding at most CAP records."""
+    out, todo = [], []
+    for y in range(FIRST_YEAR, LAST_YEAR + 1):
+        for m in range(1, 13):
+            d0 = dt.date(y, m, 1)
+            d1 = (dt.date(y + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1))
+            todo.append((d0, d1))
+    while todo:
+        d0, d1 = todo.pop()
+        n = _get(_params(d0, d1, limit=0))["count"]
+        if n <= CAP or d0 == d1:
+            if n:
+                out.append((d0, d1, n))
+        else:
+            mid = d0 + (d1 - d0) // 2
+            todo += [(d0, mid), (mid + dt.timedelta(days=1), d1)]
+    return sorted(out)
+
+
+def _pull(d0, d1, n):
+    f = CHUNKS / f"{d0}_{d1}.parquet"
+    if f.exists():
+        return len(pd.read_parquet(f, columns=["key"]))
+    with ThreadPoolExecutor(INNER) as ex:  # pages of one range in parallel
+        pages = ex.map(lambda o: _get(_params(d0, d1, o))["results"], range(0, n, PAGE))
+        rows = [{k: r.get(k) for k in FIELDS} for page in pages for r in page]
+    df = pd.DataFrame(rows, columns=FIELDS).drop_duplicates("key")
+    tmp = f.with_suffix(".tmp")
+    df.to_parquet(tmp, index=False)
+    tmp.replace(f)  # atomic: a killed run never leaves half a chunk
+    return len(df)
+
+
+def combine():
+    """Chunks -> one Parquet file per year, with the columns the Atlas uses."""
+    import duckdb
+    out = DATA / "records"
+    con = duckdb.connect()
+    con.execute(f"""
+        COPY (
+          SELECT key::BIGINT AS gbif_id, catalogNumber::BIGINT AS inat_id, taxonID::BIGINT AS inat_taxon,
+                 taxonRank AS rank, speciesKey::BIGINT AS species_key, species, genus, family, "order",
+                 decimalLatitude AS lat, decimalLongitude AS lng, coordinateUncertaintyInMeters AS accuracy_m,
+                 year::INT AS year, month::INT AS month, day::INT AS day, eventTime AS event_time,
+                 recordedBy AS observer, stateProvince AS state
+          FROM read_parquet('{CHUNKS}/*.parquet', union_by_name=true)
+          WHERE day IS NOT NULL
+        ) TO '{out}' (FORMAT parquet, PARTITION_BY (year), OVERWRITE_OR_IGNORE true)
+    """)
+    print(con.execute(f"SELECT year, count(*) FROM read_parquet('{out}/*/*.parquet', hive_partitioning=true) "
+                      "GROUP BY 1 ORDER BY 1").fetchall())
+
+
+def main(workers=3):
+    CHUNKS.mkdir(parents=True, exist_ok=True)
+    rs = ranges()
+    print(f"{len(rs)} ranges, {sum(n for *_, n in rs):,} records", flush=True)
+    done = 0
+    with ThreadPoolExecutor(workers) as ex:
+        for got in ex.map(lambda r: _pull(*r), rs):
+            done += got
+            print(f"  {done:,}", flush=True)
+    combine()
+
+
+if __name__ == "__main__":
+    main()
