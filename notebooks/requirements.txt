@@ -8,3 +8,7 @@ ipykernel==7.4.0
 nbconvert==7.17.2
 nbformat==5.11.1
 pytest==9.1.1
+# Living Atlas (pipeline/atlas): CPU-only torch keeps the CI install small
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+duckdb==2.0.0
