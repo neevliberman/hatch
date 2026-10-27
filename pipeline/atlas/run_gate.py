@@ -145,7 +145,7 @@ def luna_rows_2026():
 
 
 def weighted_quantile(days, weights, q):
-    """Linear interpolation between day midpoints, as pandas' quantile does for a list of record days."""
+    """Linear interpolation between day midpoints (a sub-day match to P3's quantile of record days)."""
     c = (np.cumsum(weights) - weights / 2) / weights.sum()
     return float(np.interp(q, c, days))
 

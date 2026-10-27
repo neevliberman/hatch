@@ -1,8 +1,10 @@
 # Living Atlas gate
 
-**Verdict: GO.** With two bugs in the luna check fixed (amendment 2, found by an independent review), run 1 passes
-all three of its originally frozen checks, scored on 2025 against P3 like-for-like. Run 2 repeats the result on
-2026, a season no step had touched.
+**No-go as first computed; GO after fixing a mismatch between the code and the frozen rule, found after the result
+was known.** The luna check failed by 0.3 days, so an independent review looked there and found the code counting
+different records than the rule says (amendment 2). Fixed, run 1 passes all three of its original checks, scored on
+2025 against P3 like-for-like. Run 2 repeats the result on 2026, a season no training or tuning step had touched
+(amendment 2 itself came after run 2's results were seen).
 
 | Check | Run 1: 2025 (as frozen) | Run 2: 2026 (amendment 1) |
 |---|---|---|
@@ -27,7 +29,7 @@ In plain words:
 - **Warmth helps a little, not a lot.** See run 2 below. The blend barely moves from even; making the clock learn
   harder is the first upgrade to try, against this same scorer.
 - **Known misses:** the periodical cicada (a 17-year brood, which needs a brood map), and luna onset in 43-45 °N is
-  still 8-15 days late.
+  still about 12-15 days late.
 
 ## Run 2 (27 Oct 2026, amendment 1, scored on 2026)
 
