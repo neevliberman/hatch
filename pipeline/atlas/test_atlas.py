@@ -77,3 +77,15 @@ def test_browser_fixture_matches_the_shipped_weights():
     for a, b in zip(now, saved):
         assert [i for i, _ in a["top"][:10]] == [i for i, _ in b["top"][:10]]
         assert np.allclose([v for _, v in a["top"]], [v for _, v in b["top"]], atol=1e-4)
+
+
+def test_warm_table_moves_spring_the_right_way():
+    """warm.bin (warm.py): 3 °F cooler runs every cell behind its typical spring, 3 °F warmer ahead, by days not weeks."""
+    import json
+    from pathlib import Path
+    out = Path(__file__).resolve().parents[2] / "public/atlas"
+    n = len(json.loads((out / "cells.json").read_text()))
+    w = np.fromfile(out / "warm.bin", np.int8).reshape(2, n, -1) / 4
+    june = (152 - 60) // 4  # 1 June, every 4 days from 1 March
+    assert (w[0, :, june] <= 0).all() and (w[1, :, june] >= 0).all()
+    assert 3 < np.median(w[1, :, june]) < 15 and -15 < np.median(w[0, :, june]) < -3

@@ -751,6 +751,36 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.locator('#season').selectOption('2026');
         await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 }).catch(() => fail('2026 never took'));
       }
+      // Warm the spring: +3 °F reruns the season (a spring bug comes out sooner), the link keeps it, a ?warm= link
+      // reopens it, and closing it puts spring back as it was.
+      const ink = () => page.evaluate(() => {
+        const h = window.__hatch;
+        const hex = h.current().render({ t: h.time.cursor, zoom: 5, theme: { bg: '#000', hexEdge: [0, 0, 0, 0], text: '#000' } }).find((l) => /-forecast-r4$/.test(l.id));
+        return hex ? hex.props.data.reduce((a, d) => a + Math.max(0, hex.props.getFillColor(d)[3] - 90), 0) : 0;
+      });
+      await page.goto(origin + '/?species=poecilocapsus-lineatus&noauto&date=05-20');
+      await isOn('poecilocapsus-lineatus-atlas');
+      await page.waitForTimeout(3000);
+      const before = await ink();
+      await page.locator('#warm').click();
+      await page.locator('#warm-in').fill('3');
+      await page.locator('#warm-in').dispatchEvent('input');
+      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+        .catch(async () => fail(`+3 °F never said "earlier": "${await page.locator('#warm-out').textContent()}"`));
+      await page.waitForTimeout(3000);
+      const after = await ink();
+      if (!(after > before * 1.04)) fail(`+3 °F did not bring the four-lined plant bug out sooner on 20 May (ink ${before} -> ${after})`);
+      await shotA('4-warm');
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('warm') === '3', null, { timeout: 5000, polling: 250 })
+        .catch(() => fail(`the link dropped the warmth: ${page.url()}`));
+      await page.goto(origin + '/?species=poecilocapsus-lineatus&noauto&date=05-20&warm=-2');
+      await isOn('poecilocapsus-lineatus-atlas');
+      await page.waitForFunction(() => /later/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+        .catch(() => fail('a ?warm=-2 link did not open spring 2 °F cooler'));
+      await page.locator('#warm-row .warm-x').click();
+      if ((await page.locator('#warm-in').inputValue()) !== '0' || !(await page.locator('#warm-row').isHidden())) fail('closing the slider left spring warmed');
+      await page.waitForFunction(() => !new URL(location.href).searchParams.has('warm'), null, { timeout: 5000, polling: 250 })
+        .catch(() => fail('closing the slider left ?warm= in the link'));
       // A pinned card names others out here; one tap switches to it.
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
       await isOn('papilio-glaucus-atlas');

@@ -220,6 +220,16 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; font-size: 12.5px; }
 #actions .icon-btn:disabled { opacity: 0.6; cursor: progress; }
 #locate svg { color: var(--accent); }
+#warm:not(.on) svg { color: var(--warn); }
+#warm[hidden] { display: none; }
+#actions #warm.on { background: var(--accent); color: var(--on-accent); }
+/* "Warm the spring": one line over the time bar, opened from the thermometer. */
+#warm-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 2px 0 4px; font-size: 12.5px; }
+#warm-row[hidden] { display: none; }
+#warm-row label { font-weight: 600; }
+#warm-row input { flex: 1; min-width: 0; max-width: 360px; height: 28px; accent-color: var(--accent); }
+#warm-row output { min-width: 0; flex: 0 1 auto; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#warm-row .warm-x { flex: none; width: 32px; height: 32px; padding: 0; border: 0; background: none; color: var(--muted); box-shadow: none; }
 /* A short status: beside the button that asked (.at, placed from main.ts), else under the header. */
 #action-msg { position: fixed; top: calc(62px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3;
   width: max-content; max-width: calc(100% - 24px); text-align: center; font-size: 12px; color: var(--text);

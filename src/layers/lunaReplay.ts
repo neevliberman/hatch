@@ -301,6 +301,10 @@ export interface LunaLayer extends HatchLayer {
   seasons?(): Mode[];
   /** Its own time range for a mode, when not replayTimeSpec's (an Atlas species spans its own months). */
   timeSpec?(mode: Mode, month?: number, day?: number): TimeSpec;
+  /** "Warm the spring": rerun the season with every spring day `degF` warmer (negative: cooler); 0 is as it was. */
+  setWarmth?(degF: number): void;
+  /** What the warmth does to it, e.g. "about 6 days earlier" (empty at 0). */
+  warmthNote?(): string;
 }
 
 interface FineCell {
