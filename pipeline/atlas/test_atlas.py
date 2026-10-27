@@ -77,3 +77,31 @@ def test_browser_fixture_matches_the_shipped_weights():
     for a, b in zip(now, saved):
         assert [i for i, _ in a["top"][:10]] == [i for i, _ in b["top"][:10]]
         assert np.allclose([v for _, v in a["top"]], [v for _, v in b["top"]], atol=1e-4)
+
+
+def test_tree_holds_every_species_once_and_names_whole_groups():
+    """public/atlas/tree.json (build_tree.py): each species one tip, and a named branch is exactly its group."""
+    import json
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2] / "public" / "atlas"
+    species = json.loads((root / "species.json").read_text())[:-1]  # the last row is "other"
+    tree = json.loads((root / "tree.json").read_text())["t"]
+
+    def tips(n):
+        return [n] if isinstance(n, int) else [i for c in n[2:] for i in tips(c)]
+
+    got = tips(tree)
+    assert sorted(got) == list(range(len(species)))
+    key = {"o": "order", "f": "family", "g": "genus"}
+
+    def check(n):
+        if isinstance(n, int):
+            return
+        label, rank = n[0], n[1]
+        if rank:
+            below = {species[i].get(key[rank]) for i in tips(n)} - {None}
+            assert below == {label}, (label, below)
+        for c in n[2:]:
+            check(c)
+
+    check(tree)
