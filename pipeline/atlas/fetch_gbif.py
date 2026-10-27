@@ -1,7 +1,7 @@
 """Bulk-pull research-grade iNaturalist insect records for the Atlas box from GBIF, into Parquet files by year.
 
-GBIF's search API pages 300 records at a time and stops at offset 100,000, so the box is split into date ranges small
-enough to stay under that, halving a range until it fits (July in a recent year is ~115k, so it splits in two).
+GBIF's search API pages 300 records at a time, stops at offset 100,000 and gets slow past a few thousand, so the box
+is split into date ranges of at most CAP records, halving a range until it fits (a July day can hold ~4,000).
 Each finished range is written to its own Parquet file, so a killed run resumes where it stopped. Then `combine()`
 writes one file per year into notebooks/data/atlas/records/year=YYYY/ for DuckDB.
 
@@ -28,8 +28,8 @@ INAT_DATASET = "50c9509d-22c7-4a22-a47d-8c48425ef4a7"  # iNaturalist research-gr
 INSECTA = 216
 API = "https://api.gbif.org/v1/occurrence/search"
 PAGE = 300
-CAP = 99_000  # GBIF refuses offset + limit > 100,000
-INNER = 6  # parallel pages per range; 3 ranges at once = 18 requests in flight
+CAP = 6_000  # deep offsets are slow (GBIF refuses past 100,000 anyway)
+INNER = 2  # parallel pages per range; 8 ranges at once = 16 requests in flight
 CHUNKS = DATA / "gbif_chunks"
 FIELDS = ["key", "taxonID", "taxonRank", "speciesKey", "species", "genus", "family", "order", "decimalLatitude",
           "decimalLongitude", "coordinateUncertaintyInMeters", "eventDate", "eventTime", "year", "month", "day",
@@ -44,13 +44,13 @@ def _params(d0, d1, offset=0, limit=PAGE):
 
 def _get(params):
     url = API + "?" + urllib.parse.urlencode(params)
-    for attempt in range(6):
+    for attempt in range(10):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "hatch-atlas (github.com/neevliberman/hatch)"})
             with urllib.request.urlopen(req, timeout=120) as r:
                 return json.load(r)
         except Exception:
-            time.sleep(2 ** attempt)
+            time.sleep(min(2 ** attempt, 60))
     raise RuntimeError(f"GBIF kept failing: {url}")
 
 
@@ -62,15 +62,18 @@ def ranges():
             d0 = dt.date(y, m, 1)
             d1 = (dt.date(y + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1))
             todo.append((d0, d1))
-    while todo:
-        d0, d1 = todo.pop()
-        n = _get(_params(d0, d1, limit=0))["count"]
-        if n <= CAP or d0 == d1:
-            if n:
-                out.append((d0, d1, n))
-        else:
-            mid = d0 + (d1 - d0) // 2
-            todo += [(d0, mid), (mid + dt.timedelta(days=1), d1)]
+    with ThreadPoolExecutor(8) as ex:
+        while todo:
+            counts = list(ex.map(lambda r: _get(_params(*r, limit=0))["count"], todo))
+            nxt = []
+            for (d0, d1), n in zip(todo, counts):
+                if n <= CAP or d0 == d1:
+                    if n:
+                        out.append((d0, d1, n))
+                else:
+                    mid = d0 + (d1 - d0) // 2
+                    nxt += [(d0, mid), (mid + dt.timedelta(days=1), d1)]
+            todo = nxt
     return sorted(out)
 
 
@@ -102,15 +105,25 @@ def combine():
                  recordedBy AS observer, stateProvince AS state
           FROM read_parquet('{CHUNKS}/*.parquet', union_by_name=true)
           WHERE day IS NOT NULL
+          QUALIFY row_number() OVER (PARTITION BY key) = 1
         ) TO '{out}' (FORMAT parquet, PARTITION_BY (year), OVERWRITE_OR_IGNORE true)
     """)
     print(con.execute(f"SELECT year, count(*) FROM read_parquet('{out}/*/*.parquet', hive_partitioning=true) "
                       "GROUP BY 1 ORDER BY 1").fetchall())
 
 
-def main(workers=3):
+def main(workers=8):
     CHUNKS.mkdir(parents=True, exist_ok=True)
-    rs = ranges()
+    cache = CHUNKS / "ranges.json"  # counting takes a few minutes; reuse it when resuming the same snapshot
+    if cache.exists():
+        rs = [(dt.date.fromisoformat(a), dt.date.fromisoformat(b), n) for a, b, n in json.loads(cache.read_text())]
+    else:
+        rs = ranges()
+        cache.write_text(json.dumps([(str(a), str(b), n) for a, b, n in rs]))
+    keep = {f"{d0}_{d1}.parquet" for d0, d1, _ in rs}
+    for f in CHUNKS.glob("*.parquet"):  # chunks from an older split would double-count
+        if f.name not in keep:
+            f.unlink()
     print(f"{len(rs)} ranges, {sum(n for *_, n in rs):,} records", flush=True)
     done = 0
     with ThreadPoolExecutor(workers) as ex:

@@ -1,0 +1,119 @@
+{
+ "test_a": {
+  "records": 23440,
+  "scored_species": 22,
+  "atlas_wins": 12,
+  "win_share": 0.5454545454545454,
+  "win_share_95": [
+   0.34659473289041554,
+   0.7307998556799515
+  ],
+  "median_gain_nats": 4.798194340198279,
+  "loglik_per_record": {
+   "atlas": -3.0078270771067093,
+   "calendar": -3.045209731881224,
+   "atlas_no_warmth": -3.006993525277556
+  },
+  "nowarmth_wins_vs_cal": 13,
+  "atlas_wins_vs_nowarmth": 9,
+  "pass": true
+ },
+ "test_b": {
+  "records": 21113,
+  "scored_species": 22,
+  "atlas_wins": 18,
+  "win_share": 0.8181818181818182,
+  "win_share_95": [
+   0.6148297802336213,
+   0.9269323397589488
+  ],
+  "median_gain_nats": 41.726017438262204,
+  "loglik_per_record": {
+   "atlas": -2.8258926777124733,
+   "calendar": -3.245887891378446,
+   "atlas_no_warmth": -2.8266933887508103
+  },
+  "nowarmth_wins_vs_cal": 18,
+  "atlas_wins_vs_nowarmth": 13,
+  "pass": true
+ },
+ "luna": {
+  "band_years": 5,
+  "atlas": 7.559999999999999,
+  "p3": 4.3,
+  "calendar": 4.860000000000001,
+  "rows": [
+   {
+    "band": "37-39",
+    "n": 29,
+    "onset": 107.8,
+    "peak": 135.0,
+    "atlas_onset": 104,
+    "atlas_peak": 141,
+    "p3_onset": 103,
+    "p3_peak": 131,
+    "cal_onset": 105.4,
+    "cal_peak": 133.62
+   },
+   {
+    "band": "39-41",
+    "n": 91,
+    "onset": 113.0,
+    "peak": 134.0,
+    "atlas_onset": 110,
+    "atlas_peak": 146,
+    "p3_onset": 113,
+    "p3_peak": 140,
+    "cal_onset": 117.55,
+    "cal_peak": 142.88
+   },
+   {
+    "band": "41-43",
+    "n": 105,
+    "onset": 121.0,
+    "peak": 147.0,
+    "atlas_onset": 115,
+    "atlas_peak": 155,
+    "p3_onset": 124,
+    "p3_peak": 156,
+    "cal_onset": 132.24,
+    "cal_peak": 151.0
+   },
+   {
+    "band": "43-45",
+    "n": 50,
+    "onset": 127.8,
+    "peak": 157.0,
+    "atlas_onset": 125,
+    "atlas_peak": 163,
+    "p3_onset": 135,
+    "p3_peak": 161,
+    "cal_onset": 140.15,
+    "cal_peak": 157.0
+   },
+   {
+    "band": "45-49",
+    "n": 77,
+    "onset": 156.0,
+    "peak": 173.0,
+    "atlas_onset": 147,
+    "atlas_peak": 192,
+    "p3_onset": 152,
+    "p3_peak": 174,
+    "cal_onset": 157.72,
+    "cal_peak": 170.92
+   }
+  ],
+  "pass": false
+ },
+ "go": false,
+ "clock_weights_median": [
+  0.3341691195964813,
+  0.3321281969547272,
+  0.33337733149528503
+ ],
+ "n_species": 163,
+ "train_records": 82455,
+ "seconds": 50,
+ "quick": true
+}
