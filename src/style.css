@@ -229,7 +229,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #warm-row label { font-weight: 600; }
 #warm-row input { flex: 1; min-width: 0; max-width: 360px; height: 28px; accent-color: var(--accent); }
 #warm-row output { min-width: 0; flex: 0 1 auto; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#warm-row .warm-x { flex: none; width: 32px; height: 32px; margin-left: auto; padding: 0; border: 0; background: none; color: var(--muted); box-shadow: none; }
+#warm-row .warm-x { flex: none; width: 32px; height: 32px; padding: 0; border: 0; background: none; color: var(--muted); box-shadow: none; }
 /* A short status: beside the button that asked (.at, placed from main.ts), else under the header. */
 #action-msg { position: fixed; top: calc(62px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3;
   width: max-content; max-width: calc(100% - 24px); text-align: center; font-size: 12px; color: var(--text);

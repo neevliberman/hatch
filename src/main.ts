@@ -519,6 +519,7 @@ function start() {
     warmth.available = !!cur.setWarmth;
     if (cur.setWarmth && askedWarm) warmth.set(askedWarm), (askedWarm = 0);
     cur.setWarmth?.(warmth.value);
+    onRerun(); // its own note (a cached run lands no new data to say it)
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', cur.seasons ? `Midwest map: expected share of ${cur.words.sightingsOf} in insect photos` : `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
@@ -641,7 +642,7 @@ function start() {
     if (radar) q.set('radar', radar.id);
     else q.delete('radar');
     if (warmth.value && cur.setWarmth) q.set('warm', String(warmth.value));
-    else q.delete('warm');
+    else if (!askedWarm) q.delete('warm'); // a link's warmth stays while its species loads
     q.delete('noauto');
     q.delete('today');
     return `${location.pathname}?${q}`;
@@ -988,6 +989,7 @@ function start() {
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !finderEl.hidden) return;
+    if ($('warm-row').contains(e.target as Node)) return; // Escape there closes the slider, not the card
     const hadFocus = probeEl.contains(document.activeElement);
     unpin();
     if (hadFocus) $('t-range').focus({ preventScroll: true });

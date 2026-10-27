@@ -25,7 +25,7 @@ export function mountWarmSlider(button: HTMLButtonElement, row: HTMLElement, onC
   button.insertAdjacentHTML('afterbegin', WARM);
   row.innerHTML = `<label for="warm-in">Spring</label>
     <input id="warm-in" type="range" min="${-REACH}" max="${REACH}" step="${NOTCH}" value="0">
-    <output id="warm-out" for="warm-in" aria-live="polite"></output>
+    <output id="warm-out" for="warm-in"></output>
     <button type="button" class="warm-x icon-btn" aria-label="Close, spring as it was">${CROSS}</button>`;
   const input = row.querySelector<HTMLInputElement>('#warm-in')!;
   const out = row.querySelector<HTMLOutputElement>('#warm-out')!;
@@ -57,7 +57,6 @@ export function mountWarmSlider(button: HTMLButtonElement, row: HTMLElement, onC
   input.addEventListener('input', () => set(Number(input.value)));
   row.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    e.stopPropagation(); // the page's own Escape would also unpin the card on the map
     open(false);
     button.focus();
   });

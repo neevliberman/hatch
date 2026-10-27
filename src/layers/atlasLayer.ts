@@ -86,7 +86,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       if ((m !== TYPICAL && !year) || (w !== 0 && !on)) return;
       runs.set(k, { key: k, mode: m, warm: w, field: new Field(atlas, sp.i, on, onData), on, base });
       // Keep the last few: a drag across the slider makes a run per notch.
-      for (const old of runs.keys()) if (runs.size > 6 && old !== BASE && old !== k && old !== keyOf(mode, 0)) runs.delete(old);
+      for (const old of runs.keys()) if (runs.size > 6 && old !== BASE && old !== k && old !== keyOf(mode, 0) && old !== keyOf(mode, warm)) runs.delete(old);
       onData();
     })();
   };
