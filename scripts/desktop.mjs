@@ -18,6 +18,14 @@ import { pathToFileURL } from 'node:url';
 import { extname, join, normalize, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
+/** Picks a species from the header's picker (src/ui/speciesPicker.ts), as a reader would: open it, tap its row. */
+/** The Atlas's species photos (src/ui/speciesPicker.ts, its cards): linked from iNaturalist's open-data bucket,
+ * never copied, so these are the only outside requests a page may make. */
+const PHOTOS = /^https:\/\/(inaturalist-open-data\.s3\.amazonaws\.com|static\.inaturalist\.org)\/photos\//;
+const pickSpecies = async (page, key) => {
+  await page.locator('#species').click();
+  await page.locator(`#sp-list [data-key="${key}"]`).first().click();
+};
 
 const out = process.argv[2] ?? 'screenshots/desktop';
 mkdirSync(out, { recursive: true });
@@ -466,7 +474,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const page = await ctx.newPage();
     if (served === 404) await page.route('**/live/latest.json', (r) => r.fulfill({ status: 404, body: '' }));
     else if (served) await page.route('**/live/latest.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(served) }));
-    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     // The missing file's 404 is logged by the browser itself; nothing else may be.
     page.on('console', (m) => m.type() === 'error' && !(served === 404 && /404/.test(m.text())) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -584,7 +592,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // The firefly has a part in the served file: picking it from live mode stays live, and its menu offers live.
         // The beetle has none: it lands on all years, its menu has no live option, and says why at the top.
         if (await page.locator('#species').isVisible()) {
-          await page.locator('#species').selectOption('firefly');
+          await pickSpecies(page, 'firefly');
           await page.waitForFunction(() => window.__hatch.current().id === 'firefly-replay', null, { timeout: 8000 }).catch(() => fail('the firefly never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'live') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
@@ -594,14 +602,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           const ffDate = ffAsOf && new Date(Date.parse(ffAsOf)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
           if (ffDate && (await page.locator('#t-date').textContent()) !== ffDate)
             fail(`firefly live mode opened on ${await page.locator('#t-date').textContent()}, not its as-of day ${ffDate}`);
-          await page.locator('#species').selectOption('japanese-beetle');
+          await pickSpecies(page, 'japanese-beetle');
           await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 8000 }).catch(() => fail('the beetle never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'typical') fail(`the beetle (no live entry) from live mode opened on ${await page.locator('#season').inputValue()}`);
           if (await page.locator('#season option[value=live]').count()) fail('the beetle season menu offers live mode without a live entry');
           if (!/not for .* yet/.test((await page.locator('#season option[disabled]').first().textContent().catch(() => '')) ?? ''))
             fail('the beetle season menu does not say live mode is not there for it yet');
-          await page.locator('#species').selectOption('luna');
+          await pickSpecies(page, 'luna');
           await page.waitForTimeout(500);
           if (!(await page.locator('#season option[value=live]').count())) fail('back on luna, the live option is gone');
         } else fail('no species menu over http');
@@ -626,7 +634,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
-    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     const shotS = (step) => page.screenshot({ path: `${out}/species-${label.replace(/\W+/g, '-')}-${step}.png` });
@@ -635,7 +643,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 30000 })
         .catch(() => fail('a ?species=japanese-beetle link never opened on the beetle'));
       await page.waitForTimeout(1500);
-      const keys = await page.locator('#species option').evaluateAll((os) => os.map((o) => o.value));
+      await page.locator('#species').click();
+      const keys = await page.locator('#sp-list .sp-feat').evaluateAll((bs) => bs.map((b) => b.dataset.key));
+      await page.keyboard.press('Escape');
       if (keys.join() !== listed.join()) fail(`species menu lists ${keys.join(', ')}, src/species.ts has ${listed.join(', ')}`);
       if (!/insect tracking/.test(await page.locator('#tagline').textContent())) fail('the header lost its site-wide subtitle');
       if ((await page.locator('#dots-what').textContent()) !== 'beetles') fail('the dots line does not count beetles');
@@ -654,7 +664,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(400);
       // Every other species from the menu, then back: each loads (its own layer id) and is drawn.
       for (const k of listed.filter((k) => k !== 'japanese-beetle')) {
-        await page.locator('#species').selectOption(k);
+        await pickSpecies(page, k);
         await page.waitForFunction((k) => /-(replay|front)$/.test(window.__hatch.current().id) && window.__hatch.current().id.startsWith(`${k}-`), k, { timeout: 30000 }).catch(() => fail(`${k} never loaded`));
         // A tracker (monarch, red admiral) has no forecast: the page drops its "Colors: forecast" caveat; the others keep it.
         const tracker = await page.evaluate(() => window.__hatch.current().tracker === true);
@@ -662,6 +672,98 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       }
       await page.waitForTimeout(600);
       await shotS('3-last');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
+
+  // The Living Atlas (src/atlas/), over http in Chromium: a ?species= link to any Atlas species draws its field, the
+  // network in the page matches PyTorch's numbers (scripts/atlas-net.fixture.json) and the graphics card matches the
+  // plain network, the picker finds a species by name and opens it, the season menu offers 2026, and a pinned card's
+  // "also out here" switches species.
+  const atlasFixture = JSON.parse(readFileSync('scripts/atlas-net.fixture.json', 'utf8'));
+  const atlasUnit = async (browser) => {
+    const tag = 'atlas';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
+    // A species photo can fail to load (offline, or iNaturalist slow): the page shows a blank square, which is fine.
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png` });
+    const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
+    try {
+      await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
+      if (!(await isOn('papilio-glaucus-atlas'))) fail('a ?species=papilio-glaucus link never opened the Atlas swallowtail');
+      await page.waitForTimeout(4000);
+      const drawn = await page.evaluate(() => {
+        const h = window.__hatch;
+        const hex = h.current().render({ t: h.time.cursor, zoom: 5, theme: { bg: '#000', hexEdge: [0, 0, 0, 0], text: '#000' } }).find((l) => /-forecast-r4$/.test(l.id));
+        return hex ? hex.props.data.filter((d) => hex.props.getFillColor(d)[3] > 0).length : 0;
+      });
+      if (drawn < 300) fail(`only ${drawn} coloured cells on 1 August`);
+      await shotA('1-field');
+      const net = await page.evaluate(async (cases) => {
+        const a = await window.__hatch.atlas();
+        let worst = 0;
+        for (const c of cases) {
+          const got = a.net.logShares(c, c.day, c.ahead);
+          for (const [i, want] of c.top) worst = Math.max(worst, Math.abs(got[i] - want));
+        }
+        let gpu = null;
+        if (a.gpu) {
+          const n = 40;
+          const P = a.net.placeDim;
+          const ahead = Float32Array.from({ length: n }, (_, k) => (k % 9) * 3 - 12);
+          const [got] = a.gpu.run(a.places.subarray(0, n * P), 175, ahead, [3]);
+          gpu = 0;
+          for (let k = 0; k < n; k++) gpu = Math.max(gpu, Math.abs(got[k] - a.net.logShares(a.cells[k], 175, ahead[k])[3]));
+        }
+        return { worst, gpu };
+      }, atlasFixture);
+      console.log(`${tag}: network vs PyTorch ${net.worst.toExponential(1)}, graphics card vs network ${net.gpu?.toExponential(1) ?? 'no WebGL2 floats'}`);
+      if (!(net.worst < 1e-3)) fail(`the page's network is off PyTorch's by ${net.worst}`);
+      if (net.gpu !== null && !(net.gpu < 2e-3)) fail(`the graphics-card network is off the plain one by ${net.gpu}`);
+      // Find one by name.
+      await page.locator('#species').click();
+      await page.locator('#sp-q').fill('black swallow');
+      await page.locator('#sp-list [data-key="papilio-polyxenes"]').waitFor({ timeout: 10000 }).catch(() => fail('searching "black swallow" did not list the black swallowtail'));
+      await shotA('2-search');
+      await page.locator('#sp-list [data-key="papilio-polyxenes"]').click();
+      if (!(await isOn('papilio-polyxenes-atlas'))) fail('picking the black swallowtail did not open it');
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('species') === 'papilio-polyxenes', null, { timeout: 10000, polling: 250 })
+        .catch(() => fail(`the link dropped the species: ${page.url()}`));
+      if ((await page.locator('#app.atlas').count()) !== 1) fail('the page is not in Atlas mode (its caveat line)');
+      // The tree: insects, an order, a family, a species.
+      await page.locator('#species').click();
+      await page.locator('#sp-q').fill('');
+      await page.locator('[data-order="Odonata"]').click();
+      await page.locator('[data-family]').first().click();
+      const firstKey = await page.locator('#sp-list .sp-row').first().getAttribute('data-key');
+      await page.locator('#sp-list .sp-row').first().click();
+      if (!(await isOn(`${firstKey}-atlas`))) fail(`the tree's first dragonfly (${firstKey}) did not open`);
+      // 2026, with its real warmth.
+      if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
+      else {
+        await page.locator('#season').selectOption('2026');
+        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 }).catch(() => fail('2026 never took'));
+      }
+      // A pinned card names others out here; one tap switches to it.
+      await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
+      await isOn('papilio-glaucus-atlas');
+      await page.waitForTimeout(3000);
+      const at = await page.evaluate(() => window.__hatch.map.project([-88.5, 41.6]));
+      await page.mouse.click(at[0], at[1]);
+      const other = page.locator('#probe .probe-others [data-species]').first();
+      await other.waitFor({ timeout: 8000 }).catch(() => fail('the pinned card lists no "also out here"'));
+      await shotA('3-card');
+      const want = await other.getAttribute('data-species');
+      await other.click();
+      await page.waitForFunction((k) => window.__hatch.current().id.startsWith(`${k}-`) || (k === 'danaus-plexippus' && window.__hatch.current().id.startsWith('monarch-')), want, { timeout: 30000 })
+        .catch(() => fail(`tapping ${want} on the card did not switch to it`));
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
@@ -1029,7 +1131,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
   server.close();

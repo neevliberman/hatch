@@ -61,3 +61,19 @@ def test_atlas_learns_a_season():
           lr=1e-2, batch=256, log=lambda *a: None)
     _, total = score(AtlasModel(net), df, y, 2)
     assert total / n > -0.35  # a coin flip is -0.69
+
+
+def test_browser_fixture_matches_the_shipped_weights():
+    """scripts/atlas-net.fixture.json (what the page's network is checked against) is torch on public/atlas/model.bin."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    out = subprocess.run([sys.executable, str(root / "pipeline/atlas/net_reference.py")], capture_output=True, text=True,
+                         check=True, cwd=root).stdout
+    now = json.loads(out)
+    saved = json.loads((root / "scripts/atlas-net.fixture.json").read_text())
+    for a, b in zip(now, saved):
+        assert [i for i, _ in a["top"][:10]] == [i for i, _ in b["top"][:10]]
+        assert np.allclose([v for _, v in a["top"]], [v for _, v in b["top"]], atol=1e-4)

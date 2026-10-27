@@ -190,7 +190,12 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .species + .season { margin-left: 6px; }
 .species[hidden] + .season { margin-left: auto; }
 .species[hidden], #countdown[hidden] { display: none !important; }
-.species select { flex: none; }
+.species select, .species .pick-btn { flex: none; }
+.season .pick-btn { pointer-events: auto; height: 44px; max-width: 220px; border-radius: var(--radius); border: 1px solid var(--edge); padding: 0 28px 0 10px;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer; background: var(--chev-img) no-repeat right 10px center / 10px 6px, var(--panel); }
+.season .pick-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.season .pick-btn:disabled { cursor: progress; opacity: 0.7; }
+.sp-face { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .season select { pointer-events: auto; min-width: 0; max-width: 100%; height: 44px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--edge);
   padding: 0 28px 0 10px; color: var(--text); appearance: none; -webkit-appearance: none;
   background: var(--chev-img) no-repeat right 10px center / 10px 6px, var(--panel); }
@@ -200,6 +205,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #strip { grid-column: 1 / -1; margin: 0; font-size: 12.5px; line-height: 1.35; }
 #honesty b { font-weight: 600; }
 #app.tracker .forecast-note { display: none; }
+.atlas-note, #app.atlas .dots, #app.atlas .forecast-note { display: none; }
+#app.atlas .atlas-note { display: inline; }
 .unconfirmed { font-style: normal; font-weight: 600; color: var(--warn); }
 #why { margin-left: 4px; padding: 10px 8px; margin-block: -10px; margin-inline: -2px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
   font-size: inherit; min-height: 24px; }
@@ -344,6 +351,18 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .probe-more summary { cursor: pointer; color: var(--moon); font-weight: 600; min-height: 32px; padding-top: 6px; box-sizing: border-box; display: list-item; }
 .probe-more p { margin: 4px 0 0; }
 .probe-card + .probe-card { margin-top: 8px; }
+/* The Atlas's "also out here": a few other species at this spot, each a tap away. */
+.probe-others { margin-top: 6px; }
+.po-title { color: var(--muted); font-size: 12px; }
+.probe-others ul { list-style: none; margin: 2px 0 0; padding: 0; }
+.probe-others button { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; width: 100%; min-height: 32px;
+  padding: 2px 4px; margin: 0 -4px; border: 0; border-radius: var(--radius); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.probe-others button:hover { background: var(--track-faint); }
+.probe-others button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.probe-others img, .po-blank { width: 28px; height: 28px; border-radius: 3px; object-fit: cover; background: var(--track-faint); display: block; }
+.po-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-note { color: var(--muted); font-size: 12px; white-space: nowrap; }
+#probe.at-pointer:not(.pinned) .probe-others { display: none; }
 
 #bar { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .btns { display: flex; gap: 6px; flex: none; }
@@ -551,6 +570,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   #legend.folded .lg-chip::after { content: '\00B7\00A0 on trial in 2027'; margin-left: 2px; color: var(--warn); }
   #app.tracker #strip::before { content: 'Dots: last 10 days.'; }
   #app.tracker #legend.folded .lg-chip::after { content: none; }
+  #app.atlas #strip::before { content: 'Colors: expected share of insect photos.'; }
+  #app.atlas #legend.folded .lg-chip::after { content: none; }
   /* About opens beside the map and stops above the time bar (main.ts sets --dock-h), so the bar stays whole; the
      button stack and recenter step out to its left edge. */
   #drawer:not(.full), #drawer.full { top: 0; bottom: calc(var(--dock-h, 0px) + env(safe-area-inset-bottom)); height: auto; width: min(420px, 100%); border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
@@ -721,6 +742,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .season.species { flex: none; } /* the label shrinking would cap the select's width (max-width: 100%) */
   .season.species select { width: 72px; padding: 0; background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev), var(--panel); }
   .season.species option, .season.species optgroup { color: var(--text); background: var(--panel-solid); }
+  .season.species .pick-btn .sp-face { display: none; } /* the mark alone; its name is the button's label */
+  .season.species .pick-btn { width: 72px; padding: 0; color: transparent;
+    background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev-img) no-repeat right 10px center / 10px 6px, var(--panel); }
   #top:has(.species:not([hidden])) .brand .mark { display: none; }
   /* The season menu's face shows just the season (main.ts sets data-face); the open menu keeps the counts. */
   .season:not(.species) { position: relative; }
@@ -748,3 +772,29 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   color: var(--moon); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--radius); cursor: pointer; text-align: left; }
 .ex-radar:hover { border-color: var(--line-strong); }
 .ex-radar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The species picker (src/ui/speciesPicker.ts): search over the tree of life, opened from the header. */
+#species-sheet { position: fixed; z-index: 6; top: 60px; right: var(--gutter); width: min(380px, calc(100vw - 16px)); max-height: min(70vh, 560px);
+  display: flex; flex-direction: column; background: var(--grain) var(--panel-solid); border: 1px solid var(--label-rule); border-radius: 3px;
+  box-shadow: var(--label), var(--shadow); }
+#species-sheet[hidden] { display: none; }
+.sp-head { display: flex; gap: 6px; padding: 8px 8px 4px; }
+#sp-q { flex: 1; min-width: 0; height: 40px; padding: 0 10px; font: inherit; font-size: 16px; color: var(--text); background: var(--panel);
+  border: 1px solid var(--edge); border-radius: var(--radius); }
+#sp-q:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.sp-x { flex: none; }
+.sp-crumbs { padding: 2px 12px 4px; font-size: 12.5px; color: var(--muted); }
+.sp-crumbs button { border: 0; background: none; padding: 4px 0; font: inherit; color: var(--moon); font-weight: 600; cursor: pointer; min-height: 28px; }
+#sp-list { list-style: none; margin: 0; padding: 0 4px 6px; overflow-y: auto; overscroll-behavior: contain; }
+.sp-sec { padding: 8px 8px 2px; font: 600 16px/1.2 var(--font-note); color: var(--accent); }
+.sp-note { padding: 10px; color: var(--muted); }
+.sp-row, .sp-group { display: flex; gap: 10px; align-items: center; width: 100%; min-height: 44px; padding: 4px 8px; border: 0; border-radius: var(--radius);
+  background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.sp-row:hover, .sp-group:hover, .sp-row:focus-visible, .sp-group:focus-visible { background: var(--track-faint); outline: none; }
+.sp-row:focus-visible, .sp-group:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.sp-row img, .sp-blank { flex: none; width: 36px; height: 36px; border-radius: 3px; object-fit: cover; background: var(--track-faint); display: block; }
+.sp-name { flex: 1; min-width: 0; }
+.sp-name i { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-n { flex: none; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sp-group .sp-n::after { content: ' ›'; }
+@media (max-width: 700px) { #species-sheet { top: 52px; left: 8px; right: 8px; width: auto; max-height: calc(100dvh - 140px); } }

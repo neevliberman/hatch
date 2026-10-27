@@ -25,6 +25,9 @@ export interface ProbeCard {
   link?: { href: string; label: string };
   /** A downloadable calendar event for the card's peak window (a data: .ics link). */
   calendar?: { href: string; filename: string; label: string };
+  /** Other species to switch to (the Atlas's "also out here"): each a thumbnail, a name and a short note; `key` is its
+   * ?species= value. */
+  others?: { title: string; list: { key: string; label: string; note: string; img?: string }[] };
 }
 
 export interface LegendSpec {

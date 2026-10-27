@@ -296,6 +296,10 @@ export interface LunaLayer extends HatchLayer {
   live(): Live | null;
   /** Attach the live forecast once it arrives (species loaded before the live file). */
   setLive?(live: Live): void;
+  /** The season menu's choices, when not the replay years (an Atlas species: a typical year and the year shipped). */
+  seasons?(): Mode[];
+  /** Its own time range for a mode, when not replayTimeSpec's (an Atlas species spans its own months). */
+  timeSpec?(mode: Mode, month?: number, day?: number): TimeSpec;
 }
 
 interface FineCell {
