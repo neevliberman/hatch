@@ -386,6 +386,61 @@ for (const [name, width, height, mobile] of shots) {
     await c.close();
   }
 }
+// The About panel's "Are springs warming?" figure draws a dot per town and sits inside the panel; a card in a past year
+// compares its peak with a typical year in words.
+{
+  const sites = JSON.parse(readFileSync('src/data/warmth-trend.json', 'utf8')).sites.length;
+  for (const [vname, width, height, mobile] of [['desktop', 1440, 900, false], ['phone', 390, 844, true]]) {
+    if (!mine()) continue;
+    const tag = `features ${vname}`;
+    const c = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce' });
+    const page = await c.newPage();
+    page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
+    await page.goto(`${origin}/?noauto&year=2021&date=06-20`);
+    await page.waitForFunction(() => !document.getElementById('loader') && window.__hatch, null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
+    await page.waitForTimeout(2000);
+    // A card for a past year says how its peak compares with a typical year.
+    const box = await page.locator('#map').boundingBox();
+    let text = '';
+    for (const [fx, fy] of [[0.5, 0.45], [0.45, 0.5], [0.55, 0.5], [0.5, 0.55], [0.4, 0.45]]) {
+      if (mobile) await page.touchscreen.tap(box.x + box.width * fx, box.y + box.height * fy);
+      else await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+      await page.waitForTimeout(700);
+      if (await page.locator('#probe').isVisible()) { text = await page.locator('#probe').innerText(); if (text) break; }
+    }
+    if (!text) problems.push(`${tag}: no card to read`);
+    else {
+      if (!/typical year/i.test(text)) {
+        await page.evaluate(() => [...document.querySelectorAll('#probe button, #probe summary')].find((b) => /more/i.test(b.textContent))?.click());
+        await page.waitForTimeout(400);
+        text = await page.locator('#probe').innerText();
+      }
+      if (!/typical year/i.test(text)) problems.push(`${tag}: the card never compares with a typical year: ${text.replace(/\s+/g, ' ').slice(0, 120)}`);
+    }
+    // The warming figure, inside the About panel.
+    await page.evaluate(() => document.getElementById('info-btn').click());
+    await page.waitForSelector('#info-btn[aria-expanded=true]', { timeout: 5000 }).catch(() => problems.push(`${tag}: the About sheet never opened`));
+    await page.waitForTimeout(600);
+    const fold = page.locator('details[data-key=warmth]');
+    if (!(await fold.count())) problems.push(`${tag}: no "Are springs warming?" fold in About`);
+    else {
+      await fold.evaluate((d) => { d.open = true; d.scrollIntoView(); });
+      await page.waitForTimeout(300);
+      const fig = await fold.evaluate((d) => {
+        const svg = d.querySelector('svg');
+        const drawer = document.getElementById('drawer').getBoundingClientRect();
+        const r = svg?.getBoundingClientRect();
+        return { dots: d.querySelectorAll('circle.wm-dot').length, lead: d.querySelector('.wm-lead')?.textContent.trim().length ?? 0, inside: !!r && r.left >= drawer.left - 1 && r.right <= drawer.right + 1, label: !!svg?.getAttribute('aria-label') };
+      });
+      if (fig.dots !== sites) problems.push(`${tag}: the warming figure draws ${fig.dots} dots for ${sites} towns`);
+      if (!fig.lead) problems.push(`${tag}: the warming figure has no lead line`);
+      if (!fig.inside) problems.push(`${tag}: the warming figure spills out of the About panel`);
+      if (!fig.label) problems.push(`${tag}: the warming figure has no text alternative`);
+    }
+    console.log(`${tag}: card ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 60))}`);
+    await c.close();
+  }
+}
 await browser.close();
 server.close();
 if (problems.length) {
