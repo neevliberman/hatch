@@ -2,6 +2,7 @@
 // Usage: node scripts/fine.mjs [outDir]   (after `npm run build`; serves dist/ on a local port)
 // Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (default dist), SHARD ("2/3" = the 2nd of 3 equal
 //      slices of the cases; unset = all of them).
+// A shared link reopens on the same species, season, day and place.
 // Also, per species x light/dark x desktop/phone: cut-off text, luna-only words in the shared frame, and axe accessibility.
 // FAILS (exit 1) on any page or console error, a failed or non-local request, a level that never appears,
 // a blank map, or a tap that shows no card.
@@ -322,6 +323,64 @@ for (const [name, width, height, mobile] of shots) {
         await c.close();
       }
     }
+  }
+}
+// A shared link must bring back what it showed: the Share button's link, opened fresh, lands on the same species, season,
+// day and place (the view the sender saw), and the address bar follows the view without any click on Share.
+{
+  const views = [
+    { name: 'firefly in 2021', q: 'species=firefly&year=2021&date=07-04&at=41.880,-87.630,7.5' },
+    { name: 'luna pooled years', q: 'date=05-20&at=43.500,-89.500,6.5' },
+    { name: 'beetle live', q: 'species=japanese-beetle&season=live&date=06-15' },
+  ];
+  const state = (page) => page.evaluate(() => {
+    const h = window.__hatch;
+    const c = h.map.center(h.padding());
+    return { layer: h.current().id.split('-')[0], season: document.getElementById('season').value, date: document.getElementById('t-date').textContent, zoom: Math.round((c?.zoom ?? 0) * 10) / 10, lat: Math.round((c?.lngLat[1] ?? 0) * 100) / 100, lng: Math.round((c?.lngLat[0] ?? 0) * 100) / 100 };
+  });
+  const ready = async (page, tag, key) => {
+    await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
+    await page.waitForFunction((k) => window.__hatch.current().id.startsWith(k), key, { timeout: 15000 }).catch(() => problems.push(`${tag}: its layer never loaded`));
+    await page.waitForTimeout(1500);
+  };
+  for (const v of views) {
+    if (!mine()) continue;
+    const tag = `share ${v.name}`;
+    const key = /species=([a-z-]+)/.exec(v.q)?.[1] ?? 'luna';
+    const c = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+    const page = await c.newPage();
+    page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
+    await page.addInitScript(() => {
+      window.__shared = null;
+      const grab = async (d) => void (window.__shared = typeof d === 'string' ? d : d.url);
+      if (navigator.share) navigator.share = grab;
+      else Object.defineProperty(navigator, 'clipboard', { value: { writeText: grab } });
+    });
+    await page.goto(`${origin}/?noauto&${v.q}`);
+    await ready(page, tag, key);
+    const before = await state(page);
+    await page.waitForTimeout(600); // the address bar follows the view on a short timer
+    const bar = new URL(page.url());
+    for (const [k, want] of new URLSearchParams(v.q)) {
+      if (k === 'at') continue; // the exact place is checked below, from the reopened page
+      if (bar.searchParams.get(k) !== want && !(k === 'species' && want === 'luna')) problems.push(`${tag}: the address bar lost ${k} (${bar.search})`);
+    }
+    // Dispatched, not tapped: Playwright waits for a button to hold still, and on software GL a busy frame can keep it waiting.
+    await page.locator('#share').dispatchEvent('click').catch(() => problems.push(`${tag}: Share could not be clicked`));
+    await page.waitForTimeout(400);
+    const link = await page.evaluate(() => window.__shared);
+    if (!link) { problems.push(`${tag}: Share produced no link`); await c.close(); continue; }
+    const page2 = await c.newPage();
+    page2.on('pageerror', (e) => problems.push(`${tag}: reopened pageerror: ${e.message}`));
+    await page2.goto(new URL(new URL(link).pathname + new URL(link).search + '&noauto', origin).href);
+    await ready(page2, `${tag} (reopened)`, key);
+    const after = await state(page2);
+    for (const k of Object.keys(before)) {
+      const same = typeof before[k] === 'number' ? Math.abs(before[k] - after[k]) <= (k === 'zoom' ? 0.3 : 0.15) : before[k] === after[k];
+      if (!same) problems.push(`${tag}: the reopened link differs in ${k}: ${before[k]} became ${after[k]}`);
+    }
+    console.log(`${tag}: ${JSON.stringify(after)}`);
+    await c.close();
   }
 }
 await browser.close();
