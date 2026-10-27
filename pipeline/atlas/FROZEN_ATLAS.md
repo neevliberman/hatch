@@ -71,4 +71,28 @@ test record (a proper scoring rule: it rewards shares that are right, not just b
 - Per-species table and the 20 biggest wins and losses, by name.
 
 ## Amendments
-None yet.
+
+### Amendment 1 (27 Oct 2026, after run 1, before any run 2 training)
+**Run 1 result, kept on record:** no-go. Tests A and B passed by wide margins; the luna check failed (5.6 d vs P3's
+4.3 d, bar 5.3 d). See [RESULT.md](RESULT.md).
+
+**Why amend:** after run 1, a bug was found. The optimiser's weight decay also applied to each species' clock-blend
+weights, pulling them back to an even mix every step, so the warmth clock could barely learn (median blend stayed
+31/33/35%). Run 1's test data are now spent, so run 2 is scored on a season no step has touched: 2026.
+
+**What changes (and nothing else):**
+- The clock-blend weights get no weight decay. Everything else about the network, the features, the calendar
+  baseline, the scorer and the tuning procedure (train 2015-2023, score 2024, training states) is as frozen above.
+- **Final fit**: 2015-2025, every state except Wisconsin and Minnesota.
+- **2026 warmth**: Daymet 2026 isn't out until mid-2027, so 2026 uses PRISM (via RCC-ACIS), shifted per cell by its
+  mean Daymet-minus-PRISM gap over 2025 (`build_warmth_2026.py`).
+- **Test C**: 2026 records (GBIF snapshot of 27 Oct 2026) up to the newest PRISM day, training states.
+- **Test D**: Wisconsin and Minnesota, 2026 only.
+- **Luna check (2026)**: P3's 2026 strips, real onset/peak and P3's forecasts from
+  [SCORECARD_2026.md](../live/SCORECARD_2026.md) (P3 missed by 5.6 d, the calendar by 8.2 d), with each strip's
+  first-wave cut-off from P3's 2025 fold (`loyo_rows.csv`). The Atlas's dates come from its luna share × that strip's
+  2026 insect records per day, as in run 1. It passes if its mean miss is within 1.0 d of P3's and beats the
+  calendar. Note: the Atlas sees the real weather up to each day (a hindcast), while P3's scorecard forecasts were
+  issued at least 7 days ahead, so this check leans in the Atlas's favour.
+- **Go** if tests C and D pass by the same two conditions as A and B (more than half of scored species, and all
+  records together), and the 2026 luna check passes.

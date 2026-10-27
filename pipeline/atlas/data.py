@@ -18,14 +18,14 @@ HOLD_RATE = 2.0        # DD/day: after midsummer, once the typical curve gains l
 LAMBDAS = (0.0, 0.5, 1.0)  # the three clocks: calendar, half warmth, full warmth
 
 
-def load_records(path=DATA / "records"):
+def load_records(path=DATA / "records", last_year=LAST_YEAR):
     """All records, one per observer × species × warmth cell × day (the burst filter)."""
     con = duckdb.connect()
     df = con.execute(f"""
         SELECT inat_id, inat_taxon, rank, species, genus, family, "order", lat, lng, year, month, day, observer, state
         FROM read_parquet('{path}/*/*.parquet', hive_partitioning=true)
         WHERE lat BETWEEN {BOX['s']} AND {BOX['n']} AND lng BETWEEN {BOX['w']} AND {BOX['e']}
-          AND year BETWEEN {FIRST_YEAR} AND {LAST_YEAR}
+          AND year BETWEEN {FIRST_YEAR} AND {last_year}
     """).df()
     df["cell"] = [h3.latlng_to_cell(a, b, WARMTH_RES) for a, b in zip(df.lat.to_numpy(), df.lng.to_numpy())]
     date = pd.to_datetime(dict(year=df.year, month=df.month, day=df.day), errors="coerce")
@@ -84,12 +84,16 @@ def attach_clock(df, w: Warmth, ahead):
     assert (ci >= 0).all(), "a record falls outside the warmth grid"
     yi = df.year.to_numpy() - w.years[0]
     df = df.assign(ci=ci, delta=ahead[ci, yi, df.doy.to_numpy() - 1], norm_dd=w.typical_july()[ci])
-    return df
+    return df[np.isfinite(df.delta.to_numpy())]  # 2026 days past the newest weather have no clock yet
 
 
-def splits(df, tuning=False):
-    """(train, test_a, test_b) by FROZEN_ATLAS.md. tuning=True: train 2015-2023, score 2024 (training states)."""
+def splits(df, tuning=False, run2=False):
+    """(train, test_a, test_b) by FROZEN_ATLAS.md. tuning=True: train 2015-2023, score 2024 (training states).
+    run2=True (amendment 1): train 2015-2025, test C = 2026 training states, test D = WI/MN 2026."""
     home = ~df.held_state
+    if run2:
+        return df[home & (df.year <= TEST_YEAR)], df[home & (df.year == TEST_YEAR + 1)], \
+            df[df.held_state & (df.year == TEST_YEAR + 1)]
     if tuning:
         return df[home & (df.year < TEST_YEAR - 1)], df[home & (df.year == TEST_YEAR - 1)], None
     return df[home & (df.year < TEST_YEAR)], df[home & (df.year == TEST_YEAR)], df[df.held_state]

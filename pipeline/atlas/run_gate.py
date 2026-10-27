@@ -2,6 +2,7 @@
 Writes pipeline/atlas/results/ (gate.json, per_species.csv, tuning.json) and notebooks/data/atlas/model/ (weights).
   python3 pipeline/atlas/run_gate.py            # ~2-3 hours on 4 cores
   python3 pipeline/atlas/run_gate.py --quick    # smoke test on a 5% sample, a few minutes
+  python3 pipeline/atlas/run_gate.py --run2     # amendment 1: train 2015-2025, score 2026 (needs the 2026 pulls)
 """
 import argparse
 import json
@@ -111,10 +112,37 @@ def wilson(k, n, z=1.96):
     return c - h, c + h
 
 
-def luna_check(df_test, sp, atlas):
-    """P3's 2025 band-years: Atlas onset/peak from its luna share x that band's insect records per day."""
-    rows = pd.read_csv(ROOT / "pipeline/fit/results/loyo_rows.csv")
-    rows = rows[rows.year == TEST_YEAR]
+def luna_rows_2025():
+    """P3's 2025 band-years (pipeline/fit/results/loyo_rows.csv)."""
+    r = pd.read_csv(ROOT / "pipeline/fit/results/loyo_rows.csv")
+    r = r[r.year == TEST_YEAR]
+    return pd.DataFrame({"band": r.band, "n": r.n, "onset": r.onset, "peak": r.peak, "cut": r.cut,
+                         "p3_onset": r.p3_photo_onset, "p3_peak": r.p3_photo_peak, "cal_onset": r.cal_onset,
+                         "cal_peak": r.cal_peak})
+
+
+def luna_rows_2026():
+    """P3's 2026 strips from the scorecard table (SCORECARD_2026.md), cut-offs from P3's 2025 fold."""
+    import datetime as dt
+    import re
+    doy = lambda t: (dt.datetime.strptime(f"{t} 2026", "%d %b %Y").date() - dt.date(2025, 12, 31)).days  # noqa
+    cuts = luna_rows_2025().set_index("band").cut
+    rows = []
+    for line in (ROOT / "pipeline/live/SCORECARD_2026.md").read_text().splitlines():
+        m = re.match(r"\| (\d\d)-(\d\d) N \| [^|]+ \| (\d+) \| ([^|]+) \| ([^|]+) \|", line)
+        if not m:
+            continue
+        o = [doy(x.strip()) for x in m.group(4).split("/")]
+        p = [doy(x.strip()) for x in m.group(5).split("/")]
+        band = f"{m.group(1)}-{m.group(2)}"
+        rows.append({"band": band, "n": int(m.group(3)), "onset": o[0], "peak": p[0], "cut": cuts[band],
+                     "p3_onset": o[1], "p3_peak": p[1], "cal_onset": o[2], "cal_peak": p[2]})
+    assert len(rows) == 5, "scorecard table changed"
+    return pd.DataFrame(rows)
+
+
+def luna_check(df_test, sp, atlas, rows, beat_calendar=False):
+    """Atlas onset/peak from its luna share x that band's insect records per day, up to the band's cut-off."""
     li = sp.index(LUNA)
     home = df_test[~df_test.held_state]
     share = np.concatenate([lp[:, li].exp().numpy() for _, lp in atlas.log_probs(home)])
@@ -125,36 +153,45 @@ def luna_check(df_test, sp, atlas):
             (home.doy.to_numpy() <= r.cut)
         e = np.bincount(home.doy.to_numpy()[m], weights=share[m], minlength=366)
         c = np.cumsum(e) / e.sum()
-        onset, peak = int(np.searchsorted(c, 0.10)), int(np.searchsorted(c, 0.50))
-        out.append({"band": r.band, "n": int(r.n), "onset": r.onset, "peak": r.peak, "atlas_onset": onset,
-                    "atlas_peak": peak, "p3_onset": r.p3_photo_onset, "p3_peak": r.p3_photo_peak,
-                    "cal_onset": r.cal_onset, "cal_peak": r.cal_peak})
-    t = pd.DataFrame(out)
+        out.append({**r._asdict(), "atlas_onset": int(np.searchsorted(c, 0.10)),
+                    "atlas_peak": int(np.searchsorted(c, 0.50))})
+    t = pd.DataFrame(out).drop(columns="Index")
     mae = lambda a, b: float((t[a] - t[b]).abs().mean())  # noqa: E731
     res = {"band_years": len(t), "atlas": (mae("atlas_onset", "onset") + mae("atlas_peak", "peak")) / 2,
            "p3": (mae("p3_onset", "onset") + mae("p3_peak", "peak")) / 2,
-           "calendar": (mae("cal_onset", "onset") + mae("cal_peak", "peak")) / 2, "rows": out}
-    res["pass"] = bool(res["atlas"] <= res["p3"] + 1.0)
+           "calendar": (mae("cal_onset", "onset") + mae("cal_peak", "peak")) / 2,
+           "rows": json.loads(t.to_json(orient="records"))}
+    res["pass"] = bool(res["atlas"] <= res["p3"] + 1.0 and (not beat_calendar or res["atlas"] < res["calendar"]))
     return res
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--run2", action="store_true", help="amendment 1: train 2015-2025, score 2026 (tests C, D)")
     args = ap.parse_args()
     t0 = time.time()
     torch.set_num_threads(4)
     log("loading records")
-    df = D.load_records()
+    df = D.load_records(last_year=TEST_YEAR + 1 if args.run2 else TEST_YEAR)
     if args.quick:
         df = df.sample(frac=0.05, random_state=0).reset_index(drop=True)
     log(f"  {len(df):,} records after the burst filter")
-    tuning = tune(df, args.quick)
+    tuning = tune(df[df.year <= TEST_YEAR], args.quick)
     log(f"tuning chose {tuning['epochs']} epochs, calendar {tuning['calendar']}")
 
-    log("final: train 2015-2024, score 2025 and WI/MN")
-    df = prepare(df, np.arange(FIRST_YEAR, TEST_YEAR))
-    tr, ta, tb = D.splits(df)
+    if args.run2:
+        log("final (amendment 1): train 2015-2025, score 2026 and WI/MN 2026")
+        df = prepare(df, np.arange(FIRST_YEAR, TEST_YEAR + 1))
+        last = int(np.load(DATA / "warmth.npz")["last_day_2026"])
+        df = df[(df.year <= TEST_YEAR) | (df.doy <= last)]  # 2026 up to the newest PRISM day
+        tr, ta, tb = D.splits(df, run2=True)
+        names = ("c", "d")
+    else:
+        log("final: train 2015-2024, score 2025 and WI/MN")
+        df = prepare(df, np.arange(FIRST_YEAR, TEST_YEAR))
+        tr, ta, tb = D.splits(df)
+        names = ("a", "b")
     sp = D.species_list(tr)
     n_out = len(sp) + 1
     ytr = D.labels(tr, sp)
@@ -165,19 +202,20 @@ def main():
     net0 = train_atlas(tr, ytr, n_out, tuning["max_epochs"], clocks=(0.0,), stop_after=tuning["epochs"])
     atlas, nowarm = AtlasModel(net), AtlasModel(net0)
     tabs, gate = [], {}
-    for name, test in (("a", ta), ("b", tb)):
+    for name, test in zip(names, (ta, tb)):
         t, s = per_species_table(sp, ntrain, name, test, D.labels(test, sp), atlas, cal, nowarm)
         tabs.append(t.set_index(["species", "n_train"]))
         gate[f"test_{name}"] = s
         log(f"test {name}: {s}")
-    gate["luna"] = luna_check(ta, sp, atlas) if LUNA in sp else {"pass": False, "note": "luna not in species list"}
-    log(f"luna: atlas {gate['luna'].get('atlas')}, p3 {gate['luna'].get('p3')}")
-    gate["go"] = bool(gate["test_a"]["pass"] and gate["test_b"]["pass"] and gate["luna"]["pass"])
+    rows = luna_rows_2026() if args.run2 else luna_rows_2025()
+    gate["luna"] = luna_check(ta, sp, atlas, rows, beat_calendar=args.run2)
+    log(f"luna: atlas {gate['luna']['atlas']:.2f}, p3 {gate['luna']['p3']:.2f}, calendar {gate['luna']['calendar']:.2f}")
+    gate["go"] = bool(all(gate[f"test_{n}"]["pass"] for n in names) and gate["luna"]["pass"])
     gate["clock_weights_median"] = np.median(net.clock_weights()[:-1], 0).tolist()
     gate["n_species"], gate["train_records"] = len(sp), int(len(tr))
     gate["seconds"] = round(time.time() - t0)
     gate["quick"] = args.quick
-    out = OUT / ("quick" if args.quick else "")
+    out = OUT / ("quick" if args.quick else "") / ("run2" if args.run2 else "")
     out.mkdir(parents=True, exist_ok=True)
     pd.concat(tabs, axis=1).reset_index().to_csv(out / "per_species.csv", index=False, float_format="%.3f")
     cw = pd.DataFrame(net.clock_weights(), columns=["calendar", "half", "warmth"])
@@ -185,7 +223,7 @@ def main():
     cw.to_csv(out / "clock_weights.csv", index=False, float_format="%.3f")
     (out / "gate.json").write_text(json.dumps(gate, indent=1))
     (out / "tuning.json").write_text(json.dumps(tuning, indent=1))
-    md = DATA / ("model_quick" if args.quick else "model")
+    md = DATA / ("model_quick" if args.quick else "model") / ("run2" if args.run2 else "")
     md.mkdir(parents=True, exist_ok=True)
     torch.save({"state": net.state_dict(), "species": sp}, md / "atlas.pt")
     torch.save({"state": net0.state_dict(), "species": sp}, md / "atlas_nowarmth.pt")

@@ -54,10 +54,10 @@ def _get(params):
     raise RuntimeError(f"GBIF kept failing: {url}")
 
 
-def ranges():
+def ranges(y0=FIRST_YEAR, y1=LAST_YEAR):
     """Date ranges (inclusive ISO days), each holding at most CAP records."""
     out, todo = [], []
-    for y in range(FIRST_YEAR, LAST_YEAR + 1):
+    for y in range(y0, y1 + 1):
         for m in range(1, 13):
             d0 = dt.date(y, m, 1)
             d1 = (dt.date(y + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1))
@@ -112,17 +112,18 @@ def combine():
                       "GROUP BY 1 ORDER BY 1").fetchall())
 
 
-def main(workers=8):
+def main(y0=FIRST_YEAR, y1=LAST_YEAR, workers=8):
     CHUNKS.mkdir(parents=True, exist_ok=True)
-    cache = CHUNKS / "ranges.json"  # counting takes a few minutes; reuse it when resuming the same snapshot
+    # counting takes a few minutes; reuse it when resuming the same snapshot
+    cache = CHUNKS / ("ranges.json" if (y0, y1) == (FIRST_YEAR, LAST_YEAR) else f"ranges_{y0}_{y1}.json")
     if cache.exists():
         rs = [(dt.date.fromisoformat(a), dt.date.fromisoformat(b), n) for a, b, n in json.loads(cache.read_text())]
     else:
-        rs = ranges()
+        rs = ranges(y0, y1)
         cache.write_text(json.dumps([(str(a), str(b), n) for a, b, n in rs]))
     keep = {f"{d0}_{d1}.parquet" for d0, d1, _ in rs}
     for f in CHUNKS.glob("*.parquet"):  # chunks from an older split would double-count
-        if f.name not in keep:
+        if y0 <= int(f.name[:4]) <= y1 and f.name not in keep:
             f.unlink()
     print(f"{len(rs)} ranges, {sum(n for *_, n in rs):,} records", flush=True)
     done = 0
@@ -134,4 +135,4 @@ def main(workers=8):
 
 
 if __name__ == "__main__":
-    main()
+    main(*map(int, sys.argv[1:3]))  # optional: first and last year, e.g. 2026 2026

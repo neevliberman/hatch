@@ -84,7 +84,11 @@ def fit(model, place, doy, delta, y, epochs, lr=2e-3, batch=4096, weight_decay=1
     g = torch.Generator().manual_seed(seed)
     tensors = [torch.as_tensor(a) for a in (place, doy.astype(np.float32), delta.astype(np.float32), y)]
     n = len(y)
-    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    # no weight decay on the clock blend: decay pulls it back to an even mix (FROZEN_ATLAS.md, amendment 1)
+    clock = [p for n, p in model.named_parameters() if n == "clock_logits"]
+    rest = [p for n, p in model.named_parameters() if n != "clock_logits"]
+    opt = torch.optim.AdamW([{"params": rest}, {"params": clock, "weight_decay": 0.0}], lr=lr,
+                            weight_decay=weight_decay)
     steps = epochs * math.ceil(n / batch)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=steps, pct_start=0.05)
     losses = []
