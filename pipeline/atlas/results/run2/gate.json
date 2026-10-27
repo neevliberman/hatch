@@ -1,0 +1,124 @@
+{
+ "test_c": {
+  "records": 429048,
+  "scored_species": 798,
+  "atlas_wins": 753,
+  "win_share": 0.943609022556391,
+  "win_share_95": [
+   0.9253762679479107,
+   0.9575911410765152
+  ],
+  "median_gain_nats": 69.74685152159134,
+  "loglik_per_record": {
+   "atlas": -5.425405503370844,
+   "calendar": -5.728970796832564,
+   "atlas_no_warmth": -5.440482598550238
+  },
+  "nowarmth_wins_vs_cal": 756,
+  "atlas_wins_vs_nowarmth": 457,
+  "pass": true
+ },
+ "test_d": {
+  "records": 84075,
+  "scored_species": 433,
+  "atlas_wins": 251,
+  "win_share": 0.5796766743648961,
+  "win_share_95": [
+   0.5326815923415696,
+   0.6252703975788044
+  ],
+  "median_gain_nats": 6.5020962994277625,
+  "loglik_per_record": {
+   "atlas": -5.720475963436703,
+   "calendar": -6.24288903759875,
+   "atlas_no_warmth": -5.701786936340395
+  },
+  "nowarmth_wins_vs_cal": 258,
+  "atlas_wins_vs_nowarmth": 189,
+  "pass": true
+ },
+ "luna": {
+  "band_years": 5,
+  "atlas": 5.3,
+  "p3": 5.5,
+  "calendar": 8.0,
+  "rows": [
+   {
+    "band": "37-39",
+    "n": 65,
+    "onset": 95,
+    "peak": 130,
+    "cut": 177,
+    "p3_onset": 103,
+    "p3_peak": 115,
+    "cal_onset": 107,
+    "cal_peak": 135,
+    "atlas_onset": 94,
+    "atlas_peak": 123
+   },
+   {
+    "band": "39-41",
+    "n": 208,
+    "onset": 102,
+    "peak": 129,
+    "cut": 180,
+    "p3_onset": 107,
+    "p3_peak": 128,
+    "cal_onset": 118,
+    "cal_peak": 143,
+    "atlas_onset": 102,
+    "atlas_peak": 130
+   },
+   {
+    "band": "41-43",
+    "n": 128,
+    "onset": 113,
+    "peak": 148,
+    "cut": 185,
+    "p3_onset": 123,
+    "p3_peak": 149,
+    "cal_onset": 130,
+    "cal_peak": 150,
+    "atlas_onset": 115,
+    "atlas_peak": 149
+   },
+   {
+    "band": "43-45",
+    "n": 50,
+    "onset": 123,
+    "peak": 158,
+    "cut": 193,
+    "p3_onset": 134,
+    "p3_peak": 158,
+    "cal_onset": 137,
+    "cal_peak": 158,
+    "atlas_onset": 142,
+    "atlas_peak": 170
+   },
+   {
+    "band": "45-49",
+    "n": 124,
+    "onset": 158,
+    "peak": 172,
+    "cut": 240,
+    "p3_onset": 155,
+    "p3_peak": 171,
+    "cal_onset": 158,
+    "cal_peak": 172,
+    "atlas_onset": 160,
+    "atlas_peak": 180
+   }
+  ],
+  "pass": true
+ },
+ "go": true,
+ "clock_weights_median": [
+  0.3181757926940918,
+  0.326926052570343,
+  0.349418580532074
+ ],
+ "n_species": 1945,
+ "train_records": 2117325,
+ "seconds": 4558,
+ "quick": false
+}

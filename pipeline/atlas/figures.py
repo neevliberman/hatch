@@ -1,6 +1,7 @@
-"""First neural maps: a species' predicted share of insect photos across the box, on a few days of 2025.
-Writes pipeline/atlas/figures/<species>.png. Run after run_gate.py:
+"""First neural maps: a species' predicted share of insect photos across the box, on a few days of a season it never saw.
+Writes pipeline/atlas/figures/<species>.png (run 1, 2025) or figures/run2/<species>.png (run 2, 2026):
   python3 pipeline/atlas/figures.py "Actias luna" "Danaus plexippus" "Popillia japonica"
+  python3 pipeline/atlas/figures.py --run2 "Actias luna"
 """
 import sys
 from pathlib import Path
@@ -34,21 +35,23 @@ def grid(w, ahead, year, doy):
     return cells, df
 
 
-def main(names):
-    ck = torch.load(DATA / "model/atlas.pt")
+def main(names, run2=False):
+    year = TEST_YEAR + 1 if run2 else TEST_YEAR
+    out = OUT / "run2" if run2 else OUT
+    ck = torch.load(DATA / "model" / ("run2" if run2 else "") / "atlas.pt")
     sp = ck["species"]
     net = M.Atlas(len(sp) + 1)
     net.load_state_dict(ck["state"])
     net.eval()
-    w = D.Warmth.load(np.arange(FIRST_YEAR, TEST_YEAR))
+    w = D.Warmth.load(np.arange(FIRST_YEAR, year))
     ahead = w.days_ahead()
-    OUT.mkdir(exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     for name in names:
         si = sp.index(name)
         fig, axes = plt.subplots(1, len(DAYS), figsize=(4 * len(DAYS), 3.6), constrained_layout=True)
         shares = []
         for label, doy in DAYS.items():
-            cells, df = grid(w, ahead, TEST_YEAR, doy)
+            cells, df = grid(w, ahead, year, doy)
             with torch.no_grad():
                 z = net(torch.as_tensor(M.place_features(df.lat, df.lng, df.norm_dd)),
                         torch.as_tensor(df.doy.to_numpy(), dtype=torch.float32),
@@ -57,7 +60,7 @@ def main(names):
         vmax = max(s.max() for *_, s in shares)
         for ax, (label, df, s) in zip(axes, shares):
             sc = ax.scatter(df.lng, df.lat, c=s, s=9, marker="h", cmap="YlGn", vmin=0, vmax=vmax)
-            ax.set_title(f"{label} {TEST_YEAR}", fontsize=11)
+            ax.set_title(f"{label} {year}", fontsize=11)
             ax.set_xlim(BOX["w"], BOX["e"])
             ax.set_ylim(BOX["s"], BOX["n"])
             ax.set_xticks([])
@@ -65,10 +68,11 @@ def main(names):
             ax.set_aspect(1.3)
         fig.colorbar(sc, ax=axes, shrink=0.8, label="% of insect photos")
         fig.suptitle(f"{name}: the Atlas's expected share (a year it never saw)", fontsize=12)
-        fig.savefig(OUT / f"{name.replace(' ', '_')}.png", dpi=110)
+        fig.savefig(out / f"{name.replace(' ', '_')}.png", dpi=110)
         plt.close(fig)
         print("wrote", name)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or ["Actias luna"])
+    args = [a for a in sys.argv[1:] if a != "--run2"]
+    main(args or ["Actias luna"], run2="--run2" in sys.argv)
