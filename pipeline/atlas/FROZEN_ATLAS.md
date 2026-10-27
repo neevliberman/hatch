@@ -96,3 +96,21 @@ weights, pulling them back to an even mix every step, so the warmth clock could 
   issued at least 7 days ahead, so this check leans in the Atlas's favour.
 - **Go** if tests C and D pass by the same two conditions as A and B (more than half of scored species, and all
   records together), and the 2026 luna check passes.
+
+### Amendment 2 (27 Oct 2026, after an independent method review of runs 1 and 2; no retraining)
+Two places where the code did not do what the luna check above says. Both are fixed, and the check is re-run on the
+saved models (`recheck_luna.py`, `results/luna_amended.json`). The original numbers stay in `gate.json`.
+- **Which records count.** The rule says "that band's insect records"; the code counted only training states. P3's
+  band targets include Wisconsin and Minnesota (in 2025, 61 of 85 luna records in 43-45 N), so the Atlas was dated on
+  a different area than the target. Now every state counts. WI/MN were never trained on, so this leaks nothing.
+- **Quantile day.** The code rounded to whole days; P3's targets interpolate. Now the Atlas interpolates the same way.
+
+Also fixed for future runs (the saved runs predate them; effects are small): leap years used a 28 Feb fold where
+Daymet keeps 29 Feb and drops 31 Dec, so March-December warmth in 2016, 2020 and 2024 was read one day off; the burst
+filter now keeps the lowest iNaturalist id, so it's deterministic; `build_warmth_2026.py` refuses a PRISM gap.
+`run_gate.py` without `--run2` restores run 1's optimiser.
+
+**On amendment 1's luna comparator:** run 2 compares an Atlas hindcast on real weather with P3 forecasts issued a
+week ahead, and P3's weaker 2026 score was already known (SCORECARD_2026.md, 24 Oct) when amendment 1 was written.
+So run 2's luna number is a comparison against forecasts, not like-for-like. Run 1's comparison is like-for-like
+(both on real weather, P3 leave-one-year-out).

@@ -69,7 +69,8 @@ def main():
     off_x = np.nanmean(np.array(d25x) - p25x, 1)
     tn, tx = p26n + off_n[:, None], p26x + off_x[:, None]
     last = int(np.where(~np.isnan(tn).any(0) & ~np.isnan(tx).any(0))[0].max())  # newest day every cell has
-    tn_f, tx_f = np.nan_to_num(tn), np.nan_to_num(tx)
+    assert not (np.isnan(tn[:, :last + 1]).any() or np.isnan(tx[:, :last + 1]).any()), "PRISM gap before the newest day"
+    tn_f, tx_f = np.nan_to_num(tn), np.nan_to_num(tx)  # only the days after `last`, which become NaN below
     dd = accumulate(tn_f, tx_f, 10.0).astype(np.float32)
     dd[:, last + 1:] = np.nan
     tmean = ((tn + tx) / 2).astype(np.float32)

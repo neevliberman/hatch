@@ -77,18 +77,19 @@ class Atlas(nn.Module):
 
 
 def fit(model, place, doy, delta, y, epochs, lr=2e-3, batch=4096, weight_decay=1e-4, seed=0, log=print,
-        on_epoch=None, stop_after=None):
+        on_epoch=None, stop_after=None, decay_clock=False):
     """Plain cross-entropy with AdamW and a one-cycle learning rate. Returns per-epoch mean loss.
     on_epoch(ep) runs after each pass (the tuning run scores 2024 there). stop_after ends early on the same
-    learning-rate path, so the final fit repeats the tuning run's best pass exactly."""
+    learning-rate path, so the final fit repeats the tuning run's best pass exactly. decay_clock=True restores
+    run 1's optimiser, which also decayed the clock blend."""
     g = torch.Generator().manual_seed(seed)
     tensors = [torch.as_tensor(a) for a in (place, doy.astype(np.float32), delta.astype(np.float32), y)]
     n = len(y)
     # no weight decay on the clock blend: decay pulls it back to an even mix (FROZEN_ATLAS.md, amendment 1)
     clock = [p for n, p in model.named_parameters() if n == "clock_logits"]
     rest = [p for n, p in model.named_parameters() if n != "clock_logits"]
-    opt = torch.optim.AdamW([{"params": rest}, {"params": clock, "weight_decay": 0.0}], lr=lr,
-                            weight_decay=weight_decay)
+    groups = [{"params": rest}, {"params": clock, "weight_decay": weight_decay if decay_clock else 0.0}]
+    opt = torch.optim.AdamW(groups, lr=lr, weight_decay=weight_decay)
     steps = epochs * math.ceil(n / batch)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=steps, pct_start=0.05)
     losses = []

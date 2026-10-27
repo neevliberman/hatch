@@ -33,11 +33,11 @@ def load_records(path=DATA / "records", last_year=LAST_YEAR):
     date = date[date.notna()]
     doy = date.dt.dayofyear.to_numpy()
     leap = date.dt.is_leap_year.to_numpy()
-    df["doy"] = np.where(leap & (doy > 59), doy - 1, doy)  # Daymet's 365-day calendar; 29 Feb shares 28 Feb
+    df["doy"] = np.where(leap & (doy == 366), 365, doy)  # Daymet's 365-day calendar keeps 29 Feb, drops 31 Dec
     df["taxon"] = df.species.where(df.species.notna() & (df["rank"].isin(["SPECIES", "SUBSPECIES", "VARIETY",
                                                                            "FORM"])), None)
     key = df.taxon.fillna("~" + df.genus.fillna(df.family.fillna(df["order"].fillna("?"))))
-    df = df.assign(_k=key).drop_duplicates(["observer", "_k", "cell", "year", "doy"]).drop(columns="_k")
+    df = df.assign(_k=key).sort_values("inat_id", kind="stable").drop_duplicates(["observer", "_k", "cell", "year", "doy"]).drop(columns="_k")
     df["held_state"] = df.state.isin(HELD_OUT_STATES)
     return df.reset_index(drop=True)
 

@@ -42,15 +42,17 @@ def arrays(df):
     return M.place_features(df.lat, df.lng, df.norm_dd), df.doy.to_numpy(), df.delta.to_numpy()
 
 
-def train_atlas(train, y, n_out, epochs, clocks=D.LAMBDAS, on_epoch=None, stop_after=None, seed=0):
+def train_atlas(train, y, n_out, epochs, clocks=D.LAMBDAS, on_epoch=None, stop_after=None, seed=0,
+                decay_clock=False):
     torch.manual_seed(seed)
     net = M.Atlas(n_out, clocks=clocks)
     p, d, dl = arrays(train)
-    M.fit(net, p, d, dl, y, epochs, log=log, on_epoch=on_epoch, stop_after=stop_after, seed=seed)
+    M.fit(net, p, d, dl, y, epochs, log=log, on_epoch=on_epoch, stop_after=stop_after, seed=seed,
+          decay_clock=decay_clock)
     return net
 
 
-def tune(df, quick):
+def tune(df, quick, decay_clock=False):
     log("tuning: train 2015-2023, score 2024 (training states)")
     df = prepare(df, np.arange(FIRST_YEAR, TEST_YEAR - 1))
     tr, va, _ = D.splits(df, tuning=True)
@@ -73,7 +75,8 @@ def tune(df, quick):
     torch.manual_seed(0)
     net_ref[0] = M.Atlas(n_out)
     p, d, dl = arrays(tr)
-    M.fit(net_ref[0], p, d, dl, ytr, 3 if quick else MAX_EPOCHS, log=log, on_epoch=on_epoch)
+    M.fit(net_ref[0], p, d, dl, ytr, 3 if quick else MAX_EPOCHS, log=log, on_epoch=on_epoch,
+          decay_clock=decay_clock)
     best_ep = max(curve, key=curve.get)
     a, b = best_cal.split("|")
     return {"calendar_grid": cal, "calendar": {"alpha": float(a), "blend_weeks": b == "True"},
@@ -141,10 +144,17 @@ def luna_rows_2026():
     return pd.DataFrame(rows)
 
 
+def weighted_quantile(days, weights, q):
+    """Linear interpolation between day midpoints, as pandas' quantile does for a list of record days."""
+    c = (np.cumsum(weights) - weights / 2) / weights.sum()
+    return float(np.interp(q, c, days))
+
+
 def luna_check(df_test, sp, atlas, rows, beat_calendar=False):
-    """Atlas onset/peak from its luna share x that band's insect records per day, up to the band's cut-off."""
+    """Atlas onset/peak from its luna share x that band's insect records per day, up to the band's cut-off.
+    All states count, WI/MN included: P3's band targets include them (amendment 2)."""
     li = sp.index(LUNA)
-    home = df_test[~df_test.held_state]
+    home = df_test
     share = np.concatenate([lp[:, li].exp().numpy() for _, lp in atlas.log_probs(home)])
     out = []
     for r in rows.itertuples():
@@ -152,9 +162,9 @@ def luna_check(df_test, sp, atlas, rows, beat_calendar=False):
         m = (home.lat.to_numpy() >= lo) & (home.lat.to_numpy() < hi) & (home.doy.to_numpy() >= 60) & \
             (home.doy.to_numpy() <= r.cut)
         e = np.bincount(home.doy.to_numpy()[m], weights=share[m], minlength=366)
-        c = np.cumsum(e) / e.sum()
-        out.append({**r._asdict(), "atlas_onset": int(np.searchsorted(c, 0.10)),
-                    "atlas_peak": int(np.searchsorted(c, 0.50))})
+        days = np.arange(366)
+        out.append({**r._asdict(), "atlas_onset": round(weighted_quantile(days, e, 0.10), 1),
+                    "atlas_peak": round(weighted_quantile(days, e, 0.50), 1)})
     t = pd.DataFrame(out).drop(columns="Index")
     mae = lambda a, b: float((t[a] - t[b]).abs().mean())  # noqa: E731
     res = {"band_years": len(t), "atlas": (mae("atlas_onset", "onset") + mae("atlas_peak", "peak")) / 2,
@@ -177,7 +187,7 @@ def main():
     if args.quick:
         df = df.sample(frac=0.05, random_state=0).reset_index(drop=True)
     log(f"  {len(df):,} records after the burst filter")
-    tuning = tune(df[df.year <= TEST_YEAR], args.quick)
+    tuning = tune(df[df.year <= TEST_YEAR], args.quick, decay_clock=not args.run2)  # run 1 decayed the clock
     log(f"tuning chose {tuning['epochs']} epochs, calendar {tuning['calendar']}")
 
     if args.run2:
@@ -197,9 +207,11 @@ def main():
     ytr = D.labels(tr, sp)
     ntrain = np.bincount(ytr, minlength=n_out)
     cal = Calendar(tr, ytr, n_out, tuning["calendar"]["alpha"], tuning["calendar"]["blend_weeks"])
-    net = train_atlas(tr, ytr, n_out, tuning["max_epochs"], stop_after=tuning["epochs"])
+    net = train_atlas(tr, ytr, n_out, tuning["max_epochs"], stop_after=tuning["epochs"],
+                      decay_clock=not args.run2)
     log("ablation: same network, calendar clock only")
-    net0 = train_atlas(tr, ytr, n_out, tuning["max_epochs"], clocks=(0.0,), stop_after=tuning["epochs"])
+    net0 = train_atlas(tr, ytr, n_out, tuning["max_epochs"], clocks=(0.0,), stop_after=tuning["epochs"],
+                       decay_clock=not args.run2)
     atlas, nowarm = AtlasModel(net), AtlasModel(net0)
     tabs, gate = [], {}
     for name, test in zip(names, (ta, tb)):
@@ -208,7 +220,9 @@ def main():
         gate[f"test_{name}"] = s
         log(f"test {name}: {s}")
     rows = luna_rows_2026() if args.run2 else luna_rows_2025()
-    gate["luna"] = luna_check(ta, sp, atlas, rows, beat_calendar=args.run2)
+    year = TEST_YEAR + 1 if args.run2 else TEST_YEAR
+    luna_test = pd.concat([ta, tb[tb.year == year]])
+    gate["luna"] = luna_check(luna_test, sp, atlas, rows, beat_calendar=args.run2)
     log(f"luna: atlas {gate['luna']['atlas']:.2f}, p3 {gate['luna']['p3']:.2f}, calendar {gate['luna']['calendar']:.2f}")
     gate["go"] = bool(all(gate[f"test_{n}"]["pass"] for n in names) and gate["luna"]["pass"])
     gate["clock_weights_median"] = np.median(net.clock_weights()[:-1], 0).tolist()
