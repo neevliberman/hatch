@@ -864,7 +864,7 @@ function start() {
   $('near-go').addEventListener('click', () => {
     if (home && !showPlace(home.lat, home.lng, home.name)) say(`No forecast for ${home.name}`, $('near-go'));
   });
-  $('near-x').addEventListener('click', () => remember(null));
+  $('near-x').addEventListener('click', () => (remember(null), $('locate').focus()));
   showNear();
 
   // "My area": one location fix (kept rounded in this browser for the line above, never sent anywhere), then the
@@ -1168,6 +1168,7 @@ function start() {
     if (!live || (live.stub && asked !== LIVE)) return syncUrl();
     setLive(live);
     liveFile = live;
+    showNear(); // the live forecast replaces the typical year's dates
     fillPicker();
     if (cur !== luna || speciesPending) return syncUrl(); // the default switch is luna's first view only
     if (picker.value !== initialMode || time.cursor !== cursor0) return syncUrl(); // the user got there first: leave their choice

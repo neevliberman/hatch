@@ -337,7 +337,9 @@ export function createOneGenerationLayer(
       if (i === undefined) return null;
       const q = live && live.season === new Date(now).getUTCFullYear() ? live.median[i] : null;
       const on = dueOf(q, live?.season);
-      return on && dayOfYear(now) <= on.end ? on : dueOf(data.forecast[TYPICAL]![i]);
+      if (!on) return dueOf(data.forecast[TYPICAL]![i]);
+      // This year's live season is over: count down to next year's typical one.
+      return dayOfYear(now) <= on.end ? on : dueOf(data.forecast[TYPICAL]![i], on.year! + 1);
     },
     busy: (t) => isBusy(forecast(), dayOfYear(t)),
     endNote: cfg.endNote,

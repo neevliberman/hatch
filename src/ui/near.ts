@@ -43,8 +43,9 @@ export function nearLine(place: string, who: string, due: Due, now: number): str
   const at = (year: number, doy: number) => Date.UTC(year, 0, Math.round(doy));
   const doy = dayOfYear(now);
   const head = `Near ${place === 'you' ? 'you' : place.replace(/, [A-Z]{2}$/, '')}: ${who}`;
-  if (doy >= due.start && doy <= due.end) return doy < due.peak - 3 ? `${head} out now, peak about ${fmt(at(y, due.peak))}` : `${head} out now`;
-  const year = doy < due.start ? y : y + 1;
+  const later = due.year !== undefined && due.year > y; // a season already over this year, counted to next year's
+  if (!later && doy >= due.start && doy <= due.end) return doy < due.peak - 3 ? `${head} out now, peak about ${fmt(at(y, due.peak))}` : `${head} out now`;
+  const year = later ? due.year! : doy < due.start ? y : y + 1;
   const next = at(year, due.start);
   const days = Math.max(1, Math.ceil((next - now) / DAY));
   return `${head} in ${days} day${days === 1 ? '' : 's'} (${fmt(next)})`;
