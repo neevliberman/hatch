@@ -336,11 +336,12 @@ for (const [name, width, height, mobile] of shots) {
   const state = (page) => page.evaluate(() => {
     const h = window.__hatch;
     const c = h.map.center(h.padding());
-    return { layer: h.current().id.split('-')[0], season: document.getElementById('season').value, date: document.getElementById('t-date').textContent, zoom: Math.round((c?.zoom ?? 0) * 10) / 10, lat: Math.round((c?.lngLat[1] ?? 0) * 100) / 100, lng: Math.round((c?.lngLat[0] ?? 0) * 100) / 100 };
+    if (!c) return { noCentre: true };
+    return { layer: h.current().id.split('-')[0], season: document.getElementById('season').value, date: document.getElementById('t-date').textContent, zoom: Math.round(c.zoom * 10) / 10, lat: Math.round(c.lngLat[1] * 100) / 100, lng: Math.round(c.lngLat[0] * 100) / 100 };
   });
   const ready = async (page, tag, key) => {
     await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
-    await page.waitForFunction((k) => window.__hatch.current().id.startsWith(k), key, { timeout: 15000 }).catch(() => problems.push(`${tag}: its layer never loaded`));
+    await page.waitForFunction((k) => window.__hatch?.current().id.startsWith(k), key, { timeout: 15000 }).catch(() => problems.push(`${tag}: its layer never loaded`));
     await page.waitForTimeout(1500);
   };
   for (const v of views) {
@@ -359,7 +360,8 @@ for (const [name, width, height, mobile] of shots) {
     await page.goto(`${origin}/?noauto&${v.q}`);
     await ready(page, tag, key);
     const before = await state(page);
-    await page.waitForTimeout(600); // the address bar follows the view on a short timer
+    await page.waitForFunction(() => /date=/.test(location.search), null, { timeout: 5000 }).catch(() => {}); // the address bar follows the view on a short timer
+    await page.waitForTimeout(600);
     const bar = new URL(page.url());
     for (const [k, want] of new URLSearchParams(v.q)) {
       if (k === 'at') continue; // the exact place is checked below, from the reopened page
@@ -367,7 +369,7 @@ for (const [name, width, height, mobile] of shots) {
     }
     // Dispatched, not tapped: Playwright waits for a button to hold still, and on software GL a busy frame can keep it waiting.
     await page.locator('#share').dispatchEvent('click').catch(() => problems.push(`${tag}: Share could not be clicked`));
-    await page.waitForTimeout(400);
+    await page.waitForFunction(() => window.__shared, null, { timeout: 5000 }).catch(() => {});
     const link = await page.evaluate(() => window.__shared);
     if (!link) { problems.push(`${tag}: Share produced no link`); await c.close(); continue; }
     const page2 = await c.newPage();
@@ -375,8 +377,9 @@ for (const [name, width, height, mobile] of shots) {
     await page2.goto(new URL(new URL(link).pathname + new URL(link).search + '&noauto', origin).href);
     await ready(page2, `${tag} (reopened)`, key);
     const after = await state(page2);
+    if (before.noCentre || after.noCentre) problems.push(`${tag}: the map reported no centre, so place and zoom were not compared`);
     for (const k of Object.keys(before)) {
-      const same = typeof before[k] === 'number' ? Math.abs(before[k] - after[k]) <= (k === 'zoom' ? 0.3 : 0.15) : before[k] === after[k];
+      const same = typeof before[k] === 'number' ? Math.abs(before[k] - after[k]) <= (k === 'zoom' ? 0.2 : 0.05) : before[k] === after[k];
       if (!same) problems.push(`${tag}: the reopened link differs in ${k}: ${before[k]} became ${after[k]}`);
     }
     console.log(`${tag}: ${JSON.stringify(after)}`);
