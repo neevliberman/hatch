@@ -3,7 +3,8 @@ import { LayerRegistry } from './core/registry';
 import { TimeAxis, type TimeSpec } from './core/timeAxis';
 import { makeIntro, type Intro } from './ui/intro';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
-import { GROUP_AFTER, SPECIES } from './species';
+import { findSpecies, SPECIES } from './species';
+import { mountSpeciesPicker } from './ui/speciesPicker';
 import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
 import { inSeason, liveAvailable, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
@@ -365,14 +366,15 @@ function start() {
   // A narrow phone's closed menu shows just the season ("2024"), not its count, which would be cut off ("2024 (1,498
   // beet"); the open menu still lists the counts (style.css).
   /** The season menu's words for a mode, with the species on screen's own live forecast. */
-  const label = (m: Mode) => modeLabel(m, cur.live());
+  const label = (m: Mode) => (cur.seasons && m === TYPICAL ? 'typical year' : modeLabel(m, cur.live()));
   /** A layer's slider for a mode (live mode: from that layer's own live forecast). */
   // A tracker has no forecast after its last day, so no paler "forecast" stretch on the time bar.
   const timeFor = (l: LunaLayer, m: Mode, mo?: number, d?: number): TimeSpec => {
+    if (l.timeSpec) return l.timeSpec(m, mo, d);
     const s = replayTimeSpec(m, mo, d, clock, l.live());
     return l.tracker ? { ...s, asOf: undefined } : s;
   };
-  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : label(picker.value));
+  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? (cur.seasons ? 'Typical' : 'All years') : label(picker.value));
   const fillPicker = () => {
     const keep = picker.value || initialMode;
     const live = cur.live() ? [LIVE] : [];
@@ -380,10 +382,11 @@ function start() {
     // menu says "seen", not a number of animals. "All years" goes without one so the closed menu fits a small phone.
     // A species the nightly file has no forecast for (yet): say so at the top of the list rather than drop it silently.
     picker.innerHTML = (__BASEMAP__ && liveFile && !cur.live() ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
-      [...live, TYPICAL, ...[...years].reverse().filter((y) => !cur.tracker || cur.seasonCount(y) > 0)]
-        .map((m) => `<option value="${m}">${m === LIVE ? label(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
+      (cur.seasons?.() ?? [...live, TYPICAL, ...[...years].reverse().filter((y) => !cur.tracker || cur.seasonCount(y) > 0)])
+        .map((m) => `<option value="${m}">${m === LIVE ? label(LIVE) : m === TYPICAL ? (cur.seasons ? 'Typical year' : 'All years') : cur.seasons ? m : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
         .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
+    if (picker.selectedIndex < 0 || picker.options[picker.selectedIndex]!.disabled) picker.value = TYPICAL; // not a season this species has
     face();
     picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses)`;
   };
@@ -422,22 +425,17 @@ function start() {
   };
   $('season-name').textContent = modeLabel(initialMode);
 
-  // Species menu, from the one species list (src/species.ts): a native menu stays small in the header however long the
-  // list gets, and a phone opens it as its own scrolling picker. Past GROUP_AFTER species it gets group headings.
-  // Switching keeps the season and the calendar day, and drops any pinned card.
-  const speciesSel = $<HTMLSelectElement>('species');
-  const opt = (e: (typeof SPECIES)[number]) => `<option value="${e.key}">${e.label}</option>`;
-  const groups = [...new Set(SPECIES.map((e) => e.group))];
-  speciesSel.innerHTML = SPECIES.length > GROUP_AFTER
-    ? groups.map((g) => `<optgroup label="${g}">${SPECIES.filter((e) => e.group === g).map(opt).join('')}</optgroup>`).join('')
-    : SPECIES.map(opt).join('');
+  // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
+  // keeps the season and the calendar day, and drops any pinned card.
+  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, (k) => void setSpecies(k));
   let asking = 0; // the latest pick: a slow load that finishes after a newer pick must not switch to its species
   const setSpecies = async (want: string) => {
-    const entry = SPECIES.find((e) => e.key === want) ?? SPECIES[0]!;
     const ticket = ++asking;
+    const entry = (await findSpecies(want)) ?? SPECIES[0]!;
+    if (ticket !== asking) return;
     if (!loaded.has(entry.key)) {
       if (!entry.load) return;
-      speciesSel.disabled = true;
+      speciesPick.disabled = true;
       const mode0 = picker.value === LIVE ? TYPICAL : picker.value;
       // Its live forecast can arrive after the layer (src/species.ts): refill the menu, and go live if that was wanted.
       const layer = await entry.load(mode0, () => onLunaData(), () => {
@@ -445,9 +443,8 @@ function start() {
         fillPicker();
         goLiveIfWanted();
       });
-      speciesSel.disabled = false;
+      speciesPick.disabled = false;
       if (!layer) {
-        if (ticket === asking) speciesSel.value = curKey;
         return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
       }
       loaded.set(entry.key, layer);
@@ -455,7 +452,6 @@ function start() {
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
-    speciesSel.value = entry.key;
     if (next === cur) return;
     // Live was wanted for it (picked from live mode, or a ?season=live&species= link): goes live as soon as its live
     // forecast is there, now or when the file arrives.
@@ -470,19 +466,27 @@ function start() {
     pinned = false;
     resetKeys();
     map.setMarker(null);
-    next.setMode(picker.value);
+    // Keep the season if the new species has it (an Atlas species has a typical year and 2026), else all years; a
+    // link's own season wins while its species loads.
+    const offers = next.seasons?.() ?? [...(next.live() ? [LIVE] : []), TYPICAL, ...years];
+    const mode = speciesPending === entry.key && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
+    next.setMode(mode);
     const prev = cur;
     cur = next;
     curKey = entry.key;
+    speciesPick.show(entry.key, entry.label);
     fillPicker();
+    picker.value = mode;
+    if (picker.value !== mode) (picker.value = TYPICAL), cur.setMode(TYPICAL); // a tracker's year with no sightings
     $('season-name').textContent = label(picker.value);
     face();
     showMark();
     $('dots-what').textContent = cur.words.plural;
     $('app').classList.toggle('tracker', !!cur.tracker);
+    $('app').classList.toggle('atlas', !!cur.seasons); // an Atlas species: a model's field, no dots or forecast
     showCountdown();
     syncCountdown();
-    $('map').setAttribute('aria-label', `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
+    $('map').setAttribute('aria-label', cur.seasons ? `Midwest map: expected share of ${cur.words.sightingsOf} in insect photos` : `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
     $('explore-help').hidden = !!cur.tracker; // a tracker has no hexagons or forecast to read
     // Live mode opens on this species' own as-of day (each species' live forecast can run to its own), unless a link
     // gave a date; any other season keeps the calendar day.
@@ -500,7 +504,7 @@ function start() {
     goLiveIfWanted();
   };
   // The one-file preview has no species files next to it, so it offers luna only.
-  if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
+  if (!__BASEMAP__) speciesPick.button.parentElement!.hidden = true;
   // On narrow phones the closed menu shows just the species' sketch mark (style.css), so it stays one small square.
   const markImg = $('mark') as HTMLImageElement;
   let markSeq = 0;
@@ -510,14 +514,18 @@ function start() {
     void markFor(sketch).then((url) => {
       if (seq !== markSeq) return; // the species or the theme changed meanwhile
       markImg.src = url;
-      speciesSel.style.setProperty('--mark', `url("${url}")`);
+      speciesPick.button.style.setProperty('--mark', `url("${url}")`);
     });
   };
   showMark();
-  speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value));
+  // "Also out here" on an Atlas card switches to that species.
+  probeEl.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-species]');
+    if (b?.dataset.species) void setSpecies(b.dataset.species);
+  });
   // ?species=<key> opens on that species (?species=firefly links from before the list still work).
   const askedSpecies = params.get('species');
-  if (askedSpecies && askedSpecies !== 'luna' && SPECIES.some((e) => e.key === askedSpecies && e.load)) {
+  if (askedSpecies && askedSpecies !== 'luna') {
     speciesPending = askedSpecies;
     void setSpecies(askedSpecies).finally(() => (speciesPending = null));
   }
@@ -1048,7 +1056,11 @@ function start() {
   themeBtn.setAttribute('aria-pressed', String(isDark()));
 
   refresh();
-  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };
+  // For the test scripts: the app's clock, layers and map, and the Atlas (loaded on first ask).
+  (window as unknown as { __hatch: unknown }).__hatch = {
+    time, registry, luna, map, padding, current: () => cur,
+    atlas: () => (__BASEMAP__ ? import('./atlas/atlas').then((m) => m.loadAtlas()) : Promise.resolve(null)),
+  };
 
   // This year's nightly forecast, fetched after the first paint (none in the one-file build, or if the file is missing
   // or broken). It goes at the top of the season menu (each species finds its own part), and becomes the default during its season

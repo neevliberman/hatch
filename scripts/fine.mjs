@@ -12,6 +12,8 @@ import { mkdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, resolve, normalize } from 'node:path';
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
+/** Every hand-built species' ?species= key, in menu order (src/species.ts). */
+const SPECIES_KEYS = [...readFileSync('src/species.ts', 'utf8').matchAll(/key: '([a-z-]+)'/g)].map((m) => m[1]);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 
 const out = process.argv[2] ?? 'screenshots/fine';
@@ -184,9 +186,9 @@ for (const [name, width, height, mobile] of shots) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   const probe = await ctx.newPage();
   await probe.goto(`${origin}/?noauto`);
-  await probe.waitForFunction(() => document.querySelectorAll('#species option').length > 0 && !document.getElementById('loader'), null, { timeout: 15000 });
+  await probe.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 });
   await probe.waitForTimeout(1500);
-  const keys = await probe.evaluate(() => [...document.querySelectorAll('#species option')].map((o) => o.value));
+  const keys = SPECIES_KEYS;
   await ctx.close();
   for (const key of keys) {
     for (const season of ['2021', 'live']) {
@@ -226,8 +228,8 @@ for (const [name, width, height, mobile] of shots) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   const probe = await ctx.newPage();
   await probe.goto(`${origin}/?noauto`);
-  await probe.waitForFunction(() => document.querySelectorAll('#species option').length > 0 && !document.getElementById('loader'), null, { timeout: 15000 });
-  const keys = await probe.evaluate(() => [...document.querySelectorAll('#species option')].map((o) => o.value));
+  await probe.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 });
+  const keys = SPECIES_KEYS;
   await ctx.close();
   for (const key of keys) {
     for (const scheme of ['light', 'dark']) {
@@ -256,7 +258,7 @@ for (const [name, width, height, mobile] of shots) {
             bands: bands.filter((f) => f && !/rgba\(0,\s*0,\s*0,\s*0\)|transparent/.test(f)).length,
             disc: /r=['"]256['"]/.test(mark),
             menuWidth: sel.getBoundingClientRect().width,
-            speciesShown: !sel.closest('label').hidden,
+            speciesShown: !sel.parentElement.hidden,
           };
         });
         if (!got.hexes) problems.push(`${tag}: no hexagons drawn`);

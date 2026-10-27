@@ -51,7 +51,7 @@
     </main>
     <header id="top">
       <h1 class="brand"><img id="mark" class="mark" src="/src/marks/moth.svg" alt="" width="24" height="24" />Hatch <small id="tagline">Historical and predictive insect tracking</small></h1>
-      <label class="season species"><span class="sr">Species</span><select id="species"><option value="luna">Luna moth</option></select></label>
+      <div class="season species"><button id="species" type="button" class="pick-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="species-sheet" aria-label="Species: Luna moth. Change species"><span class="sp-face">Luna moth</span></button></div>
       <label class="season"><span class="sr">Season to replay</span><select id="season"><option value="">All years</option></select></label>
       <button id="theme-btn" class="icon-btn" type="button" aria-label="Dark mode" aria-pressed="false" title="Dark mode">
         <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.6 14.6A8 8 0 0 1 9.4 4.4a8.2 8.2 0 1 0 10.2 10.2z"/><path fill="currentColor" d="M17 3.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5z"/></svg>
@@ -61,6 +61,7 @@
       <div id="explore" class="sr explore icon-btn" role="application" tabindex="0" aria-roledescription="map explorer" aria-label="Explore map with keys" aria-describedby="explore-help">Explore map with keys</div>
       <span id="explore-help" class="sr">Arrow keys move between hexagons and read the forecast. Escape exits.</span>
     </header>
+    <div id="species-sheet" role="dialog" aria-label="Pick a species" hidden></div>
     <aside id="drawer" aria-hidden="true" aria-label="About this map"></aside>
     <div id="bottom" role="region" aria-label="Key and time controls">
       <section id="layers" aria-label="Layers" hidden></section>
@@ -78,7 +79,7 @@
         <button type="button" class="find-x" aria-label="Close town search">&times;</button></div>
       </form>
       <div id="dock">
-        <p id="strip"><span id="honesty"><span class="dots">Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. </span><span class="forecast-note">Colors: forecast <em class="unconfirmed">(on trial in 2027)</em>.</span></span>
+        <p id="strip"><span id="honesty"><span class="dots">Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. </span><span class="forecast-note">Colors: forecast <em class="unconfirmed">(on trial in 2027)</em>.</span><span class="atlas-note">Colors: expected share of insect photos, a model, not sightings.</span></span>
           <button id="why" type="button">How sure?</button><span id="countdown"></span></p>
         <footer id="bar" role="group" aria-label="Time controls"></footer>
         <div id="actions">

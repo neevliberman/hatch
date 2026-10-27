@@ -1,0 +1,166 @@
+import { cellToLatLng, latLngToCell } from 'h3-js';
+import { AtlasGpu } from './gpu';
+import { AtlasNet, type ModelMeta, type Place } from './net';
+import { atlasUrl, json, loadIndex, type AtlasSpecies } from './index';
+
+export { atlasKey, loadIndex, type AtlasSpecies } from './index';
+
+/**
+ * The Living Atlas in the page: its files (public/atlas/, written by pipeline/atlas/export.py), the network, and the
+ * map's field (every cell's share of insect photos for one species on one day).
+ *
+ * Loading is in two steps, so the species picker opens fast: the species list alone (loadIndex), then the network and
+ * the cells the first time an Atlas species is drawn (loadAtlas).
+ */
+
+/** First and last day of year the ribbon covers, and its step (export.py SEASON, STEP). */
+export const SEASON = [60, 304] as const;
+export const STEP = 4;
+const STEPS = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
+/** The year whose real warmth ships (ahead-YEAR.bin). */
+export const ATLAS_YEAR = 2026;
+/** The warmth cells' size (H3 resolution). */
+export const ATLAS_RES = 4;
+
+const bin = (f: string): Promise<ArrayBuffer | null> => fetch(atlasUrl(f)).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+
+export interface AtlasCell extends Place {
+  h: string;
+}
+
+export class Atlas {
+  readonly cellIndex: Map<string, number>;
+  /** Every cell's place inputs, back to back (net.placeFeatures). */
+  readonly places: Float32Array;
+  private aheads = new Map<number, Promise<Float32Array | null>>();
+
+  constructor(
+    readonly net: AtlasNet,
+    readonly gpu: AtlasGpu | null,
+    readonly species: AtlasSpecies[],
+    readonly cells: AtlasCell[],
+    private readonly seasonBytes: Uint8Array,
+    /** Insect photos on each ribbon day of a typical year, scaled to the busiest (export.py volume). */
+    readonly volume: number[],
+  ) {
+    this.cellIndex = new Map(cells.map((c, i) => [c.h, i]));
+    this.places = new Float32Array(cells.length * net.placeDim);
+    cells.forEach((c, i) => net.placeFeatures(c, this.places, i * net.placeDim));
+  }
+
+  /** A species' expected photos over the map, every STEP days from SEASON[0], scaled to its own top (0-1). */
+  season(i: number, year: number | null): number[] {
+    const at = (i * 2 + (year === null ? 0 : 1)) * STEPS;
+    return [...this.seasonBytes.subarray(at, at + STEPS)].map((v) => v / 255);
+  }
+
+  /** "Days ahead" of the typical warmth for every cell on every day of `year`: [cell * 365 + day - 1]. */
+  ahead(year: number): Promise<Float32Array | null> {
+    let p = this.aheads.get(year);
+    if (!p) {
+      p = bin(`ahead-${year}.bin`).then((b) => (b ? Float32Array.from(new Int8Array(b), (q) => q / 4) : (this.aheads.delete(year), null)));
+      this.aheads.set(year, p);
+    }
+    return p;
+  }
+
+  /** The cell a point falls in (null outside the map). */
+  cellAt(lat: number, lng: number): number | null {
+    return this.cellIndex.get(latLngToCell(lat, lng, ATLAS_RES)) ?? null;
+  }
+}
+
+let atlas: Promise<Atlas | null> | null = null;
+/** The network and its cells. Fetched once; null when a file is missing. */
+export function loadAtlas(): Promise<Atlas | null> {
+  atlas ??= Promise.all([json<ModelMeta>('model.json'), bin('model.bin'), loadIndex(), json<{ h: string; dd: number }[]>('cells.json'), bin('season.bin'), json<{ volume: number[] }>('season.json')])
+    .then(([meta, raw, sp, cells, season, vol]) => {
+      if (!meta || !raw || !sp || !cells || !season || !vol) return null;
+      const net = new AtlasNet(meta, raw);
+      const placed = cells.map((c) => {
+        const [lat, lng] = cellToLatLng(c.h);
+        return { h: c.h, lat, lng, dd: c.dd };
+      });
+      return new Atlas(net, AtlasGpu.create(net), sp, placed, new Uint8Array(season), vol.volume);
+    })
+    .then((a) => (a ?? (atlas = null), a));
+  return atlas;
+}
+
+/**
+ * One species' field over the map, day by day, worked out on demand and kept. `get` never blocks the frame: a day
+ * not worked out yet is queued, the nearest day already done stands in meanwhile, and `onReady` asks for a redraw
+ * when it lands. The graphics card does a day in milliseconds; without one, the plain network does it a slice of
+ * cells at a time so the page stays responsive.
+ */
+export class Field {
+  private done = new Map<number, Float32Array>();
+  private queue: number[] = [];
+  private busy = false;
+
+  constructor(
+    private readonly atlas: Atlas,
+    private readonly sp: number,
+    /** Each cell's days ahead on each day ([cell * 365 + day - 1]); null: a typical year. */
+    private readonly ahead: Float32Array | null,
+    private readonly onReady: () => void,
+  ) {}
+
+  /** Shares (0-1) per cell on `day`, or the nearest day worked out so far (undefined before the first). */
+  get(day: number): Float32Array | undefined {
+    const d = Math.round(day);
+    const have = this.done.get(d);
+    if (have) return have;
+    if (!this.queue.includes(d)) this.queue.unshift(d);
+    this.queue.length = Math.min(this.queue.length, 3); // only the latest few asks: a fast scrub skips the days between
+    this.pump();
+    let best: Float32Array | undefined;
+    let gap = Infinity;
+    for (const [k, v] of this.done) if (Math.abs(k - d) < gap) (gap = Math.abs(k - d)), (best = v);
+    return best;
+  }
+
+  private aheadOn(day: number): Float32Array | null {
+    if (!this.ahead) return null;
+    const n = this.atlas.cells.length;
+    const a = new Float32Array(n);
+    for (let c = 0; c < n; c++) a[c] = this.ahead[c * 365 + Math.min(365, Math.max(1, day)) - 1]!;
+    return a;
+  }
+
+  private pump(): void {
+    if (this.busy || !this.queue.length) return;
+    this.busy = true;
+    const d = this.queue.shift()!;
+    const finish = (v: Float32Array) => {
+      this.done.set(d, v);
+      this.busy = false;
+      this.onReady();
+      this.pump();
+    };
+    const { gpu, net, cells, places } = this.atlas;
+    const ahead = this.aheadOn(d);
+    if (gpu) {
+      setTimeout(() => {
+        try {
+          finish(gpu.run(places, d, ahead, [this.sp])[0]!.map(Math.exp));
+        } catch {
+          this.busy = false;
+        }
+      }, 0);
+      return;
+    }
+    const out = new Float32Array(cells.length);
+    let c = 0;
+    const slice = () => {
+      const until = performance.now() + 12;
+      while (c < cells.length && performance.now() < until) {
+        out[c] = Math.exp(net.logShares(cells[c]!, d, ahead ? ahead[c]! : 0)[this.sp]!);
+        c++;
+      }
+      if (c < cells.length) setTimeout(slice, 0);
+      else finish(out);
+    };
+    setTimeout(slice, 0);
+  }
+}
