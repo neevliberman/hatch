@@ -26,6 +26,7 @@ import {
 } from './lunaData';
 import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
+import { makeFront } from './front';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
 import { MOTH_NIGHT_NOTE, mothNightLine } from './activity';
@@ -327,6 +328,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
 
   const unseen = cells.filter((c) => !c.seen);
+  const front = makeFront(data.cells, 'luna-front');
   // An ink ring spreads from each moth on the day it is seen, while playing.
   const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], () => palette.dotRim);
   let sleepNote: OffSeasonNote | undefined;
@@ -689,6 +691,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           fillPatternSizeUnits: 'pixels',
         }),
         ]),
+        ...(hexLayers || wash !== undefined ? [] : [front(forecast(), doy)]),
         new ScatterplotLayer<Sighting>({
           id: 'luna-glow',
           data: shown,
@@ -909,6 +912,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       };
     },
 
+    record() {
+      const { heat, calendar } = scoreSummary();
+      return { days: heat, calendar, firstTry: false };
+    },
+
     legend(): LegendSpec {
       return {
         title: 'Forecast',
@@ -918,7 +926,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             label: STAGE_LABEL[s],
             shape: 'hex' as const,
           })),
-          { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
+          { color: css(palette.front), label: 'front: first ones out', shape: 'line' },
+          { color: css(STAGE_COLOR.peak), label: 'untested: no sightings', shape: 'striped' },
           { color: css(palette.moth), label: 'seen, last 10 days', shape: 'dot' },
           ...(isLive() ? [{ color: `rgba(${palette.moth[0]},${palette.moth[1]},${palette.moth[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
           { color: css(palette.second), label: 'seen, 2nd wave', shape: 'dot' },

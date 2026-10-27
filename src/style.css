@@ -300,6 +300,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sw.hex::after { content: ''; position: absolute; inset: 1.5px; background: var(--c); clip-path: inherit; }
 .sw.striped { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
   background: repeating-linear-gradient(-45deg, var(--text) 0 1px, transparent 1px 5px), var(--c); }
+.sw.line { width: 14px; height: 0; align-self: center; background: none; border-top: 2.5px dashed var(--c); }
 .sw.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text); box-shadow: 0 0 0 2px var(--panel-solid); }
 .probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
 .cav.credits { font-size: 13px; color: var(--muted); }
@@ -561,13 +562,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .date { min-width: 150px; font-size: 16px; }
   .date em { font-size: 15px; }
   .now b { visibility: hidden; } /* the "now" flag would poke up into the legend row; keep just its line, on the ribbon */
-  /* The map gets its height back: the caveat folds into the key chip, which says "on trial in 2027", and comes back as
+  /* The map gets its height back: the caveat folds into the key chip, which gives the track record, and comes back as
      one short line while the key is open (the full wording would wrap and eat the map). */
   #strip { display: none; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #app:has(#legend:not(.folded)) #strip { display: block; }
   #honesty { display: none; }
-  #strip::before { content: 'Dots: last 10 days. Colors: forecast (on trial in 2027).'; }
-  #legend.folded .lg-chip::after { content: '\00B7\00A0 on trial in 2027'; margin-left: 2px; color: var(--warn); }
+  #strip::before { content: 'Dots: last 10 days. Colors: ' var(--fc-words, 'forecast') '.'; }
+  #legend.folded .lg-chip::after { content: '\00B7\00A0' var(--fc-chip, ''); margin-left: 2px; color: var(--warn); }
   #app.tracker #strip::before { content: 'Dots: last 10 days.'; }
   #app.tracker #legend.folded .lg-chip::after { content: none; }
   #app.atlas #strip::before { content: 'Colors: expected share of insect photos.'; }

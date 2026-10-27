@@ -1,6 +1,7 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { ScatterplotLayer } from '@deck.gl/layers';
 import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps } from '@deck.gl/extensions';
+import { makeFront } from './front';
 import { latLngToCell } from 'h3-js';
 import { onTheme, palette } from '../theme';
 import { GRID_RES } from '../core/grid';
@@ -100,6 +101,7 @@ export function createOneGenerationLayer(
   const cells = data.cells.map((id, i) => ({ id, i, seen: data.seen[i] === 1 }));
   const washed = washer(data.cells);
   const unseen = cells.filter((c) => !c.seen);
+  const front = makeFront(data.cells, `${key}-front`);
   const isLive = () => mode === LIVE && live !== null;
   const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : isLive() ? live!.season : Number(mode));
   const forecast = () => (isLive() ? live!.median : (data.forecast[mode] ?? data.forecast[TYPICAL]!)) as ((number | null)[] | null)[];
@@ -431,6 +433,7 @@ export function createOneGenerationLayer(
           getFillPattern: () => 'stripes',
           fillPatternSizeUnits: 'pixels',
         }),
+        ...(days || wash !== undefined ? [] : [front(forecast(), doy)]),
         new ScatterplotLayer<Sighting>({
           id: `${key}-glow`,
           data: shown,
@@ -638,12 +641,18 @@ export function createOneGenerationLayer(
       };
     },
 
+    record() {
+      const { heat, calendar } = scoreSummary();
+      return { days: heat, calendar, firstTry: true }; // the luna moth's recipe refit, nothing tuned yet
+    },
+
     legend(): LegendSpec {
       return {
-        title: 'Forecast',
+        title: 'Experimental forecast',
         items: [
           ...STAGES.map((s) => ({ color: onPaper(STAGE_COLOR[s]), label: s === 'over' ? 'over' : STAGE_LABEL[s], shape: 'hex' as const })),
-          { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
+          { color: css(palette.front), label: 'front: first ones out', shape: 'line' },
+          { color: css(STAGE_COLOR.peak), label: 'untested: no sightings', shape: 'striped' },
           { color: css(cfg.glow), label: 'seen, last 10 days', shape: 'dot' },
           ...(isLive() ? [{ color: `rgba(${cfg.glow[0]},${cfg.glow[1]},${cfg.glow[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
           { color: css(palette.rough), label: 'rough location', shape: 'dot' },

@@ -35,7 +35,7 @@ export interface LegendSpec {
   /** Colour stops from low to high, drawn as a ramp. */
   stops?: { color: string; label: string }[];
   /** Discrete keys, drawn as labelled swatches (hex) or glowing dots (dot). */
-  items?: { color: string; label: string; shape: 'hex' | 'dot' | 'striped' }[];
+  items?: { color: string; label: string; shape: 'hex' | 'dot' | 'striped' | 'line' }[];
   note?: string;
 }
 
@@ -189,6 +189,9 @@ export interface HatchLayer {
   endNote?: [string, string];
   /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
+  /** The colours' track record for the line under the map: mean days off in past years it never learned from, the
+   * usual date's, and whether this is a first try (an untuned recipe borrowed from another species). */
+  record?(): { days: number; calendar: number; firstTry: boolean };
   legend(): LegendSpec;
   /** "What's here" for hover/tap. `picked` is the data object under the pointer, if it belongs to this layer. */
   probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }): ProbeCard | null;
