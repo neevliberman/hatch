@@ -402,21 +402,15 @@ for (const [name, width, height, mobile] of shots) {
     // A card for a past year says how its peak compares with a typical year.
     const box = await page.locator('#map').boundingBox();
     let text = '';
-    for (const [fx, fy] of [[0.5, 0.45], [0.45, 0.5], [0.55, 0.5], [0.5, 0.55], [0.4, 0.45]]) {
+    for (const [fx, fy] of [[0.5, 0.45], [0.45, 0.5], [0.55, 0.5], [0.5, 0.55], [0.4, 0.45], [0.6, 0.45]]) {
       if (mobile) await page.touchscreen.tap(box.x + box.width * fx, box.y + box.height * fy);
       else await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
-      await page.waitForTimeout(700);
-      if (await page.locator('#probe').isVisible()) { text = await page.locator('#probe').innerText(); if (text) break; }
+      await page.waitForFunction(() => document.getElementById('probe') && !document.getElementById('probe').hidden && document.getElementById('probe').innerText.trim(), null, { timeout: 3000 }).catch(() => {});
+      text = (await page.locator('#probe').isVisible()) ? await page.locator('#probe').innerText() : '';
+      if (/typical year/i.test(text)) break; // a spot on water or with no forecast has no such line: try the next
     }
     if (!text) problems.push(`${tag}: no card to read`);
-    else {
-      if (!/typical year/i.test(text)) {
-        await page.evaluate(() => [...document.querySelectorAll('#probe button, #probe summary')].find((b) => /more/i.test(b.textContent))?.click());
-        await page.waitForTimeout(400);
-        text = await page.locator('#probe').innerText();
-      }
-      if (!/typical year/i.test(text)) problems.push(`${tag}: the card never compares with a typical year: ${text.replace(/\s+/g, ' ').slice(0, 120)}`);
-    }
+    else if (!/typical year/i.test(text)) problems.push(`${tag}: no card compares with a typical year: ${text.replace(/\s+/g, ' ').slice(0, 120)}`);
     // The warming figure, inside the About panel.
     await page.evaluate(() => document.getElementById('info-btn').click());
     await page.waitForSelector('#info-btn[aria-expanded=true]', { timeout: 5000 }).catch(() => problems.push(`${tag}: the About sheet never opened`));
