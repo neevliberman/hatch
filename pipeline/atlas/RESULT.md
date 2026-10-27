@@ -52,8 +52,8 @@ the same.
 - **The luna miss is one band.** In 43-45 °N it put first moths 18 days late (P3: 7 days). The other four bands are
   within a few days. Five band-years is a small check, but it was the rule.
 - **The warmth clock didn't learn.** Each species' blend of the three clocks stayed near the starting even mix
-  (median 31/33/35%). Cause found after the run: the optimiser's weight decay also pulled those blend weights back to
-  even every step, so the clock could barely move. The no-warmth version ties the full one (−5.36 vs −5.37 on 2025;
+  (median 31/33/35%). Suspected cause, found after the run: the optimiser's weight decay also pulled those blend
+  weights back to even every step. Run 2 removed it and they still barely moved, so the decay wasn't the main brake. The no-warmth version ties the full one (−5.36 vs −5.37 on 2025;
   it wins 377 of 652 species head to head).
 - **Biggest loss on 2025: the periodical cicada** (*Magicicada septendecim*), a 17-year brood that emerged in 2025.
   No calendar or warmth model can know that; it needs the brood map as an input.
