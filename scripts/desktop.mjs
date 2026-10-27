@@ -21,7 +21,7 @@ const pw = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 /** Picks a species from the header's picker (src/ui/speciesPicker.ts), as a reader would: open it, tap its row. */
 /** The Atlas's species photos (src/ui/speciesPicker.ts, its cards): linked from iNaturalist's open-data bucket,
  * never copied, so these are the only outside requests a page may make. */
-const PHOTOS = /^https:\/\/inaturalist-open-data\.s3\.amazonaws\.com\//;
+const PHOTOS = /^https:\/\/(inaturalist-open-data\.s3\.amazonaws\.com|static\.inaturalist\.org)\/photos\//;
 const pickSpecies = async (page, key) => {
   await page.locator('#species').click();
   await page.locator(`#sp-list [data-key="${key}"]`).first().click();
@@ -474,7 +474,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const page = await ctx.newPage();
     if (served === 404) await page.route('**/live/latest.json', (r) => r.fulfill({ status: 404, body: '' }));
     else if (served) await page.route('**/live/latest.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(served) }));
-    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     // The missing file's 404 is logged by the browser itself; nothing else may be.
     page.on('console', (m) => m.type() === 'error' && !(served === 404 && /404/.test(m.text())) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -734,7 +734,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await shotA('2-search');
       await page.locator('#sp-list [data-key="papilio-polyxenes"]').click();
       if (!(await isOn('papilio-polyxenes-atlas'))) fail('picking the black swallowtail did not open it');
-      if (!new URL(page.url()).searchParams.get('species')?.startsWith('papilio-polyxenes')) fail(`the link dropped the species: ${page.url()}`);
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('species') === 'papilio-polyxenes', null, { timeout: 10000, polling: 250 })
+        .catch(() => fail(`the link dropped the species: ${page.url()}`));
       if ((await page.locator('#app.atlas').count()) !== 1) fail('the page is not in Atlas mode (its caveat line)');
       // The tree: insects, an order, a family, a species.
       await page.locator('#species').click();

@@ -742,6 +742,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .season.species { flex: none; } /* the label shrinking would cap the select's width (max-width: 100%) */
   .season.species select { width: 72px; padding: 0; background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev), var(--panel); }
   .season.species option, .season.species optgroup { color: var(--text); background: var(--panel-solid); }
+  .season.species .pick-btn .sp-face { display: none; } /* the mark alone; its name is the button's label */
   .season.species .pick-btn { width: 72px; padding: 0; color: transparent;
     background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev-img) no-repeat right 10px center / 10px 6px, var(--panel); }
   #top:has(.species:not([hidden])) .brand .mark { display: none; }
