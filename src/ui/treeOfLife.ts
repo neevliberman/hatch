@@ -149,8 +149,8 @@ export function mountTree(
     .filter((n) => n.label && !isTip(n) && n.n > 1)
     .sort((a, b) => 'ofg'.indexOf(a.rank) - 'ofg'.indexOf(b.rank) || b.n - a.n);
 
-  host.innerHTML = `<canvas class="tol-canvas" tabindex="0" role="img"
-      aria-label="Tree of life. Drag or pinch to explore; arrow keys walk the branches, Enter opens."></canvas>
+  host.innerHTML = `<canvas class="tol-canvas" tabindex="0" role="application"
+      aria-label="Tree of life. Drag or pinch to explore; arrow keys walk the branches, Enter opens, plus and minus zoom."></canvas>
     <div class="tol-card" hidden><img alt="" width="44" height="44" referrerpolicy="no-referrer" hidden><div class="tol-t"><b></b><span></span></div>
       <button type="button" class="tol-go"></button></div>
     <p class="tol-src">Branching: <a href="https://tree.opentreeoflife.org" target="_blank" rel="noopener">Open Tree of Life</a>, no dates</p>
@@ -173,16 +173,18 @@ export function mountTree(
   let grown = false;
   let raf = 0;
   let colors: Record<string, string> = {};
+  let font = 'sans-serif';
 
   const readColors = () => {
     const cs = getComputedStyle(host);
     const v = (k: string) => cs.getPropertyValue(k).trim();
+    font = cs.fontFamily;
     colors = { ink: v('--text'), muted: v('--muted'), halo: v('--halo'), edge: v('--o-other'), accent: v('--accent') };
     for (const [o, t] of Object.entries(ORDER_TOKENS)) colors[o] = v(t);
   };
   const colOf = (n: TNode) => (n.order && colors[n.order]) || colors.edge!;
 
-  // ── Photos: iNaturalist squares, fetched once each, only for tips big enough on screen to show them.
+  // Photos: iNaturalist squares, fetched once each, only for tips big enough on screen to show them.
   const photos = new Map<number, HTMLImageElement | null>();
   const photo = (sp: number) => {
     if (photos.has(sp)) return photos.get(sp);
@@ -191,20 +193,14 @@ export function mountTree(
     const img = new Image();
     img.referrerPolicy = 'no-referrer';
     img.decoding = 'async';
-    // Asked for with CORS (the bucket allows it) so the canvas stays readable; without it if that fails.
-    img.crossOrigin = 'anonymous';
-    img.onload = () => draw();
-    img.onerror = () => {
-      if (img.crossOrigin === null) return photos.set(sp, null);
-      img.removeAttribute('crossorigin');
-      img.src = url;
-    };
+    img.onload = () => redraw();
+    img.onerror = () => photos.set(sp, null);
     img.src = url;
     photos.set(sp, img);
     return img;
   };
 
-  // ── Geometry
+  // Geometry
   /**
    * Screen distance from the hub for a branch `r` of the way out. Whole wheel: straight proportion. Zoomed in, the
    * depth turns into a fixed step per split (a fisheye along the radius): the last few splits sit a finger's width
@@ -227,7 +223,7 @@ export function mountTree(
     const d = rpx(r);
     return [Math.cos(n.a + view.rot) * d + view.tx, Math.sin(n.a + view.rot) * d + view.ty];
   };
-  const wholeScale = () => Math.min((W / 2 - 50) / R, (H / 2 - 56) / R); // room for the you-are-here pin
+  const wholeScale = () => Math.max(0.02, Math.min((W / 2 - 38) / R, (H / 2 - 56) / R)); // room for the you-are-here pin
   const fitAll = () => {
     const s = wholeScale();
     view.min = s * 0.8;
@@ -244,16 +240,20 @@ export function mountTree(
     if (!r.width || !r.height) return;
     const first = !W;
     dpr = Math.min(2, window.devicePixelRatio || 1);
+    // A resize (a phone turned, the window dragged) keeps the same part of the tree in the middle.
+    view.tx += (r.width - W) / 2;
+    view.ty += (r.height - H) / 2;
     W = r.width;
     H = r.height;
     cv.width = Math.round(W * dpr);
     cv.height = Math.round(H * dpr);
     if (first) fitAll();
+    else view.min = wholeScale() * 0.8;
     clamp();
     draw();
   };
 
-  // ── Drawing
+  // Drawing
   /** Line weight: a twig for one species, thickening like a trunk towards the hub. */
   const weight = (n: TNode) => Math.min(3.4, 0.9 + Math.log2(n.n) * 0.24);
   /** Outside the selection (a species' selection is its genus or family, so its relatives stay lit). */
@@ -269,6 +269,7 @@ export function mountTree(
     const reach = grow; // during the grow-in, only branches inside this fraction of the radius are drawn
     const onScreen = (x: number, y: number, m: number) => x > -m && y > -m && x < W + m && y < H + m;
     ctx.lineCap = 'round';
+    let strokes = 0;
     // Branches: an arc across each branch's children, then a spoke out to each child.
     for (const n of nodes) {
       if (isTip(n) || n.r > reach) continue;
@@ -292,9 +293,11 @@ export function mountTree(
         ctx.moveTo(x0, y0);
         ctx.lineTo(x1, y1);
         ctx.stroke();
+        strokes++;
       }
     }
     ctx.globalAlpha = 1;
+    cv.dataset.branches = String(strokes); // for the page tests: the canvas itself can't be read once a photo is on it
     if (reach < 1) return;
 
     // The species on the map now: its line of descent in the accent colour, a ring on its tip.
@@ -359,7 +362,7 @@ export function mountTree(
     }
     if (gapPx > 11) {
       const out = gapPx > 18 ? Math.min(22, gapPx * 0.42) * 2 + 12 : 8;
-      ctx.font = `${gapPx > 18 ? 13 : 11}px ${getComputedStyle(host).fontFamily}`;
+      ctx.font = `${gapPx > 18 ? 13 : 11}px ${font}`;
       ctx.textBaseline = 'middle';
       for (const t of tips) {
         if (dim(t)) continue;
@@ -381,24 +384,31 @@ export function mountTree(
 
     // A pin for the species on the map now, just outside the rim: its photo in an accent ring, "you are here".
     if (current && gapPx <= 18) {
-      const [x, y] = xy(current, 1 + 30 / (R * s));
+      const [x, y] = xy(current, 1 + 22 / (R * s));
+      const [rx, ry] = xy(current, 1);
+      ctx.strokeStyle = colors.accent!;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(x, y);
+      ctx.stroke();
       const img = photo(current.sp);
       ctx.fillStyle = colors.halo!;
       ctx.beginPath();
-      ctx.arc(x, y, 17, 0, Math.PI * 2);
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
       ctx.fill();
       if (img && img.complete && img.naturalWidth) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(x, y, 15, 0, Math.PI * 2);
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
         ctx.clip();
-        ctx.drawImage(img, x - 15, y - 15, 30, 30);
+        ctx.drawImage(img, x - 12, y - 12, 24, 24);
         ctx.restore();
       }
       ctx.lineWidth = 3;
       ctx.strokeStyle = colors.accent!;
       ctx.beginPath();
-      ctx.arc(x, y, 16, 0, Math.PI * 2);
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -408,7 +418,7 @@ export function mountTree(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
-    const family = getComputedStyle(host).fontFamily;
+    const family = font;
     const overview = view.s < wholeScale() * 1.5;
     for (const n of labelled) {
       if (dim(n)) continue;
@@ -442,7 +452,7 @@ export function mountTree(
     if (!raf) raf = requestAnimationFrame(() => ((raf = 0), draw()));
   };
 
-  // ── Flying the view
+  // Flying the view
   let flight = 0;
   const fly = (to: { s: number; tx: number; ty: number; rot?: number }, ms = 520) => {
     const turn = to.rot === undefined ? 0 : Math.atan2(Math.sin(to.rot - view.rot), Math.cos(to.rot - view.rot));
@@ -486,18 +496,18 @@ export function mountTree(
       // to the left as far as they go.
       for (let i = n.lo; i <= n.hi; i++) add(tips[i]!.a, 1);
       const names = n.n <= 160 ? Math.min(240, W * 0.6) : 16;
-      const sc = Math.min(maxS, (room - 50) / Math.max(b[3]! - b[1]!, 1));
+      const sc = Math.max(view.min, Math.min(maxS, (room - 50) / Math.max(b[3]! - b[1]!, 1)));
       return fly({ s: sc, tx: W - names - 26 - R * sc, ty: room / 2 + 10, rot });
     }
     for (let i = n.lo; i <= n.hi; i++) add(tips[i]!.a, 1.04);
     add(n.a, n.r);
     const bw = Math.max(b[2]! - b[0]!, 60);
     const bh = Math.max(b[3]! - b[1]!, 60);
-    const sc = Math.min(maxS, Math.min((W - 36) / bw, (room - 40) / bh));
+    const sc = Math.max(view.min, Math.min(maxS, Math.min((W - 36) / bw, (room - 40) / bh)));
     fly({ s: sc, tx: W / 2 - ((b[0]! + b[2]!) / 2) * sc, ty: room / 2 + 10 - ((b[1]! + b[3]!) / 2) * sc, rot });
   };
 
-  // ── Selection and its card
+  // Selection and its card
   const pathTo = (n: TNode | null) => {
     const out: TNode[] = [];
     for (let m = n; m; m = m.parent) if (m.label || m === root) out.unshift(m);
@@ -568,7 +578,7 @@ export function mountTree(
     return best;
   };
 
-  // ── Touch, mouse and wheel
+  // Touch, mouse and wheel
   const ptr = new Map<number, [number, number]>();
   let press: { x: number; y: number; t: number; moved: number } | null = null;
   let pinch: { d: number; s: number; c: [number, number]; ang: number } | null = null;
@@ -641,9 +651,15 @@ export function mountTree(
     if (!ptr.size) press = null;
   };
   const zoomed = (c: [number, number], k: number) => {
-    const ns = Math.min(maxS, view.s * k);
+    const ns = Math.min(maxS, Math.max(view.min, view.s * k));
     const f = ns / view.s;
-    return { s: ns, tx: c[0] - (c[0] - view.tx) * f, ty: c[1] - (c[1] - view.ty) * f, rot: view.rot };
+    const ext = R * 1.1 * ns;
+    return {
+      s: ns,
+      tx: Math.min(W + ext - 60, Math.max(-ext + 60, c[0] - (c[0] - view.tx) * f)),
+      ty: Math.min(H + ext - 60, Math.max(-ext + 60, c[1] - (c[1] - view.ty) * f)),
+      rot: view.rot,
+    };
   };
   cv.addEventListener('pointerup', release);
   cv.addEventListener('pointercancel', release);
@@ -652,16 +668,17 @@ export function mountTree(
     (e) => {
       e.preventDefault();
       flight++;
-      zoomAt(at(e), Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)));
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : 1); // Firefox scrolls in lines
+      zoomAt(at(e), Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0018)));
       redraw();
     },
     { passive: false },
   );
 
-  // ── Keys: Up to the parent group, Down into the biggest child, Left/Right along siblings, Enter opens.
+  // Keys: Up to the parent group, Down into the biggest child, Left/Right along siblings, Enter opens.
   const namedKids = (n: TNode): TNode[] => n.kids.flatMap((k) => (!isTip(k) && !k.label ? namedKids(k) : [k]));
   cv.addEventListener('keydown', (e) => {
-    const n = sel ?? root;
+    const n = named(sel ?? root);
     let next: TNode | null | undefined;
     if (e.key === 'ArrowUp') next = n.parent ? named(n.parent) : root;
     else if (e.key === 'ArrowDown') next = isTip(n) ? n : [...namedKids(n)].sort((a, b) => b.n - a.n)[0];
@@ -680,9 +697,10 @@ export function mountTree(
   });
 
   new ResizeObserver(size).observe(host);
-  const themeWatch = matchMedia('(prefers-color-scheme: dark)');
-  themeWatch.addEventListener?.('change', () => (readColors(), draw()));
+  // The page's own light/dark switch sets data-theme on <html>.
+  new MutationObserver(() => (readColors(), draw())).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   readColors();
+  select(null); // the breadcrumb's first step
 
   return {
     mark(sp) {
@@ -690,6 +708,7 @@ export function mountTree(
       draw();
     },
     shown() {
+      if (!host.getBoundingClientRect().width) return; // still closed: grow in on the first real look
       readColors();
       size();
       if (grown) return draw();

@@ -68,20 +68,29 @@ export function mountSpeciesPicker(
     treeTried = true;
     const [data, mod] = await Promise.all([json<TreeData>('tree.json'), import('./treeOfLife').catch(() => null)]);
     if (!data || !mod) return;
-    tree = mod.mountTree(treeHost, data, all, (i) => pick(keyOf(all![i]!)), (path: TNode[], go) => {
-      treeCrumbs = () => {
-        crumbs.innerHTML = '';
-        path.forEach((n, i) => {
-          if (i) crumbs.insertAdjacentHTML('beforeend', '<span aria-hidden="true"> › </span>');
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.textContent = n.parent ? (n.rank === 'o' ? (ORDER_NAMES[n.label] ?? n.label) : n.label) : 'All insects';
-          b.addEventListener('click', () => go(n));
-          crumbs.append(b);
-        });
-      };
-      if (!q.trim()) treeCrumbs();
-    });
+    try {
+      tree = mod.mountTree(treeHost, data, all, (i) => pick(keyOf(all![i]!)), (path: TNode[], go) => {
+        treeCrumbs = () => {
+          crumbs.innerHTML = '';
+          path.forEach((n, i) => {
+            if (i) crumbs.insertAdjacentHTML('beforeend', '<span aria-hidden="true"> › </span>');
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = n.parent ? (n.rank === 'o' ? (ORDER_NAMES[n.label] ?? n.label) : n.label) : 'All insects';
+            b.addEventListener('click', () => go(n));
+            crumbs.append(b);
+          });
+        };
+        if (!q.trim()) treeCrumbs();
+      });
+    } catch (e) {
+      // tree.json and species.json out of step (a stale cache): the plain list stays.
+      console.warn('tree of life', e);
+      tree = null;
+      treeCrumbs = null;
+      treeHost.innerHTML = '';
+      return;
+    }
     const i = indexOfKey(currentKey);
     tree.mark(i >= 0 ? i : null);
     render();

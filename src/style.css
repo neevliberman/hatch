@@ -808,7 +808,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #species-sheet.sp-has-tree { width: min(580px, calc(100vw - 16px)); height: min(82vh, 700px); max-height: none; }
 .sp-has-tree .sp-crumbs { display: flex; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; gap: 2px; align-items: center; }
 .sp-has-tree .sp-crumbs > * { flex: none; }
-#sp-list.sp-strip { display: flex; flex: none; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 2px 8px 8px; scrollbar-width: none; }
+#sp-list.sp-strip { display: flex; flex: none; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 2px 8px 8px; scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 #sp-list.sp-strip li { flex: none; }
 #sp-list.sp-strip .sp-row { width: auto; min-height: 40px; padding: 3px 12px 3px 3px; border: 1px solid var(--line); border-radius: 22px; gap: 8px; }
 #sp-list.sp-strip .sp-row img, #sp-list.sp-strip .sp-blank { width: 32px; height: 32px; border-radius: 50%; }
@@ -823,12 +824,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .tol-card[hidden], .tol-card img[hidden] { display: none; }
 .tol-card img { flex: none; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: var(--track-faint); }
 .tol-t { flex: 1; min-width: 0; }
-.tol-t b { display: block; font: 600 16px/1.25 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tol-t b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font: 600 16px/1.2 var(--font-display); overflow: hidden; }
 .tol-t span { display: block; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tol-go { flex: none; height: 44px; padding: 0 14px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--on-accent);
   font: inherit; font-weight: 700; cursor: pointer; }
 .tol-go:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-.tol-src { position: absolute; top: 6px; right: 10px; margin: 0; font-size: 11.5px; color: var(--muted); }
+.tol-src { position: absolute; top: 6px; right: 8px; margin: 0; padding: 1px 6px; font-size: 11.5px; color: var(--muted); background: var(--panel-solid);
+  border-radius: 9px; }
 .tol-src a { color: inherit; }
 .tol-live { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 700px) { #species-sheet.sp-has-tree { width: auto; height: calc(100dvh - 60px - env(safe-area-inset-bottom)); } }

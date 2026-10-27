@@ -744,13 +744,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const canvas = page.locator('.tol-canvas');
       await canvas.waitFor({ timeout: 10000 }).catch(() => fail('the tree of life never showed'));
       await page.waitForTimeout(900); // the branches grow in
-      const inked = await canvas.evaluate((c) => {
-        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-        let n = 0;
-        for (let i = 3; i < d.length; i += 4 * 7) if (d[i] > 0) n++;
-        return n / (d.length / 28);
-      });
-      if (!(inked > 0.03)) fail(`the tree of life drew almost nothing (${(inked * 100).toFixed(1)}% inked)`);
+      const branches = Number(await canvas.getAttribute('data-branches'));
+      if (!(branches > 1500)) fail(`the tree of life drew ${branches} branches, not the whole tree`);
       await shotA('2b-tree');
       await canvas.focus();
       let steps = 0;
