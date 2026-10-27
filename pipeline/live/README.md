@@ -34,6 +34,9 @@ the weather caused and the part the model did (`live/drift.json`), and opens a G
 league or eastern verdict, once given, and [`summary.py`](../league/summary.py) adds the tryouts and drift state to
 the scorecard for the About panel.
 
+**Migrant trackers** ([`pipeline/front`](../front/README.md)): the same run also adds `front.<key>` to the file: this
+season's sightings so far for the monarch and red admiral, no forecast.
+
 Adding a species: an entry in `registry.py`, then `python3 pipeline/live/build_static.py --effort <key>` (its effort
 profile, from the records its fetch script cached). The app finds the species' part of the file by its key
 (`src/species.ts`), so nothing else changes. The app fetches the file only when live mode is wanted (a link asks

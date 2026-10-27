@@ -1,0 +1,150 @@
+{
+ "run1": {
+  "band_years": 5,
+  "atlas": 4.499999999999998,
+  "p3": 4.3,
+  "calendar": 4.860000000000001,
+  "rows": [
+   {
+    "band": "37-39",
+    "n": 29,
+    "onset": 107.8,
+    "peak": 135.0,
+    "cut": 177,
+    "p3_onset": 103,
+    "p3_peak": 131,
+    "cal_onset": 105.4,
+    "cal_peak": 133.62,
+    "atlas_onset": 104.0,
+    "atlas_peak": 136.1
+   },
+   {
+    "band": "39-41",
+    "n": 91,
+    "onset": 113.0,
+    "peak": 134.0,
+    "cut": 180,
+    "p3_onset": 113,
+    "p3_peak": 140,
+    "cal_onset": 117.55,
+    "cal_peak": 142.88,
+    "atlas_onset": 111.4,
+    "atlas_peak": 138.4
+   },
+   {
+    "band": "41-43",
+    "n": 105,
+    "onset": 121.0,
+    "peak": 147.0,
+    "cut": 185,
+    "p3_onset": 124,
+    "p3_peak": 156,
+    "cal_onset": 132.24,
+    "cal_peak": 151.0,
+    "atlas_onset": 124.8,
+    "atlas_peak": 154.9
+   },
+   {
+    "band": "43-45",
+    "n": 50,
+    "onset": 127.8,
+    "peak": 157.0,
+    "cut": 193,
+    "p3_onset": 135,
+    "p3_peak": 161,
+    "cal_onset": 140.15,
+    "cal_peak": 157.0,
+    "atlas_onset": 142.5,
+    "atlas_peak": 160.7
+   },
+   {
+    "band": "45-49",
+    "n": 77,
+    "onset": 156.0,
+    "peak": 173.0,
+    "cut": 240,
+    "p3_onset": 152,
+    "p3_peak": 174,
+    "cal_onset": 157.72,
+    "cal_peak": 170.92,
+    "atlas_onset": 154.7,
+    "atlas_peak": 175.7
+   }
+  ],
+  "pass": true
+ },
+ "run2": {
+  "band_years": 5,
+  "atlas": 3.560000000000001,
+  "p3": 5.5,
+  "calendar": 8.0,
+  "rows": [
+   {
+    "band": "37-39",
+    "n": 65,
+    "onset": 95,
+    "peak": 130,
+    "cut": 177,
+    "p3_onset": 103,
+    "p3_peak": 115,
+    "cal_onset": 107,
+    "cal_peak": 135,
+    "atlas_onset": 93.8,
+    "atlas_peak": 122.6
+   },
+   {
+    "band": "39-41",
+    "n": 208,
+    "onset": 102,
+    "peak": 129,
+    "cut": 180,
+    "p3_onset": 107,
+    "p3_peak": 128,
+    "cal_onset": 118,
+    "cal_peak": 143,
+    "atlas_onset": 101.9,
+    "atlas_peak": 129.6
+   },
+   {
+    "band": "41-43",
+    "n": 128,
+    "onset": 113,
+    "peak": 148,
+    "cut": 185,
+    "p3_onset": 123,
+    "p3_peak": 149,
+    "cal_onset": 130,
+    "cal_peak": 150,
+    "atlas_onset": 114.6,
+    "atlas_peak": 149.5
+   },
+   {
+    "band": "43-45",
+    "n": 50,
+    "onset": 123,
+    "peak": 158,
+    "cut": 193,
+    "p3_onset": 134,
+    "p3_peak": 158,
+    "cal_onset": 137,
+    "cal_peak": 158,
+    "atlas_onset": 135.3,
+    "atlas_peak": 161.9
+   },
+   {
+    "band": "45-49",
+    "n": 124,
+    "onset": 158,
+    "peak": 172,
+    "cut": 240,
+    "p3_onset": 155,
+    "p3_peak": 171,
+    "cal_onset": 158,
+    "cal_peak": 172,
+    "atlas_onset": 157.8,
+    "atlas_peak": 178.8
+   }
+  ],
+  "pass": true
+ }
+}

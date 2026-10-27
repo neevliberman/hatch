@@ -1,5 +1,5 @@
 # Nightly southern forecast (1 Jul 2026 - 22 Feb 2027): seals tonight's Christmas beetle forecast and re-grades
-# on Mondays. Commits to the live-data branch under live/. Nothing reaches the map. See pipeline/south/SOUTH_2026.md.
+# on Mondays. Commits to the south-data branch under live/. Nothing reaches the map. See pipeline/south/SOUTH_2026.md.
 name: south-forecast
 on:
   schedule:
@@ -43,7 +43,10 @@ jobs:
           set -euo pipefail
           REPO="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           cd "$RUNNER_TEMP"
-          git clone -q --depth 1 --branch live-data --single-branch "$REPO" ld
+          # Its own branch: live-data belongs to live-forecast, whose deploy expects live/latest.json there.
+          git clone -q --depth 1 --branch south-data --single-branch "$REPO" ld 2>/dev/null || {
+            git init -q ld && cd ld && git checkout -q -b south-data && git remote add origin "$REPO" && cd ..
+          }
           cd ld
           python3 "$GITHUB_WORKSPACE/pipeline/south/south.py" --live live
           git config user.name "hatch-live-bot"
@@ -51,10 +54,10 @@ jobs:
           git add live
           git diff --cached --quiet && { echo "nothing new"; exit 0; }
           git commit -q -m "south forecast $(date -u +%F)"
-          # live-forecast also pushes live-data (13:30 UTC); if it got there first, rebase onto it and try again
+          # a rerun overlapping this one may have pushed first; rebase onto it and try again
           for i in 1 2 3 4; do
-            git push -q origin live-data && exit 0
-            git pull -q --rebase origin live-data
+            git push -q origin south-data && exit 0
+            git pull -q --rebase origin south-data
           done
           exit 1
       - name: Failure alarm

@@ -27,18 +27,19 @@ jobs:
       matrix:
         include:
           # dist/ for Chromium: the live-mode checks serve it over http. dist-single/ is what the screens load.
-          - { suite: desktop, engine: chromium, build: 'build:all', shard: 1 }
-          - { suite: desktop, engine: chromium, build: 'build:all', shard: 2 }
-          - { suite: desktop, engine: chromium, build: 'build:all', shard: 3 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 1, of: 3 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 2, of: 3 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 3, of: 3 }
           - { suite: desktop, engine: firefox, build: 'build:single' }
           - { suite: desktop, engine: webkit, build: 'build:single' }
           # Zoomed in (scripts/fine.mjs, Chromium, dist/ over http): the finer hexagons load, draw, and give a card when
           # tapped, and a season switch never flashes back to the big ones. Its own job since it takes ~4 minutes.
-          - { suite: fine, engine: chromium, build: build }
+          - { suite: fine, engine: chromium, build: build, shard: 1, of: 2 }
+          - { suite: fine, engine: chromium, build: build, shard: 2, of: 2 }
     env:
       HOME: /root        # Firefox refuses to start as root with the runner's HOME
       ENGINES: ${{ matrix.engine }}
-      SHARD: ${{ matrix.shard && format('{0}/3', matrix.shard) || '1/1' }}   # Chromium is split three ways: it is most of the wait
+      SHARD: ${{ matrix.shard && format('{0}/{1}', matrix.shard, matrix.of) || '1/1' }}   # the slow Chromium legs are split (the radar section runs alone in desktop shard 1)
     steps:
       - uses: actions/checkout@v4
         with:

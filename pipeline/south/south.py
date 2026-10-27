@@ -344,7 +344,7 @@ def weekly_run(live: Path, season, today: dt.date, fetch=fetch_records, force=Fa
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--live", type=Path, required=True, help="the live-data folder")
+    ap.add_argument("--live", type=Path, required=True, help="the folder the archive and tables are written under (the south-data branch's live/)")
     ap.add_argument("--season", type=int)
     ap.add_argument("--today", type=dt.date.fromisoformat, default=dt.datetime.now(dt.timezone.utc).date())
     ap.add_argument("--force", action="store_true", help="rerun this week's table even if it exists")

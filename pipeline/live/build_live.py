@@ -38,6 +38,7 @@ from hatch_p1.daymet import temperature_cube  # noqa: E402
 from hatch_p1.degree_days import double_sine  # noqa: E402
 from hatch_p1.prep import BANDS, BAND_LABELS  # noqa: E402
 
+from front import build_front  # noqa: E402
 from live import registry, sources  # noqa: E402
 
 REPLAY = ROOT / "src" / "data" / "luna-replay.json"
@@ -501,6 +502,16 @@ def main(argv=None):
         except ValueError:
             prev = None
     out = build_all(season, as_of, use_forecast, today, prev, a.species)
+    # The migrants' trackers (pipeline/front): sightings so far, no forecast. Never holds the forecast back.
+    # A backfill (--as-of) stops its sightings there too.
+    out["front"] = build_front.live_front(season, min(today, a.as_of or dt.date(season, 12, 31)), (prev or {}).get("front"), season_sightings)
+    if use_forecast and a.as_of is None:   # tonight's moth activity: a nicety, never a reason to lose the map's file
+        try:
+            from activity import live as activity_live
+            out["activity"] = activity_live.build(today)
+        except Exception as e:  # noqa: BLE001
+            out["checks"]["activity"] = f"failed: {type(e).__name__}"
+            print(f"activity block skipped: {e!r}")
     a.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out.with_suffix(".tmp")
     tmp.write_text(json.dumps(out, separators=(",", ":")))

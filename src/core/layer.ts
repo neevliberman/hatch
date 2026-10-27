@@ -25,6 +25,9 @@ export interface ProbeCard {
   link?: { href: string; label: string };
   /** A downloadable calendar event for the card's peak window (a data: .ics link). */
   calendar?: { href: string; filename: string; label: string };
+  /** Other species to switch to (the Atlas's "also out here"): each a thumbnail, a name and a short note; `key` is its
+   * ?species= value. */
+  others?: { title: string; list: { key: string; label: string; note: string; img?: string }[] };
 }
 
 export interface LegendSpec {
@@ -171,6 +174,8 @@ export interface SpeciesWords {
 
 export interface HatchLayer {
   id: string;
+  /** A tracker (sightings so far, no forecast): the page leaves out its "colors: forecast" caveat. */
+  tracker?: boolean;
   title: string;
   /** The species' words for the page around the map; see SpeciesWords. */
   words: SpeciesWords;

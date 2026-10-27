@@ -29,6 +29,7 @@ import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, liveFineDa
 import { makeFront } from './front';
 import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
+import { MOTH_NIGHT_NOTE, mothNightLine } from './activity';
 import { modelChecks, windowCheck } from './replayData';
 import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
 
@@ -296,6 +297,10 @@ export interface LunaLayer extends HatchLayer {
   live(): Live | null;
   /** Attach the live forecast once it arrives (species loaded before the live file). */
   setLive?(live: Live): void;
+  /** The season menu's choices, when not the replay years (an Atlas species: a typical year and the year shipped). */
+  seasons?(): Mode[];
+  /** Its own time range for a mode, when not replayTimeSpec's (an Atlas species spans its own months). */
+  timeSpec?(mode: Mode, month?: number, day?: number): TimeSpec;
 }
 
 interface FineCell {
@@ -503,6 +508,12 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
     if (vs) lines.push(vs);
     if (!seen) lines.push('No sightings nearby to check against.');
+    const [clat, clng] = cellToLatLng(cell);
+    const night = mothNightLine(L, clat, clng, doyToMs(y, doy));
+    if (night) {
+      lines.push(night);
+      more.push(MOTH_NIGHT_NOTE);
+    }
     const out = i === undefined ? null : L.outNow[i];
     // Zeros are the empty state (early spring, or nothing banked yet): say nothing rather than "0% out".
     if (out != null && out > 0) more.push(`${Math.round(out)}% of the first wave out by ${asOf}.`);
