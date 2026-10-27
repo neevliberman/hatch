@@ -14,6 +14,7 @@ import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { mountFinder } from './ui/finder';
+import { mountWarmSlider } from './ui/warmSlider';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
 import { GRID_RES } from './core/grid';
@@ -101,6 +102,14 @@ function start() {
   let curKey = 'luna';
   /** A ?species= link's species, until it has loaded (the address bar keeps asking for it meanwhile). */
   let speciesPending: string | null = null;
+  /** A ?warm= link's "Warm the spring", until its Atlas species has loaded. */
+  let askedWarm = Number(params.get('warm')) || 0;
+  let warmed = false; // the map last drawn was warmed, so going back to "as it was" redraws the ribbon too
+  const warmth = mountWarmSlider($('warm') as HTMLButtonElement, $('warm-row'), (degF) => {
+    cur.setWarmth?.(degF);
+    onLunaData();
+    syncUrl();
+  });
   const loaded = new Map<string, LunaLayer>([['luna', luna]]);
 
   const time = new TimeAxis(registry.activeTime()!, clock);
@@ -348,7 +357,12 @@ function start() {
     }
   };
   time.onFrame(map.refresh); // in-between frames while playing: only the map moves, the card and summary keep the day
-  onLunaData = refresh;
+  // A season rerun with warmth lands later than the tap that asked for it: its ribbon and note follow it in.
+  let onRerun = () => {};
+  onLunaData = () => {
+    refresh();
+    onRerun();
+  };
   registry.subscribe(() => {
     const next = registry.activeTime();
     if (next && next !== spec) {
@@ -501,6 +515,10 @@ function start() {
     $('dots-what').textContent = cur.words.plural;
     $('app').classList.toggle('tracker', !!cur.tracker);
     $('app').classList.toggle('atlas', !!cur.seasons); // an Atlas species: a model's field, no dots or forecast
+    // "Warm the spring" carries over to the next Atlas species (a link's ?warm= once it has loaded).
+    warmth.available = !!cur.setWarmth;
+    if (cur.setWarmth && askedWarm) warmth.set(askedWarm), (askedWarm = 0);
+    cur.setWarmth?.(warmth.value);
     showCountdown();
     syncCountdown();
     $('map').setAttribute('aria-label', cur.seasons ? `Midwest map: expected share of ${cur.words.sightingsOf} in insect photos` : `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
@@ -564,6 +582,12 @@ function start() {
     }));
   registry.subscribe(drawRibbon);
   setRibbon(ribbonNow());
+  onRerun = () => {
+    if (!warmth.value && !warmed) return;
+    warmed = warmth.value !== 0;
+    warmth.note(cur.warmthNote?.() ?? '');
+    drawRibbon();
+  };
   mountLayerList($('layers'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   // With nothing pinned, the panel's example is the area in view (once the map has left the whole-Midwest fit).
@@ -616,6 +640,8 @@ function start() {
     else q.delete('at');
     if (radar) q.set('radar', radar.id);
     else q.delete('radar');
+    if (warmth.value && cur.setWarmth) q.set('warm', String(warmth.value));
+    else q.delete('warm');
     q.delete('noauto');
     q.delete('today');
     return `${location.pathname}?${q}`;

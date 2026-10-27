@@ -17,6 +17,9 @@ export { atlasKey, loadIndex, type AtlasSpecies } from './index';
 export const SEASON = [60, 304] as const;
 export const STEP = 4;
 const STEPS = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
+/** How far the "Warm the spring" slider reaches, °F (warm.py F), and the network's own limit on days ahead. */
+export const WARM_F = 3;
+const CLIP_DAYS = 30;
 /** The year whose real warmth ships (ahead-YEAR.bin). */
 export const ATLAS_YEAR = 2026;
 /** The warmth cells' size (H3 resolution). */
@@ -33,6 +36,7 @@ export class Atlas {
   /** Every cell's place inputs, back to back (net.placeFeatures). */
   readonly places: Float32Array;
   private aheads = new Map<number, Promise<Float32Array | null>>();
+  private warmth: Promise<Int8Array | null> | null = null;
 
   constructor(
     readonly net: AtlasNet,
@@ -62,6 +66,43 @@ export class Atlas {
       this.aheads.set(year, p);
     }
     return p;
+  }
+
+  /** A year's days ahead ([cell * 365 + day - 1]) as every cell's on one day. */
+  onDay(base: Float32Array): (day: number) => Float32Array {
+    const n = this.cells.length;
+    return (day) => {
+      const d = Math.min(365, Math.max(1, Math.round(day))) - 1;
+      return Float32Array.from({ length: n }, (_, c) => base[c * 365 + d]!);
+    };
+  }
+
+  /**
+   * "Warm the spring": a function giving every cell's days ahead on a day when each day of the spring runs `degF`
+   * warmer (negative: cooler), on top of `base` (a year's own days ahead, [cell * 365 + day - 1]; null: a typical
+   * year). warm.bin holds the days ahead at ±WARM_F (pipeline/atlas/warm.py); smaller moves scale along the straight
+   * line from 0, and the two add. Null while warm.bin is missing.
+   */
+  async warmed(base: Float32Array | null, degF: number): Promise<((day: number) => Float32Array) | null> {
+    this.warmth ??= bin('warm.bin').then((b) => (b ? new Int8Array(b) : ((this.warmth = null), null)));
+    const w = await this.warmth;
+    if (!w) return null;
+    const n = this.cells.length;
+    const side = degF < 0 ? 0 : 1;
+    const k = Math.abs(degF) / WARM_F / 4; // quarter days
+    return (day) => {
+      const x = Math.min(STEPS - 1, Math.max(0, (day - SEASON[0]) / STEP));
+      const j = Math.min(STEPS - 2, Math.floor(x));
+      const f = x - j;
+      const out = new Float32Array(n);
+      for (let c = 0; c < n; c++) {
+        const at = (side * n + c) * STEPS + j;
+        const shift = day < SEASON[0] ? 0 : k * (w[at]! + (w[at + 1]! - w[at]!) * f);
+        const b = base ? base[c * 365 + Math.min(365, Math.max(1, Math.round(day))) - 1]! : 0;
+        out[c] = Math.max(-CLIP_DAYS, Math.min(CLIP_DAYS, b + shift));
+      }
+      return out;
+    };
   }
 
   /** The cell a point falls in (null outside the map). */
@@ -102,8 +143,8 @@ export class Field {
   constructor(
     private readonly atlas: Atlas,
     private readonly sp: number,
-    /** Each cell's days ahead on each day ([cell * 365 + day - 1]); null: a typical year. */
-    private readonly ahead: Float32Array | null,
+    /** Every cell's days ahead on a day; null: a typical year. */
+    private readonly aheadOn: ((day: number) => Float32Array) | null,
     private readonly onReady: () => void,
   ) {}
 
@@ -121,14 +162,6 @@ export class Field {
     return best;
   }
 
-  private aheadOn(day: number): Float32Array | null {
-    if (!this.ahead) return null;
-    const n = this.atlas.cells.length;
-    const a = new Float32Array(n);
-    for (let c = 0; c < n; c++) a[c] = this.ahead[c * 365 + Math.min(365, Math.max(1, day)) - 1]!;
-    return a;
-  }
-
   private pump(): void {
     if (this.doing !== null) return;
     while (this.queue.length && this.done.has(this.queue[0]!)) this.queue.shift();
@@ -141,7 +174,7 @@ export class Field {
       this.pump();
     };
     const { gpu, net, cells, places } = this.atlas;
-    const ahead = this.aheadOn(d);
+    const ahead = this.aheadOn?.(d) ?? null;
     // The graphics card, unless its context was lost (it would read back zeros); then the plain network.
     if (gpu && !gpu.lost) {
       setTimeout(() => {

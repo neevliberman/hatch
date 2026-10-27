@@ -81,6 +81,7 @@
       <div id="dock">
         <p id="strip"><span id="honesty"><span class="dots">Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. </span><span class="forecast-note">Colors: forecast <em class="unconfirmed">(on trial in 2027)</em>.</span><span class="atlas-note">Colors: expected share of insect photos, a model, not sightings.</span></span>
           <button id="why" type="button">How sure?</button><span id="countdown"></span></p>
+        <div id="warm-row" role="group" aria-label="Warm the spring" hidden></div>
         <footer id="bar" role="group" aria-label="Time controls"></footer>
         <div id="actions">
           <button id="locate" type="button" class="icon-btn" aria-label="My area" title="Forecast where you are">
@@ -89,6 +90,7 @@
           <button id="find" type="button" class="icon-btn" aria-label="Find a town" title="Find a town" aria-expanded="false" aria-controls="finder">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
             <span class="lbl">Find</span></button>
+          <button id="warm" type="button" class="icon-btn" aria-label="Warm the spring" title="Warm the spring" aria-expanded="false" aria-controls="warm-row" hidden><span class="lbl">Warm</span></button>
           <button id="share" type="button" class="icon-btn" aria-label="Share this view" title="Share this view">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12.3 15.6l.4-.7.2-1 .3-3.7 0-3.5-.2-1.2-.1-1-.2-.9-.4-.7-.4 0-.5.7-.2 2 0 1.1-.1 1.2 0 2.2.1 1.3 0 1.3.2 2.1.4.8zm-.5 0l.2-.7.2-1 .3-3.7 0-1.2.1-1.1 0-2.4-.2-1.9-.2-.7-.2 0-.3.6-.1.9-.2 2.3 0 2.3-.1 1.1 0 4.8.2.7zm-4-8.1l.5 0 .4-.3 1.5-1.2.4-.4.4-.5.4-.4.4-.5.4-.4-.2.1-.1-.1.1.2.3.4.4.4.8 1 .4.4.5.3.5.4.4.2.4.3.4 0 .3-.3 0-.5-.3-.3-.7-.9-.4-.4-.3-.4-.2-.3-.3-.5-.4-.5-.3-.6-.6-.5-.8-.3-.8.2-.6.5-.4.5-.3.5-.6.8-1.2 1.5-.3.5-.3.4-.1.5zm-1.5 3l-.3.4-.3.6-.2.8-.4 1.8-.2 1.7-.2 1-.1 1.1 0 1.1.2 1 .6 1 1 .5 1.1.3 5.6 0 1.1.1 2.3 0 1.1-.2 1-.6.6-1 .1-1.1 0-1.2-.4-2.1-.3-2.5-.2-.9-.1-.7-.2-.6-.3-.4-.4 0-.2 1.1.1.8 0 2.5.3 3 0 .9-.1.6-.2.3-.3.1-.7.1-2 0-2.2-.2-1.1.1-3.2 0-.8-.1-.3-.2-.2-.3-.2-.5 0-1.8.1-1 0-.9.1-.8 0-.9.3-2.3-.1-.6z"/></svg>
             <span class="lbl">Share</span></button>
