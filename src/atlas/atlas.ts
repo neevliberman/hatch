@@ -54,11 +54,13 @@ export interface Dot {
   id: number;
   year: number;
   doy: number;
+  /** Its day on a typical year's 365-day calendar: a leap year's days from 29 Feb on move back one (as luna's pdoy). */
+  pdoy: number;
   lng: number;
   lat: number;
 }
 
-/** The box the dots' positions are scaled across (pipeline/atlas/config.py BOX). */
+/** The box the dots' positions are scaled across: keep in step with pipeline/atlas/config.py BOX. */
 const BOX = { s: 36.5, n: 49.5, w: -97.5, e: -80.5 };
 
 export interface AtlasCell extends Place {
@@ -172,13 +174,18 @@ export class Atlas {
         const lat = new Uint16Array(b, 6 * n, n);
         const lng = new Uint16Array(b, 8 * n, n);
         const year = new Uint8Array(b, 10 * n, n);
-        return Array.from({ length: n }, (_, k) => ({
-          id: id[k]!,
-          year: 2000 + year[k]!,
-          doy: doy[k]!,
-          lat: BOX.s + (lat[k]! / 65535) * (BOX.n - BOX.s),
-          lng: BOX.w + (lng[k]! / 65535) * (BOX.e - BOX.w),
-        }));
+        return Array.from({ length: n }, (_, k) => {
+          const y = 2000 + year[k]!;
+          const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+          return {
+            id: id[k]!,
+            year: y,
+            doy: doy[k]!,
+            pdoy: leap && doy[k]! >= 60 ? doy[k]! - 1 : doy[k]!,
+            lat: BOX.s + (lat[k]! / 65535) * (BOX.n - BOX.s),
+            lng: BOX.w + (lng[k]! / 65535) * (BOX.e - BOX.w),
+          };
+        });
       });
   }
 

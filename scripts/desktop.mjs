@@ -698,18 +698,20 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png`, timeout: 60000 })
       .catch((e) => console.log(`atlas-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
     const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
-    // The screen point of the spot in a box [w, s, e, n] farthest from the lit photo dots: a tap on a dot opens that
-    // photo's card instead of the place's.
+    // The screen point of the spot on the map's cells in a box [w, s, e, n] farthest (in pixels) from the lit photo
+    // dots: a tap on a dot opens that photo's card instead of the place's.
     const clearSpot = (box) => page.evaluate(([w, s, e, n]) => {
       const h = window.__hatch;
-      const lit = h.current().points(h.time.cursor);
+      const lit = h.current().points(h.time.cursor).map((p) => h.map.project(p));
       let best = null;
       for (let lng = w; lng <= e; lng += 0.25)
         for (let lat = s; lat <= n; lat += 0.25) {
-          const gap = Math.min(Infinity, ...lit.map(([x, y]) => Math.hypot(x - lng, y - lat)));
-          if (!best || gap > best.gap) best = { gap, lng, lat };
+          if (h.current().cellAt([lng, lat]) === null) continue;
+          const [x, y] = h.map.project([lng, lat]);
+          const gap = Math.min(Infinity, ...lit.map(([a, b]) => Math.hypot(a - x, b - y)));
+          if (!best || gap > best.gap) best = { gap, x, y };
         }
-      return h.map.project([best.lng, best.lat]);
+      return [best.x, best.y];
     }, box);
     try {
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');

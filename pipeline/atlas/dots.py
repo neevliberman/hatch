@@ -2,12 +2,14 @@
 that species is on the map.
 
 The colours are the network's expectation; the dots are the photos themselves (iNaturalist research grade, via
-GBIF, after load_records' burst filter: one per observer, species, warmth cell and day), in the map's seven states. A typical year draws the
-photos of FIRST_YEAR-LAST_YEAR (the years the network learned from) on their day of the year; YEAR draws its own.
+GBIF, after load_records' burst filter: one per observer, species, warmth cell and day), in the map's seven states.
+A typical year draws the photos of FIRST_YEAR-LAST_YEAR (the years the network learned from) on their day of the
+year; YEAR draws its own.
 Each part keeps at most CAP photos, a random sample (fixed seed), so the busiest species stay readable and small.
 
 <i>.bin, n photos sorted by year then day, as parallel little-endian arrays:
-  uint32 iNaturalist observation id [n] | uint16 day of year [n] | uint16 lat [n] | uint16 lng [n] | uint8 year - 2000 [n]
+  uint32 iNaturalist observation id [n] | uint16 day of year (data.py's, 29 Feb kept) [n] | uint16 lat [n] |
+  uint16 lng [n] | uint8 year - 2000 [n]
   lat/lng: 0-65535 across config.BOX (about 22 m by 29 m steps).
 Analogy: the map is the weather forecast; the dots are the rain gauges.
   python3 pipeline/atlas/dots.py           # needs the records through YEAR (fetch_gbif.py 2015 2026)
@@ -61,7 +63,8 @@ def main():
         if g is None:  # an empty file, so the page never asks for one that isn't there
             (out / f"{i}.bin").write_bytes(b"")
             continue
-        parts = [p.sample(CAP, random_state=i) if len(p) > CAP else p for p in (g[g.year <= LAST_YEAR], g[g.year == YEAR])]
+        parts = [p.sample(CAP, random_state=i) if len(p) > CAP else p
+                 for p in (g[g.year <= LAST_YEAR], g[g.year == YEAR])]
         keep = pd.concat(parts)
         (out / f"{i}.bin").write_bytes(pack(keep))
         total += len(g)
