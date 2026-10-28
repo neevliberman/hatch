@@ -740,14 +740,29 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => new URL(location.href).searchParams.get('species') === 'papilio-polyxenes', null, { timeout: 10000, polling: 250 })
         .catch(() => fail(`the link dropped the species: ${page.url()}`));
       if ((await page.locator('#app.atlas').count()) !== 1) fail('the page is not in Atlas mode (its caveat line)');
-      // The tree: insects, an order, a family, a species.
+      // The tree of life (src/ui/treeOfLife.ts): it draws, the arrow keys climb from the whole tree into the biggest
+      // branch down to one species, and its card's button opens that species.
       await page.locator('#species').click();
       await page.locator('#sp-q').fill('');
-      await page.locator('[data-order="Odonata"]').click();
-      await page.locator('[data-family]').first().click();
-      const firstKey = await page.locator('#sp-list .sp-row').first().getAttribute('data-key');
-      await page.locator('#sp-list .sp-row').first().click();
-      if (!(await isOn(`${firstKey}-atlas`))) fail(`the tree's first dragonfly (${firstKey}) did not open`);
+      const canvas = page.locator('.tol-canvas');
+      await canvas.waitFor({ timeout: 10000 }).catch(() => fail('the tree of life never showed'));
+      await page.waitForTimeout(900); // the branches grow in
+      const branches = Number(await canvas.getAttribute('data-branches'));
+      if (!(branches > 1500)) fail(`the tree of life drew ${branches} branches, not the whole tree`);
+      await shotA('2b-tree');
+      await canvas.focus();
+      let steps = 0;
+      while ((await page.locator('.tol-go').textContent()) !== 'Show on map' && steps++ < 14) {
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(150);
+      }
+      const crumbs = await page.locator('.sp-crumbs button').count();
+      if (crumbs < 3) fail(`climbing the tree left only ${crumbs} breadcrumb steps`);
+      const title = await page.locator('.tol-card b').textContent();
+      await shotA('2c-tree-species');
+      await page.locator('.tol-go').click();
+      await page.waitForFunction((t) => document.querySelector('#species')?.getAttribute('aria-label')?.includes(t), title, { timeout: 30000 })
+        .catch(() => fail(`"Show on map" for ${title} did not switch to it`));
       // 2026, with its real warmth.
       if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
       else {

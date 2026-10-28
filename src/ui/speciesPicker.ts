@@ -1,7 +1,8 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, loadIndex, type AtlasSpecies } from '../atlas/index';
+import { atlasKey, json, loadIndex, type AtlasSpecies } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
 import { CROSS } from './icons';
+import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -17,10 +18,11 @@ export interface SpeciesPicker {
 }
 
 /**
- * The species picker: a header button that opens a search box over a tree of life (insects, then an order, then a
- * family), so finding one of nearly 2,000 species never means scrolling a menu. The hand-built species come first,
- * as "Featured"; every Atlas species is a search away. Analogy: a field guide's index and its table of contents
- * on one page.
+ * The species picker: a header button that opens a search box over a tree of life, so finding one of nearly 2,000
+ * species never means scrolling a menu. The tree is a real family tree you can pinch and tap (src/ui/treeOfLife.ts,
+ * loaded on first open); if it can't load, a plain list of orders and families stands in. The hand-built species
+ * sit on a strip above it, as "Featured"; every Atlas species is a search away, by common or Latin name.
+ * Analogy: a field guide's index and its table of contents on one page.
  *
  * The Atlas's species list is only fetched when the picker first opens. A species the hand-built list also has (the
  * luna moth) opens its own richer layer: `featured` maps its scientific name to that key.
@@ -37,16 +39,62 @@ export function mountSpeciesPicker(
   let path: Path = {};
   let q = '';
   let refocus = false;
+  let tree: TreeOfLife | null = null;
+  let treeTried = false;
+  let currentKey = featured[0]?.key ?? ''; // the page opens on the first featured species unless a link picks another
+  let treeCrumbs: (() => void) | null = null; // redraws the tree's breadcrumb after a search clears
 
   // A plain list of buttons (Tab or the arrow keys walk it), not a listbox: each row is an action, not a selection.
   sheet.innerHTML = `<div class="sp-head"><input id="sp-q" type="search" aria-controls="sp-list"
       placeholder="Search insects" autocomplete="off" enterkeyhint="search" aria-label="Search insects">
     <button type="button" class="sp-x icon-btn" aria-label="Close">${CROSS}</button></div>
     <nav class="sp-crumbs" aria-label="Tree of life" aria-live="polite"></nav>
-    <ul id="sp-list" aria-label="Species"></ul>`;
+    <ul id="sp-list" aria-label="Species"></ul>
+    <div class="sp-tree" hidden></div>`;
   const input = sheet.querySelector<HTMLInputElement>('#sp-q')!;
   const crumbs = sheet.querySelector<HTMLElement>('.sp-crumbs')!;
   const list = sheet.querySelector<HTMLUListElement>('#sp-list')!;
+  const treeHost = sheet.querySelector<HTMLElement>('.sp-tree')!;
+  const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
+  const pick = (key: string) => {
+    open(false);
+    button.focus();
+    refocus = true; // the button is disabled while the species loads, which drops focus: hand it back after
+    onPick(key);
+  };
+  /** The tree, once: its data and code load on first open, after the species list. */
+  const loadTree = async () => {
+    if (treeTried || !all) return;
+    treeTried = true;
+    const [data, mod] = await Promise.all([json<TreeData>('tree.json'), import('./treeOfLife').catch(() => null)]);
+    if (!data || !mod) return;
+    try {
+      tree = mod.mountTree(treeHost, data, all, (i) => pick(keyOf(all![i]!)), (path: TNode[], go) => {
+        treeCrumbs = () => {
+          crumbs.innerHTML = '';
+          path.forEach((n, i) => {
+            if (i) crumbs.insertAdjacentHTML('beforeend', '<span aria-hidden="true"> › </span>');
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = n.parent ? (n.rank === 'o' ? (ORDER_NAMES[n.label] ?? n.label) : n.label) : 'All insects';
+            b.addEventListener('click', () => go(n));
+            crumbs.append(b);
+          });
+        };
+        if (!q.trim()) treeCrumbs();
+      });
+    } catch (e) {
+      // tree.json and species.json out of step (a stale cache): the plain list stays.
+      console.warn('tree of life', e);
+      tree = null;
+      treeCrumbs = null;
+      treeHost.innerHTML = '';
+      return;
+    }
+    const i = indexOfKey(currentKey);
+    tree.mark(i >= 0 ? i : null);
+    render();
+  };
 
   const row = (s: AtlasSpecies) =>
     `<li><button type="button" class="sp-row" data-key="${esc(keyOf(s))}">${s.photo
@@ -64,7 +112,7 @@ export function mountSpeciesPicker(
   // Search: every word must start a word of the name, Latin name, family or order; best match first, then most seen.
   const search = (text: string) => {
     const words = text.toLowerCase().split(/\s+/).filter(Boolean);
-    const hay = (s: AtlasSpecies) => `${s.common ?? ''} ${s.name} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`.toLowerCase();
+    const hay = (s: AtlasSpecies) => `${s.common ?? ''} ${s.name} ${s.genus ?? ''} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`.toLowerCase();
     const starts = (h: string, w: string) => h.startsWith(w) || h.includes(` ${w}`) || h.includes(`-${w}`);
     const score = (s: AtlasSpecies) => {
       const h = hay(s);
@@ -91,6 +139,9 @@ export function mountSpeciesPicker(
       })
       .join('');
   const render = () => {
+    treeHost.hidden = !tree || !!q.trim();
+    sheet.classList.toggle('sp-has-tree', !treeHost.hidden);
+    list.classList.toggle('sp-strip', !treeHost.hidden);
     if (!all) {
       list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Loading the rest…</li>`;
       crumbs.innerHTML = '';
@@ -100,6 +151,12 @@ export function mountSpeciesPicker(
       const hits = search(q.trim());
       crumbs.innerHTML = `<span>${hits.length ? hits.length === 1 ? '1 match' : `${hits.length === 60 ? 'Top 60' : hits.length} matches` : 'No matches'}</span>`;
       list.innerHTML = hits.map(row).join('');
+      return;
+    }
+    if (tree) {
+      list.innerHTML = featuredRows();
+      treeCrumbs?.();
+      tree.shown();
       return;
     }
     const steps = [`<button type="button" data-crumb="">All insects</button>`];
@@ -127,6 +184,7 @@ export function mountSpeciesPicker(
     if (!all)
       void loadIndex().then((s) => {
         if (s) all = s;
+        if (s) void loadTree();
         else list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Couldn’t load the other insects. Close and try again.</li>`;
         if (s) render();
       });
@@ -140,12 +198,8 @@ export function mountSpeciesPicker(
   sheet.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
     if (!b) return;
-    if (b.dataset.key) {
-      open(false);
-      button.focus();
-      refocus = true; // the button is disabled while the species loads, which drops focus: hand it back after
-      onPick(b.dataset.key);
-    } else if (b.dataset.order) (path = { order: b.dataset.order }), render(), list.scrollTo?.(0, 0);
+    if (b.dataset.key) pick(b.dataset.key);
+    else if (b.dataset.order) (path = { order: b.dataset.order }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.family) (path = { ...path, family: b.dataset.family }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.crumb !== undefined) (path = b.dataset.crumb ? { order: path.order } : {}), render();
   });
@@ -158,6 +212,7 @@ export function mountSpeciesPicker(
       button.focus();
       return;
     }
+    if (e.target === treeHost.querySelector('canvas')) return; // the tree walks its own branches
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const items = [...list.querySelectorAll<HTMLButtonElement>('button')];
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -183,7 +238,10 @@ export function mountSpeciesPicker(
 
   return {
     button,
-    show(_key, label) {
+    show(key, label) {
+      currentKey = key;
+      const i = indexOfKey(key);
+      tree?.mark(i >= 0 ? i : null);
       button.querySelector('.sp-face')!.textContent = label;
       button.setAttribute('aria-label', `Species: ${label}. Change species`);
     },
