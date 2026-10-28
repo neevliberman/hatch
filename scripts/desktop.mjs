@@ -693,7 +693,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     // A species photo can fail to load (offline, or iNaturalist slow): the page shows a blank square, which is fine.
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
-    const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png` });
+    // A record for the visual review, not a check: software GL in CI can keep the page busy past the screenshot's
+    // timeout while the network fills the map, which must not fail the checks around it.
+    const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png`, timeout: 60000 })
+      .catch((e) => console.log(`atlas-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
     const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
     try {
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
@@ -787,9 +790,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await isOn('lycorma-delicatula-atlas');
       await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 })
         .catch(() => fail('2026 drew no photos seen on the time bar'));
+      if (!(await page.locator('#strip .vs-note').isVisible())) fail('the time bar draws expected vs seen with no key saying which is which');
       const ohio = await page.evaluate(() => window.__hatch.map.project([-81.7, 41.4]));
       await page.mouse.click(ohio[0], ohio[1]);
-      await page.waitForFunction(() => /2026, whole map: \d+(\.\d)?× the photos expected/.test(document.getElementById('probe').textContent), null, { timeout: 10000 })
+      await page.waitForFunction(() => /Across the map in 2026: \d+(\.\d)?× as many photos as expected/.test(document.getElementById('probe').textContent), null, { timeout: 10000 })
         .catch(async () => fail(`the 2026 card does not say how the year went: "${await page.locator('#probe').innerText()}"`));
       await shotA('5-seen');
       // A pinned card names others out here; one tap switches to it.

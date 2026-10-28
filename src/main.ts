@@ -522,6 +522,7 @@ function start() {
     (ribbonFrame ||= requestAnimationFrame(() => {
       ribbonFrame = 0;
       ribbonOf = profileNow();
+      $('app').classList.toggle('vs', !!cur.seasons && !!ribbonOf?.seenOnly); // the key line for expected vs seen
       setRibbon(ribbonNow());
     }));
   registry.subscribe(drawRibbon);

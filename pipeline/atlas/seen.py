@@ -65,7 +65,7 @@ def judge(o_day, e_day, phi, phi_t):
     how much the counts and the timing scatter beyond chance (dispersion)."""
     o, e = o_day.sum(), e_day.sum()
     ratio = None
-    if e > 0:
+    if e >= 5:  # under that, a count's chance spread is too lopsided for this test
         z = (o - e) / np.sqrt(phi * e)
         r = o / e
         if abs(z) >= Z and (r >= MIN_RATIO or r <= 1 / MIN_RATIO):
@@ -86,12 +86,15 @@ def timing_dispersion(seen, expected):
     return max(1.0, float(np.median(gains)) / 0.455)
 
 
-def ribbon(day_counts):
-    """[S, 365] photos by day -> [S, steps]: the 4 days around each ribbon step."""
+def ribbon(day_counts, last):
+    """[S, 365] photos by day -> [S, steps]: the 4 days around each ribbon step, through day `last` (a step that
+    straddles it is scaled up from the days it has, so the curves don't dip at the end)."""
     steps = np.arange(SEASON[0], SEASON[1] + 1, STEP)
     out = np.zeros((day_counts.shape[0], len(steps)))
     for j, d in enumerate(steps):
-        out[:, j] = day_counts[:, max(0, d - 3):d + 1].sum(1)  # days d-2 .. d+1 (doy d is column d-1)
+        a, b = d - 2, min(d + 1, last)  # days d-2 .. d+1 (doy d is column d-1)
+        if b >= a:
+            out[:, j] = day_counts[:, a - 1:b].sum(1) * 4 / (b - a + 1)
     return out
 
 
@@ -131,7 +134,7 @@ def main():
         ratio, shift = judge(seen[s], expected[s], phi, phi_t)
         rows.append([int(seen[s].sum()), round(float(expected[s].sum()), 1), ratio, shift])
 
-    o, e = ribbon(seen), ribbon(expected)
+    o, e = ribbon(seen, last), ribbon(expected, last)
     top = np.maximum(o.max(1), e.max(1))[:, None]
     scaled = np.stack([e, o], 1) / np.where(top > 0, top, 1)[:, None]
     np.round(255 * scaled).astype(np.uint8).tofile(OUT / f"seen-{YEAR}.bin")

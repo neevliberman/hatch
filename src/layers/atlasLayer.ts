@@ -121,11 +121,17 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     });
   };
   askYear();
-  /** "3.4× the photos expected, 6 days early": its year over the whole map, in a few words. */
+  /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. */
   const yearWords = (y: Seen) => {
     if (y.photos < 10 && y.expectedPhotos < 10) return 'too few photos to judge';
-    const r = y.ratio === null ? 'about the photos expected' : y.ratio < 1 ? `${Math.max(1, Math.round(y.ratio * 100))}% of the photos expected` : `${y.ratio.toFixed(y.ratio < 10 ? 1 : 0)}× the photos expected`;
-    const d = y.days === null ? '' : `, ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'early' : 'late'}`;
+    const x = y.ratio === null ? 0 : y.ratio < 9.95 ? Math.round(y.ratio * 10) / 10 : Math.round(y.ratio);
+    const r =
+      y.ratio === null ? 'about as many photos as expected'
+      : y.ratio === 0 ? 'no photos, though some expected'
+      : y.ratio < 1 ? `${Math.max(1, Math.round(y.ratio * 100))}% as many photos as expected`
+      : `${x}× as many photos as expected`;
+    // Early or late for the warmth: the expectation already knows how warm the spring was.
+    const d = y.days === null ? '' : `, ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'early' : 'late'} for its warmth`;
     return r + d;
   };
 
@@ -284,7 +290,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         const n = Math.round((s.end - s.start) / TimeAxis.DAY) + 1;
         const line = vs ? vs.expected : c;
         const seen = Array.from({ length: n }, (_, j) => at(line, d0 + j + by));
-        const top = Math.round(peakDay(c) - by);
+        const top = Math.round(peakDay(line) - by);
         const notes = top >= d0 && top < d0 + n ? [{ at: top - d0, text: `peak ${fmt(y, top)}` }] : [];
         const g = isDark() ? BRIGHT : palette.stages.peak;
         const seenOnly = vs ? [{ color: `rgb(${g[0]},${g[1]},${g[2]})`, seen: Array.from({ length: n }, (_, j) => at(vs.seen, d0 + j)) }] : undefined;
@@ -334,7 +340,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         swatch: css(color(s)),
         lines: [
           ...(best === null ? [] : [`Best here: around ${fmt(yearOf(), best)}`]),
-          ...(mode !== TYPICAL && year ? [`${ATLAS_YEAR}, whole map: ${yearWords(year)}`] : []),
+          ...(mode !== TYPICAL && year ? [`Across the map in ${ATLAS_YEAR}: ${yearWords(year)}`] : []),
         ],
         others: { title: 'Also out here', list: others },
       };
