@@ -197,7 +197,8 @@ export function mountSpeciesPicker(
     button.setAttribute('aria-expanded', String(on));
     if (!on) return;
     render();
-    input.focus();
+    // Touch screens: land on the close button instead, so the keyboard doesn't cover the tree until search is tapped.
+    (matchMedia('(pointer: fine)').matches ? input : sheet.querySelector<HTMLElement>('.sp-x')!).focus();
     if (!all)
       void Promise.all([loadIndex(), loadSurprises(surpriseYear)]).then(([s, u]) => {
         odd = u?.list ?? [];
