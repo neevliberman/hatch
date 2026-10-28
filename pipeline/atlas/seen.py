@@ -11,7 +11,8 @@ or worse than expected, without being fooled by the exam being easy or hard.
 
 - seen-YEAR.bin: uint8, [species][2 (expected, seen)][ribbon step] (export.py SEASON, STEP: photos in the 4 days
   around each step), both scaled to the larger of the two tops, so the time bar can draw them on one scale.
-- seen-YEAR.json: {"year", "last_day", "photos", "species": [[seen, expected, ratio, days], ...]} in species order.
+- seen-YEAR.json: {"year", "last_day", "photos", "species": [[seen, expected, ratio, days], ...] in species order,
+  "surprises": [species index, ...] (surprises(): the species picker's short list)}.
   ratio: seen / expected, or null when the gap is within chance. days: how much earlier (+) or later (-) its season
   came than expected (the slide that best fits its whole season), or null when within chance or with fewer than
   MIN_TIMING photos.
@@ -98,6 +99,19 @@ def ribbon(day_counts, last):
     return out
 
 
+def surprises(rows, more=3, fewer=3, timing=2, min_photos=100):
+    """The year's biggest surprises among species with plenty of photos (seen, or expected when fewer): the most
+    photos over expected (in photos, so a widespread species' boom outranks a rare one's few extra), the furthest
+    under (as a share: an absent year), and the furthest early or late. Species indices, biggest first, none twice."""
+    over = sorted((i for i, r in enumerate(rows) if r[2] and r[2] > 1 and r[0] >= min_photos), key=lambda i: rows[i][1] - rows[i][0])
+    under = sorted((i for i, r in enumerate(rows) if r[2] and r[2] < 1 and r[1] >= min_photos), key=lambda i: rows[i][2])
+    slid = sorted((i for i, r in enumerate(rows) if r[3] and r[0] >= 2 * min_photos), key=lambda i: -abs(rows[i][3]))
+    out = []
+    for lst, k in ((over, more), (under, fewer), (slid, timing)):
+        out += [i for i in lst if i not in out][:k]
+    return out
+
+
 @torch.no_grad()
 def main():
     ck = torch.load(DATA / "model/run2/atlas.pt")
@@ -134,12 +148,13 @@ def main():
         ratio, shift = judge(seen[s], expected[s], phi, phi_t)
         rows.append([int(seen[s].sum()), round(float(expected[s].sum()), 1), ratio, shift])
 
+    picks = surprises(rows[:-1])
     o, e = ribbon(seen, last), ribbon(expected, last)
     top = np.maximum(o.max(1), e.max(1))[:, None]
     scaled = np.stack([e, o], 1) / np.where(top > 0, top, 1)[:, None]
     np.round(255 * scaled).astype(np.uint8).tofile(OUT / f"seen-{YEAR}.bin")
     (OUT / f"seen-{YEAR}.json").write_text(json.dumps(
-        {"year": YEAR, "last_day": last, "photos": len(df), "species": rows}, separators=(",", ":")))
+        {"year": YEAR, "last_day": last, "photos": len(df), "species": rows, "surprises": picks}, separators=(",", ":")))
 
     named = [(sp[i] if i < len(sp) else "(other)", *r) for i, r in enumerate(rows)]
     more = sorted((r for r in named if r[3]), key=lambda r: -r[3])

@@ -130,3 +130,9 @@ def test_expected_vs_seen_reads_a_slide_and_a_surplus():
     assert judge(o, e, phi=1, phi_t=1) == (round(o.sum() / e.sum(), 2), 6)
     # The same season as expected, in the same numbers: nothing to say.
     assert judge(np.round(e), e, phi=1, phi_t=1) == (None, None)
+
+
+def test_surprises_pick_the_biggest_gaps_with_enough_photos():
+    from pipeline.atlas.seen import surprises
+    rows = [[500, 100, 5.0, None], [50, 5, 10.0, None], [100, 400, 0.25, None], [900, 800, None, -9], [300, 280, None, None]]
+    assert surprises(rows) == [0, 2, 3]  # 10x on 50 photos is too few to list

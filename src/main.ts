@@ -5,7 +5,7 @@ import { makeIntro, type Intro } from './ui/intro';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { findSpecies, SPECIES } from './species';
 import { mountSpeciesPicker } from './ui/speciesPicker';
-import { atlasKey } from './atlas/index';
+import { ATLAS_YEAR, atlasKey } from './atlas/index';
 import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
 import { inSeason, liveAvailable, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
@@ -380,10 +380,11 @@ function start() {
 
   // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
   // keeps the season and the calendar day, and drops any pinned card.
-  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, (k) => void setSpecies(k));
+  // A picker row may ask for a season too: a surprise opens on its year.
+  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, ATLAS_YEAR, (k, s) => void setSpecies(k, s));
   let asking = 0;
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
-  const setSpecies = async (want: string) => {
+  const setSpecies = async (want: string, wish?: string) => {
     const ticket = ++asking;
     const entry = (await findSpecies(want)) ?? SPECIES[0]!;
     if (ticket !== asking) return;
@@ -419,7 +420,11 @@ function start() {
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
-    if (next === cur) return;
+    if (next === cur) {
+      // Already on screen: only the season it asked for, if any.
+      if (wish && wish !== picker.value && (next.seasons?.() ?? []).includes(wish)) (picker.value = wish), picker.dispatchEvent(new Event('change'));
+      return;
+    }
     // Live was wanted for it (picked from live mode, or a ?season=live&species= link): goes live as soon as its live
     // forecast is there, now or when the file arrives.
     const fromLink = speciesPending === entry.key && asked === LIVE;
@@ -438,7 +443,7 @@ function start() {
     const offers = next.seasons?.() ?? [...(next.live() ? [LIVE] : []), TYPICAL, ...years];
     // (A link may name a hand-built species by its Latin key, ?species=photinus-pyralis.)
     const fromThisLink = speciesPending === entry.key || (!!entry.sci && speciesPending === atlasKey(entry.sci));
-    const mode = fromThisLink && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
+    const mode = wish && offers.includes(wish) ? wish : fromThisLink && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
     next.setMode(mode);
     const prev = cur;
     cur = next;
