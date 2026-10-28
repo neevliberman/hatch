@@ -1,5 +1,5 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, loadIndex, type AtlasSpecies } from '../atlas/index';
+import { atlasKey, loadIndex, loadSurprises, type AtlasSpecies, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
 import { CROSS } from './icons';
 
@@ -29,11 +29,15 @@ export function mountSpeciesPicker(
   button: HTMLButtonElement,
   sheet: HTMLElement,
   featured: SpeciesEntry[],
-  onPick: (key: string) => void,
+  /** The year whose surprises it lists (seen-YEAR.json). */
+  surpriseYear: number,
+  /** A species picked; `season` when a row asks for one (a surprise opens on its year). */
+  onPick: (key: string, season?: string) => void,
 ): SpeciesPicker {
   const bySci = new Map(featured.filter((e) => e.sci).map((e) => [e.sci!, e.key] as const));
   const keyOf = (s: AtlasSpecies) => bySci.get(s.name) ?? atlasKey(s.name);
   let all: AtlasSpecies[] | null = null;
+  let odd: Surprise[] = [];
   let path: Path = {};
   let q = '';
   let refocus = false;
@@ -81,6 +85,17 @@ export function mountSpeciesPicker(
   };
 
   // The hand-built species, there at once (the one-file build has no Atlas list at all); photos once the list is in.
+  // The year's surprises: photos well over or under what the network expected, or a season well off (seen.py).
+  const surpriseRows = () =>
+    odd.length && all
+      ? `<li class="sp-sec">${surpriseYear} surprises</li>` +
+        odd
+          .map(({ i, note }) => {
+            const s = all!.find((x) => x.i === i);
+            return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span><span class="sp-n">${esc(note)}</span></button>`) : '';
+          })
+          .join('')
+      : '';
   const featuredRows = () =>
     featured
       .map((e) => {
@@ -108,7 +123,7 @@ export function mountSpeciesPicker(
     crumbs.innerHTML = steps.join('<span aria-hidden="true"> › </span>');
     if (!path.order) {
       list.innerHTML =
-        `<li class="sp-sec">Featured forecasts</li>${featuredRows()}${all.length ? '<li class="sp-sec">Browse</li>' : ''}` +
+        `<li class="sp-sec">Featured forecasts</li>${featuredRows()}${surpriseRows()}${all.length ? '<li class="sp-sec">Browse</li>' : ''}` +
         tally(all, 'order').map(([o, n]) => counted(group(ORDER_NAMES[o] ?? o, o, `data-order="${esc(o)}"`), n)).join('');
     } else if (!path.family) {
       const inOrder = all.filter((s) => s.order === path.order);
@@ -125,7 +140,8 @@ export function mountSpeciesPicker(
     render();
     input.focus();
     if (!all)
-      void loadIndex().then((s) => {
+      void Promise.all([loadIndex(), loadSurprises(surpriseYear)]).then(([s, u]) => {
+        odd = u?.list ?? [];
         if (s) all = s;
         else list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Couldn’t load the other insects. Close and try again.</li>`;
         if (s) render();
@@ -144,7 +160,7 @@ export function mountSpeciesPicker(
       open(false);
       button.focus();
       refocus = true; // the button is disabled while the species loads, which drops focus: hand it back after
-      onPick(b.dataset.key);
+      onPick(b.dataset.key, b.dataset.season);
     } else if (b.dataset.order) (path = { order: b.dataset.order }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.family) (path = { ...path, family: b.dataset.family }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.crumb !== undefined) (path = b.dataset.crumb ? { order: path.order } : {}), render();

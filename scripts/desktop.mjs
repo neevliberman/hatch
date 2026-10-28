@@ -748,6 +748,16 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const firstKey = await page.locator('#sp-list .sp-row').first().getAttribute('data-key');
       await page.locator('#sp-list .sp-row').first().click();
       if (!(await isOn(`${firstKey}-atlas`))) fail(`the tree's first dragonfly (${firstKey}) did not open`);
+      // The year's surprises, listed first: one opens on 2026, the year it surprised.
+      await page.locator('#species').click();
+      await page.locator('#species-sheet [data-crumb=""]').click(); // back from the dragonfly family to every insect
+      const odd = page.locator('#sp-list [data-season="2026"]').first();
+      await odd.waitFor({ timeout: 10000 }).catch(() => fail('the species picker lists no 2026 surprises'));
+      const oddKey = await odd.getAttribute('data-key');
+      await odd.click();
+      if (!(await isOn(`${oddKey}-atlas`))) fail(`the first 2026 surprise (${oddKey}) did not open`);
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 })
+        .catch(() => fail('a 2026 surprise did not open on 2026'));
       // 2026, with its real warmth.
       if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
       else {
