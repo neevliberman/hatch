@@ -1,9 +1,9 @@
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import { AtlasGpu } from './gpu';
 import { AtlasNet, type ModelMeta, type Place } from './net';
-import { atlasUrl, json, loadIndex, type AtlasSpecies } from './index';
+import { ATLAS_YEAR, atlasUrl, json, loadIndex, type AtlasSpecies } from './index';
 
-export { atlasKey, loadIndex, type AtlasSpecies } from './index';
+export { ATLAS_YEAR, atlasKey, loadIndex, type AtlasSpecies } from './index';
 
 /**
  * The Living Atlas in the page: its files (public/atlas/, written by pipeline/atlas/export.py), the network, and the
@@ -20,8 +20,6 @@ const STEPS = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
 /** How far the "Warm the spring" slider reaches, °F (warm.py F), and the network's own limit on days ahead. */
 export const WARM_F = 3;
 const CLIP_DAYS = 30;
-/** The year whose real warmth ships (ahead-YEAR.bin). */
-export const ATLAS_YEAR = 2026;
 /** The warmth cells' size (H3 resolution). */
 export const ATLAS_RES = 4;
 
