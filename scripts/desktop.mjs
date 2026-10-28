@@ -830,6 +830,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#find-list li').first().click();
       await page.waitForTimeout(1200);
       if (!/Springfield, IL/.test((await page.locator('#probe').textContent()) ?? '')) fail('picking Springfield, IL showed no card for it');
+      // "Coming out near you": the town found gets a countdown line (15 January: luna's season is months off), kept
+      // for the next visit; its cross forgets it.
+      const near = async () => ((await page.locator('#near').isVisible()) ? await page.locator('#near-go').textContent() : null);
+      if (!/^Near Springfield: luna moths in \d+ days \(\w+\u00A0\d+\)$/.test((await near()) ?? '')) fail(`after finding Springfield the near line reads ${JSON.stringify(await near())}`);
       await shotF('2-picked');
       await page.locator('#info-btn').click();
       await page.waitForTimeout(500);
@@ -878,6 +882,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 300 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
         await shotF('4-share');
       }
+      // The last town found is kept for the next visit, and speaks for whichever species is on screen; its cross forgets it.
+      await page.goto(origin + '/?noauto&today=2027-01-15&species=papilio-glaucus');
+      // (Luna's line shows first, while the swallowtail loads.)
+      await page.waitForFunction(() => /Swallowtails/.test(document.getElementById('near-go').textContent), null, { timeout: 30000, polling: 250 }).catch(() => {});
+      if (!/^Near Cincinnati: Eastern Tiger Swallowtails in \d+ days/.test((await near()) ?? '')) fail(`on the next visit, the swallowtail's near line reads ${JSON.stringify(await near())}`);
+      await page.locator('#near-x').click();
+      if ((await page.locator('#near').isVisible()) || (await page.evaluate(() => localStorage.getItem('hatch-place')))) fail('the near line\'s cross did not forget the place');
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }

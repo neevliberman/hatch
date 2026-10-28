@@ -52,6 +52,15 @@ export interface SpotSegment {
   label: string;
 }
 
+/** A species' coming season at one place, as days of year: its first ones, its peak and its last. `year` names a
+ * live forecast's season; without one it is a typical year, good for any year. */
+export interface Due {
+  start: number;
+  peak: number;
+  end: number;
+  year?: number;
+}
+
 /** The explainer's "your spot" card: one place's season, drawn as a strip with today marked. */
 export interface SpotStory {
   title: string;
