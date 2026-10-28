@@ -197,7 +197,8 @@ export function mountSpeciesPicker(
     button.setAttribute('aria-expanded', String(on));
     if (!on) return;
     render();
-    input.focus();
+    // Touch screens: no auto-focus, so the keyboard doesn't cover the tree until the search box is tapped.
+    if (matchMedia('(pointer: fine)').matches) input.focus();
     if (!all)
       void Promise.all([loadIndex(), loadSurprises(surpriseYear)]).then(([s, u]) => {
         odd = u?.list ?? [];
