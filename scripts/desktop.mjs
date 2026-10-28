@@ -679,9 +679,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     console.log(`${tag}: checked`);
   };
 
-  // The Living Atlas (src/atlas/), over http in Chromium: a ?species= link to any Atlas species draws its field, the
-  // network in the page matches PyTorch's numbers (scripts/atlas-net.fixture.json) and the graphics card matches the
-  // plain network, the picker finds a species by name and opens it, the season menu offers 2026, and a pinned card's
+  // The Living Atlas (src/atlas/), over http in Chromium: a ?species= link to any Atlas species draws its field and
+  // its photos as dots, the network in the page matches PyTorch's numbers (scripts/atlas-net.fixture.json) and the
+  // graphics card matches the plain network, the picker finds a species by name and opens it, the season menu offers 2026, and a pinned card's
   // "also out here" switches species.
   const atlasFixture = JSON.parse(readFileSync('scripts/atlas-net.fixture.json', 'utf8'));
   const atlasUnit = async (browser) => {
@@ -698,6 +698,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png`, timeout: 60000 })
       .catch((e) => console.log(`atlas-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
     const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
+    // The screen point of the spot in a box [w, s, e, n] farthest from the lit photo dots: a tap on a dot opens that
+    // photo's card instead of the place's.
+    const clearSpot = (box) => page.evaluate(([w, s, e, n]) => {
+      const h = window.__hatch;
+      const lit = h.current().points(h.time.cursor);
+      let best = null;
+      for (let lng = w; lng <= e; lng += 0.25)
+        for (let lat = s; lat <= n; lat += 0.25) {
+          const gap = Math.min(Infinity, ...lit.map(([x, y]) => Math.hypot(x - lng, y - lat)));
+          if (!best || gap > best.gap) best = { gap, lng, lat };
+        }
+      return h.map.project([best.lng, best.lat]);
+    }, box);
     try {
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
       if (!(await isOn('papilio-glaucus-atlas'))) fail('a ?species=papilio-glaucus link never opened the Atlas swallowtail');
@@ -708,6 +721,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         return hex ? hex.props.data.filter((d) => hex.props.getFillColor(d)[3] > 0).length : 0;
       });
       if (drawn < 300) fail(`only ${drawn} coloured cells on 1 August`);
+      // Its real photos as dots (dots/<i>.bin): a typical year's 1 August has hundreds of tiger swallowtails lit.
+      const lit = await page.waitForFunction(() => window.__hatch.current().points(window.__hatch.time.cursor).length, null, { timeout: 10000 })
+        .then((h) => h.jsonValue(), () => 0);
+      if (lit < 50) fail(`only ${lit} photo dots lit on 1 August`);
       await shotA('1-field');
       const net = await page.evaluate(async (cases) => {
         const a = await window.__hatch.atlas();
@@ -817,7 +834,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 })
         .catch(() => fail('2026 drew no photos seen on the time bar'));
       if (!(await page.locator('#strip .vs-note').isVisible())) fail('the time bar draws expected vs seen with no key saying which is which');
-      const ohio = await page.evaluate(() => window.__hatch.map.project([-81.7, 41.4]));
+      const ohio = await clearSpot([-84.5, 39.5, -81, 41.5]);
       await page.mouse.click(ohio[0], ohio[1]);
       await page.waitForFunction(() => /Across the map in 2026: \d+(\.\d)?× as many photos as expected/.test(document.getElementById('probe').textContent), null, { timeout: 10000 })
         .catch(async () => fail(`the 2026 card does not say how the year went: "${await page.locator('#probe').innerText()}"`));
@@ -826,7 +843,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
       await isOn('papilio-glaucus-atlas');
       await page.waitForTimeout(3000);
-      const at = await page.evaluate(() => window.__hatch.map.project([-88.5, 41.6]));
+      const at = await clearSpot([-89.5, 40.5, -87.75, 42]);
       await page.mouse.click(at[0], at[1]);
       const other = page.locator('#probe .probe-others [data-species]').first();
       await other.waitFor({ timeout: 8000 }).catch(() => fail('the pinned card lists no "also out here"'));
