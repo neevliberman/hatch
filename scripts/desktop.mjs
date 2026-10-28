@@ -746,7 +746,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#sp-q').fill('');
       const canvas = page.locator('.tol-canvas');
       await canvas.waitFor({ timeout: 10000 }).catch(() => fail('the tree of life never showed'));
-      await page.waitForTimeout(900); // the branches grow in
+      // The branches grow in: wait for the whole tree rather than a fixed time.
+      await page.waitForFunction(() => Number(document.querySelector('.tol-canvas')?.getAttribute('data-branches')) > 1500, null, { timeout: 8000, polling: 200 }).catch(() => {});
       const branches = Number(await canvas.getAttribute('data-branches'));
       if (!(branches > 1500)) fail(`the tree of life drew ${branches} branches, not the whole tree`);
       await shotA('2b-tree');
@@ -763,6 +764,16 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('.tol-go').click();
       await page.waitForFunction((t) => document.querySelector('#species')?.getAttribute('aria-label')?.includes(t), title, { timeout: 30000 })
         .catch(() => fail(`"Show on map" for ${title} did not switch to it`));
+      // The year's surprises, a second strip over the tree: one opens on 2026, the year it surprised.
+      await page.locator('#species').click();
+      const odd = page.locator('#sp-odd [data-season="2026"]').first();
+      await odd.waitFor({ timeout: 10000 }).catch(() => fail('the species picker shows no 2026 surprises'));
+      await shotA('2d-surprises');
+      const oddKey = await odd.getAttribute('data-key');
+      await odd.click();
+      if (!(await isOn(`${oddKey}-atlas`))) fail(`the first 2026 surprise (${oddKey}) did not open`);
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 })
+        .catch(() => fail('a 2026 surprise did not open on 2026'));
       // 2026, with its real warmth.
       if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
       else {
