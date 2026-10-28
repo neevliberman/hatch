@@ -1,8 +1,8 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
-import type { CaveatCard, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
-import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies } from '../atlas/atlas';
+import type { CaveatCard, Due, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
+import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import type { LunaLayer } from './lunaReplay';
@@ -46,7 +46,8 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const words: SpeciesWords = { plural: many, sightingsOf: name, countedAs: many, shareName: many, mark: markOf(sp) };
   const other = atlas.net.nOut - 1;
   let mode: Mode = initial === String(ATLAS_YEAR) ? initial : TYPICAL;
-  const fields = new Map<Mode, Field>([[TYPICAL, new Field(atlas, sp.i, null, onData)]]);
+  /** "Warm the spring", °F: every spring day this much warmer (negative: cooler). */
+  let warm = 0;
   const yearOf = () => (mode === TYPICAL ? TYPICAL_AXIS_YEAR : ATLAS_YEAR);
   const curve = (m: Mode) => atlas.season(sp.i, m === TYPICAL ? null : ATLAS_YEAR);
   const at = (c: number[], doy: number) => {
@@ -56,21 +57,83 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     return c[k]! + (c[k + 1]! - c[k]!) * (x - k);
   };
   const peakDay = (c: number[]) => SEASON[0] + STEP * c.indexOf(Math.max(...c));
-  let aheadYear: Float32Array | null = null;
-  const field = () => fields.get(mode) ?? fields.get(TYPICAL)!;
-  /** The season the numbers are for: 2026 only once its warmth file is in (until then the typical year stands in). */
-  const drawn = (): Mode => (mode === TYPICAL || !aheadYear ? TYPICAL : mode);
-  const setYear = (m: Mode) => {
-    if (m === TYPICAL || fields.has(m)) return;
-    void atlas.ahead(ATLAS_YEAR).then((a) => {
-      if (!a || fields.has(m)) return;
-      aheadYear = a;
-      fields.set(m, new Field(atlas, sp.i, a, onData));
+
+  // One run of the season per (season, warmth): its field, and every cell's days ahead on a day (null: a typical year
+  // as it was). A run loads its files first (2026's days ahead, the warmth table), so until it lands the nearest one
+  // ready stands in: the same season as it was, else the typical year.
+  interface Run {
+    key: string;
+    mode: Mode;
+    warm: number;
+    field: Field;
+    on: ((day: number) => Float32Array) | null;
+    base: ((day: number) => Float32Array) | null;
+  }
+  const keyOf = (m: Mode, w: number) => `${m}|${w}`;
+  const BASE = keyOf(TYPICAL, 0);
+  const runs = new Map<string, Run>([[BASE, { key: BASE, mode: TYPICAL, warm: 0, field: new Field(atlas, sp.i, null, onData), on: null, base: null }]]);
+  const pending = new Set<string>();
+  const run = (): Run => runs.get(keyOf(mode, warm)) ?? runs.get(keyOf(mode, 0)) ?? runs.get(BASE)!;
+  const ensure = (m: Mode, w: number) => {
+    const k = keyOf(m, w);
+    if (runs.has(k) || pending.has(k)) return;
+    pending.add(k);
+    void (async () => {
+      const year = m === TYPICAL ? null : await atlas.ahead(ATLAS_YEAR);
+      const base = year ? atlas.onDay(year) : null;
+      const on = w === 0 ? base : await atlas.warmed(year, w);
+      pending.delete(k);
+      if ((m !== TYPICAL && !year) || (w !== 0 && !on)) return;
+      runs.set(k, { key: k, mode: m, warm: w, field: new Field(atlas, sp.i, on, onData), on, base });
+      // Keep the last few: a drag across the slider makes a run per notch.
+      for (const old of runs.keys()) if (runs.size > 6 && old !== BASE && old !== k && old !== keyOf(mode, 0) && old !== keyOf(mode, warm)) runs.delete(old);
+      onData();
+    })();
+  };
+  ensure(mode, 0);
+  const field = () => run().field;
+  /** The run the numbers are for. */
+  const drawn = () => run().key;
+  const aheadAt = (c: number, doy: number) => run().on?.(doy)[c] ?? 0;
+  /** How far its season follows warmth: its clock blend's share of the days ahead (0: the calendar alone). */
+  const follows = atlas.net.meta.lambdas.reduce((a, l, k) => a + l * atlas.net.clockMix[sp.i * atlas.net.meta.lambdas.length + k]!, 0);
+  /** Days earlier (negative: later) the warmth moves its season over the map, around its typical peak. */
+  const shift = (r: Run) => {
+    if (!r.warm || !r.on) return 0;
+    const d = peakDay(curve(TYPICAL));
+    const a = r.on(d);
+    const b = r.base?.(d);
+    let sum = 0;
+    for (let c = 0; c < a.length; c++) sum += a[c]! - (b ? b[c]! : 0);
+    return (follows * sum) / a.length;
+  };
+  const cells = atlas.cells.map((c, i) => ({ id: c.h, i }));
+
+  // Expected vs seen in ATLAS_YEAR (Atlas.seen), fetched the first time that year is shown.
+  let year: Seen | null = null;
+  let askedYear = false;
+  const askYear = () => {
+    if (askedYear || mode === TYPICAL) return;
+    askedYear = true;
+    void atlas.seen(sp.i).then((s) => {
+      year = s;
       onData();
     });
   };
-  setYear(mode);
-  const cells = atlas.cells.map((c, i) => ({ id: c.h, i }));
+  askYear();
+  /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. */
+  const yearWords = (y: Seen) => {
+    if (y.photos < 10 && y.expectedPhotos < 10) return 'too few photos to judge';
+    const x = y.ratio === null ? 0 : y.ratio < 9.95 ? Math.round(y.ratio * 10) / 10 : Math.round(y.ratio);
+    const r =
+      y.ratio === null ? 'about as many photos as expected'
+      : y.ratio === 0 ? 'no photos, though some expected'
+      : y.ratio < 1 ? `${Math.max(1, Math.round(y.ratio * 100))}% as many photos as expected`
+      : `${x}× as many photos as expected`;
+    // Early or late for the warmth: the expectation already knows how warm the spring was.
+    const d = y.days === null ? '' : `, ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'early' : 'late'} for its warmth`;
+    return r + d;
+  };
 
   // On paper, pale sage to deep leaf as the share climbs to the species' top (the forecast's "starting" and "peak"
   // greens): more ink where it is commoner. By lamplight the other way, dim moss to a bright leaf, so more still reads
@@ -91,8 +154,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     const k = `${c}|${doy}|${drawn()}`;
     let r = near.get(k);
     if (!r) {
-      const ahead = mode === TYPICAL || !aheadYear ? 0 : aheadYear[c * 365 + doy - 1]!;
-      const ls = atlas.net.logShares(atlas.cells[c]!, doy, ahead);
+      const ls = atlas.net.logShares(atlas.cells[c]!, doy, aheadAt(c, doy));
       r = [...ls].map((v, i) => ({ i, s: Math.exp(v) })).sort((a, b) => b.s - a.s);
       if (near.size > 200) near.clear();
       near.set(k, r);
@@ -101,30 +163,45 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   };
   // The species' best day at a cell: the most photos of it expected (its share times the day's usual photos), from a
   // season's worth of days in one pass on the graphics card.
+  /** Its share at a cell every STEP days from SEASON[0] (on the graphics card in one pass; else the plain network). */
+  const sharesHere = (c: number, on: ((day: number) => Float32Array) | null): number[] => {
+    const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
+    const days = Array.from({ length: n }, (_, j) => SEASON[0] + STEP * j);
+    if (!atlas.gpu) return days.map((d) => Math.exp(atlas.net.logShares(atlas.cells[c]!, d, on ? on(d)[c]! : 0)[sp.i]!));
+    const P = atlas.net.placeDim;
+    const places = new Float32Array(n * P);
+    for (let j = 0; j < n; j++) places.set(atlas.places.subarray(c * P, (c + 1) * P), j * P);
+    const ahead = on ? Float32Array.from(days, (d) => on(d)[c]!) : null;
+    return [...atlas.gpu.run(places, Float32Array.from(days), ahead, [sp.i])[0]!].map(Math.exp);
+  };
   const peaks = new Map<string, number>();
   const peakHere = (c: number): number | null => {
     const k = `${c}|${drawn()}`;
     if (peaks.has(k)) return peaks.get(k)!;
     if (!atlas.gpu) return null;
-    const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
-    const P = atlas.net.placeDim;
-    const places = new Float32Array(n * P);
-    const days = new Float32Array(n);
-    const ahead = mode === TYPICAL || !aheadYear ? null : new Float32Array(n);
-    for (let j = 0; j < n; j++) {
-      places.set(atlas.places.subarray(c * P, (c + 1) * P), j * P);
-      days[j] = SEASON[0] + STEP * j;
-      if (ahead) ahead[j] = aheadYear![c * 365 + days[j]! - 1]!;
-    }
-    const v = atlas.gpu.run(places, days, ahead, [sp.i])[0]!;
-    const photos = [...v].map((x, j) => Math.exp(x) * atlas.volume[j]!);
+    const photos = sharesHere(c, run().on).map((x, j) => x * atlas.volume[j]!);
     const best = SEASON[0] + STEP * photos.indexOf(Math.max(...photos));
     peaks.set(k, best);
     return best;
   };
+  // "Coming out near you": a typical year's expected photos of it at the cell; its season is the days with at least a
+  // twentieth of its best day's (so a spring brood counts, not just the bigger summer one). None where it is hardly
+  // expected even then.
+  const dues = new Map<number, Due | null>();
+  const dueHere = (c: number): Due | null => {
+    if (dues.has(c)) return dues.get(c)!;
+    const shares = sharesHere(c, null);
+    const photos = shares.map((x, j) => x * atlas.volume[j]!);
+    const top = Math.max(...photos);
+    const best = photos.indexOf(top);
+    const on = photos.map((p, j) => (p >= top / 20 ? j : -1)).filter((j) => j >= 0);
+    const d = shares[best]! < 1e-4 ? null : { start: SEASON[0] + STEP * on[0]!, peak: SEASON[0] + STEP * best, end: SEASON[0] + STEP * on[on.length - 1]! };
+    dues.set(c, d);
+    return d;
+  };
   const shareAt = (c: number, doy: number) => field().get(doy)?.[c] ?? ranked(c, doy).find((r) => r.i === sp.i)!.s;
 
-  const profiles = new Map<Mode, SeasonProfile>();
+  const profiles = new Map<string, SeasonProfile>();
   return {
     id: `${key}-atlas`,
     title: name,
@@ -132,11 +209,27 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     mode: () => mode,
     setMode(m) {
       mode = m === String(ATLAS_YEAR) ? m : TYPICAL;
-      setYear(mode);
+      askYear();
+      ensure(mode, 0);
+      ensure(mode, warm);
+    },
+    setWarmth(degF) {
+      warm = degF;
+      ensure(mode, warm);
+    },
+    warmthNote() {
+      const r = run();
+      if (!warm || r.warm !== warm) return '';
+      const d = shift(r);
+      return Math.abs(d) < 0.5 ? 'hardly moves' : `about ${Math.round(Math.abs(d))} day${Math.round(Math.abs(d)) === 1 ? '' : 's'} ${d > 0 ? 'earlier' : 'later'}`;
     },
     seasons: () => [TYPICAL, String(ATLAS_YEAR)],
     live: () => null,
     res: () => 4,
+    due([lng, lat]) {
+      const c = atlas.cellAt(lat, lng);
+      return c === null ? null : dueHere(c);
+    },
     cellAt: ([lng, lat]) => {
       const c = atlas.cellAt(lat, lng);
       return c === null ? null : atlas.cells[c]!.h;
@@ -181,17 +274,27 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
 
     // The ribbon: its share over the whole map through the season (export.py), one value per day of the range.
     profile() {
-      let p = profiles.get(mode);
+      const r = run();
+      // In ATLAS_YEAR as it was, the line is the photos expected from that year's own photos, and the green wash the
+      // photos seen, on one scale (warmed, the year is no longer the one the photos come from: the plain curve).
+      const vs = r.mode !== TYPICAL && !r.warm ? year : null;
+      const pk = `${r.key}|${vs ? 1 : 0}|${isDark()}`;
+      let p = profiles.get(pk);
       if (!p) {
-        const c = curve(mode);
+        const c = curve(r.mode);
+        // Warmed, the season's curve slides by the days the warmth moves it (the field itself is the network rerun).
+        const by = shift(r);
         const y = yearOf();
         const s = this.timeSpec!(mode);
         const d0 = dayOfYear(s.start);
         const n = Math.round((s.end - s.start) / TimeAxis.DAY) + 1;
-        const seen = Array.from({ length: n }, (_, j) => at(c, d0 + j));
-        const top = peakDay(c);
+        const line = vs ? vs.expected : c;
+        const seen = Array.from({ length: n }, (_, j) => at(line, d0 + j + by));
+        const top = Math.round(peakDay(line) - by);
         const notes = top >= d0 && top < d0 + n ? [{ at: top - d0, text: `peak ${fmt(y, top)}` }] : [];
-        profiles.set(mode, (p = { bands: [], seen, notes }));
+        const g = isDark() ? BRIGHT : palette.stages.peak;
+        const seenOnly = vs ? [{ color: `rgb(${g[0]},${g[1]},${g[2]})`, seen: Array.from({ length: n }, (_, j) => at(vs.seen, d0 + j)) }] : undefined;
+        profiles.set(pk, (p = { bands: [], seen, notes, ...(seenOnly ? { seenOnly } : {}) }));
       }
       return p;
     },
@@ -235,7 +338,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return {
         title: s > 1e-4 ? `${name}: ${oneIn(s)} insect photos` : `${name}: hardly expected`,
         swatch: css(color(s)),
-        lines: best === null ? [] : [`Best here: around ${fmt(yearOf(), best)}`],
+        lines: [
+          ...(best === null ? [] : [`Best here: around ${fmt(yearOf(), best)}`]),
+          ...(mode !== TYPICAL && year ? [`Across the map in ${ATLAS_YEAR}: ${yearWords(year)}`] : []),
+        ],
         others: { title: 'Also out here', list: others },
       };
     },
@@ -257,6 +363,12 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           mode === TYPICAL
             ? 'A typical year: the season as it usually runs.'
             : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.`,
+          ...(mode !== TYPICAL && year
+            ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.`]
+            : []),
+          ...(warm
+            ? [`Spring ${warm > 0 ? '+' : '−'}${Math.abs(warm)} °F: every day’s high and low moved that much, the network rerun. It follows warmth ${follows > 0.66 ? 'closely' : follows > 0.33 ? 'partly' : 'hardly at all'}.`]
+            : []),
           'Photos show where people look as well as where insects are.',
         ],
       };

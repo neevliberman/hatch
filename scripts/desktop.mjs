@@ -693,7 +693,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     // A species photo can fail to load (offline, or iNaturalist slow): the page shows a blank square, which is fine.
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
-    const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png` });
+    // A record for the visual review, not a check: software GL in CI can keep the page busy past the screenshot's
+    // timeout while the network fills the map, which must not fail the checks around it.
+    const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png`, timeout: 60000 })
+      .catch((e) => console.log(`atlas-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
     const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
     try {
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
@@ -766,6 +769,48 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.locator('#season').selectOption('2026');
         await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 }).catch(() => fail('2026 never took'));
       }
+      // Warm the spring: +3 °F reruns the season (a spring bug comes out sooner), the link keeps it, a ?warm= link
+      // reopens it, and closing it puts spring back as it was.
+      const ink = () => page.evaluate(() => {
+        const h = window.__hatch;
+        const hex = h.current().render({ t: h.time.cursor, zoom: 5, theme: { bg: '#000', hexEdge: [0, 0, 0, 0], text: '#000' } }).find((l) => /-forecast-r4$/.test(l.id));
+        return hex ? hex.props.data.reduce((a, d) => a + Math.max(0, hex.props.getFillColor(d)[3] - 90), 0) : 0;
+      });
+      await page.goto(origin + '/?species=poecilocapsus-lineatus&noauto&date=05-20');
+      await isOn('poecilocapsus-lineatus-atlas');
+      await page.waitForTimeout(3000);
+      const before = await ink();
+      await page.locator('#warm').click();
+      await page.locator('#warm-in').fill('3');
+      await page.locator('#warm-in').dispatchEvent('input');
+      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+        .catch(async () => fail(`+3 °F never said "earlier": "${await page.locator('#warm-out').textContent()}"`));
+      await page.waitForTimeout(3000);
+      const after = await ink();
+      if (!(after > before * 1.04)) fail(`+3 °F did not bring the four-lined plant bug out sooner on 20 May (ink ${before} -> ${after})`);
+      await shotA('4-warm');
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('warm') === '3', null, { timeout: 5000, polling: 250 })
+        .catch(() => fail(`the link dropped the warmth: ${page.url()}`));
+      await page.goto(origin + '/?species=poecilocapsus-lineatus&noauto&date=05-20&warm=-2');
+      await isOn('poecilocapsus-lineatus-atlas');
+      await page.waitForFunction(() => /later/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+        .catch(() => fail('a ?warm=-2 link did not open spring 2 °F cooler'));
+      await page.locator('#warm-row .warm-x').click();
+      if ((await page.locator('#warm-in').inputValue()) !== '0' || !(await page.locator('#warm-row').isHidden())) fail('closing the slider left spring warmed');
+      await page.waitForFunction(() => !new URL(location.href).searchParams.has('warm'), null, { timeout: 5000, polling: 250 })
+        .catch(() => fail('closing the slider left ?warm= in the link'));
+      // Expected vs seen: 2026 draws the photos seen against the ones expected on the time bar, and the card says how
+      // the year went (spotted lanternflies: far more than expected, still spreading west).
+      await page.goto(origin + '/?species=lycorma-delicatula&noauto&year=2026&date=09-10');
+      await isOn('lycorma-delicatula-atlas');
+      await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 })
+        .catch(() => fail('2026 drew no photos seen on the time bar'));
+      if (!(await page.locator('#strip .vs-note').isVisible())) fail('the time bar draws expected vs seen with no key saying which is which');
+      const ohio = await page.evaluate(() => window.__hatch.map.project([-81.7, 41.4]));
+      await page.mouse.click(ohio[0], ohio[1]);
+      await page.waitForFunction(() => /Across the map in 2026: \d+(\.\d)?× as many photos as expected/.test(document.getElementById('probe').textContent), null, { timeout: 10000 })
+        .catch(async () => fail(`the 2026 card does not say how the year went: "${await page.locator('#probe').innerText()}"`));
+      await shotA('5-seen');
       // A pinned card names others out here; one tap switches to it.
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
       await isOn('papilio-glaucus-atlas');
@@ -815,6 +860,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#find-list li').first().click();
       await page.waitForTimeout(1200);
       if (!/Springfield, IL/.test((await page.locator('#probe').textContent()) ?? '')) fail('picking Springfield, IL showed no card for it');
+      // "Coming out near you": the town found gets a countdown line (15 January: luna's season is months off), kept
+      // for the next visit; its cross forgets it.
+      const near = async () => ((await page.locator('#near').isVisible()) ? await page.locator('#near-go').textContent() : null);
+      if (!/^Near Springfield: luna moths in \d+ days \(\w+\u00A0\d+\)$/.test((await near()) ?? '')) fail(`after finding Springfield the near line reads ${JSON.stringify(await near())}`);
       await shotF('2-picked');
       await page.locator('#info-btn').click();
       await page.waitForTimeout(500);
@@ -863,6 +912,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 300 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
         await shotF('4-share');
       }
+      // The last town found is kept for the next visit, and speaks for whichever species is on screen; its cross forgets it.
+      await page.goto(origin + '/?noauto&today=2027-01-15&species=papilio-glaucus');
+      // (Luna's line shows first, while the swallowtail loads.)
+      await page.waitForFunction(() => /Swallowtails/.test(document.getElementById('near-go').textContent), null, { timeout: 30000, polling: 250 }).catch(() => {});
+      if (!/^Near Cincinnati: Eastern Tiger Swallowtails in \d+ days/.test((await near()) ?? '')) fail(`on the next visit, the swallowtail's near line reads ${JSON.stringify(await near())}`);
+      await page.locator('#near-x').click();
+      if ((await page.locator('#near').isVisible()) || (await page.evaluate(() => localStorage.getItem('hatch-place')))) fail('the near line\'s cross did not forget the place');
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }

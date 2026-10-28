@@ -5,7 +5,7 @@ import { DataFilterExtension, FillStyleExtension, type FillStyleExtensionProps }
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import { GRID_RES } from '../core/grid';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
-import type { CaveatCard, Explainer, HatchLayer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
+import type { CaveatCard, Due, Explainer, HatchLayer, LegendSpec, OffSeasonNote, ProbeCard, SeasonProfile, SpotStory } from '../core/layer';
 import { MOTH_ART, restingSketch } from '../ui/sketch';
 import { countdownParts } from '../ui/countdown';
 import mark from '../marks/moth.svg';
@@ -26,7 +26,8 @@ import {
 } from './lunaData';
 import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
-import { isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
+import { makeFront } from './front';
+import { dueOf, isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { isStale, type Live } from './liveData';
 import { MOTH_NIGHT_NOTE, mothNightLine } from './activity';
 import { modelChecks, windowCheck } from './replayData';
@@ -300,6 +301,12 @@ export interface LunaLayer extends HatchLayer {
   seasons?(): Mode[];
   /** Its own time range for a mode, when not replayTimeSpec's (an Atlas species spans its own months). */
   timeSpec?(mode: Mode, month?: number, day?: number): TimeSpec;
+  /** "Coming out near you": its season at a place, from the live forecast while there is one, else a typical year. */
+  due?(lngLat: [number, number], now: number): Due | null;
+  /** "Warm the spring": rerun the season with every spring day `degF` warmer (negative: cooler); 0 is as it was. */
+  setWarmth?(degF: number): void;
+  /** What the warmth does to it, e.g. "about 6 days earlier" (empty at 0). */
+  warmthNote?(): string;
 }
 
 interface FineCell {
@@ -327,6 +334,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
   const filterExt = [new DataFilterExtension({ filterSize: 1 })];
 
   const unseen = cells.filter((c) => !c.seen);
+  const front = makeFront(data.cells, 'luna-front');
   // An ink ring spreads from each moth on the day it is seen, while playing.
   const rings = ripples<Sighting>('luna-ripples', (s) => [s.lng, s.lat], () => palette.dotRim);
   let sleepNote: OffSeasonNote | undefined;
@@ -539,6 +547,16 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     res: () => shownRes,
     fineCurrent: () => shownRes > 4 && shownDays !== null && shownDays === fineDaysLoaded.get(`${shownRes}/${mode}`),
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
+    // This year's live forecast where it covers the place and its season isn't over, else the typical year.
+    due(lngLat, now) {
+      const i = cellIndex.get(latLngToCell(lngLat[1], lngLat[0], GRID_RES));
+      if (i === undefined) return null;
+      const q = live && live.season === new Date(now).getUTCFullYear() ? live.median[i] : null;
+      const on = dueOf(q, live?.season);
+      if (!on) return dueOf(data.forecast[TYPICAL]![i]);
+      // This year's live season is over: count down to next year's typical one.
+      return dayOfYear(now) <= on.end ? on : dueOf(data.forecast[TYPICAL]![i], on.year! + 1);
+    },
 
     newest: (t) => newest(dayOfYear(t)),
     busy: (t) => isBusy(forecast(), dayOfYear(t)),
@@ -689,6 +707,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
           fillPatternSizeUnits: 'pixels',
         }),
         ]),
+        ...(hexLayers || wash !== undefined ? [] : [front(forecast(), doy)]),
         new ScatterplotLayer<Sighting>({
           id: 'luna-glow',
           data: shown,
@@ -909,6 +928,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       };
     },
 
+    record() {
+      const { heat, calendar } = scoreSummary();
+      return { days: heat, calendar, firstTry: false };
+    },
+
     legend(): LegendSpec {
       return {
         title: 'Forecast',
@@ -918,7 +942,8 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
             label: STAGE_LABEL[s],
             shape: 'hex' as const,
           })),
-          { color: css(STAGE_COLOR.peak), label: 'no sightings nearby', shape: 'striped' },
+          { color: css(palette.front), label: 'front: first ones out', shape: 'line' },
+          { color: css(STAGE_COLOR.peak), label: 'untested: no sightings', shape: 'striped' },
           { color: css(palette.moth), label: 'seen, last 10 days', shape: 'dot' },
           ...(isLive() ? [{ color: `rgba(${palette.moth[0]},${palette.moth[1]},${palette.moth[2]},0.59)`, label: 'pending (not yet confirmed)', shape: 'dot' as const }] : []),
           { color: css(palette.second), label: 'seen, 2nd wave', shape: 'dot' },

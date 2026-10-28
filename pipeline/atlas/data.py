@@ -60,23 +60,30 @@ class Warmth:
 
     def days_ahead(self):
         """Δ [C, Y, 365]: the day this place usually reaches today's degree-days, minus today. Clipped, then held."""
-        C, Y, D = self.dd.shape
-        days = np.arange(1, D + 1, dtype=np.float32)
-        out = np.zeros((C, Y, D), np.float32)
-        for c in range(C):
-            curve = self.clim[c] + days * 1e-4  # strictly increasing, so the inverse exists
-            rate = np.gradient(self.clim[c])
-            hold = np.argmax((days > 182) & (rate < HOLD_RATE)) or D
-            for y in range(Y):
-                t_usual = np.interp(self.dd[c, y] + days * 1e-4, curve, days)
-                d = np.clip(t_usual - days, -CLIP_DAYS, CLIP_DAYS)
-                d[self.dd[c, y] + self.clim[c] < 1] = 0  # before any warmth this year or usually
-                d[hold:] = d[hold - 1]
-                out[c, y] = d
-        return out
+        return np.stack([days_ahead(self.clim[c], self.dd[c]) for c in range(len(self.cells))])
 
     def typical_july(self):
         return self.clim[:, 180]  # degree-days usually banked by 30 June
+
+
+def days_ahead(clim, dd):
+    """Δ [..., 365] for one place: the day it usually reaches each day's degree-days in `dd` (any leading shape, e.g.
+    years), minus that day, by its typical curve `clim` [365]. Clipped to ±CLIP_DAYS, and held after midsummer."""
+    D = clim.shape[-1]
+    days = np.arange(1, D + 1, dtype=np.float32)
+    curve = clim + days * 1e-4  # strictly increasing, so the inverse exists
+    rate = np.gradient(clim)
+    hold = np.argmax((days > 182) & (rate < HOLD_RATE)) or D
+    shape = np.shape(dd)
+    dd = np.asarray(dd, np.float32).reshape(-1, D)
+    out = np.zeros(dd.shape, np.float32)
+    for y in range(len(dd)):
+        t_usual = np.interp(dd[y] + days * 1e-4, curve, days)
+        d = np.clip(t_usual - days, -CLIP_DAYS, CLIP_DAYS)
+        d[dd[y] + clim < 1] = 0  # before any warmth this year or usually
+        d[hold:] = d[hold - 1]
+        out[y] = d
+    return out.reshape(shape)
 
 
 def attach_clock(df, w: Warmth, ahead):

@@ -210,7 +210,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #strip { grid-column: 1 / -1; margin: 0; font-size: 12.5px; line-height: 1.35; }
 #honesty b { font-weight: 600; }
 #app.tracker .forecast-note { display: none; }
-.atlas-note, #app.atlas .dots, #app.atlas .forecast-note { display: none; }
+.atlas-note, #app.atlas .dots, #app.atlas .forecast-note, .vs-note { display: none; }
+#app.vs .vs-note { display: inline; }
+.vs-note b { color: var(--moon); font-weight: 600; }
 #app.atlas .atlas-note { display: inline; }
 .unconfirmed { font-style: normal; font-weight: 600; color: var(--warn); }
 #why { margin-left: 4px; padding: 10px 8px; margin-block: -10px; margin-inline: -2px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;
@@ -220,11 +222,27 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #why:focus-visible { outline-offset: -7px; border-radius: 6px; }
 #countdown { color: var(--muted); }
 #countdown:not(:empty)::before { content: ' \00B7  '; }
+/* "Coming out near you": the remembered place's line takes the countdown's spot (and, on phones, a line of its own). */
+#countdown.by-near, #near[hidden] { display: none; }
+#near::before { content: ' \00B7  '; color: var(--muted); }
+#near-go { min-height: 24px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+#near-go:hover { text-decoration: underline; }
+#near-x { min-width: 24px; padding: 0 6px; margin: -6px 0; min-height: 24px; border: 0; background: none; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; }
 .cd { display: none; margin: 0 0 8px; font-size: 12.5px; color: var(--muted); }
 #actions { pointer-events: auto; display: flex; gap: 6px; }
 #actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; font-size: 12.5px; }
 #actions .icon-btn:disabled { opacity: 0.6; cursor: progress; }
 #locate svg { color: var(--accent); }
+#warm:not(.on) svg { color: var(--warn); }
+#warm[hidden] { display: none; }
+#actions #warm.on { background: var(--accent); color: var(--on-accent); }
+/* "Warm the spring": one line over the time bar, opened from the thermometer. */
+#warm-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 2px 0 4px; font-size: 12.5px; }
+#warm-row[hidden] { display: none; }
+#warm-row label { font-weight: 600; }
+#warm-row input { flex: 1; min-width: 0; max-width: 360px; height: 28px; accent-color: var(--accent); }
+#warm-row output { min-width: 0; flex: 0 1 auto; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#warm-row .warm-x { flex: none; width: 32px; height: 32px; padding: 0; border: 0; background: none; color: var(--muted); box-shadow: none; }
 /* A short status: beside the button that asked (.at, placed from main.ts), else under the header. */
 #action-msg { position: fixed; top: calc(62px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3;
   width: max-content; max-width: calc(100% - 24px); text-align: center; font-size: 12px; color: var(--text);
@@ -305,6 +323,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sw.hex::after { content: ''; position: absolute; inset: 1.5px; background: var(--c); clip-path: inherit; }
 .sw.striped { width: 13px; height: 12px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
   background: repeating-linear-gradient(-45deg, var(--text) 0 1px, transparent 1px 5px), var(--c); }
+.sw.line { width: 14px; height: 0; align-self: center; background: none; border-top: 2.5px dashed var(--c); }
 .sw.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text); box-shadow: 0 0 0 2px var(--panel-solid); }
 .probe-link { display: inline-block; margin-top: 6px; color: var(--moon); font-weight: 600; min-height: 24px; }
 .cav.credits { font-size: 13px; color: var(--muted); }
@@ -466,6 +485,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   #dock { display: block; padding: 4px var(--gr) 4px var(--gl); }
   #strip { font-size: 12px; }
   .dots, #countdown, #t-prev, #t-next, #actions .lbl { display: none; }
+  #near:not([hidden]) { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; margin-top: 2px; }
+  #near::before { content: none; }
   .cd { display: block; }
   #actions { position: absolute; right: var(--gr); bottom: calc(100% + 10px); flex-direction: column; gap: 8px; }
   #actions .icon-btn { padding: 0; background: var(--panel-solid); box-shadow: var(--shadow); }
@@ -566,13 +587,13 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .date { min-width: 150px; font-size: 16px; }
   .date em { font-size: 15px; }
   .now b { visibility: hidden; } /* the "now" flag would poke up into the legend row; keep just its line, on the ribbon */
-  /* The map gets its height back: the caveat folds into the key chip, which says "on trial in 2027", and comes back as
+  /* The map gets its height back: the caveat folds into the key chip, which gives the track record, and comes back as
      one short line while the key is open (the full wording would wrap and eat the map). */
   #strip { display: none; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #app:has(#legend:not(.folded)) #strip { display: block; }
   #honesty { display: none; }
-  #strip::before { content: 'Dots: last 10 days. Colors: forecast (on trial in 2027).'; }
-  #legend.folded .lg-chip::after { content: '\00B7\00A0 on trial in 2027'; margin-left: 2px; color: var(--warn); }
+  #strip::before { content: 'Dots: last 10 days. Colors: ' var(--fc-words, 'forecast') '.'; }
+  #legend.folded .lg-chip::after { content: '\00B7\00A0' var(--fc-chip, ''); margin-left: 2px; color: var(--warn); }
   #app.tracker #strip::before { content: 'Dots: last 10 days.'; }
   #app.tracker #legend.folded .lg-chip::after { content: none; }
   #app.atlas #strip::before { content: 'Colors: expected share of insect photos.'; }

@@ -105,3 +105,28 @@ def test_tree_holds_every_species_once_and_names_whole_groups():
             check(c)
 
     check(tree)
+
+
+def test_warm_table_moves_spring_the_right_way():
+    """warm.bin (warm.py): 3 °F cooler runs every cell behind its typical spring, 3 °F warmer ahead, by days not weeks."""
+    import json
+    from pathlib import Path
+    out = Path(__file__).resolve().parents[2] / "public/atlas"
+    n = len(json.loads((out / "cells.json").read_text()))
+    w = np.fromfile(out / "warm.bin", np.int8).reshape(2, n, -1) / 4
+    june = (152 - 60) // 4  # 1 June, every 4 days from 1 March
+    assert (w[0, :, june] <= 0).all() and (w[1, :, june] >= 0).all()
+    assert 3 < np.median(w[1, :, june]) < 15 and -15 < np.median(w[0, :, june]) < -3
+
+
+def test_expected_vs_seen_reads_a_slide_and_a_surplus():
+    from pipeline.atlas.seen import best_shift, judge
+    days = np.arange(1, 366)
+    # Two broods, the second bigger; seen this year 6 days early and twice as often.
+    e = 40 * np.exp(-((days - 140) / 8) ** 2) + 80 * np.exp(-((days - 220) / 10) ** 2)
+    o = np.round(2 * (40 * np.exp(-((days - 134) / 8) ** 2) + 80 * np.exp(-((days - 214) / 10) ** 2)))
+    d, gain = best_shift(o, e)
+    assert d == 6 and gain > 0
+    assert judge(o, e, phi=1, phi_t=1) == (round(o.sum() / e.sum(), 2), 6)
+    # The same season as expected, in the same numbers: nothing to say.
+    assert judge(np.round(e), e, phi=1, phi_t=1) == (None, None)
