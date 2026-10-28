@@ -2,7 +2,7 @@ import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Due, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
-import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies } from '../atlas/atlas';
+import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import type { LunaLayer } from './lunaReplay';
@@ -109,6 +109,26 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   };
   const cells = atlas.cells.map((c, i) => ({ id: c.h, i }));
 
+  // Expected vs seen in ATLAS_YEAR (Atlas.seen), fetched the first time that year is shown.
+  let year: Seen | null = null;
+  let askedYear = false;
+  const askYear = () => {
+    if (askedYear || mode === TYPICAL) return;
+    askedYear = true;
+    void atlas.seen(sp.i).then((s) => {
+      year = s;
+      onData();
+    });
+  };
+  askYear();
+  /** "3.4× the photos expected, 6 days early": its year over the whole map, in a few words. */
+  const yearWords = (y: Seen) => {
+    if (y.photos < 10 && y.expectedPhotos < 10) return 'too few photos to judge';
+    const r = y.ratio === null ? 'about the photos expected' : y.ratio < 1 ? `${Math.max(1, Math.round(y.ratio * 100))}% of the photos expected` : `${y.ratio.toFixed(y.ratio < 10 ? 1 : 0)}× the photos expected`;
+    const d = y.days === null ? '' : `, ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'early' : 'late'}`;
+    return r + d;
+  };
+
   // On paper, pale sage to deep leaf as the share climbs to the species' top (the forecast's "starting" and "peak"
   // greens): more ink where it is commoner. By lamplight the other way, dim moss to a bright leaf, so more still reads
   // as more against the dark.
@@ -183,6 +203,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     mode: () => mode,
     setMode(m) {
       mode = m === String(ATLAS_YEAR) ? m : TYPICAL;
+      askYear();
       ensure(mode, 0);
       ensure(mode, warm);
     },
@@ -248,7 +269,11 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     // The ribbon: its share over the whole map through the season (export.py), one value per day of the range.
     profile() {
       const r = run();
-      let p = profiles.get(r.key);
+      // In ATLAS_YEAR as it was, the line is the photos expected from that year's own photos, and the green wash the
+      // photos seen, on one scale (warmed, the year is no longer the one the photos come from: the plain curve).
+      const vs = r.mode !== TYPICAL && !r.warm ? year : null;
+      const pk = `${r.key}|${vs ? 1 : 0}|${isDark()}`;
+      let p = profiles.get(pk);
       if (!p) {
         const c = curve(r.mode);
         // Warmed, the season's curve slides by the days the warmth moves it (the field itself is the network rerun).
@@ -257,10 +282,13 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         const s = this.timeSpec!(mode);
         const d0 = dayOfYear(s.start);
         const n = Math.round((s.end - s.start) / TimeAxis.DAY) + 1;
-        const seen = Array.from({ length: n }, (_, j) => at(c, d0 + j + by));
+        const line = vs ? vs.expected : c;
+        const seen = Array.from({ length: n }, (_, j) => at(line, d0 + j + by));
         const top = Math.round(peakDay(c) - by);
         const notes = top >= d0 && top < d0 + n ? [{ at: top - d0, text: `peak ${fmt(y, top)}` }] : [];
-        profiles.set(r.key, (p = { bands: [], seen, notes }));
+        const g = isDark() ? BRIGHT : palette.stages.peak;
+        const seenOnly = vs ? [{ color: `rgb(${g[0]},${g[1]},${g[2]})`, seen: Array.from({ length: n }, (_, j) => at(vs.seen, d0 + j)) }] : undefined;
+        profiles.set(pk, (p = { bands: [], seen, notes, ...(seenOnly ? { seenOnly } : {}) }));
       }
       return p;
     },
@@ -304,7 +332,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return {
         title: s > 1e-4 ? `${name}: ${oneIn(s)} insect photos` : `${name}: hardly expected`,
         swatch: css(color(s)),
-        lines: best === null ? [] : [`Best here: around ${fmt(yearOf(), best)}`],
+        lines: [
+          ...(best === null ? [] : [`Best here: around ${fmt(yearOf(), best)}`]),
+          ...(mode !== TYPICAL && year ? [`${ATLAS_YEAR}, whole map: ${yearWords(year)}`] : []),
+        ],
         others: { title: 'Also out here', list: others },
       };
     },
@@ -326,6 +357,9 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           mode === TYPICAL
             ? 'A typical year: the season as it usually runs.'
             : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.`,
+          ...(mode !== TYPICAL && year
+            ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.`]
+            : []),
           ...(warm
             ? [`Spring ${warm > 0 ? '+' : '−'}${Math.abs(warm)} °F: every day’s high and low moved that much, the network rerun. It follows warmth ${follows > 0.66 ? 'closely' : follows > 0.33 ? 'partly' : 'hardly at all'}.`]
             : []),

@@ -781,6 +781,17 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if ((await page.locator('#warm-in').inputValue()) !== '0' || !(await page.locator('#warm-row').isHidden())) fail('closing the slider left spring warmed');
       await page.waitForFunction(() => !new URL(location.href).searchParams.has('warm'), null, { timeout: 5000, polling: 250 })
         .catch(() => fail('closing the slider left ?warm= in the link'));
+      // Expected vs seen: 2026 draws the photos seen against the ones expected on the time bar, and the card says how
+      // the year went (spotted lanternflies: far more than expected, still spreading west).
+      await page.goto(origin + '/?species=lycorma-delicatula&noauto&year=2026&date=09-10');
+      await isOn('lycorma-delicatula-atlas');
+      await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 })
+        .catch(() => fail('2026 drew no photos seen on the time bar'));
+      const ohio = await page.evaluate(() => window.__hatch.map.project([-81.7, 41.4]));
+      await page.mouse.click(ohio[0], ohio[1]);
+      await page.waitForFunction(() => /2026, whole map: \d+(\.\d)?× the photos expected/.test(document.getElementById('probe').textContent), null, { timeout: 10000 })
+        .catch(async () => fail(`the 2026 card does not say how the year went: "${await page.locator('#probe').innerText()}"`));
+      await shotA('5-seen');
       // A pinned card names others out here; one tap switches to it.
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
       await isOn('papilio-glaucus-atlas');

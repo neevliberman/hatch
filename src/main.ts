@@ -511,19 +511,23 @@ function start() {
   // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
   // The ribbon covers the layer's full replay range; the slider may span less of it (fitSeason).
   const ribbonNow = () => {
-    const p = registry.activeLayers().find((l) => l.profile)?.profile?.();
+    const p = profileNow();
     const off = Math.round((time.start - timeFor(cur, picker.value).start) / TimeAxis.DAY);
     return p && off >= 0 ? cutProfile(p, off, time.steps + 1) : p;
   };
   let ribbonFrame = 0;
+  let ribbonOf: SeasonProfile | undefined; // the profile last drawn (layers keep theirs, so a new one is news)
+  const profileNow = () => registry.activeLayers().find((l) => l.profile)?.profile?.();
   const drawRibbon = () =>
     (ribbonFrame ||= requestAnimationFrame(() => {
       ribbonFrame = 0;
+      ribbonOf = profileNow();
       setRibbon(ribbonNow());
     }));
   registry.subscribe(drawRibbon);
   setRibbon(ribbonNow());
   onRerun = () => {
+    if (profileNow() !== ribbonOf) drawRibbon(); // its season changed under the same view (a year's photos landing)
     if (!warmth.value && !warmed) return;
     warmed = warmth.value !== 0;
     warmth.note(cur.warmthNote?.() ?? '');
