@@ -756,7 +756,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await shotA('2-search');
       await page.locator('#sp-list [data-key="papilio-polyxenes"]').click();
       if (!(await isOn('papilio-polyxenes-atlas'))) fail('picking the black swallowtail did not open it');
-      await page.waitForFunction(() => new URL(location.href).searchParams.get('species') === 'papilio-polyxenes', null, { timeout: 10000, polling: 250 })
+      // As long as isOn's: software GL in CI can keep the page busy drawing the new field past the address bar's timer.
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('species') === 'papilio-polyxenes', null, { timeout: 30000, polling: 250 })
         .catch(() => fail(`the link dropped the species: ${page.url()}`));
       if ((await page.locator('#app.atlas').count()) !== 1) fail('the page is not in Atlas mode (its caveat line)');
       // The tree of life (src/ui/treeOfLife.ts): it draws, the arrow keys climb from the whole tree into the biggest
