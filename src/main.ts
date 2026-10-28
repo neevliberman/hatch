@@ -380,14 +380,11 @@ function start() {
 
   // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
   // keeps the season and the calendar day, and drops any pinned card.
-  let wishSeason: string | null = null; // a picker row's season (a surprise opens on its year), used by the next switch
-  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, ATLAS_YEAR, (k, s) => {
-    wishSeason = s ?? null;
-    void setSpecies(k);
-  });
+  // A picker row may ask for a season too: a surprise opens on its year.
+  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, ATLAS_YEAR, (k, s) => void setSpecies(k, s));
   let asking = 0;
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
-  const setSpecies = async (want: string) => {
+  const setSpecies = async (want: string, wish?: string) => {
     const ticket = ++asking;
     const entry = (await findSpecies(want)) ?? SPECIES[0]!;
     if (ticket !== asking) return;
@@ -423,7 +420,11 @@ function start() {
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
-    if (next === cur) return;
+    if (next === cur) {
+      // Already on screen: only the season it asked for, if any.
+      if (wish && wish !== picker.value && (next.seasons?.() ?? []).includes(wish)) (picker.value = wish), picker.dispatchEvent(new Event('change'));
+      return;
+    }
     // Live was wanted for it (picked from live mode, or a ?season=live&species= link): goes live as soon as its live
     // forecast is there, now or when the file arrives.
     const fromLink = speciesPending === entry.key && asked === LIVE;
@@ -442,8 +443,6 @@ function start() {
     const offers = next.seasons?.() ?? [...(next.live() ? [LIVE] : []), TYPICAL, ...years];
     // (A link may name a hand-built species by its Latin key, ?species=photinus-pyralis.)
     const fromThisLink = speciesPending === entry.key || (!!entry.sci && speciesPending === atlasKey(entry.sci));
-    const wish = wishSeason;
-    wishSeason = null;
     const mode = wish && offers.includes(wish) ? wish : fromThisLink && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
     next.setMode(mode);
     const prev = cur;
