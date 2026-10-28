@@ -1,4 +1,7 @@
 import { cellToLatLng, getResolution, gridDisk } from 'h3-js';
+import { nearby } from '../core/grid';
+import { basemapLabels } from '../map/basemap';
+import type { MapHandle, Padding, ProbeHit } from '../map/map';
 
 export type Arrow = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
 
@@ -39,4 +42,112 @@ export function stepCell(cell: string, arrow: Arrow, col: number, row: number, u
     if (usable(from)) return from;
   }
   return null;
+}
+
+export interface KeyExploreDeps {
+  map: Pick<MapHandle, 'project' | 'focus' | 'zoom' | 'center'>;
+  /** The space the panels leave for the map. */
+  padding(): Padding;
+  /** Whether the species on screen has a forecast at a point today. */
+  hasForecast(lngLat: [number, number]): boolean;
+  /** The species' hexagon at a point, at the map's current level. */
+  cellAt(lngLat: [number, number]): string | null;
+  /** The pinned card's hit, or null with nothing pinned. */
+  selection(): ProbeHit | null;
+  /** The last pinned spot, by any means. */
+  lastPin(): [number, number] | null;
+  /** Pin the card on this hexagon. */
+  select(hit: ProbeHit): void;
+  /** True while something else owns the map (the radar replay): no hexagon to walk under it. */
+  busy(): boolean;
+  say(text: string): void;
+}
+
+/**
+ * "Explore map with keys" on `el`: arrows walk a pinned selection hex to hex (the same pinned card, announced by its
+ * live region), Enter or Space pins where it starts, Escape lets go (main.ts). It starts at the last pinned hex, or
+ * else the middle of the free map, and pans the map when the selection leaves the view. Returns a reset, for a
+ * species or season switch. Analogy: a cursor in a spreadsheet, where the cells are hexagons.
+ */
+export function mountKeyExplore(el: HTMLElement, d: KeyExploreDeps): () => void {
+  let col = 0; // the longitude of the column an up or down walk keeps to
+  let row = 0; // the latitude of the row a left or right walk keeps to
+  // The selection the keys last made. Pinned any other way since, the walk starts afresh from there. (The selection
+  // itself, not its hexagon: a zoom swaps the hexagon for one of the new size, and the walk and its count go on.)
+  let keyHit: ProbeHit | null = null;
+  let steps = 0;
+  let nudge = false; // alternates a trailing space, so a repeated message is announced again
+  // The free area of the map, inside a margin: where a selected hexagon is in view.
+  const inView = (lngLat: [number, number]) => {
+    const p = d.padding();
+    const at = d.map.project(lngLat);
+    return !!at && at[0] > 24 && at[1] > p.top + 24 && at[0] < innerWidth - (p.right ?? 0) - 24 && at[1] < innerHeight - p.bottom - 24;
+  };
+  // What the card says first, new at every step so a screen reader reads each one: the nearest town in the map's own
+  // names (when one is close), and how many steps and which way.
+  const where = (lngLat: [number, number], dir: string) => {
+    let town = '';
+    let best = 0.35 ** 2; // degrees, squared
+    for (const [name, lng, lat, , kind] of basemapLabels()) {
+      const dd = (lng - lngLat[0]) ** 2 + (lat - lngLat[1]) ** 2;
+      if ((kind === 'city' || kind === 'town') && dd < best) (best = dd), (town = name);
+    }
+    return `${steps ? `Step ${steps} ${dir}` : 'Start'}${town ? `, near ${town}` : ''}`;
+  };
+  const selectCell = (cell: string, dir = '') => {
+    const [la, ln] = cellToLatLng(cell);
+    const hit: ProbeHit = { cell, lngLat: [ln, la] };
+    hit.note = where(hit.lngLat, dir);
+    keyHit = hit;
+    // Off the free area (or near its edge): bring the hexagon to the middle of it, as the town finder does.
+    if (!inView(hit.lngLat)) d.map.focus(hit.lngLat, d.map.zoom() ?? 0, d.padding(), true);
+    d.select(hit);
+  };
+  // Where a first key press lands: the last pinned hexagon if it is in view, else the middle of the free map; the
+  // nearest hexagon with a forecast, within view, if that spot has none.
+  const startCell = (): string | null => {
+    const mid = d.map.center(d.padding())?.lngLat;
+    const last = d.lastPin();
+    const from = last && inView(last) ? last : mid;
+    if (!from) return null;
+    const at = [{ lngLat: from }, ...nearby(from[1], from[0], 4)].find((h) => inView(h.lngLat) && d.hasForecast(h.lngLat));
+    return at ? d.cellAt(at.lngLat) : null;
+  };
+  // Enter or Space. An arrow comes here too when the pinned card has no forecast hexagon under it (a sighting past
+  // the shore, land beyond the Midwest): the arrows can't move that one, so they start a walk from the nearest hexagon
+  // rather than say "Already pinned", which would be wrong.
+  const pin = (arrowed = false) => {
+    if (d.busy()) return;
+    if (d.selection() && !arrowed) return d.say('Pinned. Arrow keys move it, Escape lets go.');
+    const c = startCell();
+    if (!c) return d.say('No forecast in view');
+    steps = 0;
+    [row, col] = cellToLatLng(c);
+    selectCell(c);
+  };
+  const arrow = (a: Arrow) => {
+    if (d.busy()) return;
+    const hit = d.selection();
+    const from = hit ? d.cellAt(hit.lngLat) : null;
+    if (!from) return pin(true);
+    if (hit !== keyHit) ([row, col] = cellToLatLng(from)), (steps = 0); // pinned by mouse, tap or town since: start afresh there
+    const next = stepCell(from, a, col, row, (c) => d.hasForecast(cellToLatLng(c).reverse() as [number, number]));
+    if (!next) return d.say(`No forecast to the ${WORD[a]}${(nudge = !nudge) ? '\u00a0' : ''}`);
+    // A new column (left and right) or row (up and down); the walk keeps the other.
+    if (a === 'ArrowLeft' || a === 'ArrowRight') col = cellToLatLng(next)[1];
+    else row = cellToLatLng(next)[0];
+    steps++;
+    selectCell(next, WORD[a]);
+  };
+  // The time slider listens on the window for these same keys (and Home, End): while this has focus it owns them.
+  el.addEventListener('keydown', (e) => {
+    const move = e.key in AIM;
+    const own = move || ['Enter', ' ', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key);
+    if (e.ctrlKey || e.metaKey || e.altKey || !own) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (move) arrow(e.key as Arrow);
+    else if (e.key === 'Enter' || e.key === ' ') pin();
+  });
+  return () => ((keyHit = null), (steps = 0));
 }
