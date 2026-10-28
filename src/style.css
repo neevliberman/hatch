@@ -205,7 +205,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #strip { grid-column: 1 / -1; margin: 0; font-size: 12.5px; line-height: 1.35; }
 #honesty b { font-weight: 600; }
 #app.tracker .forecast-note { display: none; }
-.atlas-note, #app.atlas .dots, #app.atlas .forecast-note { display: none; }
+.atlas-note, #app.atlas .dots, #app.atlas .forecast-note, .vs-note { display: none; }
+#app.vs .vs-note { display: inline; }
+.vs-note b { color: var(--moon); font-weight: 600; }
 #app.atlas .atlas-note { display: inline; }
 .unconfirmed { font-style: normal; font-weight: 600; color: var(--warn); }
 #why { margin-left: 4px; padding: 10px 8px; margin-block: -10px; margin-inline: -2px; border: 0; background: none; color: var(--moon); text-decoration: underline; cursor: pointer;

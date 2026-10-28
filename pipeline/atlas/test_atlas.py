@@ -89,3 +89,16 @@ def test_warm_table_moves_spring_the_right_way():
     june = (152 - 60) // 4  # 1 June, every 4 days from 1 March
     assert (w[0, :, june] <= 0).all() and (w[1, :, june] >= 0).all()
     assert 3 < np.median(w[1, :, june]) < 15 and -15 < np.median(w[0, :, june]) < -3
+
+
+def test_expected_vs_seen_reads_a_slide_and_a_surplus():
+    from pipeline.atlas.seen import best_shift, judge
+    days = np.arange(1, 366)
+    # Two broods, the second bigger; seen this year 6 days early and twice as often.
+    e = 40 * np.exp(-((days - 140) / 8) ** 2) + 80 * np.exp(-((days - 220) / 10) ** 2)
+    o = np.round(2 * (40 * np.exp(-((days - 134) / 8) ** 2) + 80 * np.exp(-((days - 214) / 10) ** 2)))
+    d, gain = best_shift(o, e)
+    assert d == 6 and gain > 0
+    assert judge(o, e, phi=1, phi_t=1) == (round(o.sum() / e.sum(), 2), 6)
+    # The same season as expected, in the same numbers: nothing to say.
+    assert judge(np.round(e), e, phi=1, phi_t=1) == (None, None)

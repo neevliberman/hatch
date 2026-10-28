@@ -27,6 +27,29 @@ export const ATLAS_RES = 4;
 
 const bin = (f: string): Promise<ArrayBuffer | null> => fetch(atlasUrl(f)).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
 
+/** seen-YEAR.json: per species [photos seen, photos expected, seen / expected or null, days early or null]. */
+interface SeenFile {
+  year: number;
+  last_day: number;
+  photos: number;
+  species: [number, number, number | null, number | null][];
+}
+
+/** One species' year, expected vs seen (Atlas.seen). */
+export interface Seen {
+  /** Photos expected and seen every STEP days from SEASON[0], on one scale (0-1, the larger top is 1). */
+  expected: number[];
+  seen: number[];
+  photos: number;
+  expectedPhotos: number;
+  /** Seen / expected, or null when the gap is within chance. */
+  ratio: number | null;
+  /** How many days early (negative: late) its season came, or null when within chance. */
+  days: number | null;
+  /** The last day of the year counted. */
+  lastDay: number;
+}
+
 export interface AtlasCell extends Place {
   h: string;
 }
@@ -104,6 +127,25 @@ export class Atlas {
       return out;
     };
   }
+
+  /**
+   * Expected vs seen in ATLAS_YEAR, over the whole map (pipeline/atlas/seen.py): the photos of a species the network
+   * expected from every insect photo of that year, and the ones there were. Fetched the first time it is asked for;
+   * null when the files are missing.
+   */
+  seen(i: number): Promise<Seen | null> {
+    this.seenFiles ??= Promise.all([bin(`seen-${ATLAS_YEAR}.bin`), json<SeenFile>(`seen-${ATLAS_YEAR}.json`)]).then(([b, j]) =>
+      b && j ? { bytes: new Uint8Array(b), file: j } : ((this.seenFiles = null), null),
+    );
+    return this.seenFiles.then((f) => {
+      const row = f?.file.species[i];
+      if (!f || !row) return null;
+      const at = i * 2 * STEPS;
+      const scaled = (k: number) => [...f.bytes.subarray(at + k * STEPS, at + (k + 1) * STEPS)].map((v) => v / 255);
+      return { expected: scaled(0), seen: scaled(1), photos: row[0], expectedPhotos: row[1], ratio: row[2], days: row[3], lastDay: f.file.last_day };
+    });
+  }
+  private seenFiles: Promise<{ bytes: Uint8Array; file: SeenFile } | null> | null = null;
 
   /** The cell a point falls in (null outside the map). */
   cellAt(lat: number, lng: number): number | null {
