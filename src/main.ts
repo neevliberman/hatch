@@ -663,11 +663,8 @@ function start() {
     cellAt: (p) => cur.cellAt(p),
     selection: () => (pinned ? hit : null),
     lastPin: () => lastPin,
-    select: (h) => {
-      hit = h;
-      pinned = true;
-      updateProbe();
-    },
+    select: (h) => ((hit = h), (pinned = true)),
+    show: updateProbe,
     busy: () => !!radar,
     say: (text) => say(text),
   });

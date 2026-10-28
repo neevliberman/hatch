@@ -56,8 +56,10 @@ export interface KeyExploreDeps {
   selection(): ProbeHit | null;
   /** The last pinned spot, by any means. */
   lastPin(): [number, number] | null;
-  /** Pin the card on this hexagon. */
+  /** Pin the card on this hexagon (shown by show(), once the map has moved to it). */
   select(hit: ProbeHit): void;
+  /** Redraw the card. */
+  show(): void;
   /** True while something else owns the map (the radar replay): no hexagon to walk under it. */
   busy(): boolean;
   say(text: string): void;
@@ -99,9 +101,11 @@ export function mountKeyExplore(el: HTMLElement, d: KeyExploreDeps): () => void 
     const hit: ProbeHit = { cell, lngLat: [ln, la] };
     hit.note = where(hit.lngLat, dir);
     keyHit = hit;
+    // Pinned before the map moves: the move drops any hover card, which must not take this one with it.
+    d.select(hit);
     // Off the free area (or near its edge): bring the hexagon to the middle of it, as the town finder does.
     if (!inView(hit.lngLat)) d.map.focus(hit.lngLat, d.map.zoom() ?? 0, d.padding(), true);
-    d.select(hit);
+    d.show();
   };
   // Where a first key press lands: the last pinned hexagon if it is in view, else the middle of the free map; the
   // nearest hexagon with a forecast, within view, if that spot has none.
