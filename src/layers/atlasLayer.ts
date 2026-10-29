@@ -139,6 +139,15 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const shownDots = () => (dots ? (mode === TYPICAL ? dots.past : dots.year) : []);
   const litNow = (doy: number) => shownDots().filter((x) => x.pdoy <= doy && x.pdoy > doy - GLOW_DAYS);
   let lit = { key: '', pts: [] as [number, number][] };
+  // The GPU gets only the photos of the month around the day (refreshed as the day crosses into the next month), not
+  // the whole year: a busy species' 5,000 dots three layers deep cost a software-drawn page seconds.
+  let month = { key: '', list: [] as Dot[] };
+  const nearDay = (doy: number) => {
+    const m = Math.floor(doy / 30);
+    const k = `${m}|${mode}|${dots ? 1 : 0}`;
+    if (month.key !== k) month = { key: k, list: shownDots().filter((x) => x.pdoy > m * 30 - GLOW_DAYS && x.pdoy <= m * 30 + 31) };
+    return month.list;
+  };
   let fresh = { key: '', list: [] as Dot[] };
   const rings = ripples<Dot>(`${key}-ripples`, (x) => [x.lng, x.lat], () => palette.dotRim);
   /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. */
@@ -339,7 +348,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       if (!f) return [];
       const anim = animating(playing);
       const d = anim ? doy + (frac ?? 0) : doy;
-      const data = shownDots();
+      const data = nearDay(doy);
       // Time reaches the dots only through the filter range (a GPU uniform), so scrubbing never re-uploads them.
       const filter = {
         getFilterValue: (x: Dot) => x.pdoy,
