@@ -1,11 +1,14 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
+import { ScatterplotLayer } from '@deck.gl/layers';
+import { DataFilterExtension } from '@deck.gl/extensions';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Due, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
-import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies, type Seen } from '../atlas/atlas';
+import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
-import type { LunaLayer } from './lunaReplay';
+import { animating, ripples } from './motion';
+import { GLOW_DAYS, type LunaLayer } from './lunaReplay';
 import moth from '../marks/moth.svg';
 import beetle from '../marks/japanese-beetle.svg';
 
@@ -13,6 +16,8 @@ type RGBA = [number, number, number, number];
 
 /** The calendar a typical year is drawn on (any year without 29 Feb: the network counts 365 days). */
 const TYPICAL_AXIS_YEAR = 2025;
+/** The first year the network learned from: keep in step with pipeline/atlas/config.py FIRST_YEAR. */
+const FIRST_YEAR = 2015;
 const fmt = (year: number, doy: number) =>
   new Date(Date.UTC(year, 0, Math.round(doy))).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 /** "1 in 40": a share as a count of photos. */
@@ -29,6 +34,8 @@ const DECADES = 2.5;
 const DIM = [70, 92, 58];
 const BRIGHT = [143, 208, 154];
 
+const filterExt = [new DataFilterExtension({ filterSize: 1 })];
+
 /** A sketch for the header, by order (the Atlas has no drawing of each species). */
 const markOf = (s: AtlasSpecies) =>
   s.order === 'Lepidoptera' ? moth : s.order === 'Coleoptera' ? beetle : new URL(`${import.meta.env.BASE_URL}favicon.svg`, document.baseURI).href;
@@ -36,8 +43,8 @@ const markOf = (s: AtlasSpecies) =>
 /**
  * Any species of the Living Atlas on the map: the share of insect photos that would be this species, in each warmth
  * cell, on each day, from one network shared by every species (src/atlas/). The colour is the field itself, with no
- * stages or dots: this is the model's expectation, not sightings. A typical year, or 2026 with its real warmth
- * sliding each species' season earlier or later by its own clock blend.
+ * stages: the model's expectation. The dots are its real photos (Atlas.dots). A typical year, or 2026 with its real
+ * warmth sliding each species' season earlier or later by its own clock blend.
  */
 export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, onData: () => void): LunaLayer {
   const key = atlasKey(sp.name);
@@ -121,6 +128,28 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     });
   };
   askYear();
+
+  // Its photos as dots (Atlas.dots): a typical year draws the years the network learned from, ATLAS_YEAR its own.
+  let dots: { past: Dot[]; year: Dot[] } | null = null;
+  void atlas.dots(sp.i).then((d) => {
+    if (!d) return;
+    dots = { past: d.filter((x) => x.year < ATLAS_YEAR), year: d.filter((x) => x.year === ATLAS_YEAR) };
+    onData();
+  });
+  const shownDots = () => (dots ? (mode === TYPICAL ? dots.past : dots.year) : []);
+  const litNow = (doy: number) => shownDots().filter((x) => x.pdoy <= doy && x.pdoy > doy - GLOW_DAYS);
+  let lit = { key: '', pts: [] as [number, number][] };
+  // The GPU gets only the photos of the month around the day (refreshed as the day crosses into the next month), not
+  // the whole year: a busy species' 5,000 dots three layers deep cost a software-drawn page seconds.
+  let month = { key: '', list: [] as Dot[] };
+  const nearDay = (doy: number) => {
+    const m = Math.floor(doy / 30);
+    const k = `${m}|${mode}|${dots ? 1 : 0}`;
+    if (month.key !== k) month = { key: k, list: shownDots().filter((x) => x.pdoy > m * 30 - GLOW_DAYS && x.pdoy <= m * 30 + 31) };
+    return month.list;
+  };
+  let fresh = { key: '', list: [] as Dot[] };
+  const rings = ripples<Dot>(`${key}-ripples`, (x) => [x.lng, x.lat], () => palette.dotRim);
   /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. */
   const yearWords = (y: Seen) => {
     if (y.photos < 10 && y.expectedPhotos < 10) return 'too few photos to judge';
@@ -269,7 +298,21 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       const doy = dayOfYear(t);
       const f = field().get(doy);
       const top = f ? Math.max(...f) : 0;
-      return `${fmt(yearOf(), doy)}, ${mode === TYPICAL ? 'typical year' : ATLAS_YEAR}. ${name}: ${top > 1e-4 ? `up to ${oneIn(top)} insect photos` : 'hardly expected anywhere'}.`;
+      const n = litNow(doy).length;
+      return `${fmt(yearOf(), doy)}, ${mode === TYPICAL ? 'typical year' : ATLAS_YEAR}. ${name}: ${top > 1e-4 ? `up to ${oneIn(top)} insect photos` : 'hardly expected anywhere'}. ` +
+        `${n} photo${n === 1 ? '' : 's'} in the last ${GLOW_DAYS} days${mode === TYPICAL ? ' (all years)' : ''}.`;
+    },
+
+    points(t) {
+      // The same array back while the dots are unchanged (the place names re-place only when it changes).
+      const k = `${dayOfYear(t)}|${mode}|${dots ? 1 : 0}`;
+      if (lit.key !== k) lit = { key: k, pts: litNow(dayOfYear(t)).map((x) => [x.lng, x.lat]) };
+      return lit.pts;
+    },
+    newest(t) {
+      const k = `${dayOfYear(t)}|${mode}|${dots ? 1 : 0}`;
+      if (fresh.key !== k) fresh = { key: k, list: shownDots().filter((x) => x.pdoy === dayOfYear(t)) };
+      return fresh.list;
     },
 
     // The ribbon: its share over the whole map through the season (export.py), one value per day of the range.
@@ -299,10 +342,62 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return p;
     },
 
-    render({ t, theme }) {
+    render({ t, theme, playing, frac }) {
       const doy = dayOfYear(t);
       const f = field().get(doy);
       if (!f) return [];
+      const anim = animating(playing);
+      const d = anim ? doy + (frac ?? 0) : doy;
+      const data = nearDay(doy);
+      // Time reaches the dots only through the filter range (a GPU uniform), so scrubbing never re-uploads them.
+      const filter = {
+        getFilterValue: (x: Dot) => x.pdoy,
+        filterRange: [d - GLOW_DAYS + 0.5, d + 0.5] as [number, number],
+        filterSoftRange: [d - 0.5, d + 0.5] as [number, number],
+        filterTransformSize: true,
+        filterTransformColor: true,
+        extensions: filterExt,
+      };
+      // Many lit at once (a common species, or a typical year's eleven years): smaller dots, so they read as dots, not
+      // blots over the place names.
+      const k = litNow(doy).length > 150 ? 0.7 : 1;
+      const dotLayers = data.length
+        ? [
+            new ScatterplotLayer<Dot>({
+              id: `${key}-glow`,
+              data,
+              getPosition: (x) => [x.lng, x.lat],
+              getFillColor: palette.dotShadow,
+              radiusUnits: 'pixels',
+              getRadius: 9 * k,
+              pickable: true, // the soft shadow is the touch target
+              ...filter,
+            }),
+            new ScatterplotLayer<Dot>({
+              id: `${key}-halo`,
+              data,
+              getPosition: (x) => [x.lng, x.lat],
+              getFillColor: palette.dotHalo,
+              radiusUnits: 'pixels',
+              getRadius: 6.5 * k,
+              ...filter,
+            }),
+            new ScatterplotLayer<Dot>({
+              id: `${key}-dots`,
+              data,
+              getPosition: (x) => [x.lng, x.lat],
+              getFillColor: palette.moth,
+              stroked: true,
+              getLineColor: palette.dotRim,
+              lineWidthUnits: 'pixels',
+              getLineWidth: 1.5,
+              radiusUnits: 'pixels',
+              getRadius: 4 * k,
+              ...filter,
+            }),
+            ...rings(anim, doy, (from, to) => data.filter((x) => x.pdoy >= from && x.pdoy <= to)),
+          ]
+        : [];
       return [
         new H3HexagonLayer<{ id: string; i: number }>({
           // Named like the forecast hexagons, so the map draws its lakes and rivers over them and picks them as cells.
@@ -319,10 +414,19 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           pickable: true,
           updateTriggers: { getFillColor: [f, epoch], getLineColor: [f, epoch] },
         }),
+        ...dotLayers,
       ];
     },
 
-    probe(lngLat, t): ProbeCard | null {
+    probe(lngLat, t, picked): ProbeCard | null {
+      if (picked && (picked.layerId === `${key}-glow` || picked.layerId === `${key}-dots`)) {
+        const x = picked.object as Dot;
+        return {
+          title: `${name} seen ${fmt(x.year, x.doy)}, ${x.year}`,
+          lines: [],
+          link: { href: `https://www.inaturalist.org/observations/${x.id}`, label: 'Photo on iNaturalist' },
+        };
+      }
       const c = atlas.cellAt(lngLat[1], lngLat[0]);
       if (c === null) return null;
       const doy = dayOfYear(t);
@@ -357,7 +461,8 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         title: `${name}: fine print`,
         severity: 'normal',
         bullets: [
-          `A model’s expectation, not sightings: of the insect photos taken here on this day, the share that would be ${name}.`,
+          `Colors: a model’s expectation, not sightings: of the insect photos taken here on this day, the share that would be ${name}.`,
+          `Dots: real iNaturalist photos, each lit ${GLOW_DAYS} days, from ${mode === TYPICAL ? `${FIRST_YEAR}-${ATLAS_YEAR - 1}` : ATLAS_YEAR} (at most 5,000, picked at random).`,
           `One network learns all ${atlas.species.length.toLocaleString()} Midwest insects with 100+ records at once, from 2.1 million iNaturalist photos (2015-2025). ${name}: ${sp.n.toLocaleString()} of them.`,
           test,
           mode === TYPICAL
@@ -379,6 +484,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return {
         title: 'Share of insect photos',
         stops: [0, 0.5, 1].map((g) => ({ color: css(color(lo * 10 ** (g * DECADES) * 1.0001)), label: g === 0 ? oneIn(lo) : oneIn(sp.peak) })),
+        items: [{ color: `rgb(${palette.moth[0]},${palette.moth[1]},${palette.moth[2]})`, label: `photo, last ${GLOW_DAYS} days`, shape: 'dot' }],
         note: 'Blank: rarer still.',
       };
     },

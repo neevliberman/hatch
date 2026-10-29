@@ -48,6 +48,21 @@ export interface Seen {
   lastDay: number;
 }
 
+/** One photo of a species (dots/<i>.bin, pipeline/atlas/dots.py). */
+export interface Dot {
+  /** iNaturalist observation id. */
+  id: number;
+  year: number;
+  doy: number;
+  /** Its day on a typical year's 365-day calendar: a leap year's days from 29 Feb on move back one (as luna's pdoy). */
+  pdoy: number;
+  lng: number;
+  lat: number;
+}
+
+/** The box the dots' positions are scaled across: keep in step with pipeline/atlas/config.py BOX. */
+const BOX = { s: 36.5, n: 49.5, w: -97.5, e: -80.5 };
+
 export interface AtlasCell extends Place {
   h: string;
 }
@@ -144,6 +159,35 @@ export class Atlas {
     });
   }
   private seenFiles: Promise<{ bytes: Uint8Array; file: SeenFile } | null> | null = null;
+
+  /** A species' photos as dots (a sample of each part when there are many; see dots.py), sorted by year then day.
+   * Fetched per species (every species has a file, empty when it has no photos); null when it failed to load. */
+  dots(i: number): Promise<Dot[] | null> {
+    return fetch(atlasUrl(`dots/${i}.bin`))
+      .then((r) => (r.ok ? r.arrayBuffer() : null))
+      .catch(() => null)
+      .then((b) => {
+        if (!b) return null;
+        const n = Math.floor(b.byteLength / 11);
+        const id = new Uint32Array(b, 0, n);
+        const doy = new Uint16Array(b, 4 * n, n);
+        const lat = new Uint16Array(b, 6 * n, n);
+        const lng = new Uint16Array(b, 8 * n, n);
+        const year = new Uint8Array(b, 10 * n, n);
+        return Array.from({ length: n }, (_, k) => {
+          const y = 2000 + year[k]!;
+          const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+          return {
+            id: id[k]!,
+            year: y,
+            doy: doy[k]!,
+            pdoy: leap && doy[k]! >= 60 ? doy[k]! - 1 : doy[k]!,
+            lat: BOX.s + (lat[k]! / 65535) * (BOX.n - BOX.s),
+            lng: BOX.w + (lng[k]! / 65535) * (BOX.e - BOX.w),
+          };
+        });
+      });
+  }
 
   /** The cell a point falls in (null outside the map). */
   cellAt(lat: number, lng: number): number | null {
