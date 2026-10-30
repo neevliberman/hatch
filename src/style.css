@@ -807,6 +807,20 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .ex-radar:hover { border-color: var(--line-strong); }
 .ex-radar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Paper and ink polish: the drawer gets the same grain as the cards, panel edges bleed like a wet pen line, and
+   buttons lift a hair on hover. Colours are unchanged, so contrast is too; motion only when allowed. */
+#drawer, .drawer-head { background-image: var(--grain); }
+#drawer { border-left-color: transparent; box-shadow: inset 6px 0 8px -6px var(--ink-wash), inset 1px 0 0 var(--line), var(--shadow); }
+.legend-card, #probe { box-shadow: var(--label), var(--shadow), 0 0 0 3px var(--ink-wash); }
+#dock { box-shadow: 0 -4px 10px -6px var(--ink-wash); }
+.icon-btn, .season select, .ex-radar { box-shadow: 0 1px 0 var(--ink-wash), 0 0 0 2px var(--track-faint); }
+.icon-btn:not(.on):hover, .season select:hover, .ex-radar:hover { background-color: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .icon-btn, .season select, .ex-radar { transition: transform 120ms ease-out, background-color 120ms, border-color 120ms, box-shadow 120ms; }
+  .icon-btn:hover, .season select:hover, .ex-radar:hover { transform: translateY(-1px); box-shadow: 0 2px 3px var(--ink-wash), 0 0 0 2px var(--track-faint); }
+  .icon-btn:active, .ex-radar:active { transform: translateY(0) scale(0.96); box-shadow: none; }
+}
+
 /* The species picker (src/ui/speciesPicker.ts): search over the tree of life, opened from the header. */
 #species-sheet { position: fixed; z-index: 6; top: 60px; right: var(--gutter); width: min(380px, calc(100vw - 16px)); max-height: min(70vh, 560px);
   display: flex; flex-direction: column; background: var(--grain) var(--panel-solid); border: 1px solid var(--label-rule); border-radius: 3px;
