@@ -42,7 +42,11 @@ function weather(lat: number, lng: number, ms: number): Promise<Day | null> {
     p = fetch(url)
       .then((x) => (x.ok ? x.json() : null))
       .then((j) => (j?.hourly ? { temps: j.hourly.temperature_2m, cloud: j.hourly.cloud_cover, note: r.note } : null))
-      .catch(() => null);
+      .catch(() => null)
+      .then((d) => {
+        if (!d) cache.delete(key); // a failed read (a 429, offline) is tried again next time
+        return d;
+      });
     cache.set(key, p);
   }
   return p;
@@ -142,10 +146,12 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     }
   });
 
+  let opener: HTMLElement | null = null;
   const close = () => {
     root.hidden = true;
+    opener?.isConnected ? opener.focus() : null;
     cancelAnimationFrame(raf);
-    frame.removeAttribute('src'); // stops the WebGL loop while closed
+    frame.src = 'about:blank'; // unloads Exo, which stops its WebGL loop
     ready = false;
     lastKey = '';
   };
@@ -167,20 +173,23 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
       ? `${got.note} air temperature from Open-Meteo. Exo is a monarch sketch: how warm the day is decides if it can fly.`
       : 'No weather came back for this place and day.';
     push();
-    if (playing && !raf) setPlay(true);
   };
 
   const open = () => {
     if (root.hidden) {
       root.hidden = false;
-      if (!frame.getAttribute('src')) frame.src = `${import.meta.env.BASE_URL}exo/index.html?embed=1`;
+      if (!frame.src || frame.src === 'about:blank' || frame.src.endsWith('/about:blank')) frame.src = `${import.meta.env.BASE_URL}exo/index.html?embed=1`;
       setPlay(playing);
+      root.querySelector<HTMLElement>('.exo-x')!.focus();
     }
     void load();
   };
 
   probeEl.addEventListener('click', (e) => {
-    if ((e.target as Element).closest('.exo-open')) open();
+    if ((e.target as Element).closest('.exo-open')) {
+      opener = probeEl.querySelector('.exo-open');
+      open();
+    }
   });
 
   return {
