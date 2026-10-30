@@ -1,5 +1,5 @@
-import { Chorus, type Note } from '../chorus/synth';
-import { castFor, type Cast } from '../chorus/cast';
+import type { Chorus, Note } from '../chorus/synth';
+import type { Cast } from '../chorus/cast';
 import { hourWeight, tempo, toF } from '../chorus/songs';
 import { tempAt, weather, type Day } from './weather';
 
@@ -66,7 +66,7 @@ export function mountChorus(probeEl: HTMLElement): ChorusPanel {
     const h = +hourEl.value;
     const t = tempAt(day, h);
     readEl.textContent = words();
-    if (t !== null && chorus) chorus.weather = { c: t, hour: h };
+    if (chorus) chorus.weather = { c: t ?? -50, hour: h }; // no weather: nobody sings
     if (!cast) return;
     if (!cast.inside) noteEl.textContent = 'Outside the Atlas map.';
     else if (!cast.singers.length) noteEl.textContent = 'No singers in season here yet.';
@@ -80,9 +80,9 @@ export function mountChorus(probeEl: HTMLElement): ChorusPanel {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (!w || !h) return;
-    if (canvas.width !== w * devicePixelRatio) {
-      canvas.width = w * devicePixelRatio;
-      canvas.height = h * devicePixelRatio;
+    if (canvas.width !== Math.round(w * devicePixelRatio)) {
+      canvas.width = Math.round(w * devicePixelRatio);
+      canvas.height = Math.round(h * devicePixelRatio);
     }
     g.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     g.clearRect(0, 0, w, h);
@@ -137,7 +137,8 @@ export function mountChorus(probeEl: HTMLElement): ChorusPanel {
     if (!ctx) {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       ctx = new AC();
-      chorus = new Chorus(ctx);
+      const { Chorus: Engine } = await import('../chorus/synth');
+      chorus = new Engine(ctx);
       timer = window.setInterval(() => chorus?.run(ctx!.currentTime + 1.2), 250);
     }
     await ctx.resume().catch(() => {});
@@ -157,17 +158,32 @@ export function mountChorus(probeEl: HTMLElement): ChorusPanel {
   const load = async () => {
     if (!spot) return;
     const [lng, lat] = spot.lngLat;
-    const key = `${lat.toFixed(2)},${lng.toFixed(2)},${fmtDate(at)}`;
+    const key = `${lat.toFixed(2)},${lng.toFixed(2)},${new Date(at).getUTCFullYear()},${fmtDate(at)}`;
     if (key === lastKey) return;
     lastKey = key;
     titleEl.textContent = `${spot.label ? `Near ${spot.label}` : 'Here'} · ${fmtDate(at)}`;
     noteEl.textContent = 'Finding the singers…';
-    const [c, d] = await Promise.all([castFor(lat, lng, at), weather(lat, lng, at)]);
-    if (key !== lastKey) return;
-    cast = c;
-    day = d;
-    canvas.setAttribute('aria-label', c?.singers.length ? `Singers in season: ${c.singers.map((x) => c.name(x.sp)).join(', ')}` : 'No singers in season');
-    if (chorus && ctx) chorus.setCast(cast?.singers ?? [], ctx.currentTime);
+    cast = null;
+    day = null;
+    if (chorus && ctx) chorus.setCast([], ctx.currentTime);
+    try {
+      const { castFor } = await import('../chorus/cast');
+      const [c, d] = await Promise.all([castFor(lat, lng, at), weather(lat, lng, at)]);
+      if (key !== lastKey) return;
+      cast = c;
+      day = d;
+    } catch {
+      if (key === lastKey) lastKey = ''; // tried again on the next pin or date
+      noteEl.textContent = 'Could not load the singers. Try again.';
+      return;
+    }
+    if (!cast) {
+      noteEl.textContent = 'The Atlas did not load. Try again.';
+      lastKey = '';
+      return;
+    }
+    canvas.setAttribute('aria-label', cast.singers.length ? `Singers in season: ${cast.singers.map((x) => cast!.name(x.sp)).join(', ')}` : 'No singers in season');
+    if (chorus && ctx) chorus.setCast(cast.singers, ctx.currentTime);
     apply();
   };
 

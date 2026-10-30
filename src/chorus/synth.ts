@@ -110,8 +110,8 @@ export class Chorus {
           want.push(old);
           continue;
         }
-        const pan = this.ctx.createStereoPanner();
-        pan.pan.value = this.rand() * 1.6 - 0.8;
+        const pan: AudioNode = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : this.ctx.createGain();
+        if (pan instanceof StereoPannerNode) pan.pan.value = this.rand() * 1.6 - 0.8;
         const lp = this.ctx.createBiquadFilter();
         lp.type = 'lowpass';
         lp.frequency.value = 5000 + this.rand() * 9000;
