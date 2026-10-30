@@ -6,7 +6,9 @@ import type { Layer } from '@deck.gl/core';
 import type { MapHandle, Padding } from '../map/map';
 import { isDark, palette } from '../theme';
 import { CROSS, PAUSE, PLAY } from '../ui/icons';
+import { MOON } from './moon';
 import { EVENTS, type RadarEvent } from './events';
+import { createNight, glowRamp, loadWind, NIGHT_SKY, type Night } from './night';
 import './radar.css';
 
 interface Meta {
@@ -32,6 +34,10 @@ export interface RadarHost {
   before?: View | null;
   /** True once the reader has asked for something else while this one loaded: it then opens nothing and returns null. */
   stale?(): boolean;
+  /** Open in the night view (a ?night link). */
+  night?: boolean;
+  /** Called when the night view goes on or off (the link follows it). */
+  onNight?(): void;
 }
 
 /** A place on the map to go back to (MapHandle.center's answer). */
@@ -43,6 +49,8 @@ export interface Radar {
   before: View | null;
   /** Close it; `back` (the default) returns the map to `before`. */
   close(back?: boolean): void;
+  /** Whether the night view is on. */
+  night(): boolean;
 }
 
 type RGBA = [number, number, number, number];
@@ -167,15 +175,22 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   if (host.stale?.()) return null;
   const { map } = host;
   const still = matchMedia('(prefers-reduced-motion: reduce)');
-  const pal = ramp(meta.levels.count);
+  let pal = ramp(meta.levels.count);
   // Premultiplied colour per level (0 = nothing), so blending neighbours never drags in a dark fringe.
   const PR = new Float32Array(16);
   const PG = new Float32Array(16);
   const PB = new Float32Array(16);
   const PA = new Float32Array(16);
-  pal.forEach(([r, g, b, a], i) => ((PR[i + 1] = (r * a) / 255), (PG[i + 1] = (g * a) / 255), (PB[i + 1] = (b * a) / 255), (PA[i + 1] = a)));
+  let r0 = 0;
+  let g0 = 0;
+  let b0 = 0;
+  const colour = (p: RGBA[]) => {
+    pal = p;
+    p.forEach(([r, g, b, a], i) => ((PR[i + 1] = (r * a) / 255), (PG[i + 1] = (g * a) / 255), (PB[i + 1] = (b * a) / 255), (PA[i + 1] = a)));
+    [r0, g0, b0] = p[0]!;
+  };
+  colour(pal);
   const S = sampler(meta);
-  const [r0, g0, b0] = pal[0]!;
 
   /** Frame `a` blended `f` of the way to frame `b`, one radar bin per pixel-patch, as a texture-ready image. */
   const paint = (a: number, b: number, f: number): ImageData => {
@@ -207,12 +222,14 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   // lines still draw on top. Range rings at half the reach and at the reach (40 and 80 km, or 60 and 120), and the
   // radar itself as an ink dot.
   const reach = meta.kept.range_km[1] * 1000;
-  const sheet = new SolidPolygonLayer<{ ring: [number, number][] }>({
+  const disc = [{ ring: circle(meta, reach + meta.polar.gate_m) }];
+  const sheetOf = (dark: boolean) => new SolidPolygonLayer<{ ring: [number, number][] }>({
     id: 'radar-sheet',
-    data: [{ ring: circle(meta, reach + meta.polar.gate_m) }],
+    data: disc,
     getPolygon: (d) => d.ring,
-    getFillColor: [...palette.land.slice(0, 3), 235] as RGBA,
+    getFillColor: dark ? NIGHT_SKY : ([...palette.land.slice(0, 3), 235] as RGBA),
   });
+  let sheet = sheetOf(false);
   const rings = new PathLayer<{ path: [number, number][] }>({
     id: 'radar-rings',
     data: [{ path: circle(meta, reach / 2) }, { path: circle(meta, reach) }],
@@ -230,15 +247,20 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     getFillColor: palette.stripes,
   });
   let drawn = '';
+  let image: Layer | null = null;
+  let dots: Layer | null = null;
+  // The paper goes under the lakes, so they keep their shape; the echo, rings and dot go over them (a swarm off a lake
+  // is over the water), still under the rivers and state lines. At night the simulated insects go on top of the echo.
+  const compose = () => map.setOverlay([sheet] as Layer[], [image, rings, site, ...(nightOn && dots ? [dots] : [])] as Layer[]);
   const draw = (a: number, b: number, f: number) => {
     const key = `${a}:${b}:${f.toFixed(2)}`;
     if (key === drawn) return;
     drawn = key;
-    const image = new BitmapLayer({ id: 'radar-frame', bounds: S.bounds, image: paint(a, b, f), pickable: false });
-    // The paper goes under the lakes, so they keep their shape; the echo, rings and dot go over them (a swarm off a lake
-    // is over the water), still under the rivers and state lines.
-    map.setOverlay([sheet] as Layer[], [image, rings, site] as Layer[]);
+    image = new BitmapLayer({ id: 'radar-frame', bounds: S.bounds, image: paint(a, b, f), pickable: false });
+    compose();
   };
+  let nightOn = false;
+  let night: Night | null = null;
 
   // The card: play or pause, the time and a one-line caption, "How we know" behind an i, and a close button.
   const card = document.createElement('section');
@@ -250,10 +272,13 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
       <button type="button" class="icon-btn rd-play" aria-label="Pause the replay">${PAUSE}</button>
       <p class="rd-cap"><span class="rd-when"><b class="rd-time"></b> ${esc(ev.tz.name)}, <span class="rd-day"></span></span>
         <span class="rd-what">${esc(ev.caption)}</span></p>
+      <button type="button" class="rd-night" aria-pressed="false" title="Night view: simulated insects">${MOON}<span>Night</span></button>
       <button type="button" class="rd-i" aria-expanded="false" aria-controls="radar-more" aria-label="How we know it’s insects" title="How we know">i</button>
       <button type="button" class="rd-x" aria-label="Close the radar replay" title="Close">${CROSS}</button>
     </div>
+    <div class="rd-spark" aria-hidden="true" hidden><svg viewBox="0 0 100 14" preserveAspectRatio="none"><path/></svg></div>
     <div class="rd-prog" aria-hidden="true"><i></i></div>
+    <p class="rd-sim" hidden>Dots are simulated from the echo and the wind.</p>
     <div id="radar-more" class="rd-more" hidden>
       ${ev.more.map((p) => `<p>${esc(p)}</p>`).join('')}
       <div class="rd-key" aria-hidden="true"><i style="background:linear-gradient(90deg,${keyStops})"></i>
@@ -267,6 +292,9 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   const playBtn = q<HTMLButtonElement>('.rd-play');
   const more = q<HTMLElement>('.rd-more');
   const info = q<HTMLButtonElement>('.rd-i');
+  const nightBtn = q<HTMLButtonElement>('.rd-night');
+  const spark = q<HTMLElement>('.rd-spark');
+  const sim = q<HTMLElement>('.rd-sim');
 
   // Glide to the radar: its whole reach (80 km, or 120 for an event that keeps more) in the free map between the header
   // and the card.
@@ -357,8 +385,50 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     // Mid-fade the image is rebuilt about 25 times a second, not every frame: a slow fade looks the same.
     draw(idx, next, f ? Math.round(eased * 12) / 12 : 0);
     label(idx, eased);
+    if (nightOn && now - nightAt > 30) glow(simTime(idx, e / (hold + fade)), now);
     raf = requestAnimationFrame(tick);
   };
+  // Night: the radar's own echo as glow on a dark sky, and simulated insects on it (night.ts). Built the first time it is
+  // asked for, with the wind for that evening. Zoom may go in past town scale, where the glow resolves into dots.
+  let nightAt = 0;
+  const simTime = (i: number, frac: number) => {
+    const t = Date.parse(meta.times[i]!) / 1000;
+    return i === last ? t + frac * 300 : t + (Date.parse(meta.times[i + 1]!) / 1000 - t) * frac;
+  };
+  const glow = (t: number, now = 0) => {
+    nightAt = now;
+    dots = night!.at(t);
+    compose();
+  };
+  const sparkDraw = () => {
+    const v = night!.spark;
+    const pts = v.slice(first).map((x, i) => `${((i / (last - first)) * 100).toFixed(1)},${(13.5 - x * 12.5).toFixed(1)}`);
+    spark.querySelector('path')!.setAttribute('d', `M0,14L${pts.join('L')}L100,14Z`);
+  };
+  const setNight = async (on: boolean) => {
+    if (on === nightOn) return;
+    if (on && !night) {
+      const wind = await loadWind(base);
+      if (!open || nightOn) return;
+      night = createNight(meta, frames, wind, meta.levels.count);
+      sparkDraw();
+    }
+    nightOn = on;
+    nightBtn.setAttribute('aria-pressed', String(on));
+    nightBtn.classList.toggle('on', on);
+    spark.hidden = sim.hidden = !on;
+    colour(on ? glowRamp(meta.levels.count) : ramp(meta.levels.count));
+    sheet = sheetOf(on);
+    q<HTMLElement>('.rd-key i').style.background = `linear-gradient(90deg,${pal.map((c) => `rgba(${c[0]},${c[1]},${c[2]},${(c[3] / 255).toFixed(2)})`).join(',')})`;
+    map.deep(on);
+    drawn = '';
+    draw(idx, idx, 0);
+    if (on) glow(simTime(idx, 0));
+    else dots = null;
+    compose();
+    host.onNight?.();
+  };
+  nightBtn.addEventListener('click', () => void setNight(!nightOn));
   const setPlaying = (on: boolean) => {
     playing = on;
     playBtn.innerHTML = on ? PAUSE : PLAY;
@@ -371,12 +441,14 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     } else {
       draw(idx, idx, 0); // settle on the scan in view, not half-way into the next
       label(idx, 0);
+      if (nightOn) glow(simTime(idx, 0));
     }
   };
   playBtn.addEventListener('click', () => setPlaying(!playing));
   draw(idx, idx, 0);
   label(idx, 0);
   setPlaying(playing);
+  if (host.night) void setNight(true);
   // After the card is laid out, so the glide knows how much room it takes.
   requestAnimationFrame(() => open && look(true));
   let resizeTimer = 0;
@@ -392,6 +464,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     open = false;
     cancelAnimationFrame(raf);
     clearTimeout(resizeTimer);
+    if (nightOn) map.deep(false);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('keydown', onKey, true);
     const hadFocus = card.contains(document.activeElement);
@@ -411,6 +484,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     idx = idx + d > last ? first : idx + d < first ? last : idx + d;
     draw(idx, idx, 0);
     label(idx, 0);
+    if (nightOn) glow(simTime(idx, 0));
   };
   // While it is open the keys drive the replay, not the hidden season slider: arrows step a scan, Home and End go to
   // the first and last, Space plays or pauses, Escape closes. Not while something on top (the About panel, the town box) has them.
@@ -431,5 +505,5 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   window.addEventListener('keydown', onKey, true);
   q<HTMLButtonElement>('.rd-x').addEventListener('click', () => close());
   playBtn.focus({ preventScroll: true });
-  return { id, before, close };
+  return { id, before, close, night: () => nightOn };
 }

@@ -595,6 +595,8 @@ function start() {
     else q.delete('at');
     if (radar) q.set('radar', radar.id);
     else q.delete('radar');
+    if (radar?.night()) q.set('night', '1');
+    else q.delete('night');
     if (warmth.value && cur.setWarmth) q.set('warm', String(warmth.value));
     else if (!askedWarm) q.delete('warm'); // a link's warmth stays while its species loads
     q.delete('noauto');
@@ -802,7 +804,7 @@ function start() {
   time.subscribe(() => time.playing && !intro?.running && clearHint());
   // A first visit with a plain link opens on the season playing itself, so the forecast is seen moving before anything
   // is read. A link that asks for a view (a day, a year, a place, a species, a radar night) opens on that view instead.
-  const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'noauto', 'caveats'].some((k) => params.has(k));
+  const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'night', 'noauto', 'caveats'].some((k) => params.has(k));
   // In season the live forecast becomes the default view once its file arrives, so the opening waits for that and
   // lands on today; off-season it is set up now, before the first frame. Not if the reader has already touched something.
   let touched = false;
@@ -932,6 +934,8 @@ function start() {
         mount: $('floats'),
         before: radarBack,
         stale: () => ticket !== radarAsking,
+        night: params.get('night') === '1',
+        onNight: () => syncUrl(),
         onClose: () => {
           // Only the open one owns the page's radar state: one closed for a switch, or a late one, leaves it be.
           if (radar?.id !== id) return;

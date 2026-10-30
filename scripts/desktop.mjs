@@ -1116,6 +1116,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       for (const k of ['End', 'Home', 'PageDown', 'PageUp', 'ArrowRight']) await page.keyboard.press(k);
       await page.waitForTimeout(600);
       if (new URL(page.url()).searchParams.get('date') !== day) fail(`a key moved the hidden season slider: date ${day} -> ${new URL(page.url()).searchParams.get('date')}`);
+      // Night (src/radar/night.ts): the button turns on the dark sky and simulated dots, the caveat shows, the link follows, the
+      // zoom may go in past town scale. It stays on through ×, which must still bring the Midwest back.
+      if (!reduce && !phone) {
+        await page.locator('#radar .rd-night').click();
+        await page.waitForFunction(() => document.querySelector('#radar .rd-night')?.getAttribute('aria-pressed') === 'true', null, { timeout: 30000 }).catch(() => fail('Night did not turn on'));
+        if (!(await page.locator('#radar .rd-sim').isVisible())) fail('Night does not say its dots are simulated');
+        if (!(await page.locator('#radar .rd-spark').isVisible())) fail('Night shows no echo line');
+        await page.waitForFunction(() => new URL(location.href).searchParams.get('night') === '1', null, { timeout: 5000 }).catch(() => fail('the link does not say night'));
+        if (!fetched.some((p) => p.endsWith(`/radar/${id}/wind.json`))) fail('Night never fetched the wind');
+        await page.evaluate((at) => window.__hatch.map.view(at, 12), ev.at);
+        if (((await page.evaluate(() => window.__hatch.map.zoom())) ?? 0) < 11) fail('Night does not zoom in past town scale');
+        await shotR('2b-night');
+      }
       await page.locator('#radar .rd-x').click();
       if (await page.locator('#radar').count()) fail('× did not close the replay');
       // Back at the whole-Midwest fit: not just flagged as fitted, but drawn at the fit's zoom once the glide is done.
