@@ -13,9 +13,8 @@ export { ATLAS_YEAR, atlasKey, loadIndex, type AtlasSpecies } from './index';
  * the cells the first time an Atlas species is drawn (loadAtlas).
  */
 
-/** First and last day of year the ribbon covers, and its step (export.py SEASON, STEP). */
-export const SEASON = [60, 304] as const;
-export const STEP = 4;
+import { SEASON, STEP } from './index';
+export { SEASON, STEP } from './index';
 const STEPS = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
 /** How far the "Warm the spring" slider reaches, °F (warm.py F), and the network's own limit on days ahead. */
 export const WARM_F = 3;

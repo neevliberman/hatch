@@ -49,6 +49,9 @@ export interface TreeOfLife {
   mark(sp: number | null): void;
   /** Redraw after the sheet opens or the theme changes, growing the branches in on the first open. */
   shown(): void;
+  /** How far into its season each species is on the map's day `day` ("Sep 5"): 0-1 by species index, or null. Those
+   * at a quarter of their best day or more glow round the rim, counted in a note ("412 out on Sep 5"). */
+  glow(out: Float32Array | null, day: string): void;
 }
 
 const R = 1000; // world units, hub to rim
@@ -63,6 +66,8 @@ const ORDER_TOKENS: Record<string, string> = {
   Odonata: '--o-odo',
   Orthoptera: '--o-ort',
 };
+/** A species glows once its day has at least this share of its best day's expected photos ("Out now" on the map). */
+const OUT = 0.25;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The tree as linked nodes, laid out on the wheel. */
@@ -153,12 +158,15 @@ export function mountTree(
       aria-label="Tree of life. Drag or pinch to explore; arrow keys walk the branches, Enter opens, plus and minus zoom."></canvas>
     <div class="tol-card" hidden><img alt="" width="44" height="44" referrerpolicy="no-referrer" hidden><div class="tol-t"><b></b><span></span></div>
       <button type="button" class="tol-go"></button></div>
+    <p class="tol-out" hidden></p>
     <p class="tol-src">Branching: <a href="https://tree.opentreeoflife.org" target="_blank" rel="noopener">Open Tree of Life</a>, no dates</p>
     <p class="tol-live" aria-live="polite"></p>`;
   const cv = host.querySelector<HTMLCanvasElement>('canvas')!;
   const ctx = cv.getContext('2d')!;
   const card = host.querySelector<HTMLElement>('.tol-card')!;
   const live = host.querySelector<HTMLElement>('.tol-live')!;
+  const outNote = host.querySelector<HTMLElement>('.tol-out')!;
+  let out: Float32Array | null = null;
 
   /** Zoom, the hub's place on screen, and the wheel's turn (radians): a branch being looked at turns to face right. */
   const view = { s: 1, tx: 0, ty: 0, rot: 0, min: 0.1 };
@@ -179,7 +187,7 @@ export function mountTree(
     const cs = getComputedStyle(host);
     const v = (k: string) => cs.getPropertyValue(k).trim();
     font = cs.fontFamily;
-    colors = { ink: v('--text'), muted: v('--muted'), halo: v('--halo'), edge: v('--o-other'), accent: v('--accent') };
+    colors = { ink: v('--text'), muted: v('--muted'), halo: v('--halo'), edge: v('--o-other'), accent: v('--accent'), glow: v('--tol-glow') };
     for (const [o, t] of Object.entries(ORDER_TOKENS)) colors[o] = v(t);
   };
   const colOf = (n: TNode) => (n.order && colors[n.order]) || colors.edge!;
@@ -300,6 +308,27 @@ export function mountTree(
     cv.dataset.branches = String(strokes); // for the page tests: the canvas itself can't be read once a photo is on it
     if (reach < 1) return;
 
+    // In season on the map's day: a glow just outside each such tip, brighter nearer its best day. Round the whole
+    // wheel the glows run together into lit stretches of the rim; closer in, each tip gets its own halo.
+    const gapPx = tipGap();
+    if (out) {
+      const photoSize = gapPx > 18 ? Math.min(22, gapPx * 0.42) : 0;
+      ctx.save();
+      ctx.fillStyle = colors.glow!;
+      for (const t of tips) {
+        const v = out[t.sp] ?? 0;
+        if (v < OUT || dim(t)) continue;
+        const [x, y] = xy(t, 1 + (photoSize ? photoSize + 5 : 5) / (R * s));
+        if (!onScreen(x, y, 30)) continue;
+        // Faint at a quarter of its best day, strong at its peak: the rim brightens where whole groups are at their height.
+        ctx.globalAlpha = 0.08 + 0.5 * ((v - OUT) / (1 - OUT)) ** 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y, photoSize ? photoSize + 6 : Math.max(2.5, Math.min(8, gapPx * 0.7)), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     // The species on the map now: its line of descent in the accent colour, a ring on its tip.
     if (current) {
       ctx.beginPath();
@@ -324,7 +353,6 @@ export function mountTree(
     }
 
     // Tips: a dot, then a photo and a name once there is room for them.
-    const gapPx = tipGap();
     if (gapPx > 3) {
       const rad = Math.min(22, gapPx * 0.42);
       for (const t of tips) {
@@ -723,6 +751,14 @@ export function mountTree(
       };
       grow = 0;
       step();
+    },
+    glow(o, day) {
+      out = o;
+      const n = o ? tips.filter((t) => (o[t.sp] ?? 0) >= OUT).length : 0;
+      outNote.textContent = `${n.toLocaleString()} out on ${day}`;
+      outNote.hidden = !o;
+      cv.dataset.out = String(n); // for the page tests
+      draw();
     },
   };
 }

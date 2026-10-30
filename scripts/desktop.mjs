@@ -770,6 +770,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => Number(document.querySelector('.tol-canvas')?.getAttribute('data-branches')) > 1500, null, { timeout: 8000, polling: 200 }).catch(() => {});
       const branches = Number(await canvas.getAttribute('data-branches'));
       if (!(branches > 1500)) fail(`the tree of life drew ${branches} branches, not the whole tree`);
+      // In season: the tips out on the map's day glow, and a note counts them (any number, the day may be winter).
+      await page.waitForFunction(() => document.querySelector('.tol-canvas')?.hasAttribute('data-out'), null, { timeout: 8000, polling: 200 })
+        .catch(() => fail('the tree never marked which species are out'));
+      if (!/^[\d,]+ out on \w+ \d+$/.test((await page.locator('.tol-out').textContent()) ?? '') || !(await page.locator('.tol-out').isVisible()))
+        fail(`the tree's in-season note reads "${await page.locator('.tol-out').textContent()}"`);
       await shotA('2b-tree');
       await canvas.focus();
       let steps = 0;
