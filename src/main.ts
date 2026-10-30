@@ -23,6 +23,7 @@ import { mountKeyExplore } from './ui/keyexplore';
 import { GRID_RES, nearby } from './core/grid';
 import { isDark, onTheme, toggleMode } from './theme';
 import { markFor } from './ui/mark';
+import { chorusEnabled, mountChorus } from './ui/chorusPanel';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
 import type { Radar, View } from './radar/radarReplay';
@@ -130,6 +131,8 @@ function start() {
   // An open radar replay (src/radar/): the map belongs to it for now, so hexagons give no cards.
   let radar: Radar | null = null;
   const probeEl = $('probe');
+  // "Listen here": a pinned card offers the singing insects the Atlas expects there, played at the real temperature's tempo.
+  const chorus = chorusEnabled() ? mountChorus(probeEl) : null;
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -162,6 +165,7 @@ function start() {
     map.setPicked(pinned && hit && (!hit.picked || isForecast(hit.picked.layerId)) ? hit.cell : null);
     placeProbe();
     followSpot(time.cursor);
+    chorus?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
   };
   const unpin = () => {
     if (!pinned && !hit) return;
