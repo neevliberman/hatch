@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f8f2e3" />
+  <!-- Light or dark before first paint: the saved choice, else the system setting (src/theme.ts keeps both in step). -->
+  <script>
+    try {
+      var t = localStorage.getItem('hatch-theme');
+      if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+      if (t === 'dark') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#241f19');
+    } catch (e) {}
+  </script>
+  <title>Hatch · Historical and predictive insect tracking</title>
+  <meta name="description" content="Historical and predictive insect tracking across the Midwest, checked against real iNaturalist sightings." />
+  <link rel="canonical" href="https://neevliberman.github.io/hatch/" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-title" content="Hatch" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <!-- Link previews (iMessage, Slack, LinkedIn, Discord, X). Scrapers need absolute URLs. Rebuild og.png: npm run og -->
+  <meta property="og:site_name" content="Hatch" />
+  <meta property="og:title" content="Hatch · Historical and predictive insect tracking" />
+  <meta property="og:description" content="Watch insects emerge across the Midwest. A forecast, checked against real sightings." />
+  <meta property="og:image" content="https://neevliberman.github.io/hatch/og.png?v=3" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="The Hatch logo, a bug peeking out of a cracked shell, beside a Midwest map colored by where luna moths fly in mid-June." />
+  <meta property="og:url" content="https://neevliberman.github.io/hatch/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="en_US" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Hatch · Historical and predictive insect tracking" />
+  <meta name="twitter:description" content="Watch insects emerge across the Midwest. A forecast, checked against real sightings." />
+  <meta name="twitter:image" content="https://neevliberman.github.io/hatch/og.png?v=3" />
+  <meta name="twitter:image:alt" content="The Hatch logo, a bug peeking out of a cracked shell, beside a Midwest map colored by where luna moths fly in mid-June." />
+  <script type="module" crossorigin src="./assets/index-CUzMI05t.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/h3-6W3MNt59.js">
+  <link rel="modulepreload" crossorigin href="./assets/deck-B2kkhewE.js">
+  <link rel="modulepreload" crossorigin href="./assets/replay-data-D3dh01Zt.js">
+  <link rel="stylesheet" crossorigin href="./assets/index-L_PHP42G.css">
+</head>
+<body>
+  <div id="app">
+    <main>
+      <div id="map" role="img" aria-label="Midwest map: luna moth sightings over forecast hexagons" aria-describedby="sr-summary"></div>
+      <p id="sr-summary" class="sr"></p>
+      <div id="loader"><svg viewBox="-40 -40 80 80" width="120" height="120" aria-hidden="true">
+    <filter id="cat-boil" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="2"/>
+    <feDisplacementMap in="SourceGraphic" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <defs><g id="cat-a"><ellipse class="wash" cx=".8" cy=".7" rx="6.1" ry="5.6"/><path class="pen" d="M1.8 -5.5L3.3 -4.5L4.9 -3.3L5.8 -1.8L6.2 -0.2L6.1 1.4L5.4 2.9L4.3 4.2L2.8 5.1L1.0 5.6L-0.9 5.5L-2.7 5.0L-4.3 4.0L-5.4 2.6L-6.1 0.9L-6.2 -0.8L-5.8 -2.4L-4.9 -3.9L-3.5 -5.1L-1.8 -5.8L-0.0 -6.1L2.0 -5.7L3.9 -4.8L5.5 -3.2L6.6 -1.9L6.8 -2.0L5.9 -3.6L4.3 -5.3L2.3 -6.4L0.1 -6.9L-2.1 -6.7L-4.0 -5.9L-5.6 -4.6L-6.8 -2.9L-7.3 -0.9L-7.2 1.1L-6.4 3.1L-5.0 4.9L-3.2 6.0L-1.1 6.6L1.1 6.7L3.2 6.1L5.0 5.0L6.3 3.5L7.0 1.6L7.1 -0.3L6.5 -2.2L5.4 -3.8L3.5 -5.0L1.9 -5.7ZM-2.2 5.0L-3.0 6.7L-3.1 8.6L-2.9 8.6L-2.1 6.9L-2.0 5.1ZM2.0 5.3L1.4 6.9L1.4 8.6L1.6 8.7L2.2 7.1L2.2 5.4Z"/></g><g id="cat-b"><ellipse class="wash" cx=".8" cy=".7" rx="6.1" ry="5.6"/><path class="pen" d="M-1.9 -5.7L-0.1 -5.6L1.9 -5.4L3.6 -4.4L4.9 -3.1L5.7 -1.6L6.0 0.0L5.9 1.7L5.3 3.2L4.2 4.4L2.7 5.3L0.8 5.6L-1.1 5.4L-3.0 4.8L-4.5 3.8L-5.5 2.4L-6.1 0.6L-6.3 -1.1L-5.9 -2.7L-5.0 -4.1L-3.5 -5.2L-1.7 -5.9L0.2 -6.1L2.4 -5.5L4.2 -4.9L4.3 -5.1L2.6 -6.1L0.3 -6.9L-1.9 -6.7L-4.0 -6.0L-5.7 -4.8L-6.9 -3.2L-7.4 -1.2L-7.3 0.8L-6.6 2.9L-5.4 4.7L-3.5 5.9L-1.4 6.6L0.9 6.8L3.1 6.4L4.9 5.3L6.3 3.8L7.0 1.9L7.1 -0.1L6.7 -2.0L5.6 -3.7L4.1 -5.1L2.1 -6.1L-0.1 -6.2L-1.9 -5.9ZM-2.3 5.2L-2.9 6.8L-2.9 8.5L-2.7 8.5L-2.1 7.0L-2.1 5.3ZM1.9 5.3L1.3 6.8L1.3 8.5L1.5 8.6L2.1 7.0L2.1 5.3Z"/></g></defs>
+    <g filter="url(#cat-boil)"><path class="cat-path" d="M15.3 0.0L15.1 0.5L15.1 1.0L15.1 1.6L15.3 2.2L15.4 2.2L15.7 1.7L15.7 1.0L15.7 0.4L15.4 0.0ZM14.1 5.8L13.7 6.1L13.4 6.6L13.2 7.3L13.3 7.8L13.4 7.9L13.8 7.5L14.1 6.9L14.3 6.4L14.2 5.9ZM10.8 10.9L10.3 11.0L9.8 11.3L9.4 11.8L9.3 12.3L9.4 12.4L9.8 12.1L10.2 11.8L10.6 11.5L10.9 11.1ZM5.8 14.2L5.3 14.0L4.8 14.2L4.2 14.4L3.9 14.8L4.0 15.0L4.5 15.1L5.1 14.9L5.6 14.7L5.9 14.3ZM-0.0 15.3L-0.5 15.0L-1.1 15.0L-1.6 15.0L-2.1 15.2L-2.1 15.3L-1.7 15.6L-1.1 15.7L-0.5 15.6L-0.0 15.4ZM-5.8 14.3L-6.1 13.8L-6.6 13.4L-7.1 13.1L-7.7 13.2L-7.8 13.3L-7.5 13.8L-7.0 14.1L-6.5 14.4L-5.9 14.4ZM-10.8 10.9L-11.0 10.3L-11.3 9.9L-11.7 9.4L-12.2 9.2L-12.3 9.3L-12.2 9.8L-11.9 10.3L-11.4 10.7L-10.9 10.9ZM-14.1 5.8L-14.2 5.3L-14.4 4.8L-14.5 4.2L-14.8 3.8L-14.9 3.8L-15.0 4.3L-15.0 5.0L-14.7 5.5L-14.2 5.8ZM-15.3 0.1L-15.0 -0.4L-14.9 -1.0L-14.9 -1.7L-15.1 -2.2L-15.3 -2.2L-15.5 -1.7L-15.6 -1.1L-15.6 -0.4L-15.4 0.1ZM-14.1 -5.9L-13.8 -6.2L-13.5 -6.7L-13.2 -7.3L-13.2 -7.9L-13.3 -8.0L-13.7 -7.6L-14.1 -7.0L-14.3 -6.4L-14.2 -5.9ZM-10.8 -10.9L-10.3 -11.0L-9.9 -11.3L-9.5 -11.8L-9.2 -12.4L-9.3 -12.5L-9.9 -12.3L-10.4 -11.9L-10.8 -11.5L-10.9 -11.0ZM-5.8 -14.1L-5.3 -14.1L-4.7 -14.3L-4.2 -14.4L-3.8 -14.7L-3.8 -14.9L-4.3 -15.0L-4.9 -14.9L-5.5 -14.6L-5.8 -14.2ZM0.1 -15.3L0.5 -15.0L1.0 -14.9L1.6 -14.9L2.2 -15.1L2.2 -15.2L1.7 -15.6L1.1 -15.7L0.5 -15.7L0.1 -15.5ZM6.0 -14.3L6.1 -13.8L6.6 -13.4L7.2 -13.1L7.8 -13.1L7.9 -13.2L7.5 -13.7L6.9 -14.0L6.5 -14.3L6.1 -14.4ZM10.7 -10.8L10.9 -10.2L11.4 -9.7L11.8 -9.3L12.3 -9.1L12.4 -9.2L12.3 -9.8L12.0 -10.3L11.4 -10.7L10.8 -10.9ZM14.1 -5.9L14.0 -5.3L14.2 -4.7L14.5 -4.1L14.9 -3.8L15.0 -3.8L15.1 -4.3L14.9 -4.9L14.6 -5.5L14.2 -6.0Z"/><g class="walk"><g style="--k:0;--b:0"><use href="#cat-a"/></g><g style="--k:0.167;--b:0.5"><use href="#cat-b"/></g><g style="--k:0.333;--b:0.87"><use href="#cat-a"/></g><g style="--k:0.5;--b:1"><use href="#cat-b"/></g><g style="--k:0.667;--b:0.87"><use href="#cat-a"/></g><g style="--k:0.833;--b:0.5"><use href="#cat-b"/></g><g style="--k:1;--b:0"><ellipse class="wash" cx=".8" cy=".7" rx="7.1" ry="6.5"/><path class="pen" d="M6.7 -2.4L6.9 -0.5L7.1 1.6L6.3 3.4L5.1 4.8L3.4 5.8L1.5 6.4L-0.7 6.4L-2.8 5.9L-4.6 4.7L-6.1 3.0L-7.0 1.1L-7.3 -0.8L-6.9 -2.6L-5.9 -4.2L-4.3 -5.5L-2.4 -6.4L-0.1 -6.6L2.1 -6.3L4.1 -5.4L5.7 -4.0L7.0 -2.2L7.7 -0.1L7.4 2.2L6.9 4.0L7.2 4.1L8.0 2.3L8.5 -0.2L7.8 -2.6L6.5 -4.7L4.7 -6.3L2.5 -7.4L-0.1 -7.8L-2.7 -7.6L-5.0 -6.6L-6.9 -5.1L-8.1 -3.1L-8.6 -0.8L-8.2 1.5L-7.2 3.7L-5.5 5.6L-3.3 7.0L-0.8 7.6L1.6 7.5L3.9 6.8L5.7 5.6L7.1 3.8L7.9 1.7L7.6 -0.6L6.9 -2.5ZM7.0 -2.5L7.0 -0.7L6.9 1.6L6.2 3.7L5.0 5.4L3.5 6.4L1.7 6.9L-0.4 6.6L-2.7 5.8L-4.8 4.8L-6.5 3.5L-7.5 1.4L-7.9 -0.8L-7.1 -3.0L-5.7 -4.8L-4.3 -6.1L-2.6 -6.8L-0.4 -7.2L1.8 -7.0L4.0 -5.9L5.9 -4.3L7.2 -2.4L7.9 -0.4L7.4 2.1L6.7 4.2L6.8 4.2L7.7 2.2L8.3 -0.4L7.6 -2.6L6.3 -4.6L4.3 -6.3L2.0 -7.5L-0.4 -7.8L-2.8 -7.4L-4.6 -6.6L-6.2 -5.2L-7.6 -3.3L-8.5 -0.9L-8.1 1.6L-6.9 3.9L-5.1 5.4L-2.9 6.4L-0.6 7.2L1.8 7.5L3.8 6.9L5.4 5.7L6.6 3.9L7.3 1.7L7.4 -0.7L7.1 -2.5ZM2.2 -6.3L3.6 -8.1L5.1 -10.2L6.7 -11.3L7.8 -12.1L7.8 -12.2L6.3 -11.9L4.5 -10.8L3.0 -8.5L2.1 -6.4ZM-0.7 -7.0L-0.3 -9.1L0.3 -11.5L1.2 -12.8L1.9 -13.8L1.9 -13.9L0.7 -13.2L-0.4 -11.8L-0.8 -9.2L-0.9 -7.0ZM3.0 -2.6L3.4 -2.5L3.7 -2.5L3.7 -2.4L3.8 -2.3L4.0 -2.0L4.1 -1.7L4.0 -1.5L3.8 -1.3L3.8 -1.2L3.8 -1.2L3.4 -1.1L3.1 -1.1L3.1 -1.1L3.0 -1.2L2.8 -1.5L2.7 -1.6L2.7 -1.8L2.8 -2.1L3.0 -2.3L3.1 -2.4L3.2 -2.5L3.5 -2.5L3.7 -2.4L4.0 -2.3L4.1 -2.4L4.0 -2.7L3.6 -2.9L3.3 -3.0L2.8 -3.0L2.5 -2.8L2.2 -2.5L2.0 -2.1L1.9 -1.5L2.1 -1.1L2.3 -0.7L2.6 -0.4L3.0 -0.2L3.6 -0.3L4.1 -0.5L4.4 -0.7L4.5 -0.9L4.7 -1.3L4.8 -1.8L4.6 -2.3L4.3 -2.7L4.1 -2.9L3.7 -3.0L3.3 -2.9L3.0 -2.8Z"/></g></g></g>
+  </svg><p>Warming up the map…</p></div>
+    </main>
+    <header id="top">
+      <h1 class="brand"><img id="mark" class="mark" src="data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20512%20512'%3e%3c!--%20The%20luna%20moth%20for%20the%20header%20(24%20px):%20heavy%20ink%20so%20it%20survives%20small%20sizes.%20--%3e%3cdefs%3e%3cg%20id='h'%3e%3cpath%20d='M262%20186%20C300%20150%20370%20106%20426%2092%20C448%2088%20452%20112%20444%20140%20C434%20180%20420%20210%20398%20236%20C352%20252%20302%20242%20264%20222%20Z'%20fill='%23a9d47a'%20stroke='%232b241c'%20stroke-width='22'%20stroke-linejoin='round'/%3e%3cpath%20d='M264%20226%20C322%20232%20384%20248%20378%20300%20C372%20342%20334%20360%20320%20400%20C312%20436%20318%20466%20312%20494%20C298%20470%20296%20424%20290%20380%20C282%20334%20272%20302%20264%20280%20Z'%20fill='%23a9d47a'%20stroke='%232b241c'%20stroke-width='22'%20stroke-linejoin='round'/%3e%3cpath%20d='M258%20182%20C300%20146%20370%20102%20428%2088'%20fill='none'%20stroke='%237a3b4a'%20stroke-width='26'%20stroke-linecap='round'/%3e%3ccircle%20cx='350'%20cy='292'%20r='26'%20fill='%23e8b84a'%20stroke='%232b241c'%20stroke-width='12'/%3e%3c/g%3e%3c/defs%3e%3ccircle%20cx='256'%20cy='256'%20r='256'%20fill='%23f8f2e3'/%3e%3cg%20transform='translate(256%20262)%20scale(.8)%20translate(-256%20-291)'%3e%3cuse%20href='%23h'/%3e%3cuse%20href='%23h'%20transform='translate(512%200)%20scale(-1%201)'/%3e%3cellipse%20cx='256'%20cy='230'%20rx='24'%20ry='74'%20fill='%232b241c'/%3e%3c/g%3e%3c/svg%3e" alt="" width="24" height="24" />Hatch <small id="tagline">Historical and predictive insect tracking</small></h1>
+      <div class="season species"><button id="species" type="button" class="pick-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="species-sheet" aria-label="Species: Luna moth. Change species"><span class="sp-face">Luna moth</span></button></div>
+      <label class="season"><span class="sr">Season to replay</span><select id="season"><option value="">All years</option></select></label>
+      <button id="theme-btn" class="icon-btn" type="button" aria-label="Dark mode" aria-pressed="false" title="Dark mode">
+        <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.6 14.6A8 8 0 0 1 9.4 4.4a8.2 8.2 0 1 0 10.2 10.2z"/><path fill="currentColor" d="M17 3.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></g></svg>
+      </button>
+      <button id="info-btn" class="icon-btn" aria-label="About this map" aria-expanded="false" aria-controls="drawer">i</button>
+      <div id="explore" class="sr explore icon-btn" role="application" tabindex="0" aria-roledescription="map explorer" aria-label="Explore map with keys" aria-describedby="explore-help">Explore map with keys</div>
+      <span id="explore-help" class="sr">Arrow keys move between hexagons and read the forecast. Escape exits.</span>
+    </header>
+    <div id="species-sheet" role="dialog" aria-label="Pick a species" hidden></div>
+    <aside id="drawer" aria-hidden="true" aria-label="About this map"></aside>
+    <div id="bottom" role="region" aria-label="Key and time controls">
+      <section id="layers" aria-label="Layers" hidden></section>
+      <div id="floats">
+        <div id="legend"></div>
+        <div id="probe" role="status" aria-live="polite" hidden></div>
+      </div>
+      <button id="recenter" type="button" class="icon-btn" aria-label="Back to the whole Midwest" title="Back to the whole Midwest" hidden>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3.4 8.5l.3-.4.1-.6 0-.7.1-.8 0-.6.1-.5.1-.3 0-.3.1-.2-.1.1-.1 0 .1 0 .4-.1.9 0 .6-.1 1.4 0 .6-.1.5-.3 0-.5-.4-.4-.5-.2-.7-.1-.8-.2-1.2-.2-.3 0-.3-.1-.8 0-.5.1-.4.3-.3.4-.2.4-.2.8 0 1.5.1.7.2.8.1.7.2.6.4.4zm12-5.1l.4.3.6.1 1.5.2.6.1.6 0 .4.1.6 0 .1.1-.3-.3-.1-.2.1.1 0 1.5.1.7 0 .7.2 1.3.3.5.4 0 .4-.4.2-.6.1-.7.2-.7.1-.7.1-.5 0-.4.1-.3 0-.8-.1-.5-.3-.5-.5-.4-.6-.1-.4-.1-.3.1-.4 0-.4.1-.5 0-1.5.2-1.3.2-.4.4zm5.2 12l-.3.5-.1.5 0 .7-.1.7 0 .6-.1.5-.1.4 0 .3-.1.3 0 .1 0-.1.2-.1.1 0-1.1 0-.6.1-1.3 0-1.2.2-.4.3 0 .5.3.3.6.2.7.1.6.2.7.1.5 0 .6.2.4.1.4 0 .6-.1.5-.4.4-.4.2-.5 0-.5.1-.4-.1-.4 0-1-.2-1.4-.2-.6-.1-.6-.4-.4zm-12 5.3l-.4-.3-.6-.2-.7-.2-1.4-.2-.5-.1-.5 0-.4-.1-.4 0 .1 0 .4.4 0 .1 0-1.2-.1-.5-.1-.7 0-.7-.2-1.3-.3-.4-.5 0-.3.4-.2.6-.3 2.1 0 .5-.2.6 0 .4-.1.4.1.5.4.6.5.3.5.1.8 0 .3-.1 1.6 0 .7-.1.7 0 .6-.1.5-.3zm5.2-7.9l-.7.8-1.2.2-1.2-.4-.7-1 .1-1.2.8-.9 1.2-.2 1.2.5.7 1z"/></svg>
+      </button>
+      <form id="finder" role="search" hidden>
+        <label for="find-q" class="sr">Town name</label>
+        <ul id="find-list" role="listbox" aria-label="Towns" hidden></ul>
+        <div class="find-row"><input id="find-q" type="text" role="combobox" aria-autocomplete="list" aria-controls="find-list" aria-expanded="false" placeholder="Town name" autocomplete="off" enterkeyhint="go">
+        <button type="button" class="find-x" aria-label="Close town search">&times;</button></div>
+      </form>
+      <div id="dock">
+        <p id="strip"><span id="honesty"><span class="dots">Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. </span><span class="forecast-note">Colors: <em class="unconfirmed" id="fc-try" hidden>experimental </em>forecast<span id="fc-record"></span>.</span><span class="atlas-note">Colors: expected share of insect photos.<span class="dot-note"> Dots: real photos.</span><span class="vs-note"> Bar: line expected, <b>green</b> seen.</span></span></span>
+          <button id="why" type="button">How sure?</button><span id="countdown"></span><span id="near" hidden><button type="button" id="near-go" title="Show this place"></button><button type="button" id="near-x" aria-label="Forget this place">&times;</button></span></p>
+        <div id="warm-row" role="group" aria-label="Warm the spring" hidden></div>
+        <footer id="bar" role="group" aria-label="Time controls"></footer>
+        <div id="actions">
+          <button id="locate" type="button" class="icon-btn" aria-label="My area" title="Forecast where you are">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M10.4 6l.5.1 1.3 0 .8.1.7 0 .6.2 1 .6.5.4.9.9.6 1 .2.5.2.6.2 1.2 0 1.1-.1.6-.2.6-.1.5-.3.5-.2.5-1.2 1.2-1 .6-.6.2-.5.2-1.4.2-1.3 0-.5-.1-.6-.2-.5-.2-1-.6-1.2-1.2-.4-.5-.3-.5-.3-.6-.2-.6-.2-1 0-.6.1-.7.4-1.2.2-.5.3-.5.4-.6.4-.4.4-.5.5-.4 1-.6.7-.2.6-.2 1.4-.2.6 0 .6.1.7.2 1.4.6.6.2.4.1.2-.4-.4-.3-.5-.3-.6-.4-.7-.4-.8-.3-.8-.2-1.5 0-1.6.2-1.4.6-.7.4-.6.4-1.1 1.1-.4.6-.4.7-.4.6-.6 2.3 0 1.5.2.8.2.7.4.8.4.6.4.7 1 1 .6.5.6.4.7.4.7.3.7.2 1.6.2 2.4-.3 2.1-.9 1.2-1 .5-.5.5-.6.3-.6.3-.7.2-.8.2-1.4 0-1.4-.1-.7-.4-1.4-.4-.6-.3-.6-.5-.6-.5-.5-1.2-1-1.4-.6-1.6-.2-.8.1-.8 0-.6.2-.4.1zm.2-.3l.4.1 1.2 0 1.3.2.6.2.5.3.6.3.6.4.9.9.4.5.3.6.2.5.2.6.2 1.3 0 1.2-.2.6-.2.7-.2.6-.3.6-.9 1.5-.8.8-.4.3-.4.1-.6.1-1.5 0-.8-.2-.8-.1-.7-.2-.6-.2-.6-.1-.6-.3-.5-.2-.5-.3-.4-.3-.3-.5-.4-.5-.6-1.2-.2-1.2-.1-.5.1-.6.2-.5.4-1.2.6-1.2 1.2-1.8.5-.5 1-.6.6-.2 1.3-.2.7 0 1.4.2.7.3.8.4.7.3.6.4.5.1.1-.2-.9-.7-.8-.4-.7-.4-.8-.4-.8-.2-.7-.1-1.5 0-.8.1-.7.2-.7.3-1.2 1-.5.6-.8 1.4-.4.6-.6 1.2-.2.7-.2.6-.1.7 0 .7.1.7.2.8.3.7.4.6.4.7 1 1 .5.4.7.3.6.2.7.2.6.2.8.2.8.1.9.2.9.1 1.6-.2.7-.3.5-.4.5-.5.8-1 .3-.6.4-.6.2-.6.3-.7.2-.7.2-1.5 0-.7-.1-.7-.4-1.4-.3-.6-.8-1.2-1.2-1-1.2-.8-.7-.2-.6-.2-.8-.1-1.4 0-.5.1-.4.1zm3.2 7.1l-.7.8-1.2.2-1.2-.4-.7-1 .1-1.2.8-.9 1.2-.2 1.2.5.7 1zm-1.9-11.7l-.6.4-.2.7-.2.8 0 .8.1.8.6.5.4 0 .6-.4.3-.7.1-.8 0-.8-.1-.7-.5-.6zm-.1 17.7l-.6.6-.1.7 0 .8.1.9.2.7.6.5.4-.1.6-.5.1-.7 0-.9-.1-.8-.2-.7-.6-.5zm-10.8-6.9l.4.6.7.3.9.1.8 0 .8-.1.5-.5.1-.4-.5-.7-.7-.2-.9-.1-.8 0-.8.1-.5.5zm17.8.4l.6.5.7.1.9 0 .9-.1.7-.2.5-.6 0-.4-.6-.6-.7-.1-.9 0-.9.2-.7.2-.5.6z"/></svg>
+            <span class="lbl">My area</span></button>
+          <button id="find" type="button" class="icon-btn" aria-label="Find a town" title="Find a town" aria-expanded="false" aria-controls="finder">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
+            <span class="lbl">Find</span></button>
+          <button id="warm" type="button" class="icon-btn" aria-label="Warm the spring" title="Warm the spring" aria-expanded="false" aria-controls="warm-row" hidden><span class="lbl">Warm</span></button>
+          <button id="share" type="button" class="icon-btn" aria-label="Share this view" title="Share this view">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12.3 15.6l.4-.7.2-1 .3-3.7 0-3.5-.2-1.2-.1-1-.2-.9-.4-.7-.4 0-.5.7-.2 2 0 1.1-.1 1.2 0 2.2.1 1.3 0 1.3.2 2.1.4.8zm-.5 0l.2-.7.2-1 .3-3.7 0-1.2.1-1.1 0-2.4-.2-1.9-.2-.7-.2 0-.3.6-.1.9-.2 2.3 0 2.3-.1 1.1 0 4.8.2.7zm-4-8.1l.5 0 .4-.3 1.5-1.2.4-.4.4-.5.4-.4.4-.5.4-.4-.2.1-.1-.1.1.2.3.4.4.4.8 1 .4.4.5.3.5.4.4.2.4.3.4 0 .3-.3 0-.5-.3-.3-.7-.9-.4-.4-.3-.4-.2-.3-.3-.5-.4-.5-.3-.6-.6-.5-.8-.3-.8.2-.6.5-.4.5-.3.5-.6.8-1.2 1.5-.3.5-.3.4-.1.5zm-1.5 3l-.3.4-.3.6-.2.8-.4 1.8-.2 1.7-.2 1-.1 1.1 0 1.1.2 1 .6 1 1 .5 1.1.3 5.6 0 1.1.1 2.3 0 1.1-.2 1-.6.6-1 .1-1.1 0-1.2-.4-2.1-.3-2.5-.2-.9-.1-.7-.2-.6-.3-.4-.4 0-.2 1.1.1.8 0 2.5.3 3 0 .9-.1.6-.2.3-.3.1-.7.1-2 0-2.2-.2-1.1.1-3.2 0-.8-.1-.3-.2-.2-.3-.2-.5 0-1.8.1-1 0-.9.1-.8 0-.9.3-2.3-.1-.6z"/></svg>
+            <span class="lbl">Share</span></button>
+          <span id="action-msg" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
