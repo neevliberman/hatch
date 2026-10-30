@@ -294,7 +294,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #probe.at-pointer:not(.pinned) .probe-card > div:nth-child(n + 4), #probe.at-pointer:not(.pinned) .probe-link,
   #probe.at-pointer:not(.pinned) .probe-more { display: none; }
 #probe.at-pointer::after { content: 'Click to pin'; display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
-#probe.at-pointer.pinned::after { content: 'Pinned. Esc or \00D7  closes.'; /* two spaces: the first ends the escape */ color: var(--accent); }
+#probe.at-pointer.pinned::after { content: 'Pinned. Esc closes.'; color: var(--accent); }
 /* In the card's top-right corner, over its padding, so the title keeps its width. */
 #probe { position: relative; }
 .probe-close + .probe-cell, .probe-close + .probe-card .probe-title { padding-right: 22px; }
@@ -387,6 +387,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .probe-others button:hover { background: var(--track-faint); }
 .probe-others button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .probe-others img, .po-blank { width: 28px; height: 28px; border-radius: 3px; object-fit: cover; background: var(--track-faint); display: block; }
+.probe-others button:has(.po-blank) { grid-template-columns: 1fr auto; } /* no photo: no empty box */
+.po-blank { display: none; }
 .po-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .po-note { color: var(--muted); font-size: 12px; white-space: nowrap; }
 #probe.at-pointer:not(.pinned) .probe-others { display: none; }
