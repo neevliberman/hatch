@@ -6,51 +6,9 @@
  * Analogy: the map is a weather station and Exo is the thermometer's pet. The map says where and when; Exo shows
  * what that day feels like to a monarch. Weather comes from Open-Meteo, fetched only when the panel opens.
  */
-const DAY = 864e5;
+import { weather, type Day } from './weather';
+
 const HOURS = [5, 21] as const;
-
-interface Day {
-  temps: (number | null)[];
-  cloud: (number | null)[];
-  note: string;
-}
-
-/** Which weather source answers for a map date: past days from the archive, near days from the forecast, and a far
- * future date borrows the same calendar day of a past year (the map's "typical year"). */
-function resolve(ms: number, now = Date.now()): { date: string; api: string; note: string } {
-  let d = new Date(ms);
-  let note = '';
-  while (d.getTime() > now + 15 * DAY) {
-    d = new Date(Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth(), d.getUTCDate()));
-    note = `Same day in ${d.getUTCFullYear()}`;
-  }
-  const near = d.getTime() > now - 6 * DAY;
-  return {
-    date: d.toISOString().slice(0, 10),
-    api: near ? 'https://api.open-meteo.com/v1/forecast' : 'https://archive-api.open-meteo.com/v1/archive',
-    note: note || (near ? 'Forecast' : 'Recorded'),
-  };
-}
-
-const cache = new Map<string, Promise<Day | null>>();
-function weather(lat: number, lng: number, ms: number): Promise<Day | null> {
-  const r = resolve(ms);
-  const key = `${lat.toFixed(2)},${lng.toFixed(2)},${r.date}`;
-  let p = cache.get(key);
-  if (!p) {
-    const url = `${r.api}?latitude=${lat.toFixed(2)}&longitude=${lng.toFixed(2)}&hourly=temperature_2m,cloud_cover&start_date=${r.date}&end_date=${r.date}&timezone=auto`;
-    p = fetch(url)
-      .then((x) => (x.ok ? x.json() : null))
-      .then((j) => (j?.hourly ? { temps: j.hourly.temperature_2m, cloud: j.hourly.cloud_cover, note: r.note } : null))
-      .catch(() => null)
-      .then((d) => {
-        if (!d) cache.delete(key); // a failed read (a 429, offline) is tried again next time
-        return d;
-      });
-    cache.set(key, p);
-  }
-  return p;
-}
 
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const clock = (h: number, mm: number) => `${((h + 11) % 12) + 1}${mm ? `:${String(mm).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
