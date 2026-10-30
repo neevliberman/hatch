@@ -18,6 +18,14 @@ export function stageAt(q: Q | undefined, doy: number): Stage {
   return 'over';
 }
 
+/** "Coming out near you" from a cell's forecast: first ones (5%), peak (50%) and last (95%; the 75% day plus a fortnight
+ * when the file has none). `year`: a live forecast's season. */
+export function dueOf(q: Q | undefined, year?: number) {
+  const [q05, q25, q50, q75, q95] = q ?? [];
+  if (q05 == null || q75 == null) return null;
+  return { start: q05, peak: q50 ?? (q25 != null ? (q25 + q75) / 2 : q75), end: q95 ?? q75 + 14, year };
+}
+
 /** How many hexagons are at each stage on day `doy`. */
 export function stageCounts(qs: readonly Q[], doy: number) {
   const n: Record<Stage, number> = { 'not yet': 0, starting: 0, peak: 0, 'winding down': 0, over: 0 };

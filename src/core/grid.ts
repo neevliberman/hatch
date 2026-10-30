@@ -1,4 +1,4 @@
-import { cellToLatLng, polygonToCells } from 'h3-js';
+import { cellToLatLng, gridDisk, latLngToCell, polygonToCells } from 'h3-js';
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 import states from '../data/midwest-states.json';
 
@@ -43,3 +43,13 @@ export const MIDWEST_BOUNDS: [[number, number], [number, number]] = [
   [-97.3, 36.8],
   [-80.4, 49.5],
 ];
+
+/** The hexagons within k rings of lat/lng, nearest centre first. */
+export function nearby(lat: number, lng: number, k: number) {
+  return gridDisk(latLngToCell(lat, lng, GRID_RES), k)
+    .map((c) => {
+      const [la, ln] = cellToLatLng(c);
+      return { cell: c, lngLat: [ln, la] as [number, number], d: (la - lat) ** 2 + (ln - lng) ** 2 };
+    })
+    .sort((a, b) => a.d - b.d);
+}
