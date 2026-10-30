@@ -53,7 +53,7 @@ function weather(lat: number, lng: number, ms: number): Promise<Day | null> {
 }
 
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-const hourLabel = (h: number) => `${((h + 11) % 12) + 1} ${h < 12 ? 'am' : 'pm'}`;
+const clock = (h: number, mm: number) => `${((h + 11) % 12) + 1}${mm ? `:${String(mm).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
 
 export const exoEnabled = () => new URLSearchParams(location.search).has('exo');
 
@@ -110,7 +110,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     const mm = Math.round((h - hh) * 60);
     readEl.textContent = t == null
       ? 'No weather for this day'
-      : `${hourLabel(hh)}${mm ? `:${String(mm).padStart(2, '0')}` : ''} · ${t.toFixed(0)} °C · ${Math.round((t * 9) / 5 + 32)} °F${cl >= 70 ? ' · cloudy' : ''}`;
+      : `${clock(hh, mm)} · ${t.toFixed(0)} °C · ${Math.round((t * 9) / 5 + 32)} °F${cl >= 70 ? ' · cloudy' : ''}`;
     if (t != null && ready) frame.contentWindow?.postMessage({ type: 'exo-air', t, cloudy: cl >= 70 }, location.origin);
   };
 

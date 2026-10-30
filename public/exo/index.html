@@ -56,7 +56,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 #labels span { position: absolute; transform: translate(-50%, -50%); font-size: .58rem; letter-spacing: .04em; background: var(--paper); padding: 0 3px; border: 1px solid var(--rule); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .toast, .therm i { transition: none; } }
-html.embed .day, html.embed #recenter { display: none !important; }
+html.embed .day, html.embed .rail, html.embed #recenter { display: none !important; }
 html.embed .cap h1, html.embed .cap .common { display: none; }
 </style>
 
@@ -561,7 +561,7 @@ let W_ = 1, H = 1, top = 0, bot = 0;
 function fitDist(r) { const v = camera.fov * Math.PI / 360, band = Math.max(120, H - top - bot); return Math.max(r / Math.tan(v) * (H / band), r / Math.tan(Math.atan(Math.tan(v) * camera.aspect))); }
 function resize() {
   W_ = canvas.clientWidth; H = canvas.clientHeight; renderer.setSize(W_, H, false); camera.aspect = W_ / H;
-  top = document.getElementById('cap').getBoundingClientRect().bottom + 6; bot = H - document.getElementById('day').getBoundingClientRect().top + 6;
+  top = document.getElementById('cap').getBoundingClientRect().bottom + 6; bot = document.documentElement.classList.contains('embed') ? 6 : H - document.getElementById('day').getBoundingClientRect().top + 6;
   camera.setViewOffset(W_, H, 0, -(top - bot) / 2, W_, H); camera.updateProjectionMatrix(); drawTrack();
 }
 
