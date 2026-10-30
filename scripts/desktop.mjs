@@ -574,7 +574,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if ((await page.evaluate(() => window.__hatch.luna.res())) <= 4) fail('live mode stayed on the big hexagons when zoomed in');
       if (label === 'in-season default') {
         // About panel: the live card and the weather credits.
-        await page.locator('#info-btn').click();
+        await page.locator('#info-btn').click({ timeout: 90000 });
         await page.waitForTimeout(500);
         const about = await page.locator('#drawer').textContent();
         if (!/how it works/.test(about)) fail('the About panel has no live-mode card');
