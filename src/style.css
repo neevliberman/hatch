@@ -859,3 +859,21 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .tol-src a { color: inherit; }
 .tol-live { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 700px) { #species-sheet.sp-has-tree { width: auto; height: calc(100dvh - 60px - env(safe-area-inset-bottom)); } }
+
+/* Exo in the map (?exo, src/ui/exoPanel.ts): a monarch that lives the pinned place's temperature. */
+.exo-open { margin-top: 6px; padding: 4px 10px; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel-solid);
+  color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
+.exo-open:focus-visible, .exo-x:focus-visible, #exo-play:focus-visible, #exo-hour:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#exo { position: fixed; z-index: 30; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 24px)); display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto; height: min(420px, 56vh); background: var(--grain) var(--panel-solid);
+  border: 1px solid var(--label-rule); border-radius: 3px; box-shadow: var(--label), var(--shadow); }
+#exo[hidden] { display: none; }
+.exo-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 4px 4px 12px; font-size: 13px; font-weight: 700; color: var(--moon); }
+.exo-x { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+#exo iframe { width: 100%; height: 100%; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel-solid); }
+.exo-bar { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; padding: 6px 12px 0; }
+.exo-bar output { grid-column: 1 / -1; font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; }
+#exo-hour { width: 100%; accent-color: var(--accent); }
+#exo-play { width: 32px; height: 28px; padding: 0; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); font-size: 11px; cursor: pointer; }
+.exo-note { padding: 2px 12px 8px; font-size: 11px; color: var(--muted); }
+@media (max-width: 600px) { #exo { left: 8px; right: 8px; width: auto; height: 40vh; top: calc(60px + env(safe-area-inset-top)); bottom: auto; } }

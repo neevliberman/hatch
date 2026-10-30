@@ -1,0 +1,712 @@
+<title>Sketch Butterfly</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the scene fills the screen. Notebook caption top-left, a slim icon rail on the right, the day as a timeline along the bottom. */
+:root {
+  --paper: #f7f7f4;
+  --ink: #141414;
+  --ink-soft: #5c5c58;
+  --rule: #c9c9c2;
+  --chip: #ffffff;
+  --warm: #d9620f;
+  --display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #111112; --ink: #ededE8; --ink-soft: #9a9a94; --rule: #3a3a38; --chip: #1b1b1c; --warm: #fb923c; color-scheme: dark } }
+:root[data-theme="dark"] { --paper: #111112; --ink: #ededE8; --ink-soft: #9a9a94; --rule: #3a3a38; --chip: #1b1b1c; --warm: #fb923c; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); overflow: hidden; font-family: var(--mono); }
+#stage { position: fixed; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; display: block; }
+#stage:active { cursor: grabbing; }
+.cap { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); pointer-events: none; display: grid; gap: 2px; }
+.cap h1 { margin: 0; font: italic 400 1.9rem/1 var(--display); }
+.cap .common { font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-soft); }
+.cap .fact { font: 400 1.05rem/1.3 var(--display); max-width: 34ch; margin-top: 6px; text-wrap: balance; }
+.cap .sim { font-size: .72rem; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.cap .sim b { font-weight: 500; color: var(--warm); }
+.therm { width: 84px; height: 6px; border: 1px solid var(--ink); border-radius: 3px; position: relative; overflow: hidden; }
+.therm i { position: absolute; inset: 0 auto 0 0; background: var(--warm); transition: width .3s; }
+.therm s { position: absolute; top: -1px; bottom: -1px; width: 1px; background: var(--ink); }
+
+.rail { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; }
+.ico { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--ink); background: var(--chip); color: var(--ink); display: grid; place-items: center; padding: 0; cursor: pointer; }
+.ico[hidden] { display: none; }
+.ico[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.ico svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.day { position: fixed; left: 0; right: 0; bottom: 0; padding: 6px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: end; }
+.track { position: relative; height: 62px; min-width: 0; }
+.track svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.track svg .curve { stroke: var(--warm); stroke-width: 1.2; fill: none; }
+.track svg .fill { fill: var(--warm); opacity: .1; }
+.track svg .base { stroke: var(--ink); stroke-width: 1; }
+.track svg text { fill: var(--ink-soft); font: 9px var(--mono); text-anchor: middle; }
+.track input { position: absolute; left: 0; right: 0; top: 24px; width: 100%; height: 24px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+.track input::-webkit-slider-runnable-track { height: 24px; background: transparent; }
+.track input::-moz-range-track { height: 24px; background: transparent; }
+.track input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; background: var(--warm); border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--ink); }
+.track input::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--warm); border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--ink); }
+.readout { position: absolute; top: 2px; transform: translateX(-50%); font-size: .7rem; font-variant-numeric: tabular-nums; white-space: nowrap; background: var(--paper); padding: 0 4px; }
+.toast { position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-size: .72rem; background: var(--ink); color: var(--paper); padding: 6px 12px; border-radius: 999px; pointer-events: none; opacity: 0; transition: opacity .3s; white-space: nowrap; }
+.toast.on { opacity: 1; }
+#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+#labels span { position: absolute; transform: translate(-50%, -50%); font-size: .58rem; letter-spacing: .04em; background: var(--paper); padding: 0 3px; border: 1px solid var(--rule); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .toast, .therm i { transition: none; } }
+html.embed .day, html.embed #recenter { display: none !important; }
+html.embed .cap h1, html.embed .cap .common { display: none; }
+</style>
+
+<canvas id="stage" aria-label="Sketched monarch on milkweed. Drag to orbit."></canvas>
+<div id="labels" aria-hidden="true"></div>
+
+<div class="cap" id="cap">
+  <div class="common">Monarch · male · wingspan 9–10 cm</div>
+  <h1>Danaus plexippus</h1>
+  <div class="fact" id="fact" aria-live="polite">&nbsp;</div>
+  <div class="sim"><span id="therm-t">Thorax</span><span class="therm" aria-hidden="true"><i id="therm-fill"></i><s id="therm-need"></s></span></div>
+</div>
+
+<div class="rail" id="rail">
+  <button class="ico" id="view" aria-label="View: follow the butterfly" title="Change view"></button>
+  <button class="ico" id="cloud" aria-label="Send a cloud over the sun" title="Send a cloud"><svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6-1A4.5 4.5 0 0 0 7 18z"/></svg></button>
+  <button class="ico" id="veins" aria-pressed="false" aria-label="Name the wing veins" title="Name the veins"><svg viewBox="0 0 24 24"><path d="M4 20 20 4M4 20l5-14M4 20l10-11M4 20l14-5M4 20l13 0M9 6l6 2"/></svg></button>
+  <button class="ico" id="recenter" aria-label="Recenter" title="Recenter" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></button>
+</div>
+
+<div class="day" id="day">
+  <button class="ico" id="play" aria-label="Pause" aria-pressed="true"></button>
+  <div class="track" id="track">
+    <svg id="trackSvg" aria-hidden="true"></svg>
+    <div class="readout" id="readout">16°C · 61°F</div>
+    <input id="air" type="range" min="5" max="40" step="1" value="16" aria-label="Air temperature">
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="three.min.js"></script>
+<script>
+(() => {
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const canvas = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
+const matKey = new THREE.LineBasicMaterial({ vertexColors: true });
+const matDetail = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false });
+const matPlant = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: .55, depthWrite: false });
+const paper = new THREE.Color(), ink = new THREE.Color();
+const geos = new Set(), washes = [];
+
+function paint(geo) {
+  const w = geo.userData.w, c = new Float32Array(w.length * 3), tmp = new THREE.Color();
+  for (let i = 0; i < w.length; i++) { tmp.copy(paper).lerp(ink, w[i]); c[i * 3] = tmp.r; c[i * 3 + 1] = tmp.g; c[i * 3 + 2] = tmp.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+}
+function applyTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  paper.set(cs.getPropertyValue('--paper').trim()); ink.set(cs.getPropertyValue('--ink').trim());
+  const dark = paper.getHSL({}).l < .5;
+  renderer.setClearColor(paper); geos.forEach(paint);
+  washes.forEach(m => m.uniforms.dark.value = dark ? 1 : 0);
+  drawTrack && drawTrack();
+}
+let drawTrack = null;
+
+// ---------- pen ----------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let R = rng(1);
+const V = a => new THREE.Vector3(a[0], a[1], a[2]);
+function inkStroke(s, r, out, w) {
+  const n = s.pts.length; if (n < 2) return;
+  const amp = s.amp ?? .009, p1 = r() * 6.3, p2 = r() * 6.3;
+  const n1 = new THREE.Vector3(r() - .5, r() - .5, r() - .5).normalize(), n2 = new THREE.Vector3(r() - .5, r() - .5, r() - .5).normalize();
+  const pts = s.pts.map((p, i) => V(p).addScaledVector(n1, amp * Math.sin(i * .29 + p1)).addScaledVector(n2, amp * .6 * Math.sin(i * .13 + p2)));
+  const os = (s.os ?? 1) * (.03 + r() * .04);
+  pts.unshift(pts[0].clone().add(pts[0].clone().sub(pts[1]).setLength(os)));
+  pts.push(pts[n].clone().add(pts[n].clone().sub(pts[n - 1]).setLength(os)));
+  const m = pts.length, peak = s.w * (.8 + r() * .35);
+  const pr = i => peak * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, (i / (m - 1)) * 1.04 - .02))), .45);
+  for (let i = 0; i < m - 1; i++) { out.push(pts[i].x, pts[i].y, pts[i].z, pts[i + 1].x, pts[i + 1].y, pts[i + 1].z); w.push(Math.min(1, pr(i)), Math.min(1, pr(i + 1))); }
+}
+function takes(strokes, seed, material) {
+  const g = new THREE.Group();
+  for (let v = 0; v < 3; v++) {
+    const r = rng(seed * 131 + v * 7919), out = [], w = [];
+    strokes.forEach(s => { inkStroke(s, r, out, w); if (s.twice) inkStroke(s, r, out, w); });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+    geo.userData.w = w; geos.add(geo);
+    const ls = new THREE.LineSegments(geo, material); ls.visible = v === 0; g.add(ls);
+  }
+  g.userData.boil = true; return g;
+}
+function part(strokes, seed, keyMat = matKey) {
+  const g = new THREE.Group();
+  g.add(takes(strokes.filter(s => !s.d), seed, keyMat));
+  const det = strokes.filter(s => s.d); if (det.length) g.add(takes(det, seed + 7, matDetail));
+  return g;
+}
+
+// ---------- geometry helpers ----------
+function crClosed(cp, n) {
+  const out = [], m = cp.length;
+  for (let i = 0; i < m; i++) {
+    const p0 = cp[(i - 1 + m) % m], p1 = cp[i], p2 = cp[(i + 1) % m], p3 = cp[(i + 2) % m];
+    for (let k = 0; k < n; k++) { const t = k / n, t2 = t * t, t3 = t2 * t;
+      out.push([0, 1].map(j => .5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3))); }
+  }
+  return out;
+}
+function inPoly(x, z, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; }
+const q2 = (a, b, c, t) => { const u = 1 - t; return [u * u * a[0] + 2 * u * t * b[0] + t * t * c[0], u * u * a[1] + 2 * u * t * b[1] + t * t * c[1]]; };
+const qpts = (a, b, c, n = 22) => Array.from({ length: n + 1 }, (_, i) => q2(a, b, c, i / n));
+const quad3 = (a, b, c, n = 20) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n, u = 1 - t; return [0, 1, 2].map(j => u * u * a[j] + 2 * u * t * b[j] + t * t * c[j]); });
+function loop(cx, cy, cz, r, turns = 1.15, n = 26, plane = 'xz', grow = 0) {
+  const o = []; for (let i = 0; i <= n * turns; i++) { const a = i / n * Math.PI * 2, rr = r * (1 + grow * i / n); o.push(plane === 'xz' ? [cx + Math.cos(a) * rr, cy, cz + Math.sin(a) * rr] : plane === 'yz' ? [cx, cy + Math.cos(a) * rr, cz + Math.sin(a) * rr] : [cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, cz]); }
+  return o;
+}
+const camber = u => -.045 * u * u * .25;
+const nearest = (outline, p) => outline.reduce((b, q, i) => Math.hypot(q[0] - p[0], q[1] - p[1]) < Math.hypot(outline[b][0] - p[0], outline[b][1] - p[1]) ? i : b, 0);
+
+// ---------- monarch wings: Comstock–Needham venation ----------
+// Veins start on the discal cell (U = upper edge, L = lower edge, D = the cross-vein closing it) or at the base,
+// and end on the wing margin. x = outward from the body, z = forward.
+const WINGS = {
+  fore: {
+    cp: [[.1, .2], [.6, .48], [1.3, .76], [1.9, .84], [2.4, .7], [2.33, .3], [2.05, -.15], [1.5, -.36], [.9, -.3], [.35, -.08]],
+    U: [[.14, .2], [.7, .36], [1.25, .43]], L: [[.16, .1], [.62, -.02], [1.15, .04]], D: [[1.25, .43], [1.13, .25], [1.15, .04]],
+    veins: [
+      ['Sc', [.14, .24], [.55, .55], [1.15, .74]],
+      ['R1', ['U', .72], null, [1.55, .8]],
+      ['R2', ['U', .9], null, [1.85, .86]],
+      ['R3–5', ['D', 0], [1.5, .55], [1.75, .6], 'stalk'],
+      ['R3', [1.75, .6], null, [2.12, .84]],
+      ['', [1.75, .6], null, [2.02, .63], 'stalk'],
+      ['R4', [2.02, .63], null, [2.36, .7]],
+      ['R5', [2.02, .63], null, [2.36, .45]],
+      ['M1', ['D', .06], null, [2.31, .25]],
+      ['M2', ['D', .5], null, [2.2, .02]],
+      ['M3', ['D', .92], null, [2.05, -.15]],
+      ['CuA1', ['L', 1], null, [1.8, -.28]],
+      ['CuA2', ['L', .5], null, [1.45, -.36]],
+      ['1A+2A', [.16, .06], [.6, -.18], [1.1, -.33]],
+    ],
+    band: .15, veinW: .045, apex: ([u, z]) => u > 1.78 && z > .3,
+  },
+  hind: {
+    cp: [[.1, -.02], [.7, -.1], [1.4, -.26], [1.82, -.62], [1.76, -1.1], [1.36, -1.5], [.8, -1.62], [.4, -1.3], [.16, -.7]],
+    U: [[.16, -.12], [.55, -.22], [.98, -.42]], L: [[.16, -.2], [.45, -.55], [.86, -.8]], D: [[.98, -.42], [.88, -.6], [.86, -.8]],
+    veins: [
+      ['h', [.22, -.1], [.26, -.06], [.34, -.06]],
+      ['Sc+R1', [.16, -.1], [.8, -.12], [1.4, -.27]],
+      ['Rs', ['U', 1], null, [1.8, -.55]],
+      ['M1', ['D', .1], null, [1.82, -.82]],
+      ['M2', ['D', .5], null, [1.72, -1.15]],
+      ['M3', ['D', .9], null, [1.52, -1.38]],
+      ['CuA1', ['L', .97], null, [1.2, -1.55]],
+      ['CuA2', ['L', .5], null, [.92, -1.62]],
+      ['1A+2A', [.17, -.22], [.38, -.8], [.62, -1.52]],
+      ['3A', [.17, -.26], [.2, -.5], [.22, -.8]],
+    ],
+    band: .12, veinW: .06, apex: () => false, scent: ['CuA2', .35],
+  },
+};
+function venation(W) {
+  const outline = W.outline = crClosed(W.cp, 14), edge = { U: W.U, L: W.L, D: W.D };
+  const at = o => typeof o[0] === 'string' ? q2(...edge[o[0]], o[1]) : o;
+  W.lines = []; W.named = []; const ends = [];
+  [W.U, W.L, W.D].forEach(e => W.lines.push(qpts(...e)));
+  W.veins.forEach(([name, from, via, to, kind]) => {
+    const a = at(from), end = kind === 'stalk' ? to : outline[nearest(outline, to)];
+    if (kind !== 'stalk') ends.push(nearest(outline, to));
+    const c = via || [(a[0] + end[0]) / 2 + (end[1] - a[1]) * .06, (a[1] + end[1]) / 2 - (end[0] - a[0]) * .06];
+    const pts = qpts(a, c, end); W.lines.push(pts);
+    if (name && name !== 'h') W.named.push([name, pts[Math.round(pts.length * .62)]]);
+    if (W.scent && name === W.scent[0]) W.scentAt = pts[Math.round(pts.length * W.scent[1])];
+  });
+  ends.sort((a, b) => a - b); W.spots = [];
+  const cx = outline.reduce((s, p) => s + p[0], 0) / outline.length, cz = outline.reduce((s, p) => s + p[1], 0) / outline.length;
+  for (let k = 0; k < ends.length - 1; k++) {
+    const i0 = ends[k], i1 = ends[k + 1]; if (i1 - i0 < 3) continue;
+    const m = outline[Math.round((i0 + i1) / 2)], d = [cx - m[0], cz - m[1]], dl = Math.hypot(...d);
+    if (Math.hypot(m[0] - W.cp[0][0], m[1] - W.cp[0][1]) < 1.3) continue;
+    [[.04, .018], [.1, .034]].forEach(([o, r]) => W.spots.push([m[0] + d[0] / dl * o, m[1] + d[1] / dl * o, r]));
+  }
+  if (W === WINGS.fore) [[1.80, .70, .05], [1.98, .66, .045], [2.10, .55, .04], [2.17, .42, .032], [2.20, .28, .026]].forEach(s => W.spots.push(s));
+}
+venation(WINGS.fore); venation(WINGS.hind);
+const isDark = (W, u, z, dOut) => dOut < W.band || (W.apex([u, z]) && dOut < .42);
+const inSpot = (W, u, z, k = 1) => W.spots.some(([x, y, r]) => Math.hypot(u - x, z - y) < r * k);
+
+function wingStrokes(W, mirror, seed) {
+  R = rng(seed); const s = mirror ? -1 : 1, S = [], o = W.outline;
+  const to3 = (u, z, lift = 0) => [s * u, camber(u) + lift, z];
+  S.push({ pts: [...o, o[0]].map(p => to3(...p)), w: .95 });
+  for (let k = 0; k < 2; k++) { const a = Math.floor(R() * o.length), len = Math.floor(o.length * (.4 + R() * .3)); S.push({ pts: Array.from({ length: len }, (_, i) => to3(...o[(a + i) % o.length])), w: .5, d: true }); }
+  W.lines.forEach(l => S.push({ pts: l.map(p => to3(...p, .004)), w: .9, twice: true, os: .3 }));
+  const hatch = (ang, gap, test, wt) => {
+    const dir = [Math.cos(ang), Math.sin(ang)], nrm = [-dir[1], dir[0]];
+    for (let c = -3; c <= 3; c += gap) {
+      let run = [];
+      const flush = () => { if (run.length > 1) S.push({ pts: run, w: wt, amp: .003, d: true, os: .2 }); run = []; };
+      for (let t = -3; t <= 3; t += .025) { const x = 1.2 + nrm[0] * c + dir[0] * t, z = -.6 + nrm[1] * c + dir[1] * t; if (test(x, z)) run.push(to3(x, z, .003)); else flush(); }
+      flush();
+    }
+  };
+  const dOut = (x, z) => Math.min(...o.map(p => Math.hypot(p[0] - x, p[1] - z)));
+  hatch(W === WINGS.fore ? .9 : -.7, .028, (x, z) => inPoly(x, z, o) && isDark(W, x, z, dOut(x, z)) && !inSpot(W, x, z, 1.5), .62);
+  hatch(W === WINGS.fore ? .4 : -1.1, .11, (x, z) => inPoly(x, z, o), .16);
+  W.spots.forEach(([x, z, r]) => S.push({ pts: loop(x, 0, z, r, 1.2, 14).map(([u, , zz]) => to3(u, zz, .006)), w: .7 }));
+  if (W.scentAt) { const [x, z] = W.scentAt; S.push({ pts: loop(x, 0, z, .055, 2.6, 18, 'xz', -.2).map(([u, , zz]) => to3(u, zz, .007)), w: 1, twice: true }); }
+  return S;
+}
+
+// ---------- heat on the wing ----------
+// A grid over each wing. Sunlight heats each cell (black scales absorb most), warmth diffuses (fast along veins,
+// slow through membrane), leaks to the air, and flows into the thorax at the wing root.
+const CELL = .022;
+function makeHeat(W) {
+  const o = W.outline, us = o.map(p => p[0]), zs = o.map(p => p[1]);
+  const minU = Math.min(...us) - CELL * 2, minZ = Math.min(...zs) - CELL * 2;
+  const nx = Math.ceil((Math.max(...us) - minU) / CELL) + 3, nz = Math.ceil((Math.max(...zs) - minZ) / CELL) + 3, n = nx * nz;
+  const inside = new Uint8Array(n), D = new Float32Array(n), absorb = new Float32Array(n), root = new Uint8Array(n);
+  const veinPts = W.lines.flat();
+  for (let j = 1; j < nz - 1; j++) for (let i = 1; i < nx - 1; i++) {
+    const k = j * nx + i, u = minU + (i + .5) * CELL, z = minZ + (j + .5) * CELL;
+    if (!inPoly(u, z, o)) continue;
+    inside[k] = 1;
+    const dO = Math.min(...o.map(p => Math.hypot(p[0] - u, p[1] - z)));
+    const dV = Math.min(...veinPts.map(p => Math.hypot(p[0] - u, p[1] - z)));
+    const vein = dV < CELL * 1.3, spot = inSpot(W, u, z, 1.2), blk = isDark(W, u, z, dO) && !spot;
+    D[k] = vein ? .22 : .035;
+    absorb[k] = vein || blk ? 1 : spot ? .25 : .55;
+    root[k] = Math.hypot(u - W.cp[0][0], z - W.cp[0][1]) < .2 ? 1 : 0;
+  }
+  const cE = new Float32Array(n), cN = new Float32Array(n), hm = (a, b) => 2 * a * b / (a + b);
+  for (let k = 0; k < n - nx - 1; k++) { if (inside[k] && inside[k + 1]) cE[k] = hm(D[k], D[k + 1]); if (inside[k] && inside[k + nx]) cN[k] = hm(D[k], D[k + nx]); }
+  const data = new Uint8Array(n * 4);
+  const tex = new THREE.DataTexture(data, nx, nz, THREE.RGBAFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  const idx = []; for (let k = 0; k < n; k++) if (inside[k]) idx.push(k);
+  return { nx, nz, minU, minZ, idx, T: new Float32Array(n), T2: new Float32Array(n), data, tex, rootMean: 0,
+    reset(Ta) { this.T.fill(Ta); this.T2.fill(Ta); },
+    step(S, Ta, Tth, loss, sub) {
+      let T = this.T, T2 = this.T2; const q = .0065, g = .01;
+      for (let s = 0; s < sub; s++) {
+        for (let a = 0; a < idx.length; a++) {
+          const k = idx[a], t = T[k];
+          const lap = cE[k] * (T[k + 1] - t) + cE[k - 1] * (T[k - 1] - t) + cN[k] * (T[k + nx] - t) + cN[k - nx] * (T[k - nx] - t);
+          T2[k] = t + lap + absorb[k] * S * q - loss * (t - Ta) - root[k] * g * (t - Tth);
+        }
+        const sw = T; T = T2; T2 = sw;
+      }
+      this.T = T; this.T2 = T2; let rs = 0, rc = 0;
+      for (let a = 0; a < idx.length; a++) { const k = idx[a]; if (root[k]) { rs += T[k]; rc++; } this.data[k * 4] = Math.max(0, Math.min(255, (T[k] - Ta) / 12 * 255)); }
+      // cells just outside the wing copy their inside neighbour, so the texture fades cleanly at the margin
+      this.rootMean = rc ? rs / rc : Ta; this.tex.needsUpdate = true;
+    },
+  };
+}
+
+// The paint mask: where orange pigment can sit (between the black veins and the black border), drawn smooth at
+// 512 px with canvas strokes. G holds a blurred copy, so the shader can tell how close a spot is to a vein or edge.
+function makeMask(W, hs) {
+  const cw = 512, ch = Math.round(512 * hs.nz / hs.nx), c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const x = c.getContext('2d'), sx = cw / (hs.nx * CELL), X = u => (u - hs.minU) * sx, Y = z => (z - hs.minZ) * sx;
+  const path = new Path2D(); W.outline.forEach(([u, z], i) => i ? path.lineTo(X(u), Y(z)) : path.moveTo(X(u), Y(z))); path.closePath();
+  x.fillStyle = '#000'; x.fillRect(0, 0, cw, ch); x.fillStyle = '#fff'; x.fill(path);
+  x.save(); x.clip(path); x.strokeStyle = '#000'; x.lineJoin = x.lineCap = 'round';
+  x.lineWidth = W.band * 2 * sx; x.stroke(path);
+  const apex = W.outline.filter(p => W.apex(p)); if (apex.length) { x.lineWidth = .84 * sx; x.beginPath(); apex.forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); x.stroke(); }
+  W.lines.forEach(l => { x.lineWidth = W.veinW * sx; x.beginPath(); l.forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); x.stroke(); });
+  x.restore();
+  const src = x.getImageData(0, 0, cw, ch).data, m = new Float32Array(cw * ch);
+  for (let i = 0; i < m.length; i++) m[i] = src[i * 4] / 255;
+  const blur = (a, r) => { const b = new Float32Array(a.length), o2 = new Float32Array(a.length);
+    for (let j = 0; j < ch; j++) { let s = 0; for (let i = -r; i <= r; i++) s += a[j * cw + Math.max(0, Math.min(cw - 1, i))]; for (let i = 0; i < cw; i++) { b[j * cw + i] = s / (2 * r + 1); s += a[j * cw + Math.min(cw - 1, i + r + 1)] - a[j * cw + Math.max(0, i - r)]; } }
+    for (let i = 0; i < cw; i++) { let s = 0; for (let j = -r; j <= r; j++) s += b[Math.max(0, Math.min(ch - 1, j)) * cw + i]; for (let j = 0; j < ch; j++) { o2[j * cw + i] = s / (2 * r + 1); s += b[Math.min(ch - 1, j + r + 1) * cw + i] - b[Math.max(0, j - r) * cw + i]; } }
+    return o2; };
+  const soft = blur(m, 1), wide = blur(blur(m, 7), 7), data = new Uint8Array(cw * ch * 4);
+  for (let i = 0; i < m.length; i++) { data[i * 4] = soft[i] * 255; data[i * 4 + 1] = wide[i] * 255; data[i * 4 + 3] = 255; }
+  const t = new THREE.DataTexture(data, cw, ch, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
+  return t;
+}
+
+const WASH_VS = `varying vec2 vP; void main(){ vP = vec2(abs(position.x), position.z); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
+const WASH_FS = `
+precision highp float; varying vec2 vP;
+uniform sampler2D heat, mask; uniform vec4 box; uniform float dark;
+float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+float fbm(vec2 p){ return .5*n(p)+.25*n(p*2.03)+.125*n(p*4.01)+.0625*n(p*8.13); }
+void main(){
+  vec2 uv = (vP - box.xy) / box.zw;
+  vec2 mk = texture2D(mask, uv).rg; float m = mk.r, mb = mk.g;
+  if (m < .02) discard;
+  float w = texture2D(heat, uv).r;
+  float big = fbm(vP*1.5 + 3.0), mid = fbm(vP*5.0), fine = fbm(vP*34.0), fiber = fbm(vec2(vP.x*60.0, vP.y*9.0));
+  float e = w + (mid - .5) * .32 + (big - .5) * .18;      // warmth, with a ragged wet front
+  float th = .42;
+  float wet = smoothstep(th - .2, th + .14, e);            // how far the wash has crept
+  float tide = exp(-pow((e - th) / .045, 2.0));             // tide line where the spreading edge dried
+  float pool = clamp((m - mb) * 2.4, 0.0, 1.0);             // pigment collects against veins and border
+  float dens = wet * (.36 + .2*big + .3*pool) + tide * .26 * smoothstep(.1, .5, e);
+  dens *= (.72 + .45*fine) * (.9 + .2*fiber);               // paper grain
+  dens *= m;
+  vec3 light = vec3(.97, .62, .22), deep = vec3(.80, .30, .05);
+  vec3 c = mix(light, deep, clamp(dens * 1.2 + pool * .35, 0.0, 1.0));
+  gl_FragColor = vec4(c, clamp(dens * mix(1.0, 1.1, dark), 0.0, .82));
+}`;
+
+// ---------- the monarch ----------
+const bug = new THREE.Group(); scene.add(bug);
+const P = {}, heat = {}, legs = [];
+function bodyProfile() {
+  const segs = [[.42, .14, .13], [.04, .29, .2], [-.74, .5, .13, 4]];
+  return z => Math.max(0, ...segs.map(([c, h, r, p = 2]) => r * Math.sqrt(Math.max(0, 1 - Math.abs((z - c) / h) ** p))));
+}
+function bodyStrokes(z0, z1, r, seed) {
+  R = rng(seed); const S = [];
+  for (let k = 0; k < 9; k++) {
+    const a = k / 9 * Math.PI * 2 + R() * .2, pts = [];
+    for (let z = z0; z <= z1 + 1e-6; z += (z1 - z0) / 30) { const rr = r(z); if (rr > .01) pts.push([Math.cos(a) * rr, Math.sin(a) * rr, z]); }
+    S.push({ pts, w: .6, d: k % 3 !== 0 });
+  }
+  const step = (z1 - z0) / Math.max(4, Math.round((z1 - z0) / .07)); let j = 0;
+  for (let z = z0 + step / 2; z < z1; z += step, j++) {
+    const rr = r(z); if (rr < .03) continue;
+    const a0 = R() * 6.3, span = 3.6 + R() * 2, pts = [];
+    for (let i = 0; i <= 22; i++) { const a = a0 + span * i / 22; pts.push([Math.cos(a) * rr * 1.02, Math.sin(a) * rr * 1.02, z + .01 * Math.sin(a)]); }
+    S.push({ pts, w: .45, d: j % 2 === 1 });
+  }
+  return S;
+}
+// One leg segment along local +x: a thin tube of two strokes, a knuckle at the joint.
+function segStrokes(len, r, claw) {
+  const S = [[0, r], [0, -r]].map(([y, z]) => ({ pts: Array.from({ length: 9 }, (_, i) => [len * i / 8, y * (1 - .3 * i / 8), z * (1 - .3 * i / 8)]), w: .7, os: .2, amp: .003 }));
+  S.push({ pts: loop(len, 0, 0, r * 1.3, 1.1, 10, 'xy'), w: .55, amp: .002 });
+  if (claw) S.push({ pts: [[len, 0, 0], [len + .05, -.03, .02]], w: .7 }, { pts: [[len, 0, 0], [len + .05, -.03, -.02]], w: .7 });
+  return S;
+}
+function buildBug() {
+  let seed = 100; const r = bodyProfile();
+  const add = (name, obj, home = new THREE.Vector3()) => { obj.position.copy(home); bug.add(obj); P[name] = obj; return obj; };
+  const head = add('head', part([...bodyStrokes(.3, .57, r, seed++),
+    { pts: loop(.12, .04, .45, .085, 1.4, 20, 'yz', -.25), w: .8 }, { pts: loop(-.12, .04, .45, .085, 1.4, 20, 'yz', -.25), w: .8 },
+    ...[-1, 1].map(s => ({ pts: quad3([s * .04, -.1, .5], [s * .05, -.08, .62], [s * .04, .02, .64], 10), w: .75 })), // labial palps
+    { pts: Array.from({ length: 40 }, (_, i) => { const a = i / 40 * Math.PI * 4.5, rr = .075 * (1 - i / 46); return [0, -.09 + Math.cos(a) * rr, .52 + Math.sin(a) * rr * .8]; }), w: .7 }], seed++));
+  add('thorax', part([...bodyStrokes(-.24, .3, r, seed++), ...[[.1, .12, .1], [-.1, .12, .1], [.12, .08, -.08], [-.12, .08, -.08]].map(([x, y, z]) => ({ pts: loop(x, y, z, .025, 1.2, 10), w: .5 }))], seed++));
+  const abd = add('abdomen', new THREE.Group(), new THREE.Vector3(0, 0, -.24)); abd.add(part(bodyStrokes(-1.24, -.24, r, seed++).map(s => ({ ...s, pts: s.pts.map(([x, y, z]) => [x, y, z + .24]) })), seed++));
+  [-1, 1].forEach(s => { const a = new THREE.Group(); a.position.set(s * .05, .1, .53);
+    a.add(part([{ pts: quad3([0, 0, 0], [s * .12, .32, .34], [s * .34, .36, .76], 26), w: .85 }, { pts: loop(0, 0, 0, .035, 1.4, 16, 'xz').map(([x, , z]) => [s * .36 + x * .8, .37, .78 + z * 1.7]), w: .8 }], seed++));
+    head.add(a); P['ant' + s] = a; });
+  // brush-footed: the front pair is tiny and folded against the chest
+  const fl = []; [-1, 1].forEach(s => { const a = [s * .09, -.14, .17]; fl.push({ pts: quad3(a, [s * .16, -.2, .25], [s * .14, -.26, .3], 8), w: .7 }, { pts: [[s * .14, -.26, .3], [s * .1, -.3, .36]], w: .6 }); });
+  add('forelegs', part(fl, seed++));
+  // walking legs: hip → femur → tibia → tarsus, each a joint we can bend
+  [[.02, .3], [-.14, -.7]].forEach(([z, phi], li) => [1, -1].forEach(s => {
+    const hip = new THREE.Group(); hip.position.set(s * .1, -.17, z); hip.rotation.order = 'YXZ'; bug.add(hip);
+    const fem = new THREE.Group(), tib = new THREE.Group(), tar = new THREE.Group();
+    fem.add(part(segStrokes(.30, .022), seed++)); tib.add(part(segStrokes(.32, .016), seed++)); tar.add(part(segStrokes(.28, .011, true), seed++));
+    tib.position.x = .30; tar.position.x = .32; hip.add(fem); fem.add(tib); tib.add(tar);
+    legs.push({ s, li, phi, hip, fem, tib, tar, twitch: 0 });
+  }));
+  [['fore', .1], ['hind', -.08]].forEach(([w, z]) => {
+    const W = WINGS[w], hs = heat[w] = makeHeat(W), mask = makeMask(W, hs);
+    [1, -1].forEach(s => {
+      const g = new THREE.Group(); g.add(part(wingStrokes(W, s < 0, seed), seed)); seed++;
+      const shape = new THREE.Shape(W.outline.map(([u, zz]) => new THREE.Vector2(u, zz)));
+      const geo = new THREE.ShapeGeometry(shape), pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) { const u = pos.getX(i), zz = pos.getY(i); pos.setXYZ(i, s * u, camber(u) - .002, zz); }
+      const m = new THREE.ShaderMaterial({ vertexShader: WASH_VS, fragmentShader: WASH_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        uniforms: { heat: { value: hs.tex }, mask: { value: mask }, box: { value: new THREE.Vector4(hs.minU, hs.minZ, hs.nx * CELL, hs.nz * CELL) }, dark: { value: 0 } } });
+      washes.push(m);
+      const mesh = new THREE.Mesh(geo, m); mesh.renderOrder = -1; g.add(mesh);
+      g.rotation.order = 'YXZ';
+      add(`${w}${s > 0 ? 'R' : 'L'}`, g, new THREE.Vector3(s * .08, .13, z));
+    });
+  });
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(232,115,26,.9)'); gr.addColorStop(1, 'rgba(232,115,26,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, opacity: 0 }));
+  glow.scale.set(1.1, 1.1, 1); glow.position.set(0, .05, .02); bug.add(glow); P.glow = glow;
+}
+
+// ---------- the garden: one common milkweed (the monarch's host plant), grass, sun, cloud ----------
+const garden = new THREE.Group(); scene.add(garden);
+const LEAF = { y: 0, dir: new THREE.Vector3(1, 0, .15).normalize(), len: 7.5 };
+function leafStrokes(node, dir, len, wid, droop) {
+  const side = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize(), S = [];
+  const pt = (t, off) => { const p = node.clone().addScaledVector(dir, len * t).addScaledVector(side, off); p.y -= droop * t * t; return [p.x, p.y, p.z]; };
+  const half = t => wid * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.02)), .8);
+  const L = [], Rt = []; for (let i = 0; i <= 26; i++) { const t = i / 26; L.push(pt(t, half(t))); Rt.push(pt(t, -half(t))); }
+  S.push({ pts: L, w: .85 }, { pts: Rt, w: .85 }, { pts: Array.from({ length: 21 }, (_, i) => pt(i / 20, 0)), w: .7 });
+  for (let k = 1; k <= 8; k++) { const t0 = k / 10; [1, -1].forEach(sg => S.push({ pts: [pt(t0, 0), pt(t0 + .06, sg * half(t0 + .06) * .55), pt(t0 + .1, sg * half(t0 + .1) * .9)], w: .35, d: true })); }
+  return S;
+}
+function buildGarden() {
+  const S = [], stalk = []; for (let i = 0; i <= 30; i++) { const y = 2.6 - i / 30 * 20.6; stalk.push([.12 * Math.sin(i * .4), y, 0]); }
+  S.push({ pts: stalk, w: .8 }, { pts: stalk.map(([x, y, z]) => [x + .22, y, z]), w: .6 });
+  [[0, 0], [-4.5, Math.PI / 2], [-9, 0], [-13.5, Math.PI / 2]].forEach(([y, rot], li) => [0, Math.PI].forEach(fl => {
+    const a = rot + fl, d = new THREE.Vector3(Math.cos(a), -.08, Math.sin(a)).normalize();
+    S.push(...leafStrokes(new THREE.Vector3(0, y, 0), li === 0 && !fl ? LEAF.dir : d, li === 0 ? LEAF.len : 6.5, 1.5, 1.2));
+  }));
+  R = rng(77); const top = [0, 2.6, 0];
+  for (let i = 0; i < 26; i++) {
+    const a = R() * 6.3, e = .5 + R() * .9, L = 1.6 + R() * .5, f = [Math.cos(a) * Math.cos(e) * L, 2.6 + Math.sin(e) * L, Math.sin(a) * Math.cos(e) * L];
+    S.push({ pts: [top, f], w: .35, d: true });
+    const fl = []; for (let k = 0; k <= 30; k++) { const t = k / 30 * Math.PI * 2, rr = .16 * (.7 + .3 * Math.cos(5 * t)); fl.push([f[0] + Math.cos(t) * rr, f[1] + .05 * Math.sin(5 * t), f[2] + Math.sin(t) * rr]); }
+    S.push({ pts: fl, w: .55 });
+  }
+  for (let i = 0; i < 120; i++) { const a = R() * 6.3, rr = 3 + R() * 14, x = Math.cos(a) * rr, z = Math.sin(a) * rr, h = .4 + R() * 1.1, lean = R() - .5;
+    S.push({ pts: [[x, -18, z], [x + lean * .3, -18 + h * .6, z], [x + lean * .7, -18 + h, z]], w: .4, d: i % 3 > 0, os: .2 }); }
+  garden.add(part(S, 901, matPlant));
+}
+const FOOT = .6; // body centre sits this high above whatever the feet stand on
+const PERCHES = { leaf: (() => { const p = LEAF.dir.clone().multiplyScalar(LEAF.len * .5); p.y = LEAF.y - 1.2 * .25 + FOOT; return p; })(), flower: new THREE.Vector3(0, 4.1 + FOOT * .4, 0) };
+
+const sunG = new THREE.Group(); scene.add(sunG);
+sunG.add(part([{ pts: loop(0, 0, 0, 2.2, 1.15, 40, 'yz'), w: .8 }, ...Array.from({ length: 12 }, (_, i) => { const a = i / 12 * Math.PI * 2; return { pts: [[0, Math.cos(a) * 2.9, Math.sin(a) * 2.9], [0, Math.cos(a) * 4, Math.sin(a) * 4]], w: .6 }; })], 950));
+const cloudG = new THREE.Group(); scene.add(cloudG);
+cloudG.add(part([[-3, 0, 2.2], [-1, .9, 2.6], [1.2, .6, 2.4], [3, 0, 2], [0, -.4, 3.2]].map(([z, y, r]) => ({ pts: loop(0, y, z, r, .62, 30, 'yz').map(([x, yy, zz]) => [x, Math.max(-.6, yy), zz]), w: .7 })), 960));
+
+// ---------- world state ----------
+let tod = 11, air = 16, flyMin = 19, playing = !reduce, cloudT = 0, Tth = 15, hold = false;
+const sunDirAt = t => { const a = Math.PI * (t - 6.5) / 13; return new THREE.Vector3(Math.cos(a), Math.sin(a) * .9, -.45).normalize(); };
+const NEED = 28;
+
+// flight: bouts of flapping then short glides, wandering between waypoints, banking into turns
+const fl = { mode: 'perch', at: 'leaf', t: 0, vel: new THREE.Vector3(), wp: new THREE.Vector3(), beats: 4, glide: 0, phase: 0, flapW: 0, heading: 0, bank: 0, settle: 0, from: new THREE.Vector3(), fromQ: new THREE.Quaternion() };
+const pickWaypoint = () => { const a = Math.random() * 6.3, r = 5 + Math.random() * 6; return fl.wp.set(Math.cos(a) * r, 2 + Math.random() * 6, Math.sin(a) * r); };
+
+// ---------- camera: orbit around a target that follows the monarch ----------
+const VIEWS = { follow: { r: 4.6, el: .42, label: 'Follow', aria: 'follow the butterfly' }, wings: { r: 2.7, el: 1.42, label: 'Wings from above', aria: 'look down on the wings' }, garden: { r: 12.5, el: .22, label: 'The whole plant', aria: 'see the whole plant' } };
+const ICONS = {
+  follow: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/></svg>',
+  wings: '<svg viewBox="0 0 24 24"><path d="M12 7v11M12 10C10 5 4 4 4 8s4 4 8 3M12 10c2-5 8-6 8-2s-4 4-8 3M12 12c-2 2-6 5-5 7 1 1 4-2 5-5M12 12c2 2 6 5 5 7-1 1-4-2-5-5"/></svg>',
+  garden: '<svg viewBox="0 0 24 24"><path d="M12 21V5M12 14c-4 0-6-3-6-6 4 0 6 3 6 6M12 10c3 0 5-2 5-5-3 0-5 2-5 5M7 21h10"/></svg>',
+};
+const PLAY_I = '<svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>', PAUSE_I = '<svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg>';
+let view = 'follow', az = .6, el = .42, dist = 13, zoom = 1, vAz = 0, dragging = false, alignBody = false, moved = false;
+const target = new THREE.Vector3(), ptrs = new Map(); let pinch0 = 0, zoom0 = 1, lastTap = 0, down = null;
+const viewBtn = document.getElementById('view'), recBtn = document.getElementById('recenter'), toastEl = document.getElementById('toast');
+let toastTimer = 0;
+function toast(msg, ms = 1500) { toastEl.textContent = msg; toastEl.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('on'), ms); }
+function setView(v, snap) {
+  view = v; zoom = 1; alignBody = v === 'wings'; moved = false; recBtn.hidden = true;
+  viewBtn.innerHTML = ICONS[v]; viewBtn.setAttribute('aria-label', 'View: ' + VIEWS[v].aria);
+  if (snap) { el = VIEWS[v].el; dist = fitDist(VIEWS[v].r); }
+}
+viewBtn.onclick = () => { const order = ['follow', 'wings', 'garden']; setView(order[(order.indexOf(view) + 1) % 3]); toast(VIEWS[view].label); };
+recBtn.onclick = () => setView(view);
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); dragging = true; vAz = 0;
+  down = ptrs.size === 1 ? { t: performance.now(), moved: 0 } : null;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); zoom0 = zoom; }
+});
+canvas.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; if (pinch0) zoom = Math.min(6, Math.max(.4, zoom0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch0)); return; }
+  const dx = e.clientX - prev[0], dy = e.clientY - prev[1]; if (down) down.moved += Math.abs(dx) + Math.abs(dy);
+  if (down && down.moved > 8 && !moved) { moved = true; alignBody = false; recBtn.hidden = false; }
+  az -= dx * .009; el = Math.max(-.15, Math.min(1.5, el + dy * .007)); vAz = -dx * .0009;
+});
+const up = e => {
+  ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; dragging = ptrs.size > 0;
+  if (down && !ptrs.size && down.moved < 8 && performance.now() - down.t < 300) { const now = performance.now(); if (now - lastTap < 350) setView(view); lastTap = now; }
+  if (!ptrs.size) down = null;
+};
+canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.min(6, Math.max(.4, zoom * (1 - e.deltaY * .0012))); if (!moved) { moved = true; recBtn.hidden = false; } }, { passive: false });
+
+const airEl = document.getElementById('air'), readout = document.getElementById('readout'), playBtn = document.getElementById('play');
+airEl.oninput = () => { air = +airEl.value; };
+// Embedded in Hatch (?embed=1): the map's place and date drive the air temperature, and a cloudy hour sends a cloud over.
+if (new URLSearchParams(location.search).has('embed')) {
+  document.documentElement.classList.add('embed');
+  addEventListener('message', e => {
+    const m = e.data; if (!m || m.type !== 'exo-air' || e.origin !== location.origin) return;
+    air = Math.max(5, Math.min(40, +m.t)); airEl.value = String(air);
+    if (m.cloudy && cloudT === 0) cloudT = 9;
+  });
+  parent.postMessage({ type: 'exo-ready' }, location.origin);
+}
+const setPlay = on => { playing = on; playBtn.innerHTML = on ? PAUSE_I : PLAY_I; playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play'); playBtn.setAttribute('aria-pressed', String(on)); };
+setPlay(playing); playBtn.onclick = () => setPlay(!playing);
+document.getElementById('cloud').onclick = () => { cloudT = 9; toast('A cloud drifts over the sun'); };
+const veinBtn = document.getElementById('veins');
+veinBtn.onclick = () => { hold = !hold; veinBtn.setAttribute('aria-pressed', String(hold)); if (hold) { setView('wings'); toast('Vein names on'); } else toast('Vein names off'); };
+
+// the day timeline: air temperature curve behind the slider, hour ticks underneath
+const track = document.getElementById('track'), tsvg = document.getElementById('trackSvg');
+const thumbX = t => 11 + (t - 5) / 35 * (track.clientWidth - 22);
+const F = c => Math.round(c * 9 / 5 + 32);
+// the air-temperature scale: a shaded band shows where it can warm up enough to fly (estimated from the sim itself)
+drawTrack = () => {
+  const w = track.clientWidth; if (!w) return;
+  const a = thumbX(Math.min(40, flyMin)), b = thumbX(40);
+  const ticks = [5, 10, 15, 20, 25, 30, 35, 40].map(t => `<text x="${thumbX(t)}" y="60">${t}°</text><line class="base" x1="${thumbX(t)}" x2="${thumbX(t)}" y1="43" y2="49"/>`).join('');
+  tsvg.innerHTML = `<rect class="fill" x="${a}" y="30" width="${Math.max(0, b - a)}" height="16"/><text x="${(a + b) / 2}" y="40" style="fill:var(--warm)">can fly in sun</text><line class="base" x1="${thumbX(5)}" x2="${thumbX(40)}" y1="46" y2="46"/>${ticks}`;
+};
+
+const labelBox = document.getElementById('labels');
+const vLabels = [['foreR', WINGS.fore], ['hindR', WINGS.hind]].flatMap(([wing, W]) => W.named.map(([name, p]) => { const s = document.createElement('span'); s.textContent = name; labelBox.appendChild(s); return { wing, p, s }; }));
+
+let W_ = 1, H = 1, top = 0, bot = 0;
+function fitDist(r) { const v = camera.fov * Math.PI / 360, band = Math.max(120, H - top - bot); return Math.max(r / Math.tan(v) * (H / band), r / Math.tan(Math.atan(Math.tan(v) * camera.aspect))); }
+function resize() {
+  W_ = canvas.clientWidth; H = canvas.clientHeight; renderer.setSize(W_, H, false); camera.aspect = W_ / H;
+  top = document.getElementById('cap').getBoundingClientRect().bottom + 6; bot = H - document.getElementById('day').getBoundingClientRect().top + 6;
+  camera.setViewOffset(W_, H, 0, -(top - bot) / 2, W_, H); camera.updateProjectionMatrix(); drawTrack();
+}
+
+applyTheme(); buildBug(); buildGarden(); applyTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+new ResizeObserver(resize).observe(canvas); new ResizeObserver(drawTrack).observe(track); addEventListener('resize', resize); resize();
+document.fonts && document.fonts.ready.then(resize);
+heat.fore.reset(air); heat.hind.reset(air); Tth = air;
+
+// ---------- loop ----------
+const tmp = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), qPerch = new THREE.Quaternion(), qFly = new THREE.Quaternion(), mtx = new THREE.Matrix4();
+const Y = new THREE.Vector3(0, 1, 0), nW = new THREE.Vector3(), pos = new THREE.Vector3().copy(PERCHES.leaf);
+const factEl = document.getElementById('fact'), thermT = document.getElementById('therm-t'), thermF = document.getElementById('therm-fill');
+document.getElementById('therm-need').style.left = ((NEED - 5) / 35 * 100) + '%';
+function basis(fwd, upv, q) { const z = fwd.clone().normalize(), x = new THREE.Vector3().crossVectors(upv, z).normalize(), y = new THREE.Vector3().crossVectors(z, x); mtx.makeBasis(x, y, z); return q.setFromRotationMatrix(mtx); }
+const smooth = (a, b, k) => a + (b - a) * k;
+let last = performance.now(), boil = 0, uiTick = 0, story = '', storyAt = -1e9, trackTick = 0, pose = .03, legBlend = 0, clock = 0;
+
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; clock += dt;
+  cloudT = Math.max(0, cloudT - (playing ? dt : 0));
+  const Ta = air, sun = sunDirAt(tod), cover = cloudT > 0 ? 1 - .85 * Math.min(1, Math.min(cloudT, 9 - cloudT) / 1.2) : 1;
+  const S = Math.pow(Math.max(0, sun.y), .6) * cover;
+  const night = S < .03, hot = Tth > 35;
+  const hsun = new THREE.Vector3(sun.x, 0, sun.z).normalize();
+  basis(hsun.clone().negate(), night ? Y : Y.clone().addScaledVector(sun, .7).normalize(), qPerch);
+
+  // --- behaviour ---
+  if (playing) {
+    fl.t += dt;
+    if (fl.mode === 'perch') {
+      pos.copy(PERCHES[fl.at]); bug.quaternion.slerp(qPerch, Math.min(1, dt * 2));
+      if (!hold && Tth >= NEED && fl.t > 4 && S > .15) { fl.mode = 'fly'; fl.t = 0; fl.vel.set(0, 3, 0).addScaledVector(hsun, -1.5); pickWaypoint(); fl.beats = 6; fl.glide = 0; }
+    } else if (fl.mode === 'fly' || fl.mode === 'land') {
+      if (fl.mode === 'fly' && (hold || Tth < NEED - 6 || fl.t > 18)) { fl.mode = 'land'; fl.at = fl.at === 'leaf' ? 'flower' : 'leaf'; }
+      const goal = fl.mode === 'land' ? tmp.copy(PERCHES[fl.at]).add(new THREE.Vector3(0, .9, 0)) : fl.wp;
+      if (fl.mode === 'fly' && pos.distanceTo(fl.wp) < 1.6) pickWaypoint();
+      const want = goal.clone().sub(pos), d = want.length(); want.setLength(Math.min(4.2, 1 + d * 1.2));
+      fl.vel.lerp(want, 1 - Math.exp(-dt * 1.6));
+      if (fl.glide > 0) { fl.glide -= dt; fl.vel.y -= 1.1 * dt; if (fl.glide <= 0) fl.beats = 3 + Math.floor(Math.random() * 5); }
+      pos.addScaledVector(fl.vel, dt);
+      if (fl.mode === 'land' && d < .5) { fl.mode = 'settle'; fl.settle = 0; fl.from.copy(pos); fl.fromQ.copy(bug.quaternion); }
+      // facing: along the velocity, banked into the turn
+      const h = Math.atan2(fl.vel.x, fl.vel.z), dh = Math.atan2(Math.sin(h - fl.heading), Math.cos(h - fl.heading)); fl.heading = h;
+      fl.bank = smooth(fl.bank, Math.max(-.6, Math.min(.6, -dh / Math.max(dt, .001) * .35)), Math.min(1, dt * 3));
+      const fwd = new THREE.Vector3(fl.vel.x, fl.vel.y * .35, fl.vel.z); if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, 1);
+      basis(fwd, Y.clone().applyAxisAngle(fwd.clone().normalize(), fl.bank), qFly); bug.quaternion.slerp(qFly, Math.min(1, dt * 5));
+    } else if (fl.mode === 'settle') {
+      fl.settle += dt / .8; const k = Math.min(1, fl.settle), e = k * k * (3 - 2 * k);
+      pos.lerpVectors(fl.from, PERCHES[fl.at], e); bug.quaternion.slerpQuaternions(fl.fromQ, qPerch, e);
+      if (k >= 1) { fl.mode = 'perch'; fl.t = 0; }
+    }
+  }
+  const flying = fl.mode === 'fly' || fl.mode === 'land';
+  // wingbeat: fast downstroke, slower upstroke; count beats, then hold a shallow V to glide
+  if (playing && flying) {
+    if (fl.glide <= 0) { const before = fl.phase; fl.phase += dt * 2 * Math.PI * 6; if (Math.floor(before / 6.283) !== Math.floor(fl.phase / 6.283) && --fl.beats <= 0 && fl.mode === 'fly') fl.glide = .5 + Math.random() * .9; }
+  }
+  fl.flapW = smooth(fl.flapW, flying && fl.glide <= 0 ? 1 : 0, Math.min(1, dt * 6));
+  legBlend = smooth(legBlend, flying ? 1 : 0, Math.min(1, dt * 3));
+  pose = smooth(pose, night || hot ? 1.45 : .2, Math.min(1, dt * 1.5));
+  const wave = Math.sin(fl.phase) + .3 * Math.sin(2 * fl.phase);
+  const flapTheta = .42 + .62 * wave, glideTheta = .32, airborne = flying || fl.mode === 'settle' ? 1 : 0;
+  ['fore', 'hind'].forEach(w => {
+    const lag = w === 'hind' ? .35 : 0, wv = Math.sin(fl.phase - lag) + .3 * Math.sin(2 * (fl.phase - lag));
+    const th = airborne ? fl.flapW * (.42 + .62 * wv) + (1 - fl.flapW) * glideTheta : pose;
+    const sweep = airborne ? fl.flapW * .2 * Math.cos(fl.phase - lag) * (w === 'fore' ? 1 : .6) : 0;
+    [1, -1].forEach(s => { const g = P[w + (s > 0 ? 'R' : 'L')]; g.rotation.z = s * th; g.rotation.y = -s * sweep; });
+  });
+  bug.position.copy(pos); if (airborne) bug.position.y -= .1 * Math.cos(fl.phase) * fl.flapW; // downstroke lifts the body
+  P.abdomen.rotation.x = airborne ? .1 * Math.sin(fl.phase + 1) * fl.flapW + .08 : smooth(P.abdomen.rotation.x, 0, .1);
+  P.ant1.rotation.x = P['ant-1'].rotation.x = .05 * Math.sin(clock * 1.3) - (airborne ? .12 : 0);
+  // legs: grip when perched, tuck back in flight, the odd small step
+  if (!flying && Math.random() < dt * .25) legs[Math.floor(Math.random() * legs.length)].twitch = 1;
+  legs.forEach(L => {
+    L.twitch = Math.max(0, L.twitch - dt * 2.2); const tw = Math.sin(L.twitch * Math.PI) * (1 - legBlend);
+    const phi = smooth(L.phi, L.li ? -1.2 : -.9, legBlend);
+    L.hip.rotation.y = L.s > 0 ? -phi : Math.PI + phi;
+    L.fem.rotation.z = smooth(.35, -.2, legBlend) + .35 * tw;
+    L.tib.rotation.z = smooth(-1.7, -2.5, legBlend) + .3 * tw;
+    L.tar.rotation.z = smooth(.85, -.5, legBlend) - .2 * tw;
+  });
+
+  // --- heat ---
+  bug.updateMatrixWorld(true);
+  let expo = 0; ['foreR', 'foreL'].forEach(n => { nW.set(0, 1, 0).applyQuaternion(P[n].getWorldQuaternion(tmpQ)); const d = nW.dot(sun); expo += d > 0 ? d : -d * .6; }); expo /= 2;
+  if (playing) {
+    const loss = .00035 * (flying ? 2 : 1), sub = Math.min(32, Math.max(1, Math.round(dt * 480))); // 480 steps per second, whatever the frame rate
+    heat.fore.step(S * expo, Ta, Tth, loss, sub); heat.hind.step(S * expo, Ta, Tth, loss, sub);
+    const rootT = (heat.fore.rootMean + heat.hind.rootMean) / 2;
+    Tth += dt * (.12 * (rootT - Tth) + .07 * (Ta + 9 * S - Tth) + (flying ? .35 * (Ta + 6 - Tth) : 0));
+  }
+  P.glow.material.opacity = Math.max(0, Math.min(.85, (Tth - Ta - 2) / 12));
+
+  const nextStory = night ? 'Night. It roosts with its wings shut.'
+    : cloudT > 0 && !flying ? 'A cloud. Thin wings lose their heat in seconds.'
+    : fl.mode === 'fly' && fl.t < 2 ? 'Warm enough. Takeoff.'
+    : fl.mode === 'land' || fl.mode === 'settle' ? (Tth < NEED - 5 ? 'Cooling off. Time to land and bask.' : 'Landing for a rest.')
+    : flying ? 'Flying. Working flight muscles keep its body warm.'
+    : hot ? 'Too hot. It folds its wings up for shade.'
+    : hold ? 'Resting, wings open.'
+    : Tth >= NEED ? 'Warm enough to fly.'
+    : Ta < flyMin - 1 ? 'Too cold to fly. It spreads its wings to soak up sun.'
+    : 'Warming up. Its dark scales soak up the sun.';
+  if (nextStory !== story && now - storyAt > 3500) { story = nextStory; storyAt = now; factEl.textContent = story; }
+  // learn how much warmer than the air basking gets it, to mark "can fly" on the scale
+  if (!flying && fl.mode === 'perch' && cloudT === 0 && fl.t > 20) { const g = Tth - Ta; flyMin = smooth(flyMin, NEED - g, Math.min(1, dt * .2)); }
+  if (now - uiTick > 200) {
+    uiTick = now;
+    readout.textContent = `${air}°C · ${F(air)}°F`;
+    readout.style.left = Math.max(40, Math.min(track.clientWidth - 40, thumbX(air))) + 'px';
+    if (now - trackTick > 2000) { trackTick = now; drawTrack(); }
+    thermT.innerHTML = `Thorax <b>${Math.round(Tth)}°C</b> · flies easily at ~${NEED}°C`;
+    thermF.style.width = Math.max(0, Math.min(100, (Tth - 5) / 35 * 100)) + '%';
+  }
+
+  sunG.position.copy(sun).multiplyScalar(90); sunG.lookAt(0, 0, 0); sunG.rotateY(Math.PI / 2); sunG.visible = sun.y > -.05;
+  cloudG.visible = cloudT > 0; cloudG.position.copy(sunG.position); cloudG.lookAt(0, 0, 0); cloudG.rotateY(Math.PI / 2); cloudG.translateZ((4.5 - cloudT) * 2.4);
+
+  // --- camera ---
+  const vw = VIEWS[view];
+  target.lerp(view === 'garden' ? tmp.set(0, -5, 0) : bug.position, Math.min(1, dt * (view === 'garden' ? 2 : 3)));
+  if (!dragging) {
+    el += (vw.el - el) * Math.min(1, dt * (alignBody ? 2.5 : moved ? 0 : .8));
+    if (alignBody && !flying) { const f = new THREE.Vector3(0, 0, 1).applyQuaternion(bug.quaternion); const want = Math.atan2(-f.x, -f.z); az += Math.atan2(Math.sin(want - az), Math.cos(want - az)) * Math.min(1, dt * 2.5); }
+    else { az += vAz; vAz *= .95; }
+  }
+  dist += (fitDist(vw.r) / zoom - dist) * Math.min(1, dt * 4);
+  camera.position.set(target.x + dist * Math.cos(el) * Math.sin(az), target.y + dist * Math.sin(el), target.z + dist * Math.cos(el) * Math.cos(az));
+  camera.lookAt(target);
+  matDetail.opacity = Math.max(0, Math.min(1, (dist - 3.5) / 4)); matDetail.visible = matDetail.opacity > .01;
+
+  if (!reduce && now - boil > 150) { boil = now; scene.traverse(o => { if (o.userData.boil) { const i = o.children.findIndex(c => c.visible); o.children[i].visible = false; o.children[(i + 1) % 3].visible = true; } }); }
+  renderer.render(scene, camera);
+
+  labelBox.hidden = !hold;
+  if (hold) vLabels.forEach(({ wing, p, s: el2 }) => {
+    tmp.set(p[0], camber(p[0]) + .01, p[1]); P[wing].localToWorld(tmp); tmp.project(camera);
+    el2.style.left = ((tmp.x + 1) / 2 * W_) + 'px'; el2.style.top = ((1 - tmp.y) / 2 * H) + 'px'; el2.style.visibility = tmp.z < 1 ? 'visible' : 'hidden';
+  });
+  requestAnimationFrame(frame);
+}
+setView('follow', true);
+setTimeout(() => toast('Drag to orbit · pinch to zoom', 3500), 600);
+requestAnimationFrame(frame);
+})();
+</script>
