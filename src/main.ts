@@ -921,6 +921,23 @@ function start() {
     unpin();
     $('t-range').focus({ preventScroll: true });
   });
+  let surprising = false; // one Surprise at a time: a second S while it loads would race the first
+  // Global shortcuts: / opens the species search, S picks a random insect on a random day, R recentres, ? lists them.
+  // Skipped while typing, with a modifier held, or while a sheet is open.
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest('input, select, textarea, [contenteditable]')) return;
+    if (e.repeat || !$('species-sheet').hidden || $('drawer').classList.contains('open')) return;
+    const k = e.key.toLowerCase();
+    if (k === '/') (e.preventDefault(), $('species').click());
+    else if (k === 's' && !e.shiftKey && !surprising) {
+      surprising = true;
+      speciesPick.surprise().then(
+        () => setTimeout(() => ((surprising = false), time.setStepIndex(Math.floor(Math.random() * (time.steps + 1)))), 1500),
+        () => (surprising = false),
+      );
+    } else if (k === 'r') $('recenter').click();
+    else if (k === '?') $('action-msg').textContent = '/ species · S surprise · R recenter · Space play · ←→ day';
+  });
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !finderEl.hidden) return;

@@ -16,6 +16,8 @@ export interface SpeciesPicker {
   /** The header button, for its sketch mark (--mark) and for hiding it. */
   readonly button: HTMLButtonElement;
   set disabled(on: boolean);
+  /** Pick a random insect from the whole Atlas; resolves once it is chosen. */
+  surprise(): Promise<void>;
 }
 
 /**
@@ -302,6 +304,12 @@ export function mountSpeciesPicker(
 
   return {
     button,
+    async surprise() {
+      const s = all ?? (await loadIndex());
+      if (!s?.length) return;
+      all = s;
+      pick(keyOf(s[Math.floor(Math.random() * s.length)]!));
+    },
     show(key, label) {
       currentKey = key;
       const i = indexOfKey(key);
