@@ -156,6 +156,7 @@ function local(iso: string, tz: RadarEvent['tz']): [string, string] {
   return [time, day];
 }
 
+const COMPASS = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export async function openRadar(id: string, host: RadarHost): Promise<Radar | null> {
@@ -248,10 +249,10 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   });
   let drawn = '';
   let image: Layer | null = null;
-  let dots: Layer | null = null;
+  let dots: Layer[] = [];
   // The paper goes under the lakes, so they keep their shape; the echo, rings and dot go over them (a swarm off a lake
   // is over the water), still under the rivers and state lines. At night the simulated insects go on top of the echo.
-  const compose = () => map.setOverlay([sheet] as Layer[], [image, rings, site, ...(nightOn && dots ? [dots] : [])] as Layer[]);
+  const compose = () => map.setOverlay([sheet] as Layer[], [image, rings, site, ...(nightOn ? dots : [])] as Layer[]);
   const draw = (a: number, b: number, f: number) => {
     const key = `${a}:${b}:${f.toFixed(2)}`;
     if (key === drawn) return;
@@ -398,6 +399,9 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   const glow = (t: number, now = 0) => {
     nightAt = now;
     dots = night!.at(t);
+    const w = night!.windAt(t);
+    const words = w ? `Dots are simulated from the echo and the wind (${Math.round(w.speed)} m/s from the ${COMPASS[Math.round(w.from / 45) % 8]}).` : 'Dots are simulated from the echo.';
+    if (sim.textContent !== words) sim.textContent = words;
     compose();
   };
   const sparkDraw = () => {
@@ -424,7 +428,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     drawn = '';
     draw(idx, idx, 0);
     if (on) glow(simTime(idx, 0));
-    else dots = null;
+    else dots = [];
     compose();
     host.onNight?.();
   };

@@ -2,8 +2,8 @@
 // where the radar saw an echo (the stronger the echo, the likelier the place), then drifts with the hour's wind. How
 // many dots are out follows the radar's total echo for the scan. A dot is not an animal and nothing here is a count.
 // Loaded with the replay (radarReplay.ts); nothing here ships in the page.
-import { COORDINATE_SYSTEM } from '@deck.gl/core';
-import { ScatterplotLayer } from '@deck.gl/layers';
+import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
+import { LineLayer, ScatterplotLayer } from '@deck.gl/layers';
 
 type RGBA = [number, number, number, number];
 
@@ -55,12 +55,15 @@ const LIFE = [720, 2160];
 const OWN = 1.5;
 const FADE_IN = 90;
 const FADE_OUT = 240;
+const TAIL = 420; // seconds of flight a tail draws
 
 export interface Night {
   /** The echo's total for each scan, 0 to 1 (the busiest scan is 1): drawn as the line under the card. */
   spark: number[];
-  /** The dots at `t` (seconds), as one layer. Advances the simulation by the time since the last call. */
-  at(t: number): ScatterplotLayer;
+  /** The dots (each with a short tail back along its flight) at `t` (seconds). Advances the simulation by the time since the last call. */
+  at(t: number): Layer[];
+  /** The wind at `t`: speed in m/s and the compass point it blows from, in degrees ("" when there is no wind file). */
+  windAt(t: number): { speed: number; from: number } | null;
 }
 
 export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | null, levels: number): Night {
@@ -146,6 +149,11 @@ export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | nul
   let pos = new Float32Array(0);
   return {
     spark,
+    windAt(t) {
+      if (!wind) return null;
+      const [u, v] = blow(t);
+      return { speed: Math.hypot(u, v), from: (Math.atan2(-u, -v) / RAD + 360) % 360 };
+    },
     at(t) {
       const fi = near(t);
       const fresh = last < 0 || t < last - 1500 || t - last > 1800;
@@ -173,6 +181,11 @@ export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | nul
       const out = Math.round(N * share);
       if (pos.length < out * 2) pos = new Float32Array(N * 2);
       const colors = new Uint8Array(out * 4);
+      // The tail: where the dot was TAIL seconds ago, flying the way it is flying now.
+      const [tu, tv] = blow(t);
+      const from3 = new Float32Array(out * 3); // LineLayer's positions are x, y, z
+      const tail = new Float32Array(out * 3);
+      const tcolors = new Uint8Array(out * 4);
       for (let i = 0; i < out; i++) {
         pos[2 * i] = X[i]!;
         pos[2 * i + 1] = Y[i]!;
@@ -181,18 +194,31 @@ export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | nul
         colors[4 * i + 1] = 248;
         colors[4 * i + 2] = 226;
         colors[4 * i + 3] = Math.round(130 * Math.max(0, a));
+        from3[3 * i] = X[i]!;
+        from3[3 * i + 1] = Y[i]!;
+        tail[3 * i] = X[i]! - (tu + VX[i]!) * TAIL;
+        tail[3 * i + 1] = Y[i]! - (tv + VY[i]!) * TAIL;
+        tcolors.set([255, 248, 226, Math.round(60 * Math.max(0, a))], 4 * i);
       }
-      return new ScatterplotLayer({
+      const where = { coordinateSystem: COORDINATE_SYSTEM.METER_OFFSETS, coordinateOrigin: [m.lon, m.lat, 0] as [number, number, number] };
+      const here = pos.slice(0, out * 2);
+      return [new LineLayer({
+        id: 'night-tails',
+        data: { length: out, attributes: { getSourcePosition: { value: from3, size: 3 }, getTargetPosition: { value: tail, size: 3 }, getColor: { value: tcolors, size: 4, normalized: true } } },
+        ...where,
+        widthUnits: 'pixels',
+        getWidth: 1,
+        pickable: false,
+      }), new ScatterplotLayer({
         id: 'night-dots',
-        data: { length: out, attributes: { getPosition: { value: pos.slice(0, out * 2), size: 2 }, getFillColor: { value: colors, size: 4, normalized: true } } },
-        coordinateSystem: COORDINATE_SYSTEM.METER_OFFSETS,
-        coordinateOrigin: [m.lon, m.lat, 0],
+        data: { length: out, attributes: { getPosition: { value: here, size: 2 }, getFillColor: { value: colors, size: 4, normalized: true } } },
+        ...where,
         radiusUnits: 'meters',
         getRadius: 24,
         radiusMinPixels: 1,
         radiusMaxPixels: 6,
         pickable: false,
-      });
+      })];
     },
   };
 }
