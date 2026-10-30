@@ -224,7 +224,7 @@ def record_logq(p, spec, P: Prepared):
     z1 = ae.sum(1)
     ce = P.E * P.mask
     z2 = ce.sum(1)
-    q = (1 - EPS) * ae[P.rg, P.rk] / np.maximum(z1[P.rg], 1e-300) + EPS * P.E[P.rg, P.rk] / z2[P.rg]
+    q = (1 - EPS) * ae[P.rg, P.rk] / np.maximum(z1[P.rg], 1e-300) + EPS * P.E[P.rg, P.rk] / np.maximum(z2[P.rg], 1e-300)
     return np.log(np.maximum(q, 1e-300))
 
 
