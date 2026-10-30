@@ -4,7 +4,7 @@ import { nameOf, ORDER_NAMES } from '../atlas/names';
 import { CROSS } from './icons';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
-const OFF_CAPTION = 'Most off-schedule for their warmth, 2026';
+const offCaption = (year: number) => `${year}: furthest off schedule`;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** Where the browse stands: every insect, one order, or one family in it. */
@@ -59,7 +59,7 @@ export function mountSpeciesPicker(
     <nav class="sp-crumbs" aria-label="Tree of life" aria-live="polite"></nav>
     <ul id="sp-list" aria-label="Species"></ul>
     <ul id="sp-odd" class="sp-strip" aria-label="${surpriseYear} surprises" hidden></ul>
-    <ul id="sp-off" class="sp-strip" aria-label="${OFF_CAPTION}" hidden></ul>
+    <ul id="sp-off" class="sp-strip" aria-label="${offCaption(surpriseYear)}" hidden></ul>
     <div class="sp-tree" hidden></div>`;
   const input = sheet.querySelector<HTMLInputElement>('#sp-q')!;
   const crumbs = sheet.querySelector<HTMLElement>('.sp-crumbs')!;
@@ -159,7 +159,7 @@ export function mountSpeciesPicker(
       })
       .join('');
   const offList = () =>
-    off.length && all ? `<li class="sp-sec">${OFF_CAPTION}</li>${offRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
+    off.length && all ? `<li class="sp-sec">${offCaption(surpriseYear)}</li>${offRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
   const surpriseRows = () => (odd.length && all ? `<li class="sp-sec">${surpriseYear} surprises</li>${surprises()}` : '');
   const featuredRows = () =>
     featured
@@ -190,7 +190,7 @@ export function mountSpeciesPicker(
     if (tree) {
       list.innerHTML = featuredRows();
       oddStrip.innerHTML = `<li class="sp-lab">${surpriseYear} surprises</li>${surprises()}`;
-      offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${OFF_CAPTION}</li>${offRows()}`;
+      offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${offCaption(surpriseYear)}</li>${offRows()}`;
       treeCrumbs?.();
       tree.shown();
       glow();
