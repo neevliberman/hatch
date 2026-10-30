@@ -24,7 +24,7 @@ export const CITIES = [
 
 /** One place's season as a strip: coloured stages, ticks for real sightings, a marker on today. */
 export function spotHtml(s: SpotStory | null): string {
-  if (!s) return '<p class="muted">No forecast here. Hatch covers 7 Midwest states.</p>';
+  if (!s) return '<p class="muted">No forecast here: outside the 7 Midwest states.</p>';
   const [a, b] = s.span;
   const pct = (d: number) => `${(((Math.min(b, Math.max(a, d)) - a) / (b - a)) * 100).toFixed(2)}%`;
   const width = (from: number, to: number) => `${(((Math.min(b, to) - Math.max(a, from)) / (b - a)) * 100).toFixed(2)}%`;
@@ -158,7 +158,7 @@ export function explainerHtml(id: string, ex: Explainer, cav: CaveatCard): strin
               }>${esc(recordLine(score.checks, score.checksThrough))}</p>`
             : ''
         }
-        <div class="ex-sub">Average days off. Lower is better.</div>
+        <div class="ex-sub">Avg days off; lower is better.</div>
         ${score.bars
           .map(
             (x) => `<div class="bar-l"><span>${esc(x.label)}</span><i class="${x.best ? 'best' : ''}" style="width:${((x.days / max) * 100).toFixed(1)}%"></i>

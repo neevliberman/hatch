@@ -23,7 +23,9 @@ import { mountKeyExplore } from './ui/keyexplore';
 import { GRID_RES, nearby } from './core/grid';
 import { isDark, onTheme, toggleMode } from './theme';
 import { markFor } from './ui/mark';
+import { shareCard } from './ui/shareCard';
 import { exoEnabled, mountExo } from './ui/exoPanel';
+import { chorusEnabled, mountChorus } from './ui/chorusPanel';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
 import type { Radar, View } from './radar/radarReplay';
@@ -133,6 +135,8 @@ function start() {
   const probeEl = $('probe');
   // ?exo: a pinned card offers a sketched monarch that lives the place's real temperature on the map's date.
   const exo = exoEnabled() ? mountExo(probeEl) : null;
+  // "Listen here": a pinned card offers the singing insects the Atlas expects there, played at the real temperature's tempo.
+  const chorus = chorusEnabled() ? mountChorus(probeEl) : null;
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -166,6 +170,7 @@ function start() {
     placeProbe();
     followSpot(time.cursor);
     exo?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
+    chorus?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
   };
   const unpin = () => {
     if (!pinned && !hit) return;
@@ -650,7 +655,31 @@ function start() {
   $('share').addEventListener('click', async () => {
     const url = new URL(viewUrl(), location.href).href;
     try {
-      if (navigator.share) await navigator.share({ title: `Hatch: when ${cur.words.shareName} come out`, url });
+      const title = `Hatch: when ${cur.words.shareName} come out`;
+      let files: File[] | undefined;
+      try {
+        if ('canShare' in navigator) {
+          const d = new Date(time.cursor);
+          const blob = await shareCard({
+            name: cur.words.shareName, url, start: time.start, end: time.end, cursor: time.cursor,
+            dateLabel: d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }),
+            mark: cur.words.mark,
+          });
+          const f = blob && [new File([blob], 'hatch.png', { type: 'image/png' })];
+          if (f && navigator.canShare({ files: f })) files = f;
+        }
+      } catch {
+        files = undefined;
+      }
+      if (navigator.share) {
+        try {
+          await navigator.share(files ? { title, url, files } : { title, url });
+        } catch (e) {
+          // Building the card can outlast the tap's permission window: retry as a plain link.
+          if (files && (e as DOMException).name === 'NotAllowedError') await navigator.share({ title, url });
+          else throw e;
+        }
+      }
       else {
         await navigator.clipboard.writeText(url);
         say('Link copied', $('share'));
