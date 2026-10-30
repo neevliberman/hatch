@@ -23,6 +23,7 @@ import { mountKeyExplore } from './ui/keyexplore';
 import { GRID_RES, nearby } from './core/grid';
 import { isDark, onTheme, toggleMode } from './theme';
 import { markFor } from './ui/mark';
+import { shareCard } from './ui/shareCard';
 import { exoEnabled, mountExo } from './ui/exoPanel';
 import { chorusEnabled, mountChorus } from './ui/chorusPanel';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
@@ -654,7 +655,31 @@ function start() {
   $('share').addEventListener('click', async () => {
     const url = new URL(viewUrl(), location.href).href;
     try {
-      if (navigator.share) await navigator.share({ title: `Hatch: when ${cur.words.shareName} come out`, url });
+      const title = `Hatch: when ${cur.words.shareName} come out`;
+      let files: File[] | undefined;
+      try {
+        if ('canShare' in navigator) {
+          const d = new Date(time.cursor);
+          const blob = await shareCard({
+            name: cur.words.shareName, url, start: time.start, end: time.end, cursor: time.cursor,
+            dateLabel: d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }),
+            mark: cur.words.mark,
+          });
+          const f = blob && [new File([blob], 'hatch.png', { type: 'image/png' })];
+          if (f && navigator.canShare({ files: f })) files = f;
+        }
+      } catch {
+        files = undefined;
+      }
+      if (navigator.share) {
+        try {
+          await navigator.share(files ? { title, url, files } : { title, url });
+        } catch (e) {
+          // Building the card can outlast the tap's permission window: retry as a plain link.
+          if (files && (e as DOMException).name === 'NotAllowedError') await navigator.share({ title, url });
+          else throw e;
+        }
+      }
       else {
         await navigator.clipboard.writeText(url);
         say('Link copied', $('share'));
