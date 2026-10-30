@@ -5,6 +5,7 @@ import type { Feature, FeatureCollection } from 'geojson';
 import { stateCollection } from '../core/grid';
 import type { Theme } from '../core/layer';
 import { isDark, onTheme, palette, recoloured } from '../theme';
+import { unpackGeo } from './unpackGeo';
 
 const P = palette;
 
@@ -73,7 +74,7 @@ function want(zoom: number) {
       })
       .then((p) => {
         if (p?.version !== 1) return;
-        parts[name as keyof typeof parts] = p;
+        parts[name as keyof typeof parts] = unpackGeo(p);
         queueMicrotask(onLoad);
       })
       // A dropped connection: try again on a later zoom, a few times. A missing or broken file stays given up on
