@@ -24,6 +24,7 @@ import { GRID_RES, nearby } from './core/grid';
 import { isDark, onTheme, toggleMode } from './theme';
 import { markFor } from './ui/mark';
 import { exoEnabled, mountExo } from './ui/exoPanel';
+import { chorusEnabled, mountChorus } from './ui/chorusPanel';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
 import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
 import type { Radar, View } from './radar/radarReplay';
@@ -133,6 +134,8 @@ function start() {
   const probeEl = $('probe');
   // ?exo: a pinned card offers a sketched monarch that lives the place's real temperature on the map's date.
   const exo = exoEnabled() ? mountExo(probeEl) : null;
+  // "Listen here": a pinned card offers the singing insects the Atlas expects there, played at the real temperature's tempo.
+  const chorus = chorusEnabled() ? mountChorus(probeEl) : null;
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -166,6 +169,7 @@ function start() {
     placeProbe();
     followSpot(time.cursor);
     exo?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
+    chorus?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
   };
   const unpin = () => {
     if (!pinned && !hit) return;
