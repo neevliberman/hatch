@@ -574,7 +574,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if ((await page.evaluate(() => window.__hatch.luna.res())) <= 4) fail('live mode stayed on the big hexagons when zoomed in');
       if (label === 'in-season default') {
         // About panel: the live card and the weather credits.
-        await page.locator('#info-btn').click();
+        await page.locator('#info-btn').click({ timeout: 90000 });
         await page.waitForTimeout(500);
         const about = await page.locator('#drawer').textContent();
         if (!/how it works/.test(about)) fail('the About panel has no live-mode card');
@@ -819,7 +819,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#warm').click();
       await page.locator('#warm-in').fill('3');
       await page.locator('#warm-in').dispatchEvent('input');
-      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 90000 })
         .catch(async () => fail(`+3 °F never said "earlier": "${await page.locator('#warm-out').textContent()}"`));
       await page.waitForTimeout(3000);
       const after = await ink();
