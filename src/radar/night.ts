@@ -27,6 +27,7 @@ export async function loadWind(base: string): Promise<Wind | null> {
     const res = await fetch(`${base}wind.json`);
     if (!res.ok) return null;
     const w = (await res.json()) as { times: string[]; speed: number[]; from: number[] };
+    if (w.times.length < 2) return null;
     const a = w.from.map((d) => (d * Math.PI) / 180);
     return { t: w.times.map((s) => Date.parse(s) / 1000), u: w.speed.map((s, i) => -s * Math.sin(a[i]!)), v: w.speed.map((s, i) => -s * Math.cos(a[i]!)) };
   } catch {
@@ -147,11 +148,12 @@ export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | nul
     spark,
     at(t) {
       const fi = near(t);
-      if (last < 0 || t < last || t - last > 1800) {
+      const fresh = last < 0 || t < last - 1500 || t - last > 1800;
+      if (fresh) {
         // First look, a loop back to the start or a jump: begin again, with ages spread so they don't all fade at once.
         for (let i = 0; i < N; i++) spawn(i, fi, Math.random() * LIFE[1]!);
       } else {
-        const dt = t - last;
+        const dt = Math.max(0, t - last); // a small step back (a pause settling on its scan) leaves the dots where they are
         for (let i = 0; i < N; i++) {
           AGE[i] = AGE[i]! + dt;
           if (AGE[i]! > LIVES[i]! || Math.hypot(X[i]!, Y[i]!) > reach + 3000) spawn(i, fi, 0);
@@ -162,7 +164,7 @@ export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | nul
           Y[i] = Y[i]! + (wv + VY[i]!) * dt;
         }
       }
-      last = t;
+      if (fresh || t > last) last = t;
       // How many are out: the radar's echo now (between the two nearest scans) against its busiest scan.
       let k = 0;
       while (k < times.length - 2 && times[k + 1]! <= t) k++;
@@ -178,7 +180,7 @@ export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | nul
         colors[4 * i] = 255;
         colors[4 * i + 1] = 248;
         colors[4 * i + 2] = 226;
-        colors[4 * i + 3] = Math.round(165 * Math.max(0, a));
+        colors[4 * i + 3] = Math.round(130 * Math.max(0, a));
       }
       return new ScatterplotLayer({
         id: 'night-dots',
@@ -187,7 +189,7 @@ export function createNight(m: NightMeta, frames: Uint8Array[], wind: Wind | nul
         coordinateOrigin: [m.lon, m.lat, 0],
         radiusUnits: 'meters',
         getRadius: 24,
-        radiusMinPixels: 1.15,
+        radiusMinPixels: 1,
         radiusMaxPixels: 6,
         pickable: false,
       });
