@@ -26,7 +26,7 @@ export function warmthHtml(): string {
   const clearOnes = sites.filter(clear).map((s) => s.name);
   const lead = clearOnes.length
     ? `Spring warmth arrives earlier in ${new Intl.ListFormat('en').format(clearOnes)}. Elsewhere any change is too small to tell from the year-to-year swings.`
-    : 'No clear change in when spring warmth arrives. Any change is too small to tell from the year-to-year swings.';
+    : 'No clear change: shifts are within normal year-to-year swings.';
   const h = sites.length * ROW + 26;
   const rows = sites
     .map((s, i) => {

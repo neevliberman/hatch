@@ -59,7 +59,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     // Where the code lives and where to report a problem: the same for every layer, so it closes the list.
     if (credits.length)
       credits.push(
-        { text: 'Code, data and method notes on GitHub', href: 'https://github.com/neevliberman/hatch' },
+        { text: 'Code and method notes', href: 'https://github.com/neevliberman/hatch' },
         { text: 'Report a problem', href: 'https://github.com/neevliberman/hatch/issues' },
       );
     const credit = (c: { text: string; href?: string }) =>
@@ -87,7 +87,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
                   <ul>${c.bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></section>`;
               })
               .join('')
-          : '<p class="muted">No layers are active.</p>'
+          : '<p class="muted">No layers on.</p>'
       }
       ${layers.length ? warmthHtml() : ''}
       ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}</div>`;

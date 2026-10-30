@@ -87,9 +87,9 @@ function tryoutText(t: Tryout): string {
 }
 
 const DRIFT = {
-  ok: 'no sign the model is going stale',
-  watch: 'possible drift, rechecked as the season settles',
-  alarm: 'the model looks stale; a refit will be tried before next season',
+  ok: 'no sign of drift',
+  watch: 'possible drift; rechecking',
+  alarm: 'looks stale; refit before next season',
 };
 
 function tryoutsHtml(l: League, key: string): string {
