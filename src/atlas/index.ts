@@ -47,6 +47,7 @@ export async function outOn(doy: number, year: boolean): Promise<Float32Array | 
   const b = await seasons;
   if (!b) return null;
   const n = b.length / (2 * STEPS);
+  if (doy < SEASON[0] || doy > SEASON[1]) return new Float32Array(n); // winter: the curves stop at the season's edges
   const x = Math.min(STEPS - 1, Math.max(0, (doy - SEASON[0]) / STEP));
   const j = Math.min(STEPS - 2, Math.floor(x));
   const f = x - j;

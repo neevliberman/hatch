@@ -204,6 +204,7 @@ export function mountSpeciesPicker(
     if (!d || k === glowKey) return;
     glowKey = k;
     void outOn(d.doy, d.year).then((v) => {
+      if (!v) glowKey = ''; // a failed fetch tries again next time
       if (!tree || glowKey !== k) return;
       tree.glow(v, d.label);
     });
