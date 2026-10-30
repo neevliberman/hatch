@@ -212,6 +212,8 @@ for (const [name, width, height, mobile] of shots) {
       for (const [lng, lat, z] of [[-87.9, 43.04, 7], [-87.9, 43.04, 8.6]]) {
         await page.evaluate(([a, b, zz]) => window.__hatch.map.view([a, b], zz), [lng, lat, z]);
         await page.waitForTimeout(2500);
+        // A busy runner can take longer than 2.5 s to draw the finer level: wait for it before judging.
+        await page.waitForFunction((want) => window.__hatch.current().res() >= want, z > 8 ? 6 : 5, { timeout: 15000 }).catch(() => {});
         res.push(await page.evaluate(() => window.__hatch.current().res()));
       }
       console.log(`${tag}: res at zoom 7 / 8.6 = ${res.join(' / ')}`);
