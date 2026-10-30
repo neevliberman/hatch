@@ -16,7 +16,11 @@ export const animating = (playing?: boolean) => !!playing && !still.matches;
  */
 const BLEND = { id: '-blend', transitions: { getFillColor: 140 } };
 const PLAIN = { id: '', transitions: undefined };
-export const hexFade = (anim: boolean) => (anim ? BLEND : PLAIN);
+// Hand-scrubbing the day or switching species: a gentle eased wash (not a snap) of fill, with the pale ink edge bleeding
+// in a touch slower, like watercolour settling into paper. Only on a change, so a still map costs nothing extra.
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
+const SOFT = { id: '-soft', transitions: { getFillColor: { duration: 260, easing: easeOut }, getLineColor: { duration: 420, easing: easeOut } } };
+export const hexFade = (anim: boolean) => (anim ? BLEND : still.matches ? PLAIN : SOFT);
 
 type Ring<T> = { s: T; at: number };
 

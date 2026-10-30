@@ -25,6 +25,9 @@ export interface ProbeCard {
   link?: { href: string; label: string };
   /** A downloadable calendar event for the card's peak window (a data: .ics link). */
   calendar?: { href: string; filename: string; label: string };
+  /** Other species to switch to (the Atlas's "also out here"): each a thumbnail, a name and a short note; `key` is its
+   * ?species= value. */
+  others?: { title: string; list: { key: string; label: string; note: string; img?: string }[] };
 }
 
 export interface LegendSpec {
@@ -32,7 +35,7 @@ export interface LegendSpec {
   /** Colour stops from low to high, drawn as a ramp. */
   stops?: { color: string; label: string }[];
   /** Discrete keys, drawn as labelled swatches (hex) or glowing dots (dot). */
-  items?: { color: string; label: string; shape: 'hex' | 'dot' | 'striped' }[];
+  items?: { color: string; label: string; shape: 'hex' | 'dot' | 'striped' | 'line' }[];
   note?: string;
 }
 
@@ -47,6 +50,15 @@ export interface SpotSegment {
   to: number;
   color: string;
   label: string;
+}
+
+/** A species' coming season at one place, as days of year: its first ones, its peak and its last. `year` names a
+ * live forecast's season; without one it is a typical year, good for any year. */
+export interface Due {
+  start: number;
+  peak: number;
+  end: number;
+  year?: number;
 }
 
 /** The explainer's "your spot" card: one place's season, drawn as a strip with today marked. */
@@ -139,8 +151,8 @@ export interface SeasonProfile {
   bands: { color: string; share: number[] }[];
   /** Animals seen per day, drawn as a line scaled to its own peak. */
   seen: number[];
-  /** Part of `seen` to wash in its own colour under the line (the same scale), such as a wave the forecast does not
-   * cover, in the colour of its dots on the map. */
+  /** Washes in their own colour under the line, on the same scale: part of `seen`, such as a wave the forecast does
+   * not cover, in the colour of its dots on the map; or, with `seen` the photos expected, the ones seen. */
   seenOnly?: { color: string; seen: number[] }[];
   /** Handwritten notes on the line, at a day index. */
   notes: { at: number; text: string }[];
@@ -186,6 +198,9 @@ export interface HatchLayer {
   endNote?: [string, string];
   /** Honesty one tap away. Required. */
   caveats(): CaveatCard;
+  /** The colours' track record for the line under the map: mean days off in past years it never learned from, the
+   * usual date's, and whether this is a first try (an untuned recipe borrowed from another species). */
+  record?(): { days: number; calendar: number; firstTry: boolean };
   legend(): LegendSpec;
   /** "What's here" for hover/tap. `picked` is the data object under the pointer, if it belongs to this layer. */
   probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }): ProbeCard | null;

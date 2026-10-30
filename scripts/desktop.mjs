@@ -18,6 +18,14 @@ import { pathToFileURL } from 'node:url';
 import { extname, join, normalize, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const pw = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
+/** Picks a species from the header's picker (src/ui/speciesPicker.ts), as a reader would: open it, tap its row. */
+/** The Atlas's species photos (src/ui/speciesPicker.ts, its cards): linked from iNaturalist's open-data bucket,
+ * never copied, so these are the only outside requests a page may make. */
+const PHOTOS = /^https:\/\/(inaturalist-open-data\.s3\.amazonaws\.com|static\.inaturalist\.org)\/photos\//;
+const pickSpecies = async (page, key) => {
+  await page.locator('#species').click();
+  await page.locator(`#sp-list [data-key="${key}"]`).first().click();
+};
 
 const out = process.argv[2] ?? 'screenshots/desktop';
 mkdirSync(out, { recursive: true });
@@ -466,7 +474,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const page = await ctx.newPage();
     if (served === 404) await page.route('**/live/latest.json', (r) => r.fulfill({ status: 404, body: '' }));
     else if (served) await page.route('**/live/latest.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(served) }));
-    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     // The missing file's 404 is logged by the browser itself; nothing else may be.
     page.on('console', (m) => m.type() === 'error' && !(served === 404 && /404/.test(m.text())) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -584,7 +592,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // The firefly has a part in the served file: picking it from live mode stays live, and its menu offers live.
         // The beetle has none: it lands on all years, its menu has no live option, and says why at the top.
         if (await page.locator('#species').isVisible()) {
-          await page.locator('#species').selectOption('firefly');
+          await pickSpecies(page, 'firefly');
           await page.waitForFunction(() => window.__hatch.current().id === 'firefly-replay', null, { timeout: 8000 }).catch(() => fail('the firefly never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'live') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
@@ -594,14 +602,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           const ffDate = ffAsOf && new Date(Date.parse(ffAsOf)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
           if (ffDate && (await page.locator('#t-date').textContent()) !== ffDate)
             fail(`firefly live mode opened on ${await page.locator('#t-date').textContent()}, not its as-of day ${ffDate}`);
-          await page.locator('#species').selectOption('japanese-beetle');
+          await pickSpecies(page, 'japanese-beetle');
           await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 8000 }).catch(() => fail('the beetle never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'typical') fail(`the beetle (no live entry) from live mode opened on ${await page.locator('#season').inputValue()}`);
           if (await page.locator('#season option[value=live]').count()) fail('the beetle season menu offers live mode without a live entry');
           if (!/not for .* yet/.test((await page.locator('#season option[disabled]').first().textContent().catch(() => '')) ?? ''))
             fail('the beetle season menu does not say live mode is not there for it yet');
-          await page.locator('#species').selectOption('luna');
+          await pickSpecies(page, 'luna');
           await page.waitForTimeout(500);
           if (!(await page.locator('#season option[value=live]').count())) fail('back on luna, the live option is gone');
         } else fail('no species menu over http');
@@ -626,7 +634,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
-    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     const shotS = (step) => page.screenshot({ path: `${out}/species-${label.replace(/\W+/g, '-')}-${step}.png` });
@@ -635,7 +643,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 30000 })
         .catch(() => fail('a ?species=japanese-beetle link never opened on the beetle'));
       await page.waitForTimeout(1500);
-      const keys = await page.locator('#species option').evaluateAll((os) => os.map((o) => o.value));
+      await page.locator('#species').click();
+      const keys = await page.locator('#sp-list .sp-feat').evaluateAll((bs) => bs.map((b) => b.dataset.key));
+      await page.keyboard.press('Escape');
       if (keys.join() !== listed.join()) fail(`species menu lists ${keys.join(', ')}, src/species.ts has ${listed.join(', ')}`);
       if (!/insect tracking/.test(await page.locator('#tagline').textContent())) fail('the header lost its site-wide subtitle');
       if ((await page.locator('#dots-what').textContent()) !== 'beetles') fail('the dots line does not count beetles');
@@ -654,7 +664,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(400);
       // Every other species from the menu, then back: each loads (its own layer id) and is drawn.
       for (const k of listed.filter((k) => k !== 'japanese-beetle')) {
-        await page.locator('#species').selectOption(k);
+        await pickSpecies(page, k);
         await page.waitForFunction((k) => /-(replay|front)$/.test(window.__hatch.current().id) && window.__hatch.current().id.startsWith(`${k}-`), k, { timeout: 30000 }).catch(() => fail(`${k} never loaded`));
         // A tracker (monarch, red admiral) has no forecast: the page drops its "Colors: forecast" caveat; the others keep it.
         const tracker = await page.evaluate(() => window.__hatch.current().tracker === true);
@@ -662,6 +672,194 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       }
       await page.waitForTimeout(600);
       await shotS('3-last');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
+
+  // The Living Atlas (src/atlas/), over http in Chromium: a ?species= link to any Atlas species draws its field and
+  // its photos as dots, the network in the page matches PyTorch's numbers (scripts/atlas-net.fixture.json) and the
+  // graphics card matches the plain network, the picker finds a species by name and opens it, the season menu offers 2026, and a pinned card's
+  // "also out here" switches species.
+  const atlasFixture = JSON.parse(readFileSync('scripts/atlas-net.fixture.json', 'utf8'));
+  const atlasUnit = async (browser) => {
+    const tag = 'atlas';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
+    // A species photo can fail to load (offline, or iNaturalist slow): the page shows a blank square, which is fine.
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    // A record for the visual review, not a check: software GL in CI can keep the page busy past the screenshot's
+    // timeout while the network fills the map, which must not fail the checks around it.
+    const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png`, timeout: 60000 })
+      .catch((e) => console.log(`atlas-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
+    const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
+    // The screen point of the spot on the map's cells in a box [w, s, e, n] farthest (in pixels) from the lit photo
+    // dots: a tap on a dot opens that photo's card instead of the place's.
+    const clearSpot = (box) => page.evaluate(([w, s, e, n]) => {
+      const h = window.__hatch;
+      const lit = h.current().points(h.time.cursor).map((p) => h.map.project(p));
+      let best = null;
+      for (let lng = w; lng <= e; lng += 0.25)
+        for (let lat = s; lat <= n; lat += 0.25) {
+          if (h.current().cellAt([lng, lat]) === null) continue;
+          const [x, y] = h.map.project([lng, lat]);
+          const gap = Math.min(Infinity, ...lit.map(([a, b]) => Math.hypot(a - x, b - y)));
+          if (!best || gap > best.gap) best = { gap, x, y };
+        }
+      return [best.x, best.y];
+    }, box);
+    try {
+      await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
+      if (!(await isOn('papilio-glaucus-atlas'))) fail('a ?species=papilio-glaucus link never opened the Atlas swallowtail');
+      await page.waitForTimeout(4000);
+      const drawn = await page.evaluate(() => {
+        const h = window.__hatch;
+        const hex = h.current().render({ t: h.time.cursor, zoom: 5, theme: { bg: '#000', hexEdge: [0, 0, 0, 0], text: '#000' } }).find((l) => /-forecast-r4$/.test(l.id));
+        return hex ? hex.props.data.filter((d) => hex.props.getFillColor(d)[3] > 0).length : 0;
+      });
+      if (drawn < 300) fail(`only ${drawn} coloured cells on 1 August`);
+      // Its real photos as dots (dots/<i>.bin): a typical year's 1 August has hundreds of tiger swallowtails lit.
+      const lit = await page.waitForFunction(() => window.__hatch.current().points(window.__hatch.time.cursor).length, null, { timeout: 10000 })
+        .then((h) => h.jsonValue(), () => 0);
+      if (lit < 50) fail(`only ${lit} photo dots lit on 1 August`);
+      await shotA('1-field');
+      const net = await page.evaluate(async (cases) => {
+        const a = await window.__hatch.atlas();
+        let worst = 0;
+        for (const c of cases) {
+          const got = a.net.logShares(c, c.day, c.ahead);
+          for (const [i, want] of c.top) worst = Math.max(worst, Math.abs(got[i] - want));
+        }
+        let gpu = null;
+        if (a.gpu) {
+          const n = 40;
+          const P = a.net.placeDim;
+          const ahead = Float32Array.from({ length: n }, (_, k) => (k % 9) * 3 - 12);
+          const [got] = a.gpu.run(a.places.subarray(0, n * P), 175, ahead, [3]);
+          gpu = 0;
+          for (let k = 0; k < n; k++) gpu = Math.max(gpu, Math.abs(got[k] - a.net.logShares(a.cells[k], 175, ahead[k])[3]));
+        }
+        return { worst, gpu };
+      }, atlasFixture);
+      console.log(`${tag}: network vs PyTorch ${net.worst.toExponential(1)}, graphics card vs network ${net.gpu?.toExponential(1) ?? 'no WebGL2 floats'}`);
+      if (!(net.worst < 1e-3)) fail(`the page's network is off PyTorch's by ${net.worst}`);
+      if (net.gpu !== null && !(net.gpu < 2e-3)) fail(`the graphics-card network is off the plain one by ${net.gpu}`);
+      // Find one by name.
+      await page.locator('#species').click();
+      await page.locator('#sp-q').fill('black swallow');
+      await page.locator('#sp-list [data-key="papilio-polyxenes"]').waitFor({ timeout: 10000 }).catch(() => fail('searching "black swallow" did not list the black swallowtail'));
+      await shotA('2-search');
+      await page.locator('#sp-list [data-key="papilio-polyxenes"]').click();
+      if (!(await isOn('papilio-polyxenes-atlas'))) fail('picking the black swallowtail did not open it');
+      // As long as isOn's: software GL in CI can keep the page busy drawing the new field past the address bar's timer.
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('species') === 'papilio-polyxenes', null, { timeout: 30000, polling: 250 })
+        .catch(() => fail(`the link dropped the species: ${page.url()}`));
+      if ((await page.locator('#app.atlas').count()) !== 1) fail('the page is not in Atlas mode (its caveat line)');
+      // The tree of life (src/ui/treeOfLife.ts): it draws, the arrow keys climb from the whole tree into the biggest
+      // branch down to one species, and its card's button opens that species.
+      await page.locator('#species').click();
+      await page.locator('#sp-q').fill('');
+      const canvas = page.locator('.tol-canvas');
+      await canvas.waitFor({ timeout: 10000 }).catch(() => fail('the tree of life never showed'));
+      // The branches grow in: wait for the whole tree rather than a fixed time.
+      await page.waitForFunction(() => Number(document.querySelector('.tol-canvas')?.getAttribute('data-branches')) > 1500, null, { timeout: 8000, polling: 200 }).catch(() => {});
+      const branches = Number(await canvas.getAttribute('data-branches'));
+      if (!(branches > 1500)) fail(`the tree of life drew ${branches} branches, not the whole tree`);
+      // In season: the tips out on the map's day glow, and a note counts them (any number, the day may be winter).
+      await page.waitForFunction(() => document.querySelector('.tol-canvas')?.hasAttribute('data-out'), null, { timeout: 8000, polling: 200 })
+        .catch(() => fail('the tree never marked which species are out'));
+      if (!/^[\d,]+ out on \w+ \d+$/.test((await page.locator('.tol-out').textContent()) ?? '') || !(await page.locator('.tol-out').isVisible()))
+        fail(`the tree's in-season note reads "${await page.locator('.tol-out').textContent()}"`);
+      await shotA('2b-tree');
+      await canvas.focus();
+      let steps = 0;
+      while ((await page.locator('.tol-go').textContent()) !== 'Show on map' && steps++ < 14) {
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(150);
+      }
+      const crumbs = await page.locator('.sp-crumbs button').count();
+      if (crumbs < 3) fail(`climbing the tree left only ${crumbs} breadcrumb steps`);
+      const title = await page.locator('.tol-card b').textContent();
+      await shotA('2c-tree-species');
+      await page.locator('.tol-go').click();
+      await page.waitForFunction((t) => document.querySelector('#species')?.getAttribute('aria-label')?.includes(t), title, { timeout: 30000 })
+        .catch(() => fail(`"Show on map" for ${title} did not switch to it`));
+      // The year's surprises, a second strip over the tree: one opens on 2026, the year it surprised.
+      await page.locator('#species').click();
+      const odd = page.locator('#sp-odd [data-season="2026"]').first();
+      await odd.waitFor({ timeout: 10000 }).catch(() => fail('the species picker shows no 2026 surprises'));
+      await shotA('2d-surprises');
+      const oddKey = await odd.getAttribute('data-key');
+      await odd.click();
+      if (!(await isOn(`${oddKey}-atlas`))) fail(`the first 2026 surprise (${oddKey}) did not open`);
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 })
+        .catch(() => fail('a 2026 surprise did not open on 2026'));
+      // 2026, with its real warmth.
+      if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
+      else {
+        await page.locator('#season').selectOption('2026');
+        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 }).catch(() => fail('2026 never took'));
+      }
+      // Warm the spring: +3 °F reruns the season (a spring bug comes out sooner), the link keeps it, a ?warm= link
+      // reopens it, and closing it puts spring back as it was.
+      const ink = () => page.evaluate(() => {
+        const h = window.__hatch;
+        const hex = h.current().render({ t: h.time.cursor, zoom: 5, theme: { bg: '#000', hexEdge: [0, 0, 0, 0], text: '#000' } }).find((l) => /-forecast-r4$/.test(l.id));
+        return hex ? hex.props.data.reduce((a, d) => a + Math.max(0, hex.props.getFillColor(d)[3] - 90), 0) : 0;
+      });
+      await page.goto(origin + '/?species=poecilocapsus-lineatus&noauto&date=05-20');
+      await isOn('poecilocapsus-lineatus-atlas');
+      await page.waitForTimeout(3000);
+      const before = await ink();
+      await page.locator('#warm').click();
+      await page.locator('#warm-in').fill('3');
+      await page.locator('#warm-in').dispatchEvent('input');
+      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+        .catch(async () => fail(`+3 °F never said "earlier": "${await page.locator('#warm-out').textContent()}"`));
+      await page.waitForTimeout(3000);
+      const after = await ink();
+      if (!(after > before * 1.04)) fail(`+3 °F did not bring the four-lined plant bug out sooner on 20 May (ink ${before} -> ${after})`);
+      await shotA('4-warm');
+      await page.waitForFunction(() => new URL(location.href).searchParams.get('warm') === '3', null, { timeout: 5000, polling: 250 })
+        .catch(() => fail(`the link dropped the warmth: ${page.url()}`));
+      await page.goto(origin + '/?species=poecilocapsus-lineatus&noauto&date=05-20&warm=-2');
+      await isOn('poecilocapsus-lineatus-atlas');
+      await page.waitForFunction(() => /later/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+        .catch(() => fail('a ?warm=-2 link did not open spring 2 °F cooler'));
+      await page.locator('#warm-row .warm-x').click();
+      if ((await page.locator('#warm-in').inputValue()) !== '0' || !(await page.locator('#warm-row').isHidden())) fail('closing the slider left spring warmed');
+      await page.waitForFunction(() => !new URL(location.href).searchParams.has('warm'), null, { timeout: 5000, polling: 250 })
+        .catch(() => fail('closing the slider left ?warm= in the link'));
+      // Expected vs seen: 2026 draws the photos seen against the ones expected on the time bar, and the card says how
+      // the year went (spotted lanternflies: far more than expected, still spreading west).
+      await page.goto(origin + '/?species=lycorma-delicatula&noauto&year=2026&date=09-10');
+      await isOn('lycorma-delicatula-atlas');
+      await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 })
+        .catch(() => fail('2026 drew no photos seen on the time bar'));
+      if (!(await page.locator('#strip .vs-note').isVisible())) fail('the time bar draws expected vs seen with no key saying which is which');
+      const ohio = await clearSpot([-84.5, 39.5, -81, 41.5]);
+      await page.mouse.click(ohio[0], ohio[1]);
+      await page.waitForFunction(() => /Across the map in 2026: \d+(\.\d)?× as many photos as expected/.test(document.getElementById('probe').textContent), null, { timeout: 10000 })
+        .catch(async () => fail(`the 2026 card does not say how the year went: "${await page.locator('#probe').innerText()}"`));
+      await shotA('5-seen');
+      // A pinned card names others out here; one tap switches to it.
+      await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
+      await isOn('papilio-glaucus-atlas');
+      await page.waitForTimeout(3000);
+      const at = await clearSpot([-89.5, 40.5, -87.75, 42]);
+      await page.mouse.click(at[0], at[1]);
+      const other = page.locator('#probe .probe-others [data-species]').first();
+      await other.waitFor({ timeout: 8000 }).catch(() => fail('the pinned card lists no "also out here"'));
+      await shotA('3-card');
+      const want = await other.getAttribute('data-species');
+      await other.click();
+      await page.waitForFunction((k) => window.__hatch.current().id.startsWith(`${k}-`) || (k === 'danaus-plexippus' && window.__hatch.current().id.startsWith('monarch-')), want, { timeout: 30000 })
+        .catch(() => fail(`tapping ${want} on the card did not switch to it`));
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
@@ -698,6 +896,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#find-list li').first().click();
       await page.waitForTimeout(1200);
       if (!/Springfield, IL/.test((await page.locator('#probe').textContent()) ?? '')) fail('picking Springfield, IL showed no card for it');
+      // "Coming out near you": the town found gets a countdown line (15 January: luna's season is months off), kept
+      // for the next visit; its cross forgets it.
+      const near = async () => ((await page.locator('#near').isVisible()) ? await page.locator('#near-go').textContent() : null);
+      if (!/^Near Springfield: luna moths in \d+ days \(\w+\u00A0\d+\)$/.test((await near()) ?? '')) fail(`after finding Springfield the near line reads ${JSON.stringify(await near())}`);
       await shotF('2-picked');
       await page.locator('#info-btn').click();
       await page.waitForTimeout(500);
@@ -746,6 +948,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         else if (m.y + m.height > s.y || s.y - (m.y + m.height) > 300 || m.x + m.width < s.x) fail('"Link copied" is not next to Share');
         await shotF('4-share');
       }
+      // The last town found is kept for the next visit, and speaks for whichever species is on screen; its cross forgets it.
+      await page.goto(origin + '/?noauto&today=2027-01-15&species=papilio-glaucus');
+      // (Luna's line shows first, while the swallowtail loads.)
+      await page.waitForFunction(() => /Swallowtails/.test(document.getElementById('near-go').textContent), null, { timeout: 30000, polling: 250 }).catch(() => {});
+      if (!/^Near Cincinnati: Eastern Tiger Swallowtails in \d+ days/.test((await near()) ?? '')) fail(`on the next visit, the swallowtail's near line reads ${JSON.stringify(await near())}`);
+      await page.locator('#near-x').click();
+      if ((await page.locator('#near').isVisible()) || (await page.evaluate(() => localStorage.getItem('hatch-place')))) fail('the near line\'s cross did not forget the place');
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
@@ -907,6 +1116,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       for (const k of ['End', 'Home', 'PageDown', 'PageUp', 'ArrowRight']) await page.keyboard.press(k);
       await page.waitForTimeout(600);
       if (new URL(page.url()).searchParams.get('date') !== day) fail(`a key moved the hidden season slider: date ${day} -> ${new URL(page.url()).searchParams.get('date')}`);
+      // Night (src/radar/night.ts): the button turns on the dark sky and simulated dots, the caveat shows, the link follows, the
+      // zoom may go in past town scale. It stays on through ×, which must still bring the Midwest back.
+      if (!reduce && !phone) {
+        await page.locator('#radar .rd-night').click();
+        await page.waitForFunction(() => document.querySelector('#radar .rd-night')?.getAttribute('aria-pressed') === 'true', null, { timeout: 30000 }).catch(() => fail('Night did not turn on'));
+        if (!(await page.locator('#radar .rd-sim').isVisible())) fail('Night does not say its dots are simulated');
+        if (!(await page.locator('#radar .rd-spark').isVisible())) fail('Night shows no echo line');
+        await page.waitForFunction(() => new URL(location.href).searchParams.get('night') === '1', null, { timeout: 5000 }).catch(() => fail('the link does not say night'));
+        if (!fetched.some((p) => p.endsWith(`/radar/${id}/wind.json`))) fail('Night never fetched the wind');
+        await page.evaluate((at) => window.__hatch.map.view(at, 12), ev.at);
+        if (((await page.evaluate(() => window.__hatch.map.zoom())) ?? 0) < 11) fail('Night does not zoom in past town scale');
+        await shotR('2b-night');
+      }
       await page.locator('#radar .rd-x').click();
       if (await page.locator('#radar').count()) fail('× did not close the replay');
       // Back at the whole-Midwest fit: not just flagged as fitted, but drawn at the fit's zoom once the glide is done.
@@ -1029,7 +1251,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
   server.close();

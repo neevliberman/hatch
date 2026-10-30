@@ -51,7 +51,7 @@
     </main>
     <header id="top">
       <h1 class="brand"><img id="mark" class="mark" src="/src/marks/moth.svg" alt="" width="24" height="24" />Hatch <small id="tagline">Historical and predictive insect tracking</small></h1>
-      <label class="season species"><span class="sr">Species</span><select id="species"><option value="luna">Luna moth</option></select></label>
+      <div class="season species"><button id="species" type="button" class="pick-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="species-sheet" aria-label="Species: Luna moth. Change species"><span class="sp-face">Luna moth</span></button></div>
       <label class="season"><span class="sr">Season to replay</span><select id="season"><option value="">All years</option></select></label>
       <button id="theme-btn" class="icon-btn" type="button" aria-label="Dark mode" aria-pressed="false" title="Dark mode">
         <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M19.6 14.6A8 8 0 0 1 9.4 4.4a8.2 8.2 0 1 0 10.2 10.2z"/><path fill="currentColor" d="M17 3.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5z"/></svg>
@@ -61,6 +61,7 @@
       <div id="explore" class="sr explore icon-btn" role="application" tabindex="0" aria-roledescription="map explorer" aria-label="Explore map with keys" aria-describedby="explore-help">Explore map with keys</div>
       <span id="explore-help" class="sr">Arrow keys move between hexagons and read the forecast. Escape exits.</span>
     </header>
+    <div id="species-sheet" role="dialog" aria-label="Pick a species" hidden></div>
     <aside id="drawer" aria-hidden="true" aria-label="About this map"></aside>
     <div id="bottom" role="region" aria-label="Key and time controls">
       <section id="layers" aria-label="Layers" hidden></section>
@@ -78,8 +79,9 @@
         <button type="button" class="find-x" aria-label="Close town search">&times;</button></div>
       </form>
       <div id="dock">
-        <p id="strip"><span id="honesty"><span class="dots">Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. </span><span class="forecast-note">Colors: forecast <em class="unconfirmed">(on trial in 2027)</em>.</span></span>
-          <button id="why" type="button">How sure?</button><span id="countdown"></span></p>
+        <p id="strip"><span id="honesty"><span class="dots">Dots: <span id="dots-what">moths</span> seen in the last 10 days<span class="long">, <b id="season-name"></b></span>. </span><span class="forecast-note">Colors: <em class="unconfirmed" id="fc-try" hidden>experimental </em>forecast<span id="fc-record"></span>.</span><span class="atlas-note">Colors: expected share of insect photos.<span class="dot-note"> Dots: real photos.</span><span class="vs-note"> Bar: line expected, <b>green</b> seen.</span></span></span>
+          <button id="why" type="button">How sure?</button><span id="countdown"></span><span id="near" hidden><button type="button" id="near-go" title="Show this place"></button><button type="button" id="near-x" aria-label="Forget this place">&times;</button></span></p>
+        <div id="warm-row" role="group" aria-label="Warm the spring" hidden></div>
         <footer id="bar" role="group" aria-label="Time controls"></footer>
         <div id="actions">
           <button id="locate" type="button" class="icon-btn" aria-label="My area" title="Forecast where you are">
@@ -88,6 +90,7 @@
           <button id="find" type="button" class="icon-btn" aria-label="Find a town" title="Find a town" aria-expanded="false" aria-controls="finder">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
             <span class="lbl">Find</span></button>
+          <button id="warm" type="button" class="icon-btn" aria-label="Warm the spring" title="Warm the spring" aria-expanded="false" aria-controls="warm-row" hidden><span class="lbl">Warm</span></button>
           <button id="share" type="button" class="icon-btn" aria-label="Share this view" title="Share this view">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12.3 15.6l.4-.7.2-1 .3-3.7 0-3.5-.2-1.2-.1-1-.2-.9-.4-.7-.4 0-.5.7-.2 2 0 1.1-.1 1.2 0 2.2.1 1.3 0 1.3.2 2.1.4.8zm-.5 0l.2-.7.2-1 .3-3.7 0-1.2.1-1.1 0-2.4-.2-1.9-.2-.7-.2 0-.3.6-.1.9-.2 2.3 0 2.3-.1 1.1 0 4.8.2.7zm-4-8.1l.5 0 .4-.3 1.5-1.2.4-.4.4-.5.4-.4.4-.5.4-.4-.2.1-.1-.1.1.2.3.4.4.4.8 1 .4.4.5.3.5.4.4.2.4.3.4 0 .3-.3 0-.5-.3-.3-.7-.9-.4-.4-.3-.4-.2-.3-.3-.5-.4-.5-.3-.6-.6-.5-.8-.3-.8.2-.6.5-.4.5-.3.5-.6.8-1.2 1.5-.3.5-.3.4-.1.5zm-1.5 3l-.3.4-.3.6-.2.8-.4 1.8-.2 1.7-.2 1-.1 1.1 0 1.1.2 1 .6 1 1 .5 1.1.3 5.6 0 1.1.1 2.3 0 1.1-.2 1-.6.6-1 .1-1.1 0-1.2-.4-2.1-.3-2.5-.2-.9-.1-.7-.2-.6-.3-.4-.4 0-.2 1.1.1.8 0 2.5.3 3 0 .9-.1.6-.2.3-.3.1-.7.1-2 0-2.2-.2-1.1.1-3.2 0-.8-.1-.3-.2-.2-.3-.2-.5 0-1.8.1-1 0-.9.1-.8 0-.9.3-2.3-.1-.6z"/></svg>
             <span class="lbl">Share</span></button>

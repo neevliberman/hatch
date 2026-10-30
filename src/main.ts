@@ -1,24 +1,30 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
-import { TimeAxis, type TimeSpec } from './core/timeAxis';
+import { dayOfYear, TimeAxis, type TimeSpec } from './core/timeAxis';
 import { makeIntro, type Intro } from './ui/intro';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
-import { GROUP_AFTER, SPECIES } from './species';
+import { findSpecies, SPECIES } from './species';
+import { mountSpeciesPicker } from './ui/speciesPicker';
+import { ATLAS_YEAR, atlasKey } from './atlas/index';
 import { data, LIVE, TYPICAL, type Mode } from './layers/lunaData';
 import { inSeason, liveAvailable, loadLive, type Live } from './layers/liveData';
 import { createMap, type Padding, type ProbeHit } from './map/map';
-import { basemapLabels, theme } from './map/basemap';
+import { theme } from './map/basemap';
 import { mountScrubber } from './ui/scrubber';
 import { mountCaveatDrawer } from './ui/caveatDrawer';
 import { mountLayerList, mountLegend, showProbe } from './ui/panels';
 import { mountFinder } from './ui/finder';
-import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
-import { AIM, WORD, stepCell, type Arrow } from './ui/keyexplore';
-import { GRID_RES } from './core/grid';
+import { mountWarmSlider } from './ui/warmSlider';
+import { mountMarginNotes } from './ui/marginNotes';
+import { loadPlace, nearLine, savePlace, type Place } from './ui/near';
+import type { Due } from './core/layer';
+import { latLngToCell } from 'h3-js';
+import { mountKeyExplore } from './ui/keyexplore';
+import { GRID_RES, nearby } from './core/grid';
 import { isDark, onTheme, toggleMode } from './theme';
 import { markFor } from './ui/mark';
+import { exoEnabled, mountExo } from './ui/exoPanel';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
-import { MIDWEST_MARGIN } from './layers/stages';
 import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
 import type { Radar, View } from './radar/radarReplay';
 
@@ -99,6 +105,16 @@ function start() {
   let curKey = 'luna';
   /** A ?species= link's species, until it has loaded (the address bar keeps asking for it meanwhile). */
   let speciesPending: string | null = null;
+  /** A ?warm= link's "Warm the spring", until its Atlas species has loaded. */
+  let askedWarm = Number(params.get('warm')) || 0;
+  /** "Coming out near you": the line for the remembered place (set up with My area and Find, below). */
+  let showNear = () => {};
+  let warmed = false; // the map last drawn was warmed, so going back to "as it was" redraws the ribbon too
+  const warmth = mountWarmSlider($('warm') as HTMLButtonElement, $('warm-row'), (degF) => {
+    cur.setWarmth?.(degF);
+    onLunaData();
+    syncUrl();
+  });
   const loaded = new Map<string, LunaLayer>([['luna', luna]]);
 
   const time = new TimeAxis(registry.activeTime()!, clock);
@@ -115,6 +131,8 @@ function start() {
   // An open radar replay (src/radar/): the map belongs to it for now, so hexagons give no cards.
   let radar: Radar | null = null;
   const probeEl = $('probe');
+  // ?exo: a pinned card offers a sketched monarch that lives the place's real temperature on the map's date.
+  const exo = exoEnabled() ? mountExo(probeEl) : null;
   // With a mouse, the hex card sits next to the pointer, like a tooltip, so hovering visibly does something.
   // Touch screens and "My area" keep it docked above the time bar.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -147,6 +165,7 @@ function start() {
     map.setPicked(pinned && hit && (!hit.picked || isForecast(hit.picked.layerId)) ? hit.cell : null);
     placeProbe();
     followSpot(time.cursor);
+    exo?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
   };
   const unpin = () => {
     if (!pinned && !hit) return;
@@ -156,6 +175,17 @@ function start() {
     updateProbe();
   };
 
+  // The colours' track record, beside "Colors: forecast" under the map (and in the folded key's chip on a phone on its
+  // side): how many days off it was in past years it never learned from, against the usual date.
+  const showRecord = () => {
+    const r = cur.record?.();
+    $('fc-try').hidden = !r?.firstTry;
+    $('fc-record').innerHTML = r ? `, typically ${Math.round(r.days)} days off<span class="long"> (calendar guess: ${Math.round(r.calendar)})</span>` : '';
+    const words = r ? `${r.firstTry ? 'experimental ' : ''}forecast, ~${Math.round(r.days)} days off` : 'forecast';
+    document.documentElement.style.setProperty('--fc-words', JSON.stringify(words));
+    document.documentElement.style.setProperty('--fc-chip', JSON.stringify(r?.firstTry ? 'experimental' : r ? `~${Math.round(r.days)} days off` : ''));
+  };
+  showRecord();
   let intro: Intro | null = null; // the first visit's opening playback (ui/intro.ts), while it runs
   const colourKey = mountLegend($('legend'), registry);
   time.subscribe(() => time.playing && !intro?.running && colourKey.autoFold());
@@ -239,87 +269,9 @@ function start() {
 
   // The map is a canvas, so screen readers get the day's picture in words (read with the map, not announced each frame).
   const srSummary = $('sr-summary');
-  // After the season the map goes one flat colour, which reads as "no data". A margin note on empty paper (the
-  // layer's own words, sketch and spot, HatchLayer.offSeason) says they are asleep. It only shows on the fitted view,
-  // so it never sits on hexes, and fades as soon as any hexagon starts.
-  const note = document.createElement('div');
-  note.id = 'asleep';
-  note.setAttribute('aria-hidden', 'true'); // the screen-reader summary already says every hexagon is over
-  let shownNote: unknown = null;
-  // When playback reaches the last day, the layer's end note (HatchLayer.endNote) goes on the same empty paper: just
-  // under the margin note on a phone, just over it on a wide screen. Never over the map's hexes, the dock or the
-  // slider's ribbon: with no room for it, only Replay and the status message say it.
-  const endEl = document.createElement('p');
-  endEl.id = 'end-note';
-  endEl.setAttribute('role', 'status');
-  let endWords: [string, string] | null = null;
-  let endClear = 0;
-  $('app').append(note, endEl);
-  // Panels a note must stay clear of: the header, the dock (with the time slider and its ribbon), the key, the card,
-  // the phone's button stack, the recenter button, the town finder and an open About panel.
-  const blockers = () =>
-    [...document.querySelectorAll('#top, #dock, #legend .legend-card, #legend .lg-chip, #probe:not([hidden]), #actions, #recenter:not([hidden]), #finder:not([hidden]), #drawer.open')]
-      .map((e) => e.getBoundingClientRect())
-      .filter((r) => r.width && r.height);
-  const fits = (x: number, y: number, w: number, h: number, block: DOMRect[]) =>
-    x >= 4 && y >= 4 && x + w <= window.innerWidth - 4 && y + h <= window.innerHeight - 4 &&
-    block.every((r) => x + w <= r.left || x >= r.right || y + h <= r.top || y >= r.bottom);
-  const place = (el: HTMLElement, spot: [number, number] | null, tilt: number) => {
-    el.classList.toggle('on', !!spot);
-    if (spot) el.style.transform = `translate(${Math.round(spot[0])}px, ${Math.round(spot[1])}px) rotate(${tilt}deg)`;
-    return spot;
-  };
-  placeNote = () => {
-    // Runs on every pan and zoom frame: the cheap tests first, and no layout read unless a note will show.
-    if (map.moved() || (!endWords && !note.classList.contains('on') && !registry.activeLayers().some((l) => l.offSeason?.(time.cursor)))) {
-      place(note, null, 0);
-      place(endEl, null, 0);
-      return;
-    }
-    // The active layers' own note, only when every one of them has one to show (the layers cache this per day).
-    const notes = registry.activeLayers().map((l) => l.offSeason?.(time.cursor));
-    const n = notes.length && notes.every(Boolean) ? notes[0]! : null;
-    if (n && n !== shownNote) {
-      shownNote = n;
-      note.innerHTML = `<svg viewBox="0 0 64 34">${n.sketch}</svg><b>${n.title}</b><span>${n.line}</span>`;
-    }
-    const anchor = n?.at ?? notes.find(Boolean)?.at ?? MIDWEST_MARGIN;
-    const atPhone = phone.matches ? map.project(anchor.phone) : null;
-    const atWide = map.project(anchor.wide);
-    const block = blockers();
-    // Phone: centred on its spot under the data. Wide screen: starting at its spot east of the data, on blank paper,
-    // which is also where a phone on its side (no room under the data) puts the end note.
-    const spotFor = (w: number, h: number): [number, number] | null => {
-      const tries: [number, number][] = [];
-      if (atPhone) tries.push([atPhone[0] - w / 2, atPhone[1]]);
-      if (atWide) tries.push([atWide[0], atWide[1] - h / 2]);
-      return tries.find(([x, y]) => fits(x, y, w, h, block)) ?? null;
-    };
-    let box: [number, number, number, number] | null = null;
-    if (n) {
-      const { width: w, height: h } = note.getBoundingClientRect();
-      const s = place(note, w && h ? spotFor(w, h) : null, -3); // none on a phone on its side (style.css)
-      if (s) box = [s[0], s[1], w, h];
-    } else place(note, null, 0);
-    if (!endWords) return void place(endEl, null, 0);
-    const { width: w, height: h } = endEl.getBoundingClientRect();
-    let spot: [number, number] | null = null;
-    if (box) {
-      const [x0, y0, w0, h0] = box;
-      const x = x0 + (w0 - w) / 2;
-      const tries: [number, number][] = phone.matches ? [[x, y0 + h0 + 6], [x, y0 - h - 8]] : [[x, y0 - h - 8], [x, y0 + h0 + 6]];
-      spot = tries.find(([tx, ty]) => fits(tx, ty, w, h, block)) ?? null;
-    } else spot = spotFor(w, h);
-    place(endEl, spot, -2);
-  };
-  const showEnd = (words: [string, string] | null) => {
-    clearTimeout(endClear);
-    endWords = words;
-    if (words) endEl.replaceChildren(words[0], Object.assign(document.createElement('small'), { textContent: words[1] }));
-    // Emptied once faded, so the same words are announced again at the next ending.
-    else endClear = window.setTimeout(() => endEl.replaceChildren(), 450);
-    placeNote();
-  };
+  const notes = mountMarginNotes($('app'), map, () => registry.activeLayers(), () => time.cursor, phone);
+  placeNote = notes.place;
+  const showEnd = notes.showEnd;
   const refresh = () => {
     map.refresh();
     updateProbe();
@@ -346,7 +298,13 @@ function start() {
     }
   };
   time.onFrame(map.refresh); // in-between frames while playing: only the map moves, the card and summary keep the day
-  onLunaData = refresh;
+  // A season rerun with warmth lands later than the tap that asked for it: its ribbon and note follow it in.
+  let onRerun = () => {};
+  onLunaData = () => {
+    refresh();
+    onRerun();
+    showNear(); // a live forecast arriving changes it
+  };
   registry.subscribe(() => {
     const next = registry.activeTime();
     if (next && next !== spec) {
@@ -365,14 +323,15 @@ function start() {
   // A narrow phone's closed menu shows just the season ("2024"), not its count, which would be cut off ("2024 (1,498
   // beet"); the open menu still lists the counts (style.css).
   /** The season menu's words for a mode, with the species on screen's own live forecast. */
-  const label = (m: Mode) => modeLabel(m, cur.live());
+  const label = (m: Mode) => (cur.seasons && m === TYPICAL ? 'typical year' : modeLabel(m, cur.live()));
   /** A layer's slider for a mode (live mode: from that layer's own live forecast). */
   // A tracker has no forecast after its last day, so no paler "forecast" stretch on the time bar.
   const timeFor = (l: LunaLayer, m: Mode, mo?: number, d?: number): TimeSpec => {
+    if (l.timeSpec) return l.timeSpec(m, mo, d);
     const s = replayTimeSpec(m, mo, d, clock, l.live());
     return l.tracker ? { ...s, asOf: undefined } : s;
   };
-  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? 'All years' : label(picker.value));
+  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? (cur.seasons ? 'Typical' : 'All years') : label(picker.value));
   const fillPicker = () => {
     const keep = picker.value || initialMode;
     const live = cur.live() ? [LIVE] : [];
@@ -380,10 +339,11 @@ function start() {
     // menu says "seen", not a number of animals. "All years" goes without one so the closed menu fits a small phone.
     // A species the nightly file has no forecast for (yet): say so at the top of the list rather than drop it silently.
     picker.innerHTML = (__BASEMAP__ && liveFile && !cur.live() ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
-      [...live, TYPICAL, ...[...years].reverse().filter((y) => !cur.tracker || cur.seasonCount(y) > 0)]
-        .map((m) => `<option value="${m}">${m === LIVE ? label(LIVE) : m === TYPICAL ? 'All years' : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
+      (cur.seasons?.() ?? [...live, TYPICAL, ...[...years].reverse().filter((y) => !cur.tracker || cur.seasonCount(y) > 0)])
+        .map((m) => `<option value="${m}">${m === LIVE ? label(LIVE) : m === TYPICAL ? (cur.seasons ? 'Typical year' : 'All years') : cur.seasons ? m : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
         .join('');
     picker.value = keep === LIVE && !live.length ? TYPICAL : keep;
+    if (picker.selectedIndex < 0 || picker.options[picker.selectedIndex]!.disabled) picker.value = TYPICAL; // not a season this species has
     face();
     picker.title = `Season to replay (sightings of ${cur.words.countedAs} in parentheses)`;
   };
@@ -422,41 +382,57 @@ function start() {
   };
   $('season-name').textContent = modeLabel(initialMode);
 
-  // Species menu, from the one species list (src/species.ts): a native menu stays small in the header however long the
-  // list gets, and a phone opens it as its own scrolling picker. Past GROUP_AFTER species it gets group headings.
-  // Switching keeps the season and the calendar day, and drops any pinned card.
-  const speciesSel = $<HTMLSelectElement>('species');
-  const opt = (e: (typeof SPECIES)[number]) => `<option value="${e.key}">${e.label}</option>`;
-  const groups = [...new Set(SPECIES.map((e) => e.group))];
-  speciesSel.innerHTML = SPECIES.length > GROUP_AFTER
-    ? groups.map((g) => `<optgroup label="${g}">${SPECIES.filter((e) => e.group === g).map(opt).join('')}</optgroup>`).join('')
-    : SPECIES.map(opt).join('');
-  let asking = 0; // the latest pick: a slow load that finishes after a newer pick must not switch to its species
-  const setSpecies = async (want: string) => {
-    const entry = SPECIES.find((e) => e.key === want) ?? SPECIES[0]!;
+  // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
+  // keeps the season and the calendar day, and drops any pinned card.
+  // A picker row may ask for a season too: a surprise opens on its year.
+  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, ATLAS_YEAR, (k, s) => void setSpecies(k, s), () => {
+    // The map's day, for the tree's "out now" glow (ATLAS_YEAR's own season when the map shows it, else a typical year).
+    const label = new Date(time.cursor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return { doy: dayOfYear(time.cursor), year: picker.value === String(ATLAS_YEAR), label };
+  });
+  let asking = 0;
+  const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
+  const setSpecies = async (want: string, wish?: string) => {
     const ticket = ++asking;
+    const entry = (await findSpecies(want)) ?? SPECIES[0]!;
+    if (ticket !== asking) return;
     if (!loaded.has(entry.key)) {
       if (!entry.load) return;
-      speciesSel.disabled = true;
-      const mode0 = picker.value === LIVE ? TYPICAL : picker.value;
-      // Its live forecast can arrive after the layer (src/species.ts): refill the menu, and go live if that was wanted.
-      const layer = await entry.load(mode0, () => onLunaData(), () => {
-        if (loaded.get(entry.key) !== cur) return;
-        fillPicker();
-        goLiveIfWanted();
-      });
-      speciesSel.disabled = false;
-      if (!layer) {
-        if (ticket === asking) speciesSel.value = curKey;
-        return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
+      // One load per species, however many times it is picked meanwhile (a slow Atlas load, a double tap on a card).
+      let pending = loading.get(entry.key);
+      if (!pending) {
+        const mode0 = picker.value === LIVE ? TYPICAL : picker.value;
+        // Its live forecast can arrive after the layer (src/species.ts): refill the menu, and go live if that was wanted.
+        pending = entry
+          .load(mode0, () => onLunaData(), () => {
+            if (loaded.get(entry.key) !== cur) return;
+            fillPicker();
+            goLiveIfWanted();
+          })
+          .catch(() => null)
+          .then((layer) => {
+            if (layer && !loaded.has(entry.key)) {
+              loaded.set(entry.key, layer);
+              registry.register(layer, fitSeason(layer, timeFor(layer, mode0, 5, 10)), false);
+            }
+            return layer;
+          })
+          .finally(() => loading.delete(entry.key));
+        loading.set(entry.key, pending);
       }
-      loaded.set(entry.key, layer);
-      registry.register(layer, fitSeason(layer, timeFor(layer, mode0, 5, 10)), false);
+      speciesPick.disabled = true;
+      const layer = await pending;
+      speciesPick.disabled = loading.size > 0; // still waiting on another species' load
+      if (ticket !== asking) return; // a newer pick won
+      if (!layer) return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
-    speciesSel.value = entry.key;
-    if (next === cur) return;
+    if (next === cur) {
+      // Already on screen: only the season it asked for, if any.
+      if (wish && wish !== picker.value && (next.seasons?.() ?? []).includes(wish)) (picker.value = wish), picker.dispatchEvent(new Event('change'));
+      return;
+    }
     // Live was wanted for it (picked from live mode, or a ?season=live&species= link): goes live as soon as its live
     // forecast is there, now or when the file arrives.
     const fromLink = speciesPending === entry.key && asked === LIVE;
@@ -470,19 +446,36 @@ function start() {
     pinned = false;
     resetKeys();
     map.setMarker(null);
-    next.setMode(picker.value);
+    // Keep the season if the new species has it (an Atlas species has a typical year and 2026), else all years; a
+    // link's own season wins while its species loads.
+    const offers = next.seasons?.() ?? [...(next.live() ? [LIVE] : []), TYPICAL, ...years];
+    // (A link may name a hand-built species by its Latin key, ?species=photinus-pyralis.)
+    const fromThisLink = speciesPending === entry.key || (!!entry.sci && speciesPending === atlasKey(entry.sci));
+    const mode = wish && offers.includes(wish) ? wish : fromThisLink && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
+    next.setMode(mode);
     const prev = cur;
     cur = next;
     curKey = entry.key;
+    speciesPick.show(entry.key, entry.label);
     fillPicker();
+    picker.value = mode;
+    if (picker.value !== mode) (picker.value = TYPICAL), cur.setMode(TYPICAL); // a tracker's year with no sightings
     $('season-name').textContent = label(picker.value);
     face();
     showMark();
     $('dots-what').textContent = cur.words.plural;
+    showRecord();
     $('app').classList.toggle('tracker', !!cur.tracker);
+    $('app').classList.toggle('atlas', !!cur.seasons); // an Atlas species: a model's field, no dots or forecast
+    // "Warm the spring" carries over to the next Atlas species (a link's ?warm= once it has loaded).
+    warmth.available = !!cur.setWarmth;
+    if (cur.setWarmth && askedWarm) warmth.set(askedWarm), (askedWarm = 0);
+    cur.setWarmth?.(warmth.value);
+    onRerun(); // its own note (a cached run lands no new data to say it)
+    showNear();
     showCountdown();
     syncCountdown();
-    $('map').setAttribute('aria-label', `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
+    $('map').setAttribute('aria-label', cur.seasons ? `Midwest map: expected share of ${cur.words.sightingsOf} in insect photos` : `Midwest map: ${cur.words.sightingsOf} sightings${cur.tracker ? '' : ' over forecast hexagons'}`);
     $('explore-help').hidden = !!cur.tracker; // a tracker has no hexagons or forecast to read
     // Live mode opens on this species' own as-of day (each species' live forecast can run to its own), unless a link
     // gave a date; any other season keeps the calendar day.
@@ -500,7 +493,7 @@ function start() {
     goLiveIfWanted();
   };
   // The one-file preview has no species files next to it, so it offers luna only.
-  if (!__BASEMAP__) speciesSel.closest('label')!.hidden = true;
+  if (!__BASEMAP__) speciesPick.button.parentElement!.hidden = true;
   // On narrow phones the closed menu shows just the species' sketch mark (style.css), so it stays one small square.
   const markImg = $('mark') as HTMLImageElement;
   let markSeq = 0;
@@ -510,14 +503,18 @@ function start() {
     void markFor(sketch).then((url) => {
       if (seq !== markSeq) return; // the species or the theme changed meanwhile
       markImg.src = url;
-      speciesSel.style.setProperty('--mark', `url("${url}")`);
+      speciesPick.button.style.setProperty('--mark', `url("${url}")`);
     });
   };
   showMark();
-  speciesSel.addEventListener('change', () => void setSpecies(speciesSel.value));
+  // "Also out here" on an Atlas card switches to that species.
+  probeEl.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-species]');
+    if (b?.dataset.species) void setSpecies(b.dataset.species);
+  });
   // ?species=<key> opens on that species (?species=firefly links from before the list still work).
   const askedSpecies = params.get('species');
-  if (askedSpecies && askedSpecies !== 'luna' && SPECIES.some((e) => e.key === askedSpecies && e.load)) {
+  if (askedSpecies && askedSpecies !== 'luna') {
     speciesPending = askedSpecies;
     void setSpecies(askedSpecies).finally(() => (speciesPending = null));
   }
@@ -527,18 +524,29 @@ function start() {
   // The registry can fire several times in one change (layer off, layer on): draw the ribbon once per frame.
   // The ribbon covers the layer's full replay range; the slider may span less of it (fitSeason).
   const ribbonNow = () => {
-    const p = registry.activeLayers().find((l) => l.profile)?.profile?.();
+    const p = profileNow();
     const off = Math.round((time.start - timeFor(cur, picker.value).start) / TimeAxis.DAY);
     return p && off >= 0 ? cutProfile(p, off, time.steps + 1) : p;
   };
   let ribbonFrame = 0;
+  let ribbonOf: SeasonProfile | undefined; // the profile last drawn (layers keep theirs, so a new one is news)
+  const profileNow = () => registry.activeLayers().find((l) => l.profile)?.profile?.();
   const drawRibbon = () =>
     (ribbonFrame ||= requestAnimationFrame(() => {
       ribbonFrame = 0;
+      ribbonOf = profileNow();
+      $('app').classList.toggle('vs', !!cur.seasons && !!ribbonOf?.seenOnly); // the key line for expected vs seen
       setRibbon(ribbonNow());
     }));
   registry.subscribe(drawRibbon);
   setRibbon(ribbonNow());
+  onRerun = () => {
+    if (profileNow() !== ribbonOf) drawRibbon(); // its season changed under the same view (a year's photos landing)
+    if (!warmth.value && !warmed) return;
+    warmed = warmth.value !== 0;
+    warmth.note(cur.warmthNote?.() ?? '');
+    drawRibbon();
+  };
   mountLayerList($('layers'), registry);
   const toggleDrawer = mountCaveatDrawer($('info-btn'), $('drawer'), registry);
   // With nothing pinned, the panel's example is the area in view (once the map has left the whole-Midwest fit).
@@ -591,6 +599,10 @@ function start() {
     else q.delete('at');
     if (radar) q.set('radar', radar.id);
     else q.delete('radar');
+    if (radar?.night()) q.set('night', '1');
+    else q.delete('night');
+    if (warmth.value && cur.setWarmth) q.set('warm', String(warmth.value));
+    else if (!askedWarm) q.delete('warm'); // a link's warmth stays while its species loads
     q.delete('noauto');
     q.delete('today');
     return `${location.pathname}?${q}`;
@@ -648,14 +660,6 @@ function start() {
     }
   });
 
-  // The hexagons within k rings of lat/lng, nearest centre first.
-  const nearby = (lat: number, lng: number, k: number) =>
-    gridDisk(latLngToCell(lat, lng, GRID_RES), k)
-      .map((c) => {
-        const [la, ln] = cellToLatLng(c);
-        return { cell: c, lngLat: [ln, la] as [number, number], d: (la - lat) ** 2 + (ln - lng) ** 2 };
-      })
-      .sort((a, b) => a.d - b.d);
   // Pin the card (and the About panel's spot) on the hexagon at lat/lng, named `label`, and bring the map to it.
   // Lakeshore cities (Chicago, Milwaukee, Cleveland) can sit in a hex whose centre is in the lake, so fall back to
   // the nearest land hex within two rings.
@@ -672,88 +676,17 @@ function start() {
     updateProbe();
     return here === first ? 'exact' : 'nearby';
   };
-  // "Explore map with keys": arrows walk a pinned selection hex to hex (the same pinned card, announced by its live
-  // region), Enter or Space pins where it starts, Escape lets go (the handler below). It starts at the last pinned hex,
-  // or else the middle of the free map, and pans the map when the selection leaves the view.
-  let col = 0; // the longitude of the column an up or down walk keeps to
-  let row = 0; // the latitude of the row a left or right walk keeps to
-  // The selection the keys last made. Pinned any other way since, the walk starts afresh from there. (The selection
-  // itself, not its hexagon: a zoom swaps the hexagon for one of the new size, and the walk and its count go on.)
-  let keyHit: ProbeHit | null = null;
-  let steps = 0;
-  let nudge = false; // alternates a trailing space, so a repeated message is announced again
-  resetKeys = () => ((keyHit = null), (steps = 0));
-  const hasForecast = (p: [number, number]) => !!cur.probe?.(p, time.cursor);
-  // The free area of the map, inside a margin: where a selected hexagon is in view.
-  const inView = (lngLat: [number, number]) => {
-    const p = padding();
-    const at = map.project(lngLat);
-    return !!at && at[0] > 24 && at[1] > p.top + 24 && at[0] < innerWidth - (p.right ?? 0) - 24 && at[1] < innerHeight - p.bottom - 24;
-  };
-  // What the card says first, new at every step so a screen reader reads each one: the nearest town in the map's own
-  // names (when one is close), and how many steps and which way.
-  const where = (lngLat: [number, number], dir: string) => {
-    let town = '';
-    let best = 0.35 ** 2; // degrees, squared
-    for (const [name, lng, lat, , kind] of basemapLabels()) {
-      const d = (lng - lngLat[0]) ** 2 + (lat - lngLat[1]) ** 2;
-      if ((kind === 'city' || kind === 'town') && d < best) (best = d), (town = name);
-    }
-    return `${steps ? `Step ${steps} ${dir}` : 'Start'}${town ? `, near ${town}` : ''}`;
-  };
-  const selectCell = (cell: string, dir = '') => {
-    const [la, ln] = cellToLatLng(cell);
-    hit = { cell, lngLat: [ln, la] };
-    hit.note = where(hit.lngLat, dir);
-    keyHit = hit;
-    pinned = true;
-    // Off the free area (or near its edge): bring the hexagon to the middle of it, as the town finder does.
-    if (!inView(hit.lngLat)) map.focus(hit.lngLat, map.zoom() ?? 0, padding(), true);
-    updateProbe();
-  };
-  // Where a first key press lands: the last pinned hexagon if it is in view, else the middle of the free map; the
-  // nearest hexagon with a forecast, within view, if that spot has none.
-  const startCell = (): string | null => {
-    const mid = map.center(padding())?.lngLat;
-    const from = lastPin && inView(lastPin) ? lastPin : mid;
-    if (!from) return null;
-    const at = [{ lngLat: from }, ...nearby(from[1], from[0], 4)].find((h) => inView(h.lngLat) && hasForecast(h.lngLat));
-    return at ? cur.cellAt(at.lngLat) : null;
-  };
-  // Enter or Space. An arrow comes here too when the pinned card has no forecast hexagon under it (a sighting past
-  // the shore, land beyond the Midwest): the arrows can't move that one, so they start a walk from the nearest hexagon
-  // rather than say "Already pinned", which would be wrong.
-  const pin = (arrowed = false) => {
-    if (radar) return; // the radar replay has the map: no hexagon to walk under it
-    if (pinned && !arrowed) return say('Pinned. Arrow keys move it, Escape lets go.');
-    const c = startCell();
-    if (!c) return say('No forecast in view');
-    steps = 0;
-    [row, col] = cellToLatLng(c);
-    selectCell(c);
-  };
-  const arrow = (a: Arrow) => {
-    if (radar) return;
-    const from = pinned && hit ? cur.cellAt(hit.lngLat) : null;
-    if (!from) return pin(true);
-    if (hit !== keyHit) ([row, col] = cellToLatLng(from)), (steps = 0); // pinned by mouse, tap or town since: start afresh there
-    const next = stepCell(from, a, col, row, (c) => hasForecast(cellToLatLng(c).reverse() as [number, number]));
-    if (!next) return say(`No forecast to the ${WORD[a]}${(nudge = !nudge) ? '\u00a0' : ''}`);
-    // A new column (left and right) or row (up and down); the walk keeps the other.
-    if (a === 'ArrowLeft' || a === 'ArrowRight') col = cellToLatLng(next)[1];
-    else row = cellToLatLng(next)[0];
-    steps++;
-    selectCell(next, WORD[a]);
-  };
-  // The time slider listens on the window for these same keys (and Home, End): while this has focus it owns them.
-  $('explore').addEventListener('keydown', (e) => {
-    const move = e.key in AIM;
-    const own = move || ['Enter', ' ', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key);
-    if (e.ctrlKey || e.metaKey || e.altKey || !own) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (move) arrow(e.key as Arrow);
-    else if (e.key === 'Enter' || e.key === ' ') pin();
+  resetKeys = mountKeyExplore($('explore'), {
+    map,
+    padding,
+    hasForecast: (p) => !!cur.probe?.(p, time.cursor),
+    cellAt: (p) => cur.cellAt(p),
+    selection: () => (pinned ? hit : null),
+    lastPin: () => lastPin,
+    select: (h) => ((hit = h), (pinned = true)),
+    show: updateProbe,
+    busy: () => !!radar,
+    say: (text) => say(text),
   });
   // Find a town (needs the map's town names, so not in the one-file build). The About panel's "Find a town" opens the
   // same box inside the panel: a way to read a place's season without pointing at the map.
@@ -763,6 +696,7 @@ function start() {
       // On a phone, drop the About sheet to its middle stop first, so the place lands in the map above it.
       if ($('drawer').classList.contains('open') && phone.matches && !slim.matches) toggleDrawer(true);
       if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
+      else remember({ name, lat, lng });
     }, say);
     $('drawer').addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-find]');
@@ -774,7 +708,30 @@ function start() {
     toggleDrawer.onLeave(finder.leave);
   } else $('find').hidden = true;
 
-  // "My area": one location fix (never stored or sent anywhere), then the forecast card for that hex, pinned.
+  // "Coming out near you": the last place found (My area or Find), kept in this browser, gets one line under the map
+  // for the species on screen, from today. Tapping it brings the place back; the cross forgets it.
+  let home = loadPlace();
+  showNear = () => {
+    const now = clock;
+    // A lakeshore town's own hexagon can be water: the nearest land one within two rings speaks for it, as on the map.
+    const d = home && cur.due ? [[home.lng, home.lat] as [number, number], ...nearby(home.lat, home.lng, 2).map((h) => h.lngLat)].reduce<Due | null>((got, at) => got ?? cur.due!(at, now), null) : null;
+    $('near').hidden = !d;
+    $('countdown').classList.toggle('by-near', !!d);
+    if (d) $('near-go').textContent = nearLine(home!.name, cur.words.shareName, d, now);
+  };
+  const remember = (p: Place | null) => {
+    home = p;
+    savePlace(p);
+    showNear();
+  };
+  $('near-go').addEventListener('click', () => {
+    if (home && !showPlace(home.lat, home.lng, home.name)) say(`No forecast for ${home.name}`, $('near-go'));
+  });
+  $('near-x').addEventListener('click', () => (remember(null), $('locate').focus()));
+  showNear();
+
+  // "My area": one location fix (kept rounded in this browser for the line above, never sent anywhere), then the
+  // forecast card for that hex, pinned.
   $('locate').addEventListener('click', () => {
     if (!navigator.geolocation) return say('Location is not available in this browser', $('locate'));
     const btn = $<HTMLButtonElement>('locate');
@@ -795,6 +752,7 @@ function start() {
           return;
         }
         map.setMarker([coords.longitude, coords.latitude]);
+        remember({ name: 'you', lat: coords.latitude, lng: coords.longitude });
         // The marker is the accent brown; the pale yellow dots are moths.
         say(at === 'exact' ? 'You are the brown dot' : 'You are the brown dot (the card shows the nearest land hexagon)', btn);
       },
@@ -850,7 +808,7 @@ function start() {
   time.subscribe(() => time.playing && !intro?.running && clearHint());
   // A first visit with a plain link opens on the season playing itself, so the forecast is seen moving before anything
   // is read. A link that asks for a view (a day, a year, a place, a species, a radar night) opens on that view instead.
-  const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'noauto', 'caveats'].some((k) => params.has(k));
+  const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'night', 'noauto', 'caveats'].some((k) => params.has(k));
   // In season the live forecast becomes the default view once its file arrives, so the opening waits for that and
   // lands on today; off-season it is set up now, before the first frame. Not if the reader has already touched something.
   let touched = false;
@@ -937,6 +895,7 @@ function start() {
   // Capture phase, so this sees the About panel before its own Escape handler closes it: one Escape, one thing closed.
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !pinned || $('drawer').classList.contains('open') || !finderEl.hidden) return;
+    if ($('warm-row').contains(e.target as Node)) return; // Escape there closes the slider, not the card
     const hadFocus = probeEl.contains(document.activeElement);
     unpin();
     if (hadFocus) $('t-range').focus({ preventScroll: true });
@@ -979,6 +938,8 @@ function start() {
         mount: $('floats'),
         before: radarBack,
         stale: () => ticket !== radarAsking,
+        night: params.get('night') === '1',
+        onNight: () => syncUrl(),
         onClose: () => {
           // Only the open one owns the page's radar state: one closed for a switch, or a late one, leaves it be.
           if (radar?.id !== id) return;
@@ -1048,7 +1009,11 @@ function start() {
   themeBtn.setAttribute('aria-pressed', String(isDark()));
 
   refresh();
-  (window as unknown as { __hatch: unknown }).__hatch = { time, registry, luna, map, padding, current: () => cur };
+  // For the test scripts: the app's clock, layers and map, and the Atlas (loaded on first ask).
+  (window as unknown as { __hatch: unknown }).__hatch = {
+    time, registry, luna, map, padding, current: () => cur,
+    atlas: () => (__BASEMAP__ ? import('./atlas/atlas').then((m) => m.loadAtlas()) : Promise.resolve(null)),
+  };
 
   // This year's nightly forecast, fetched after the first paint (none in the one-file build, or if the file is missing
   // or broken). It goes at the top of the season menu (each species finds its own part), and becomes the default during its season
@@ -1068,6 +1033,7 @@ function start() {
     if (!live || (live.stub && asked !== LIVE)) return syncUrl();
     setLive(live);
     liveFile = live;
+    showNear(); // the live forecast replaces the typical year's dates
     fillPicker();
     if (cur !== luna || speciesPending) return syncUrl(); // the default switch is luna's first view only
     if (picker.value !== initialMode || time.cursor !== cursor0) return syncUrl(); // the user got there first: leave their choice
