@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import packReplay from './scripts/pack-replay.mjs';
 import leanDeps from './scripts/lean-deps.mjs';
+import packBasemap from './scripts/pack-basemap.mjs';
 import { loaderHtml } from './src/ui/loader';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -61,7 +62,7 @@ export const loader = (): Plugin => ({ name: 'hatch-loader', transformIndexHtml:
 // Normal multi-file build -> dist/. Relative base so it works under any sub-path (GitHub Pages etc.).
 export default defineConfig({
   base: './',
-  plugins: [leanDeps(), packReplay(), serviceWorker(), loader()],
+  plugins: [leanDeps(), packReplay(), packBasemap(), serviceWorker(), loader()],
   build: {
     outDir: 'dist',
     target: 'es2022',
