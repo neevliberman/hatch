@@ -33,3 +33,14 @@
   .rd-more p { margin-bottom: 5px; }
   .rd-credits a { display: inline-block; margin-right: 14px; }
 }
+/* Night (night.ts): the Night button beside the caption, the echo's total for the evening under it, and the one-line caveat. */
+.rd-night { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 9px 0 7px; font: 700 12px var(--font-display); color: var(--muted);
+  border: 1px solid var(--edge); border-radius: 15px; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.rd-night:hover { color: var(--text); background: var(--track-faint); }
+.rd-night.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.rd-night:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rd-spark { margin: 6px 4px -4px; opacity: .45; }
+.rd-spark svg { display: block; width: 100%; height: 14px; fill: var(--accent); }
+.rd-spark[hidden], .rd-sim[hidden] { display: none; }
+.rd-sim { margin: 5px 4px 0; font-size: 11px; color: var(--muted); }
+@media (max-width: 380px) { .rd-night span { display: none; } .rd-night { padding: 0 7px; } }

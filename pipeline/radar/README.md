@@ -158,7 +158,17 @@ An entry in `EVENTS` here (radar, its site, the UTC window, the first frame to s
 little), a run, then an entry in `src/radar/events.ts` (its words and sources) and one in `src/radar/index.ts` (the About
 link: a place and a year, a few words). Same id in all three, and one more line in the `RADARS` lists of
 `scripts/desktop.mjs` and `scripts/mobile.mjs`. Write down here what was reported that night and what the radar's own
-numbers say. Each pack adds 15 to 25 KB, fetched only by someone who opens it.
+numbers say. Each pack adds 15 to 25 KB, fetched only by someone who opens it; then `python3 pipeline/radar/build_wind.py` for its wind.
+
+## Night view (simulated insects)
+
+The card's Night button (src/radar/night.ts) paints the echo as glow on a dark sky and adds about 18,000 simulated dots.
+Each dot is born at a random radar bin, weighted by the echo there (level^1.4), lives 12 to 36 minutes, and flies with
+the hour's wind plus its own push of up to 1.5 m/s. How many dots are out follows the scan's total echo (square root of
+its share of the busiest scan). Nothing here is a count or an animal: it shows where the radar saw echo and which way
+the air was going. Wind is `wind.json` per event, from the Open-Meteo archive (ERA5) at 100 m, the highest level the
+archive has, so it stands in for the wind the insects really flew in. `python3 pipeline/radar/build_wind.py` rewrites
+every event's file; a new event needs no more than that run.
 
 ## Sources
 

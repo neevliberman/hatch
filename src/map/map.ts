@@ -53,6 +53,8 @@ export interface MapHandle {
    * state lines until the zoomed-in shore draws the lakes over those (then over them, never under a lake).
    * While any are set the sighting dots stand down, so nothing but the overlay's own story sits on it. [] clears it. */
   setOverlay(layers: Layer[], overWater?: Layer[]): void;
+  /** Let the zoom go in past town scale (the radar replay's night view, where simulated insects resolve into dots). */
+  deep(on: boolean): void;
   /** After a light/dark switch: drop every layer and draw them again, so none keeps its old colours on the GPU. */
   recolor(): void;
 }
@@ -98,8 +100,9 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     onFirstDraw?.();
-    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {}, recolor() {} };
+    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {}, deep() {}, recolor() {} };
   }
+  let deepest = 9.5;
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
   // The size the last fit was worked out for. Before layout (an in-app browser still sliding in) the map can be 0 x 0,
   // and a fit for the 800 x 600 guess above comes out zoomed in.
@@ -159,7 +162,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     }
     // Zoom stops at the whole Midwest (zooming further out only shrinks it into a speck in empty sea) and in at about
     // town scale, where a finest hexagon (about 6 km) is still a few dozen pixels, rather than one blank hexagon.
-    return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: Math.max(2, vp.zoom), maxZoom: 9.5 };
+    return { longitude: vp.longitude, latitude: vp.latitude, zoom: vp.zoom, minZoom: Math.max(2, vp.zoom), maxZoom: deepest };
   };
   // A centre that puts lngLat in the middle of the free area (between the panels), not the middle of the screen.
   const focusState = (lngLat: [number, number], z: number, p: Padding) => {
@@ -611,6 +614,12 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       overlay = layers;
       overWater = wet;
       refresh();
+    },
+    deep(on) {
+      deepest = on ? 13 : 9.5;
+      fitted = { ...fitted, maxZoom: deepest };
+      if (!on && current.zoom > deepest) handle.view([current.longitude, current.latitude], deepest);
+      else deck.setProps({ initialViewState: { ...fitted, ...current, zoom: current.zoom + (nudge = nudge ? 0 : 1e-9), transitionDuration: 0 } });
     },
     setPicked(cell) {
       if (cell === picked) return;
