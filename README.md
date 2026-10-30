@@ -1,6 +1,6 @@
 # Hatch
 
-**When will luna moths fly near you?** Hatch is a map of the US Midwest that forecasts when the luna moth comes out each spring, built from 11 years of public sightings and daily temperatures, and checked against years it never saw.
+**When will luna moths fly near you?** Hatch is a map of the US Midwest that forecasts when the luna moth comes out each spring, built from 11 years of public sightings and daily temperatures, and checked against years it never saw. The **Living Atlas** now does the same job for about 1,900 insects at once.
 
 **Try it: [neevliberman.github.io/hatch](https://neevliberman.github.io/hatch/)** (works on phones too).
 
@@ -14,11 +14,38 @@ TypeScript, deck.gl (WebGL) and Python. Tested in Chrome, Firefox and Safari eng
 
 **Live scorecard.** Each night's forecast is archived and graded strip by strip once that strip's first wave is over and its sightings have settled for 14 days, against the usual calendar date (`pipeline/live/scorecard.py`). Rehearsed on 2026 with forecasts rebuilt as they would have stood each Monday morning: luna **5.6 days off on average against 8.2 for the calendar**, over 5 strips, with the far south the big miss; firefly 3.2 against 4.8 (3 strips); Japanese beetle 3.5 against 2.4, worse than the calendar (5 strips) ([SCORECARD_2026.md](pipeline/live/SCORECARD_2026.md)). The app shows it in "How sure?".
 
+## New since the first release
+
+- **Living Atlas: any of ~1,950 insects on the map.** One small neural network, trained on about 2.9 million iNaturalist insect photos (2015 to 2024), learns where and when each species shows up. It takes a place, a day and how far ahead of normal the spring is running, and returns the species' expected share of insect photos there. It runs in your browser on the GPU (CPU fallback). Gate, written before training ([FROZEN_ATLAS.md](pipeline/atlas/FROZEN_ATLAS.md)): **GO**. It beats each species' own calendar for 95% of species in 2025 (94% in 2026) and for about 58% in two states it never saw. Luna lands 4.5 days off against the dedicated model's 4.3, from a network that also does 1,900 other species. First computed it was a no-go by 0.3 days; a review found the code counting different records than the rule said, and both numbers are in [RESULT.md](pipeline/atlas/RESULT.md).
+- **A tree of life for a picker.** Species are chosen from a radial family tree (Open Tree of Life's branching) that you can pinch, drag and tap, or from a search box. Species in season glow on the rim, and a 2026 "surprises" strip lists species showing up earlier or later than expected.
+- **Expected vs seen, coming out near you, warm the spring.** Each species compares what the network expected in 2026 with what people actually photographed; one line says when it is due at the place you saved; and a ±3 °F slider reruns the species' season on a warmer or cooler spring (most seasons move about 3 to 6 days).
+- **Real photo dots.** Every Atlas species gets its sightings as photo dots with the observer's credit.
+- **Hatch Night.** Open a radar replay and press **Night**: the radar echo glows on a dark sky and about 18,000 simulated insects drift on that evening's wind (ERA5 at 100 m), with short tails and a wind readout. They show where the radar saw echo and which way the air went. They are not counts and not animals ([pipeline/radar](pipeline/radar/README.md)). A third replay, Quad Cities, 23 June 2012, joins La Crosse and Lake Erie.
+- **Opening and trackers.** The season plays itself on a first visit. Monarch and red admiral are sightings-only migration trackers. Moths get a night-activity line from the weather ([pipeline/activity](pipeline/activity/README.md)).
+- **Forecast front and honest labels.** The forecast front shows its track record and is marked experimental where it is.
+- **Warming and drift.** A vs-typical-year line, plus an "Are springs warming?" card ([pipeline/league](pipeline/league/README.md)).
+- **The league.** Challenger models forecast every night from the bench, sealed and dated, and take the map only between seasons by a rule written beforehand. Soil temperature and phenology-network data did not help, and that is recorded too.
+- **South.** A nightly Christmas beetle forecast for the Australian spring, as a shadow track ([pipeline/south](pipeline/south/SOUTH_2026.md)).
+- **Dark mode**, a live-season hex split, and a CI that now checks accessibility, cut-off text and share links across every species, in both themes.
+- **Exo (side project, not in the app).** A pen-sketch, watercolour 3D monarch whose body heat is simulated: it basks, warms and flies by air temperature, with anatomy checked against the literature. Kept separate until it is finished.
+
+![The species picker: a radial tree of life of every Atlas insect, with the Midwest forecast behind it](docs/media/atlas-tree-picker.jpg)
+
+*The tree-of-life picker: tap a branch to zoom in, a tip to put that insect on the map.*
+
+![Hatch Night: simulated insects drifting over the La Crosse radar echo on 20 July 2014](docs/media/hatch-night.jpg)
+
+*Hatch Night over the La Crosse mayfly hatch, 20 July 2014: radar echo as glow, simulated insects on the evening's wind.*
+
+![The Atlas's expected share of luna moth photos on four dates in 2025, a year it never saw: lower Midwest in May, north in June, quiet in July, a late-summer wave in August](docs/media/atlas-luna-2025.jpg)
+
+*The Atlas's expected share of insect photos that are luna moths, 15 May to 15 Aug 2025, a year it never saw.*
+
 ## What you can do with it
 
 - **Press play** and watch a season: the forecast wave (hexagons) and the real sightings (dots) move north together.
 - **Pick a year** from 2015 to 2025, or "all years" pooled into one typical season.
-- **Pick a species** from the menu by the title: the luna moth, the common eastern firefly or the Japanese beetle (an invasive beetle, so knowing when it comes out lets gardeners hand-pick the first ones instead of spraying). The firefly and the beetle are exploratory first tries with luna's model: leave-one-year-out, the beetle's forecast is 2.9 days off against 3.8 for its usual date ([pipeline/species](pipeline/species/README.md)), the firefly's 3.7 against 5.4 ([pipeline/firefly](pipeline/firefly/README.md)). Each one's data loads only when picked. The monarch and red admiral are trackers, not forecasts: where they have been seen this spring, since migrants arrive from the south rather than emerge with warmth ([pipeline/front](pipeline/front/README.md)).
+- **Pick a species** from the search box or tree of life by the title (any Atlas insect; the three below also have dedicated models): the luna moth, the common eastern firefly or the Japanese beetle (an invasive beetle, so knowing when it comes out lets gardeners hand-pick the first ones instead of spraying). The firefly and the beetle are exploratory first tries with luna's model: leave-one-year-out, the beetle's forecast is 2.9 days off against 3.8 for its usual date ([pipeline/species](pipeline/species/README.md)), the firefly's 3.7 against 5.4 ([pipeline/firefly](pipeline/firefly/README.md)). Each one's data loads only when picked. The monarch and red admiral are trackers, not forecasts: where they have been seen this spring, since migrants arrive from the south rather than emerge with warmth ([pipeline/front](pipeline/front/README.md)).
 - **Hover or tap a hexagon** for its forecast: when the first moths show up and the busiest days.
 - **Tap a dot** to see that sighting and open the original photo on iNaturalist.
 - **My area** jumps to the forecast where you are (location stays in your browser). **Share** copies (or, on phones, shares) a link to the same place, season and day.
@@ -126,6 +153,10 @@ pipeline/species/ every further species (Japanese beetle so far): one list, one 
 pipeline/front/   migrant trackers (monarch, red admiral): sightings so far, no forecast
 pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
 pipeline/radar/   radar replays: NEXRAD scans -> public/radar/<event>/ (run by hand, needs Py-ART)
+pipeline/atlas/   the Living Atlas: GBIF data, one network for ~1,950 species, gate, export to public/atlas/
+pipeline/league/  challenger models, sealed nightly forecasts, weekly grading
+pipeline/south/   Christmas beetle shadow forecast (Australia)
+pipeline/activity/ moths-tonight activity line from the weather
 pipeline/live/    nightly live forecast -> live/latest.json, every species in registry.py (PRISM + Open-Meteo + Daymet, frozen fits)
 .github/workflows/live-forecast.yml  the nightly live job, 2 Mar-7 Oct
 notebooks/        the first prototype model (Jupyter notebook)
@@ -136,6 +167,7 @@ docs/             engineering notes and README media
 ## Data and credits
 
 - **Sightings:** [iNaturalist](https://www.inaturalist.org/taxa/47916-Actias-luna) observers. Only CC0, CC BY and CC BY-NC records are shown or redistributed, so the app's data carries those observers' licenses (non-commercial terms apply). The model also learned from the dates and places of other confirmed records, which are not shipped. Photos are linked, never copied, and every shown record keeps its observation id.
+- **Atlas sightings:** [GBIF](https://www.gbif.org/) downloads of iNaturalist research-grade insect records; tree of life from [Open Tree of Life](https://opentreeoflife.github.io/); wind for Night from the [Open-Meteo](https://open-meteo.com/) ERA5 archive.
 - **Temperatures:** [Daymet](https://daymet.ornl.gov/) v4 daily 1 km data, Thornton et al., ORNL DAAC.
 - **State outlines, town names and populations:** US Census Bureau (outlines via [us-atlas](https://github.com/topojson/us-atlas)). Public domain.
 - **Lakes, rivers, highways, national parks and the land beyond the US:** [Natural Earth](https://www.naturalearthdata.com/). Public domain.
