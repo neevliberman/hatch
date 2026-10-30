@@ -1,6 +1,6 @@
 import './style.css';
 import { LayerRegistry } from './core/registry';
-import { TimeAxis, type TimeSpec } from './core/timeAxis';
+import { dayOfYear, TimeAxis, type TimeSpec } from './core/timeAxis';
 import { makeIntro, type Intro } from './ui/intro';
 import { createLunaLayer, modeLabel, replayTimeSpec, setLive, type LunaLayer } from './layers/lunaReplay';
 import { findSpecies, SPECIES } from './species';
@@ -381,7 +381,11 @@ function start() {
   // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
   // keeps the season and the calendar day, and drops any pinned card.
   // A picker row may ask for a season too: a surprise opens on its year.
-  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, ATLAS_YEAR, (k, s) => void setSpecies(k, s));
+  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, ATLAS_YEAR, (k, s) => void setSpecies(k, s), () => {
+    // The map's day, for the tree's "out now" glow (ATLAS_YEAR's own season when the map shows it, else a typical year).
+    const label = new Date(time.cursor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return { doy: dayOfYear(time.cursor), year: picker.value === String(ATLAS_YEAR), label };
+  });
   let asking = 0;
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
   const setSpecies = async (want: string, wish?: string) => {

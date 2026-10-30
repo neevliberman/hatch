@@ -1,5 +1,5 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, json, loadIndex, loadSurprises, type AtlasSpecies, type Surprise } from '../atlas/index';
+import { atlasKey, json, loadIndex, loadSurprises, outOn, type AtlasSpecies, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
 import { CROSS } from './icons';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
@@ -35,6 +35,8 @@ export function mountSpeciesPicker(
   surpriseYear: number,
   /** A species picked; `season` when a row asks for one (a surprise opens on its year). */
   onPick: (key: string, season?: string) => void,
+  /** The map's day (its day of year, whether it is ATLAS_YEAR's own season, and its words), for the tree's glow. */
+  day?: () => { doy: number; year: boolean; label: string },
 ): SpeciesPicker {
   const bySci = new Map(featured.filter((e) => e.sci).map((e) => [e.sci!, e.key] as const));
   const keyOf = (s: AtlasSpecies) => bySci.get(s.name) ?? atlasKey(s.name);
@@ -174,6 +176,7 @@ export function mountSpeciesPicker(
       oddStrip.innerHTML = `<li class="sp-lab">${surpriseYear} surprises</li>${surprises()}`;
       treeCrumbs?.();
       tree.shown();
+      glow();
       return;
     }
     const steps = [`<button type="button" data-crumb="">All insects</button>`];
@@ -190,6 +193,20 @@ export function mountSpeciesPicker(
     } else {
       list.innerHTML = all.filter((s) => s.family === path.family).sort((a, b) => b.n - a.n).map(row).join('');
     }
+  };
+
+  // The insects out on the map's day glow round the tree's rim (Atlas season curves: at least a quarter of their best
+  // day). Worked out each time the tree shows, as the map's day may have moved.
+  let glowKey = '';
+  const glow = () => {
+    const d = day?.();
+    const k = d ? `${d.doy}|${d.year}` : '';
+    if (!d || k === glowKey) return;
+    glowKey = k;
+    void outOn(d.doy, d.year).then((v) => {
+      if (!tree || glowKey !== k) return;
+      tree.glow(v, d.label);
+    });
   };
 
   const open = (on: boolean) => {
