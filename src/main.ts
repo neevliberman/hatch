@@ -655,7 +655,15 @@ function start() {
       } catch {
         files = undefined;
       }
-      if (navigator.share) await navigator.share(files ? { title, url, files } : { title, url });
+      if (navigator.share) {
+        try {
+          await navigator.share(files ? { title, url, files } : { title, url });
+        } catch (e) {
+          // Building the card can outlast the tap's permission window: retry as a plain link.
+          if (files && (e as DOMException).name === 'NotAllowedError') await navigator.share({ title, url });
+          else throw e;
+        }
+      }
       else {
         await navigator.clipboard.writeText(url);
         say('Link copied', $('share'));
