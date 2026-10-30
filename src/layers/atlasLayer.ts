@@ -465,6 +465,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           `Dots: real iNaturalist photos, each lit ${GLOW_DAYS} days, from ${mode === TYPICAL ? `${FIRST_YEAR}-${ATLAS_YEAR - 1}` : ATLAS_YEAR} (at most 5,000, picked at random).`,
           `One network learns all ${atlas.species.length.toLocaleString()} Midwest insects with 100+ records at once, from 2.1 million iNaturalist photos (2015-2025). ${name}: ${sp.n.toLocaleString()} of them.`,
           test,
+          ...(sp.n < 300 ? [`Only ${sp.n.toLocaleString()} records: this forecast is rough.`] : sp.n >= 5000 ? [`Well recorded (${sp.n.toLocaleString()} records).`] : []),
+          ...(mode !== TYPICAL && year && year.ratio !== null && year.ratio < 0.6 && year.expectedPhotos >= 10
+            ? ['Fewer photos than expected this year. Seen one? Add it on iNaturalist.']
+            : []),
           mode === TYPICAL
             ? 'A typical year: the season as it usually runs.'
             : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.`,
@@ -497,6 +501,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         { text: 'Warmth: Daymet (ORNL DAAC); 2026 from PRISM via RCC-ACIS.', href: 'https://daymet.ornl.gov/' },
       ];
       if (sp.photo && sp.credit && sp.taxon) out.push({ text: `${name} photo: ${sp.credit}, via iNaturalist.`, href: `https://www.inaturalist.org/taxa/${sp.taxon}` });
+      if (sp.taxon) {
+        out.push({ text: `Recent ${name} sightings on iNaturalist.`, href: `https://www.inaturalist.org/observations?taxon_id=${sp.taxon}&order_by=observed_on` });
+        out.push({ text: 'Seen one? Add it to iNaturalist.', href: 'https://www.inaturalist.org/observations/upload' });
+      }
       return out;
     },
   };

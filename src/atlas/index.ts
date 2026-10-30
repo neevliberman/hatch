@@ -83,6 +83,29 @@ export function loadSurprises(year: number): Promise<{ year: number; list: Surpr
   return surprising;
 }
 
+/** The species whose season ran furthest off its calendar: [species index, days early (negative: late)], biggest gap first. */
+export type OffSchedule = [number, number][];
+/** Photos a species needs expected before its timing is worth ranking. */
+export const OFF_MIN_EXPECTED = 50;
+/** The n species with the largest |days| among those with at least OFF_MIN_EXPECTED photos expected (seen-YEAR.json rows). */
+export function pickOffSchedule(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10): OffSchedule {
+  const out: OffSchedule = [];
+  rows.forEach((r, i) => {
+    if (r[1] >= OFF_MIN_EXPECTED && r[3] !== null && r[3] !== 0) out.push([i, r[3]]);
+  });
+  return out.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0] - b[0]).slice(0, n);
+}
+let offering: Promise<OffSchedule | null> | null = null;
+/** The year's most off-schedule species for the species picker, from seen-YEAR.json. Fetched once; null when missing. */
+export function loadOffSchedule(year: number, n = 10): Promise<OffSchedule | null> {
+  offering ??= json<{ species: [number, number, number | null, number | null][] }>(`seen-${year}.json`).then((f) =>
+    f ? pickOffSchedule(f.species, n) : ((offering = null), null),
+  );
+  return offering;
+}
+/** "9 d early" / "4 d late". */
+export const offNote = (days: number) => `${Math.abs(days)} d ${days > 0 ? 'early' : 'late'}`;
+
 let index: Promise<AtlasSpecies[] | null> | null = null;
 /** The species list (the last row, "other", left out). Fetched once. */
 export function loadIndex(): Promise<AtlasSpecies[] | null> {

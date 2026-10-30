@@ -1,7 +1,7 @@
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import { AtlasGpu } from './gpu';
 import { AtlasNet, type ModelMeta, type Place } from './net';
-import { ATLAS_YEAR, atlasUrl, json, loadIndex, type AtlasSpecies } from './index';
+import { ATLAS_YEAR, atlasUrl, json, loadIndex, pickOffSchedule, type AtlasSpecies, type OffSchedule } from './index';
 
 export { ATLAS_YEAR, atlasKey, loadIndex, type AtlasSpecies } from './index';
 
@@ -156,6 +156,11 @@ export class Atlas {
       const scaled = (k: number) => [...f.bytes.subarray(at + k * STEPS, at + (k + 1) * STEPS)].map((v) => v / 255);
       return { expected: scaled(0), seen: scaled(1), photos: row[0], expectedPhotos: row[1], ratio: row[2], days: row[3], lastDay: f.file.last_day };
     });
+  }
+  /** The n species whose ATLAS_YEAR season ran furthest off schedule (>= 50 photos expected): [index, days early (negative: late)]. */
+  async offSchedule(n = 10): Promise<OffSchedule> {
+    await this.seen(0);
+    return pickOffSchedule((await this.seenFiles)?.file.species ?? [], n);
   }
   private seenFiles: Promise<{ bytes: Uint8Array; file: SeenFile } | null> | null = null;
 

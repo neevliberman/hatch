@@ -61,7 +61,8 @@ def volume(days):
     per[t.doy.to_numpy()] = t.n.to_numpy()
     week = np.convolve(np.r_[per[-3:], per, per[:3]], np.ones(7) / 7, "valid")
     v = week[days]
-    return v / v.max()
+    m = v.max()
+    return v / m if m > 0 else v
 
 
 def taxonomy(species):

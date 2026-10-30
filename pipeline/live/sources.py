@@ -50,6 +50,8 @@ def prism_acis(lat, lng, start: dt.date, end: dt.date):
     exactly as ACIS files them: (tmin, tmax) arrays over ACIS dates start..end, NaN = missing."""
     js = _request(ACIS, {"loc": f"{lng:.4f},{lat:.4f}", "sdate": start.isoformat(), "edate": end.isoformat(),
                          "grid": "21", "elems": [{"name": "maxt", "units": "degreeC", "prec": 2}, {"name": "mint", "units": "degreeC", "prec": 2}]})
+    if "error" in js or "data" not in js:
+        raise RuntimeError(f"ACIS error: {js.get('error', 'no data key')}")
     want = {d.isoformat(): i for i, d in enumerate(dates(start, end))}
     tmin = np.full(len(want), np.nan)
     tmax = tmin.copy()

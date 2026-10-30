@@ -26,7 +26,7 @@ WEEKS = 52
 
 def strip_week(df):
     b = np.clip(((df.lat.to_numpy() - BOX["s"]) // STRIP).astype(int), 0, int((BOX["n"] - BOX["s"]) // STRIP))
-    w = np.minimum((df.doy.to_numpy() - 1) // 7, WEEKS - 1)
+    w = np.clip((df.doy.to_numpy() - 1) // 7, 0, WEEKS - 1)
     return b, w
 
 
