@@ -812,7 +812,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .legend-card, #probe { box-shadow: var(--label), var(--shadow), 0 0 0 3px var(--ink-wash); }
 #dock { box-shadow: 0 -4px 10px -6px var(--ink-wash); }
 .icon-btn, .season select, .ex-radar { box-shadow: 0 1px 0 var(--ink-wash), 0 0 0 2px var(--track-faint); }
-.icon-btn:hover, .season select:hover, .ex-radar:hover { background-color: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.icon-btn:not(.on):hover, .season select:hover, .ex-radar:hover { background-color: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
 @media (prefers-reduced-motion: no-preference) {
   .icon-btn, .season select, .ex-radar { transition: transform 120ms ease-out, background-color 120ms, border-color 120ms, box-shadow 120ms; }
   .icon-btn:hover, .season select:hover, .ex-radar:hover { transform: translateY(-1px); box-shadow: 0 2px 3px var(--ink-wash), 0 0 0 2px var(--track-faint); }
