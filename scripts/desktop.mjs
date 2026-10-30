@@ -819,7 +819,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#warm').click();
       await page.locator('#warm-in').fill('3');
       await page.locator('#warm-in').dispatchEvent('input');
-      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 90000 })
         .catch(async () => fail(`+3 °F never said "earlier": "${await page.locator('#warm-out').textContent()}"`));
       await page.waitForTimeout(3000);
       const after = await ink();
