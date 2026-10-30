@@ -72,7 +72,7 @@ export function mountScrubber(
       <div class="ribbon" id="t-ribbon" aria-hidden="true"></div>
       <div class="fc-wash" id="t-fc" aria-hidden="true" hidden></div>
       <input id="t-range" type="range" min="0" step="1" aria-label="Date within season"
-        aria-description="Behind it: the share of the map at each stage per day, and sightings per day." />
+        aria-description="Daily share of the map at each stage, and sightings per day." />
       <div class="ticks" id="t-ticks" aria-hidden="true"></div>
     </div>`;
 
