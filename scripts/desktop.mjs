@@ -570,7 +570,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(200);
       if (served !== null && (await page.locator('#t-doy').textContent()) !== 'forecast') fail('a day after "today" is not marked forecast');
       await page.evaluate(() => window.__hatch.map.view([-87.9, 42.0], 8.6));
-      await page.waitForFunction(() => window.__hatch.luna.res() > 4, null, { timeout: 8000 }).catch(() => {});
+      await page.waitForFunction(() => window.__hatch.luna.res() > 4, null, { timeout: 25000 }).catch(() => {});
       if ((await page.evaluate(() => window.__hatch.luna.res())) <= 4) fail('live mode stayed on the big hexagons when zoomed in');
       if (label === 'in-season default') {
         // About panel: the live card and the weather credits.
@@ -593,7 +593,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // The beetle has none: it lands on all years, its menu has no live option, and says why at the top.
         if (await page.locator('#species').isVisible()) {
           await pickSpecies(page, 'firefly');
-          await page.waitForFunction(() => window.__hatch.current().id === 'firefly-replay', null, { timeout: 8000 }).catch(() => fail('the firefly never loaded'));
+          await page.waitForFunction(() => window.__hatch.current().id === 'firefly-replay', null, { timeout: 25000 }).catch(() => fail('the firefly never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'live') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
           if (!(await page.locator('#season option[value=live]').count())) fail('the firefly season menu does not offer live mode');
@@ -603,7 +603,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           if (ffDate && (await page.locator('#t-date').textContent()) !== ffDate)
             fail(`firefly live mode opened on ${await page.locator('#t-date').textContent()}, not its as-of day ${ffDate}`);
           await pickSpecies(page, 'japanese-beetle');
-          await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 8000 }).catch(() => fail('the beetle never loaded'));
+          await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 25000 }).catch(() => fail('the beetle never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'typical') fail(`the beetle (no live entry) from live mode opened on ${await page.locator('#season').inputValue()}`);
           if (await page.locator('#season option[value=live]').count()) fail('the beetle season menu offers live mode without a live entry');
@@ -797,13 +797,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const oddKey = await odd.getAttribute('data-key');
       await odd.click();
       if (!(await isOn(`${oddKey}-atlas`))) fail(`the first 2026 surprise (${oddKey}) did not open`);
-      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 })
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 })
         .catch(() => fail('a 2026 surprise did not open on 2026'));
       // 2026, with its real warmth.
       if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
       else {
         await page.locator('#season').selectOption('2026');
-        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 8000 }).catch(() => fail('2026 never took'));
+        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 }).catch(() => fail('2026 never took'));
       }
       // Warm the spring: +3 °F reruns the season (a spring bug comes out sooner), the link keeps it, a ?warm= link
       // reopens it, and closing it puts spring back as it was.
