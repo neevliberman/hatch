@@ -170,7 +170,7 @@ select:focus-visible, .season select:focus-visible, .year select:focus-visible {
 }
 .icon-btn:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
   details summary:focus-visible, .lg-fold:focus-visible, .lg-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Any control without a ring of its own still shows keyboard focus (zero specificity, so every rule above wins). */
+/* Any control without a ring of its own still shows keyboard focus (low specificity, so any ring set elsewhere wins). */
 :where(button, a, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
 #theme-btn .i-sun, :root[data-theme="dark"] #theme-btn .i-moon { display: none; }
@@ -875,5 +875,5 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 @media (forced-colors: active) {
   .icon-btn, select, input, #strip, .sp-row { border: 1px solid CanvasText; }
   .icon-btn.on { background: Highlight; color: HighlightText; }
-  :where(button, a, summary, [tabindex], input, select):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  :focus-visible { outline: 2px solid Highlight !important; outline-offset: 2px; } /* box-shadow rings are dropped in this mode */
 }

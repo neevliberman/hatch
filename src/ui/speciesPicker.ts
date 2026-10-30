@@ -251,7 +251,7 @@ export function mountSpeciesPicker(
     }
     if (e.key === 'Tab') {
       // The sheet covers the page, so Tab loops inside it instead of walking onto controls hidden behind.
-      const tabs = [...sheet.querySelectorAll<HTMLElement>('button, input, canvas[tabindex], [tabindex="0"]')].filter((el) => el.offsetParent !== null);
+      const tabs = [...sheet.querySelectorAll<HTMLElement>('button, input, select, a[href], summary, canvas[tabindex], [tabindex="0"]')].filter((el) => el.offsetParent !== null);
       const first = tabs[0], last = tabs[tabs.length - 1];
       if (!first || !last) return;
       if (e.shiftKey && document.activeElement === first) (e.preventDefault(), last.focus());
