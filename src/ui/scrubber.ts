@@ -39,7 +39,7 @@ function ribbon(p: SeasonProfile): string {
       return `<path class="band" fill="${b.color}" d="M${edge(base).join('L')}L1000 28L0 28Z"/>`;
     })
     .reverse();
-  const top = Math.max(...p.seen) || 1;
+  const top = Math.max(...p.seen, ...(p.seenOnly ?? []).flatMap((o) => o.seen)) || 1; // expected vs seen: the larger
   const curve = (seen: number[]) => seen.map((v, i) => `${xs[i]} ${(14 - (v / top) * 12.5).toFixed(2)}`).join('L');
   const line = curve(p.seen);
   const only = (p.seenOnly ?? []).map((o) => `<path class="seen-only" fill="${o.color}" d="M0 14L${curve(o.seen)}L1000 14Z"/>`);

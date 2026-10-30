@@ -140,6 +140,15 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
             ? `<a class="probe-link" href="${esc(card.link.href)}" target="_blank" rel="noopener noreferrer">${esc(card.link.label)}<span aria-hidden="true"> &#8599;</span><span class="sr"> (opens in a new tab)</span></a>`
             : ''
         }${
+          card.others?.list.length
+            ? `<div class="probe-others"><div class="po-title">${esc(card.others.title)}</div><ul>${card.others.list
+                .map(
+                  (o) =>
+                    `<li><button type="button" data-species="${esc(o.key)}">${o.img ? `<img src="${esc(o.img)}" alt="" width="28" height="28" loading="lazy" referrerpolicy="no-referrer">` : '<i class="po-blank"></i>'}<span class="po-name">${esc(o.label)}</span><span class="po-note">${esc(o.note)}</span></button></li>`,
+                )
+                .join('')}</ul></div>`
+            : ''
+        }${
           card.calendar
             ? `<a class="probe-link" href="${esc(card.calendar.href)}" download="${esc(card.calendar.filename)}">${esc(card.calendar.label)}<span class="sr"> (downloads a calendar file)</span></a>`
             : ''

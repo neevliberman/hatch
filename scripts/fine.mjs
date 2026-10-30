@@ -2,6 +2,8 @@
 // Usage: node scripts/fine.mjs [outDir]   (after `npm run build`; serves dist/ on a local port)
 // Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (default dist), SHARD ("2/3" = the 2nd of 3 equal
 //      slices of the cases; unset = all of them).
+// A shared link reopens on the same species, season, day and place.
+// Also, per species x light/dark x desktop/phone: cut-off text, luna-only words in the shared frame, and axe accessibility.
 // FAILS (exit 1) on any page or console error, a failed or non-local request, a level that never appears,
 // a blank map, or a tap that shows no card.
 import { createRequire } from 'node:module';
@@ -9,6 +11,9 @@ import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, resolve, normalize } from 'node:path';
 const require = createRequire(import.meta.url);
+const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
+/** Every hand-built species' ?species= key, in menu order (src/species.ts). */
+const SPECIES_KEYS = [...readFileSync('src/species.ts', 'utf8').matchAll(/key: '([a-z-]+)'/g)].map((m) => m[1]);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH ?? 'playwright');
 
 const out = process.argv[2] ?? 'screenshots/fine';
@@ -181,9 +186,9 @@ for (const [name, width, height, mobile] of shots) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   const probe = await ctx.newPage();
   await probe.goto(`${origin}/?noauto`);
-  await probe.waitForFunction(() => document.querySelectorAll('#species option').length > 0 && !document.getElementById('loader'), null, { timeout: 15000 });
+  await probe.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 });
   await probe.waitForTimeout(1500);
-  const keys = await probe.evaluate(() => [...document.querySelectorAll('#species option')].map((o) => o.value));
+  const keys = SPECIES_KEYS;
   await ctx.close();
   for (const key of keys) {
     for (const season of ['2021', 'live']) {
@@ -223,8 +228,8 @@ for (const [name, width, height, mobile] of shots) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   const probe = await ctx.newPage();
   await probe.goto(`${origin}/?noauto`);
-  await probe.waitForFunction(() => document.querySelectorAll('#species option').length > 0 && !document.getElementById('loader'), null, { timeout: 15000 });
-  const keys = await probe.evaluate(() => [...document.querySelectorAll('#species option')].map((o) => o.value));
+  await probe.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 });
+  const keys = SPECIES_KEYS;
   await ctx.close();
   for (const key of keys) {
     for (const scheme of ['light', 'dark']) {
@@ -253,7 +258,7 @@ for (const [name, width, height, mobile] of shots) {
             bands: bands.filter((f) => f && !/rgba\(0,\s*0,\s*0,\s*0\)|transparent/.test(f)).length,
             disc: /r=['"]256['"]/.test(mark),
             menuWidth: sel.getBoundingClientRect().width,
-            speciesShown: !sel.closest('label').hidden,
+            speciesShown: !sel.parentElement.hidden,
           };
         });
         if (!got.hexes) problems.push(`${tag}: no hexagons drawn`);
@@ -274,11 +279,162 @@ for (const [name, width, height, mobile] of shots) {
         }
         if (!ring) problems.push(`${tag}: Tab never reached the season menu`);
         else if (!ring.visible || !ring.outline || !ring.shadow || !ring.accent) problems.push(`${tag}: menu focus is not one clean ring (${JSON.stringify(ring)})`);
+        // Words that do not fit: a control or line of chrome whose text is cut off (ellipsis or hidden overflow), or pushed off the screen.
+        const clipped = await page.evaluate(() => {
+          const bad = [];
+          for (const el of document.querySelectorAll('#top *, #strip *, #bar *, #actions *, #legend *, #probe *')) {
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden' || el.closest('[hidden], .sr, select')) continue;
+            if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+            const cs = getComputedStyle(el);
+            const cut = (cs.overflowX !== 'visible' || cs.textOverflow === 'ellipsis') && el.scrollWidth > el.clientWidth + 1;
+            const off = r.right > innerWidth + 1 || r.left < -1;
+            if (cut || off) bad.push(`${el.id || el.className || el.tagName} "${el.textContent.trim().slice(0, 30)}"`);
+          }
+          return bad;
+        });
+        if (clipped.length) problems.push(`${tag}: text cut off or off-screen: ${clipped.slice(0, 3).join('; ')}`);
+        // Other species must not wear the luna moth's name in the site's frame (header, strip, key, time bar, tab title, map label).
+        if (key !== 'luna') {
+          const leak = await page.evaluate(() => {
+            // The species menu lists every species by name, so leave it out.
+            const words = ['#top', '#strip', '#legend', '#bar', '#actions'].map((q) => [...(document.querySelector(q)?.querySelectorAll('*') ?? [])].filter((e) => !e.closest('select') && !e.closest('.sr')).map((e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('')).join(' ')).join(' ');
+            if (['#top', '#strip', '#legend', '#bar', '#actions'].some((q) => !document.querySelector(q))) return 'a frame container is missing, so this check saw nothing';
+            const hit = `${words} ${document.title} ${document.getElementById('map').getAttribute('aria-label')}`.match(/\b(luna|moths?)\b/i);
+            return hit ? hit[0] : null;
+          });
+          if (leak) problems.push(`${tag}: the page still says "${leak}" (a luna-only word in the shared frame)`);
+        }
+        // Accessibility (axe: WCAG 2 A/AA, contrast included) on the page as first seen, then with the About sheet open.
+        const axe = async (what) => {
+          const res = await page.evaluate(async () => {
+            const r = await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'], rules: { region: { enabled: false } } });
+            return r.violations.map((v) => `${v.id} (${v.nodes.length}): ${v.nodes[0].target.join(' ')}`);
+          });
+          for (const v of res) problems.push(`${tag}: axe ${what}: ${v}`);
+        };
+        await page.evaluate(axeSource);
+        await axe('on load');
+        // Clicked from the page: whether the button can be reached is the other smoke tests' job, and a slow frame must not fail this one.
+        await page.evaluate(() => document.getElementById('info-btn').click());
+        await page.waitForSelector('#info-btn[aria-expanded=true]', { timeout: 5000 }).catch(() => problems.push(`${tag}: the About sheet never opened`));
+        await page.waitForTimeout(600);
+        await axe('with About open');
         await page.screenshot({ path: `${out}/look-${key}-${scheme}-${vname}.png` });
         console.log(`${tag}: hexes ${got.hexes}, ribbon bands ${got.bands}, menu ${Math.round(got.menuWidth)}px`);
         await c.close();
       }
     }
+  }
+}
+// A shared link must bring back what it showed: the Share button's link, opened fresh, lands on the same species, season,
+// day and place (the view the sender saw), and the address bar follows the view without any click on Share.
+{
+  const views = [
+    { name: 'firefly in 2021', q: 'species=firefly&year=2021&date=07-04&at=41.880,-87.630,7.5' },
+    { name: 'luna pooled years', q: 'date=05-20&at=43.500,-89.500,6.5' },
+    { name: 'beetle live', q: 'species=japanese-beetle&season=live&date=06-15' },
+  ];
+  const state = (page) => page.evaluate(() => {
+    const h = window.__hatch;
+    const c = h.map.center(h.padding());
+    if (!c) return { noCentre: true };
+    return { layer: h.current().id.split('-')[0], season: document.getElementById('season').value, date: document.getElementById('t-date').textContent, zoom: Math.round(c.zoom * 10) / 10, lat: Math.round(c.lngLat[1] * 100) / 100, lng: Math.round(c.lngLat[0] * 100) / 100 };
+  });
+  const ready = async (page, tag, key) => {
+    await page.waitForFunction(() => !document.getElementById('loader'), null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
+    await page.waitForFunction((k) => window.__hatch?.current().id.startsWith(k), key, { timeout: 15000 }).catch(() => problems.push(`${tag}: its layer never loaded`));
+    await page.waitForTimeout(1500);
+  };
+  for (const v of views) {
+    if (!mine()) continue;
+    const tag = `share ${v.name}`;
+    const key = /species=([a-z-]+)/.exec(v.q)?.[1] ?? 'luna';
+    const c = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+    const page = await c.newPage();
+    page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
+    await page.addInitScript(() => {
+      window.__shared = null;
+      const grab = async (d) => void (window.__shared = typeof d === 'string' ? d : d.url);
+      if (navigator.share) navigator.share = grab;
+      else Object.defineProperty(navigator, 'clipboard', { value: { writeText: grab } });
+    });
+    await page.goto(`${origin}/?noauto&${v.q}`);
+    await ready(page, tag, key);
+    const before = await state(page);
+    await page.waitForFunction(() => /date=/.test(location.search), null, { timeout: 5000 }).catch(() => {}); // the address bar follows the view on a short timer
+    await page.waitForTimeout(600);
+    const bar = new URL(page.url());
+    for (const [k, want] of new URLSearchParams(v.q)) {
+      if (k === 'at') continue; // the exact place is checked below, from the reopened page
+      if (bar.searchParams.get(k) !== want && !(k === 'species' && want === 'luna')) problems.push(`${tag}: the address bar lost ${k} (${bar.search})`);
+    }
+    // Dispatched, not tapped: Playwright waits for a button to hold still, and on software GL a busy frame can keep it waiting.
+    await page.locator('#share').dispatchEvent('click').catch(() => problems.push(`${tag}: Share could not be clicked`));
+    await page.waitForFunction(() => window.__shared, null, { timeout: 5000 }).catch(() => {});
+    const link = await page.evaluate(() => window.__shared);
+    if (!link) { problems.push(`${tag}: Share produced no link`); await c.close(); continue; }
+    const page2 = await c.newPage();
+    page2.on('pageerror', (e) => problems.push(`${tag}: reopened pageerror: ${e.message}`));
+    await page2.goto(new URL(new URL(link).pathname + new URL(link).search + '&noauto', origin).href);
+    await ready(page2, `${tag} (reopened)`, key);
+    const after = await state(page2);
+    if (before.noCentre || after.noCentre) problems.push(`${tag}: the map reported no centre, so place and zoom were not compared`);
+    for (const k of Object.keys(before)) {
+      const same = typeof before[k] === 'number' ? Math.abs(before[k] - after[k]) <= (k === 'zoom' ? 0.2 : 0.05) : before[k] === after[k];
+      if (!same) problems.push(`${tag}: the reopened link differs in ${k}: ${before[k]} became ${after[k]}`);
+    }
+    console.log(`${tag}: ${JSON.stringify(after)}`);
+    await c.close();
+  }
+}
+// The About panel's "Are springs warming?" figure draws a dot per town and sits inside the panel; a card in a past year
+// compares its peak with a typical year in words.
+{
+  const sites = JSON.parse(readFileSync('src/data/warmth-trend.json', 'utf8')).sites.length;
+  for (const [vname, width, height, mobile] of [['desktop', 1440, 900, false], ['phone', 390, 844, true]]) {
+    if (!mine()) continue;
+    const tag = `features ${vname}`;
+    const c = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce' });
+    const page = await c.newPage();
+    page.on('pageerror', (e) => problems.push(`${tag}: pageerror: ${e.message}`));
+    await page.goto(`${origin}/?noauto&year=2021&date=06-20`);
+    await page.waitForFunction(() => !document.getElementById('loader') && window.__hatch, null, { timeout: 15000 }).catch(() => problems.push(`${tag}: never drew`));
+    await page.waitForTimeout(2000);
+    // A card for a past year says how its peak compares with a typical year.
+    const box = await page.locator('#map').boundingBox();
+    let text = '';
+    for (const [fx, fy] of [[0.5, 0.45], [0.45, 0.5], [0.55, 0.5], [0.5, 0.55], [0.4, 0.45], [0.6, 0.45]]) {
+      if (mobile) await page.touchscreen.tap(box.x + box.width * fx, box.y + box.height * fy);
+      else await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+      await page.waitForFunction(() => document.getElementById('probe') && !document.getElementById('probe').hidden && document.getElementById('probe').innerText.trim(), null, { timeout: 3000 }).catch(() => {});
+      text = (await page.locator('#probe').isVisible()) ? await page.locator('#probe').innerText() : '';
+      if (/typical year/i.test(text)) break; // a spot on water or with no forecast has no such line: try the next
+    }
+    if (!text) problems.push(`${tag}: no card to read`);
+    else if (!/typical year/i.test(text)) problems.push(`${tag}: no card compares with a typical year: ${text.replace(/\s+/g, ' ').slice(0, 120)}`);
+    // The warming figure, inside the About panel.
+    await page.evaluate(() => document.getElementById('info-btn').click());
+    await page.waitForSelector('#info-btn[aria-expanded=true]', { timeout: 5000 }).catch(() => problems.push(`${tag}: the About sheet never opened`));
+    await page.waitForTimeout(600);
+    const fold = page.locator('details[data-key=warmth]');
+    if (!(await fold.count())) problems.push(`${tag}: no "Are springs warming?" fold in About`);
+    else {
+      await fold.evaluate((d) => { d.open = true; d.scrollIntoView(); });
+      await page.waitForTimeout(300);
+      const fig = await fold.evaluate((d) => {
+        const svg = d.querySelector('svg');
+        const drawer = document.getElementById('drawer').getBoundingClientRect();
+        const r = svg?.getBoundingClientRect();
+        return { dots: d.querySelectorAll('circle.wm-dot').length, lead: d.querySelector('.wm-lead')?.textContent.trim().length ?? 0, inside: !!r && r.left >= drawer.left - 1 && r.right <= drawer.right + 1, label: !!svg?.getAttribute('aria-label') };
+      });
+      if (fig.dots !== sites) problems.push(`${tag}: the warming figure draws ${fig.dots} dots for ${sites} towns`);
+      if (!fig.lead) problems.push(`${tag}: the warming figure has no lead line`);
+      if (!fig.inside) problems.push(`${tag}: the warming figure spills out of the About panel`);
+      if (!fig.label) problems.push(`${tag}: the warming figure has no text alternative`);
+    }
+    console.log(`${tag}: card ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 60))}`);
+    await c.close();
   }
 }
 await browser.close();

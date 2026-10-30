@@ -88,6 +88,11 @@ const icons = {
     const wing = (s) => [e[0] - 4 * dx + s * 3.6 * -dy, e[1] - 4 * dy + s * 3.6 * dx];
     return pen(pts, 2.2, 51) + pen([wing(1), e, wing(-1)], 2, 52, false);
   })(),
+  // Warm the spring: a thermometer, its tube open into the bulb, and the mercury drawn up the middle.
+  warm: pen([[10, 14.6], [9.9, 9], [10, 4.6], [11, 2.9], [12.2, 2.6], [13.3, 3], [14, 4.6], [14.1, 9], [14, 14.6]], 1.9, 81, false) +
+    pen(loop(12, 17.8, 3.7, 3.6, 0.3, 1.05, -1.1), 1.9, 82, false) +
+    `M${loop(12, 17.8, 1.9, 1.8, 0.4, 1, 0).slice(0, -1).map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L')}Z` +
+    pen([[12, 16.5], [12.1, 11.5], [12, 7.5]], 1.8, 83, false),
   cross: pen([[6.5, 6.4], [12, 12], [17.6, 17.5]], 2.2, 61, false) + pen([[17.5, 6.5], [12, 12], [6.4, 17.6]], 2.2, 62, false),
 };
 
