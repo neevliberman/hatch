@@ -815,7 +815,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #dock { box-shadow: 0 -4px 10px -6px var(--ink-wash); }
 .icon-btn, .season select, .ex-radar { box-shadow: 0 1px 0 var(--ink-wash), 0 0 0 2px var(--track-faint); }
 .icon-btn:not(.on):hover, .season select:hover, .ex-radar:hover { background-color: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
-@media (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
   .icon-btn, .season select, .ex-radar { transition: transform 120ms ease-out, background-color 120ms, border-color 120ms, box-shadow 120ms; }
   .icon-btn:hover, .season select:hover, .ex-radar:hover { transform: translateY(-1px); box-shadow: 0 2px 3px var(--ink-wash), 0 0 0 2px var(--track-faint); }
   .icon-btn:active, .ex-radar:active { transform: translateY(0) scale(0.96); box-shadow: none; }
