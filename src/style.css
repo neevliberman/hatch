@@ -148,7 +148,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   50% { transform: rotate(calc(60deg + var(--k) * 60deg)) translateY(calc(-24px - var(--b) * 9px)); }
   100% { transform: rotate(calc(60deg + var(--k) * 120deg)) translateY(-24px); }
 }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .muted { color: var(--muted); }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
 
@@ -170,6 +170,8 @@ select:focus-visible, .season select:focus-visible, .year select:focus-visible {
 }
 .icon-btn:focus-visible, input:focus-visible, #why:focus-visible, #drawer a:focus-visible,
   details summary:focus-visible, .lg-fold:focus-visible, .lg-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Any control without a ring of its own still shows keyboard focus (zero specificity, so every rule above wins). */
+:where(button, a, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon-btn.on { background: var(--accent); color: var(--on-accent); }
 #theme-btn .i-sun, :root[data-theme="dark"] #theme-btn .i-moon { display: none; }
 :root[data-theme="dark"] #theme-btn .i-sun { display: block; }
@@ -868,3 +870,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   box-shadow: 0 0 6px var(--tol-glow); vertical-align: 0; }
 .tol-live { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 700px) { #species-sheet.sp-has-tree { width: auto; height: calc(100dvh - 60px - env(safe-area-inset-bottom)); } }
+
+/* Windows high contrast: keep panel edges and the on state visible when colors are overridden. */
+@media (forced-colors: active) {
+  .icon-btn, select, input, #strip, .sp-row { border: 1px solid CanvasText; }
+  .icon-btn.on { background: Highlight; color: HighlightText; }
+  :where(button, a, summary, [tabindex], input, select):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}

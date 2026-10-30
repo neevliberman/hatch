@@ -249,6 +249,15 @@ export function mountSpeciesPicker(
       button.focus();
       return;
     }
+    if (e.key === 'Tab') {
+      // The sheet covers the page, so Tab loops inside it instead of walking onto controls hidden behind.
+      const tabs = [...sheet.querySelectorAll<HTMLElement>('button, input, canvas[tabindex], [tabindex="0"]')].filter((el) => el.offsetParent !== null);
+      const first = tabs[0], last = tabs[tabs.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && document.activeElement === first) (e.preventDefault(), last.focus());
+      else if (!e.shiftKey && document.activeElement === last) (e.preventDefault(), first.focus());
+      return;
+    }
     if (e.target === treeHost.querySelector('canvas')) return; // the tree walks its own branches
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const items = [...sheet.querySelectorAll<HTMLButtonElement>('#sp-list button, #sp-odd:not([hidden]) button')];
