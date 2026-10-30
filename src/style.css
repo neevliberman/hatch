@@ -905,4 +905,4 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #ch-hour { width: 100%; accent-color: var(--accent); }
 #ch-play { width: 32px; height: 28px; padding: 0; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); font-size: 11px; cursor: pointer; }
 .ch-note { padding: 0 12px 2px; font-size: 11px; color: var(--muted); }
-@media (max-width: 600px) { #ch-roll { height: 66px; } #chorus { left: 8px; width: calc(100vw - 16px); bottom: calc(170px + env(safe-area-inset-bottom)); } }
+@media (max-width: 600px) { #ch-roll { height: 58px; } #chorus { left: 8px; width: calc(100vw - 16px); bottom: auto; top: calc(64px + env(safe-area-inset-top)); } .ch-bar { grid-template-columns: auto 1fr auto; } .ch-bar output { grid-column: auto; } }

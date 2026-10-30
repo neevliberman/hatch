@@ -14,7 +14,7 @@ import { tempAt, weather, type Day } from './weather';
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const clock = (h: number) => `${((Math.floor(h) + 11) % 12) + 1} ${Math.floor(h) % 24 < 12 ? 'am' : 'pm'}`;
 const WINDOW = 14; // seconds the roll shows
-const LANES = 6;
+const LANES = matchMedia('(max-width: 600px)').matches ? 4 : 6;
 
 export const chorusEnabled = () => !new URLSearchParams(location.search).has('nochorus');
 
