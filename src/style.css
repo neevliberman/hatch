@@ -892,7 +892,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .exo-note { padding: 2px 12px 8px; font-size: 11px; color: var(--muted); }
 @media (max-width: 600px) { #exo { left: 8px; width: calc(100vw - 80px); height: 34vh; top: calc(64px + env(safe-area-inset-top)); } }
 /* Chorus (src/ui/chorusPanel.ts): the singing insects at a pinned place, synthesised from song traits. */
-.ch-open { margin: 6px 6px 0 0; padding: 4px 10px; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); font-size: 12px; cursor: pointer; }
+.ch-open { position: absolute; top: 2px; right: 36px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.ch-open:hover { color: var(--text); background: var(--track-faint); }
+#probe:has(.ch-open) .probe-close + .probe-cell, #probe:has(.ch-open) .probe-close + .probe-card .probe-title { padding-right: 58px; }
 .ch-open:focus-visible, .ch-x:focus-visible, #ch-play:focus-visible, #ch-hour:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #chorus { position: fixed; z-index: 30; left: 12px; bottom: calc(150px + env(safe-area-inset-bottom)); width: 340px; display: grid; gap: 4px; padding: 0 0 6px;
   border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel-solid); box-shadow: 0 4px 18px #0003; }

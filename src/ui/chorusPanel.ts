@@ -217,7 +217,9 @@ export function mountChorus(probeEl: HTMLElement): ChorusPanel {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'ch-open';
-        b.textContent = 'Listen here';
+        b.setAttribute('aria-label', 'Listen here');
+        b.title = 'Listen here';
+        b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/></svg>';
         card.append(b);
       }
       if (hit) {
