@@ -831,6 +831,37 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .icon-btn:active, .ex-radar:active { transform: translateY(0) scale(0.96); box-shadow: none; }
 }
 
+/* Small feedback (ideas "UI 4"). Each is 120-180 ms, ease-out, opacity and transform only, and none touches the map.
+   Under reduced motion nothing moves: things appear at once, and the pressed tints (colour only) still show. */
+/* The species button is a button like the others: the same pencil edge, hover wash and press. */
+.season .pick-btn { box-shadow: 0 1px 0 var(--ink-wash), 0 0 0 2px var(--track-faint); }
+.season .pick-btn:hover { background-color: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.season .pick-btn:active { background-color: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+/* A tapped row answers at once, while its species loads. */
+.sp-row:active, .sp-group:active, .sp-go:active, .sp-wx:active, .probe-others button:active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .season .pick-btn { transition: transform 120ms ease-out, background-color 120ms ease-out; }
+  .season .pick-btn:active { transform: scale(0.96); }
+  /* The species sheet drops from the header, the town box rises from its button: they open where they came from. */
+  #species-sheet:not([hidden]) { animation: drop-in 140ms ease-out; } /* the tree's branches grow in after it (treeOfLife.ts) */
+  #finder:not([hidden]):not(.inline) { animation: rise-in 180ms ease-out; }
+  /* A tapped hex's card, docked above the time bar, rises into place rather than blinking on. (The card that follows
+     a mouse pointer stays instant: fading it would trail the pointer.) */
+  #probe:not([hidden]):not(.at-pointer) { animation: rise-in 160ms ease-out; }
+  /* "Copied link" and the other short notes fade up; they leave at once. */
+  #action-msg:not(:empty) { animation: rise-in 160ms ease-out; }
+  /* The time thumb grows a little under the finger or mouse, so a grab is felt. */
+  .track input[type=range]::-webkit-slider-thumb { transition: transform 120ms ease-out; }
+  .track input[type=range]::-moz-range-thumb { transition: transform 120ms ease-out; }
+  .track input[type=range].held::-webkit-slider-thumb { transform: scale(1.1); }
+  .track input[type=range].held::-moz-range-thumb { transform: scale(1.1); }
+  /* The watch star inks in rather than snapping full; un-watching clears it at once. */
+  .sp-star[aria-pressed="true"] path { transition: fill-opacity 160ms ease-out; }
+}
+/* `translate`, not `transform`: the toast, the town box and the card place themselves with transform. */
+@keyframes rise-in { from { opacity: 0; translate: 0 6px; } }
+@keyframes drop-in { from { opacity: 0; translate: 0 -4px; } }
+
 /* The species picker (src/ui/speciesPicker.ts): search over the tree of life, opened from the header. */
 #species-sheet { position: fixed; z-index: 6; top: 60px; right: var(--gutter); width: min(380px, calc(100vw - 16px)); max-height: min(70vh, 560px);
   display: flex; flex-direction: column; background: var(--grain) var(--panel-solid); border: 1px solid var(--label-rule); border-radius: 3px;
@@ -894,7 +925,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #sp-watch[hidden] { display: none; }
 .sp-star { flex: none; }
 .sp-star[aria-pressed="true"] { color: var(--accent); }
-.sp-star[aria-pressed="true"] path { fill: currentColor; }
+.sp-star path { fill: currentColor; fill-opacity: 0; } /* filled in, not swapped: so the fill can ink in (UI 4) */
+.sp-star[aria-pressed="true"] path { fill-opacity: 1; }
 .sp-chip { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
 .sp-go { display: block; max-width: 168px; min-height: 40px; padding: 3px 4px 3px 12px; border: 0; background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
 .sp-go b { display: block; font-weight: 600; font-size: 13.5px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

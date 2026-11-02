@@ -272,7 +272,12 @@ export function mountScrubber(
   };
 
   range.addEventListener('input', () => (touch(), time.setStepIndex(Number(range.value))));
-  range.addEventListener('pointerdown', () => (touch(), time.pause()));
+  range.addEventListener('pointerdown', () => (touch(), time.pause(), range.classList.add('held')));
+  // While a finger or the mouse holds the slider its thumb grows a little (style.css): touch screens don't reliably set :active.
+  const release = () => range.classList.remove('held');
+  for (const t of ['pointerup', 'pointercancel'] as const) addEventListener(t, release, true);
+  addEventListener('blur', release);
+  range.addEventListener('lostpointercapture', release);
   // A press during the rewind stops it, like Pause would. Replay (after the last day) is a plain press too: touch()
   // stops any rewind, and play() starts the season over.
   const togglePlay = () => (rewinding ? touch() : !touched && !time.playing ? playFromStart() : (touch(), time.toggle()));
