@@ -119,13 +119,44 @@ const midwest = (page, png) =>
     return { w: Math.max(0, x1 - x0) / bmp.width, h: Math.max(0, y1 - y0) / bmp.height, colours: seen.size };
   }, png.toString('base64'));
 
+// The UI 4 rise-ins (style.css) translate the species sheet, the town box, a docked hex card and the short notes by a
+// few px for up to 180 ms. Every section but ONLY=motion turns just those off, so a place or overlap it measures is
+// never a mid-animation one. (Not reduced motion as a whole: that would also stop the camera glides, playback and
+// radar replays these sections test.)
+const STILL_UI = '#species-sheet, #finder, #probe, #action-msg { animation: none !important; }';
+const settledContext = async (browser, opts) => {
+  const ctx = await browser.newContext(opts);
+  await ctx.addInitScript((css) => {
+    const add = () => document.head.append(Object.assign(document.createElement('style'), { textContent: css }));
+    if (document.head) add();
+    else document.addEventListener('DOMContentLoaded', add);
+  }, STILL_UI);
+  return ctx;
+};
+
+// The screen point of the spot on the map's cells in a box [w, s, e, n] farthest (in pixels) from the lit photo
+// dots: a tap on a dot opens that photo's card instead of the place's.
+const clearSpotOn = (page, box) => page.evaluate(([w, s, e, n]) => {
+  const h = window.__hatch;
+  const lit = h.current().points(h.time.cursor).map((p) => h.map.project(p));
+  let best = null;
+  for (let lng = w; lng <= e; lng += 0.25)
+    for (let lat = s; lat <= n; lat += 0.25) {
+      if (h.current().cellAt([lng, lat]) === null) continue;
+      const [x, y] = h.map.project([lng, lat]);
+      const gap = Math.min(Infinity, ...lit.map(([a, b]) => Math.hypot(a - x, b - y)));
+      if (!best || gap > best.gap) best = { gap, x, y };
+    }
+  return [best.x, best.y];
+}, box);
+
 const drawerOpen = (page) => page.locator('#drawer.open').count().then((n) => n > 0);
 
 const screenUnit = async ([engine, width, height], browser = browsers[engine]) => {
   const tag = `${engine} ${width}x${height}`;
   const name = `${engine}-${width}x${height}`;
   const fail = (m) => problems.push(`${tag}: ${m}`);
-  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+  const ctx = await settledContext(browser, { viewport: { width, height }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   page.on('request', (r) => !/^(file|data|blob):/.test(r.url()) && fail(`external request ${r.url()}`));
   page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
@@ -483,7 +514,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const liveUnit = async ([label, query, served, width, height, phone], browser) => {
     const tag = `live ${label}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const ctx = await settledContext(browser, { viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
     if (served === 404) await page.route('**/live/latest.json', (r) => r.fulfill({ status: 404, body: '' }));
     else if (served) await page.route('**/live/latest.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(served) }));
@@ -649,7 +680,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const speciesUnit = async ([label, width, height, phone], browser) => {
     const tag = `species ${label}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const ctx = await settledContext(browser, { viewport: { width, height }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
     page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
@@ -704,7 +735,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const atlasUnit = async (browser) => {
     const tag = 'atlas';
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const ctx = await settledContext(browser, { viewport: { width: 1280, height: 800 } });
     const page = await ctx.newPage();
     page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     // A species photo can fail to load (offline, or iNaturalist slow): the page shows a blank square, which is fine.
@@ -715,21 +746,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png`, timeout: 60000 })
       .catch((e) => console.log(`atlas-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
     const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
-    // The screen point of the spot on the map's cells in a box [w, s, e, n] farthest (in pixels) from the lit photo
-    // dots: a tap on a dot opens that photo's card instead of the place's.
-    const clearSpot = (box) => page.evaluate(([w, s, e, n]) => {
-      const h = window.__hatch;
-      const lit = h.current().points(h.time.cursor).map((p) => h.map.project(p));
-      let best = null;
-      for (let lng = w; lng <= e; lng += 0.25)
-        for (let lat = s; lat <= n; lat += 0.25) {
-          if (h.current().cellAt([lng, lat]) === null) continue;
-          const [x, y] = h.map.project([lng, lat]);
-          const gap = Math.min(Infinity, ...lit.map(([a, b]) => Math.hypot(a - x, b - y)));
-          if (!best || gap > best.gap) best = { gap, x, y };
-        }
-      return [best.x, best.y];
-    }, box);
+    const clearSpot = (box) => clearSpotOn(page, box);
     try {
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
       if (!(await isOn('papilio-glaucus-atlas'))) fail('a ?species=papilio-glaucus link never opened the Atlas swallowtail');
@@ -892,7 +909,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const findUnit = async ([w, h, phone], browser) => {
     const tag = `find ${phone ? 'phone' : 'desktop'}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     if (!phone) await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -1022,7 +1039,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const reused = !!carry && carry.phone === phone && !reduce;
     if (carry && !reused) await carry.ctx.close();
     const { ctx, page, fetched, state } = reused ? carry : await (async () => {
-      const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+      const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
         reducedMotion: reduce ? 'reduce' : 'no-preference' });
       const page = await ctx.newPage();
       const fetched = [];
@@ -1188,7 +1205,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const reuse = carry && !carry.phone ? carry : null;
     if (reuse) reuse.state.fail = fail;
     else if (carry) await carry.ctx.close();
-    const ctx = reuse?.ctx ?? (await browser.newContext({ viewport: { width: 1366, height: 768 } }));
+    const ctx = reuse?.ctx ?? (await settledContext(browser, { viewport: { width: 1366, height: 768 } }));
     const page = reuse?.page ?? (await ctx.newPage());
     if (!reuse) {
       page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
@@ -1272,7 +1289,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const watchUnit = async ([w, h, phone], browser) => {
     const tag = `watch ${phone ? 'phone' : 'desktop'}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
     page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
@@ -1415,7 +1432,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const quietUnit = async ([w, h, phone], browser) => {
     const tag = `quiet ${phone ? 'phone' : 'desktop'}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -1467,7 +1484,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const twinsUnit = async ([w, h, phone], browser) => {
     const tag = `twins ${phone ? 'phone' : 'desktop'}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -1538,7 +1555,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const tag = `band ${phone ? 'phone' : 'desktop'}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
     for (const scheme of ['light', 'dark']) {
-      const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone, colorScheme: scheme });
+      const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone, colorScheme: scheme });
       const page = await ctx.newPage();
       page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
       page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -1592,7 +1609,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const tag = 'evict';
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const KEPT = 8;
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const ctx = await settledContext(browser, { viewport: { width: 1280, height: 800 } });
     const page = await ctx.newPage();
     await ctx.route(PHOTOS, (r) => r.abort()); // the picker's photos: not what this checks
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
@@ -1667,7 +1684,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   const emptyUnit = async ([w, h, phone], browser) => {
     const tag = `empty ${phone ? 'phone' : 'desktop'}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
     const page = await ctx.newPage();
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource|ERR_FAILED/.test(m.text()) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -1781,19 +1798,21 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     };
     try {
       await page.goto(`${origin}/?noauto`);
-      await page.waitForTimeout(3000);
+      // The map is ready once its forecast answers for a place (central Illinois).
+      await page.waitForFunction(() => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null, null, { timeout: 60000 });
       const tap = (loc) => (phone ? loc.tap() : loc.click());
       await check('species button', '#species');
       await tap(page.locator('#species'));
       await page.locator('#species-sheet').waitFor();
       await check('species sheet', '#species-sheet');
-      await check('watch star', '.sp-star path');
+      // Un-watching snaps out (only the pressed star has a transition), so the star never fades through a dark half-fill.
+      if (((await longest('.sp-star path')) ?? 1) > 0) fail('an unwatched star has a transition');
       await tap(page.locator('.sp-star'));
       await check('watch star (on)', '.sp-star path');
       await page.keyboard.press('Escape');
       if (!(await page.locator('#species-sheet').isHidden())) await tap(page.locator('#species-sheet .sp-x'));
       if (phone) {
-        await page.touchscreen.tap(180, 390);
+        await page.touchscreen.tap(...(await clearSpotOn(page, [-91, 38.5, -88, 41.5])));
         await page.locator('#probe').waitFor({ timeout: 10000 }).catch(() => fail('a tapped hex showed no card'));
         await check('hex card', '#probe');
         await tap(page.locator('#probe .probe-close'));
@@ -1812,6 +1831,15 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await check('held time thumb', '#t-range', '::-webkit-slider-thumb');
       await page.mouse.up();
       if (await page.evaluate(() => document.querySelector('#t-range').classList.contains('held'))) fail('a released time slider stays held');
+      if (phone) {
+        // A finger that turns into a page scroll (the slider pans vertically) is cancelled, not lifted: that lets go too.
+        const cdp = await ctx.newCDPSession(page);
+        const at = [{ x: r.x + 4, y: r.y + r.height / 2 }];
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at });
+        if (!(await page.evaluate(() => document.querySelector('#t-range').classList.contains('held')))) fail('a finger on the time slider does not mark it held');
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+        if (await page.evaluate(() => document.querySelector('#t-range').classList.contains('held'))) fail('a cancelled touch leaves the time slider held');
+      }
       if (!reduce) for (const [what, d] of seen) if (!(d > 0 && d <= 0.24)) fail(`${what} moves for ${d * 1000} ms, not 1-240 ms`);
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);

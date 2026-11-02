@@ -843,7 +843,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .season .pick-btn { transition: transform 120ms ease-out, background-color 120ms ease-out; }
   .season .pick-btn:active { transform: scale(0.96); }
   /* The species sheet drops from the header, the town box rises from its button: they open where they came from. */
-  #species-sheet:not([hidden]) { animation: drop-in 180ms ease-out; }
+  #species-sheet:not([hidden]) { animation: drop-in 140ms ease-out; } /* the tree's branches grow in after it (treeOfLife.ts) */
   #finder:not([hidden]):not(.inline) { animation: rise-in 180ms ease-out; }
   /* A tapped hex's card, docked above the time bar, rises into place rather than blinking on. (The card that follows
      a mouse pointer stays instant: fading it would trail the pointer.) */
@@ -853,14 +853,14 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   /* The time thumb grows a little under the finger or mouse, so a grab is felt. */
   .track input[type=range]::-webkit-slider-thumb { transition: transform 120ms ease-out; }
   .track input[type=range]::-moz-range-thumb { transition: transform 120ms ease-out; }
-  .track input[type=range].held::-webkit-slider-thumb { transform: scale(1.15); }
-  .track input[type=range].held::-moz-range-thumb { transform: scale(1.15); }
-  /* The watch star inks in rather than snapping full. */
-  .sp-star path { transition: fill-opacity 180ms ease-out; }
+  .track input[type=range].held::-webkit-slider-thumb { transform: scale(1.1); }
+  .track input[type=range].held::-moz-range-thumb { transform: scale(1.1); }
+  /* The watch star inks in rather than snapping full; un-watching clears it at once. */
+  .sp-star[aria-pressed="true"] path { transition: fill-opacity 160ms ease-out; }
 }
 /* `translate`, not `transform`: the toast, the town box and the card place themselves with transform. */
 @keyframes rise-in { from { opacity: 0; translate: 0 6px; } }
-@keyframes drop-in { from { opacity: 0; translate: 0 -6px; } }
+@keyframes drop-in { from { opacity: 0; translate: 0 -4px; } }
 
 /* The species picker (src/ui/speciesPicker.ts): search over the tree of life, opened from the header. */
 #species-sheet { position: fixed; z-index: 6; top: 60px; right: var(--gutter); width: min(380px, calc(100vw - 16px)); max-height: min(70vh, 560px);
