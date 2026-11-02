@@ -1,7 +1,11 @@
-<title>Sketch Butterfly</title>
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exo</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: the scene fills the screen. Notebook caption top-left, a slim icon rail on the right, the day as a timeline along the bottom. */
 :root {
@@ -11,6 +15,7 @@
   --rule: #c9c9c2;
   --chip: #ffffff;
   --warm: #d9620f;
+  --hand: "Caveat", "Segoe Print", cursive;
   --display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
 }
@@ -24,6 +29,7 @@ body { background: var(--paper); color: var(--ink); overflow: hidden; font-famil
 .cap { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); pointer-events: none; display: grid; gap: 2px; }
 .cap h1 { margin: 0; font: italic 400 1.9rem/1 var(--display); }
 .cap .common { font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-soft); }
+.cap .sex { pointer-events: auto; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--ink); background: none; border: 0; padding: 6px 2px; margin: -6px 0; border-bottom: 1px dotted currentColor; cursor: pointer; }
 .cap .fact { font: 400 1.05rem/1.3 var(--display); max-width: 34ch; margin-top: 6px; text-wrap: balance; }
 .cap .sim { font-size: .72rem; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .cap .sim b { font-weight: 500; color: var(--warm); }
@@ -55,25 +61,57 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 .toast.on { opacity: 1; }
 #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 #labels span { position: absolute; transform: translate(-50%, -50%); font-size: .58rem; letter-spacing: .04em; background: var(--paper); padding: 0 3px; border: 1px solid var(--rule); white-space: nowrap; }
+
+/* ---------- "touch the world" controls: the sun and clouds live in the scene (drag them); a hand-lettered menu ---------- */
+.day, #view, #cloud, #veins, #flip { display: none !important; }
+.cap { right: calc(150px + env(safe-area-inset-right, 0px)); }
+.cap h1 { font-size: 1.5rem; }
+.cap .common { letter-spacing: .06em; font-size: .66rem; }
+.cap .fact { font: 600 1.35rem/1.15 var(--hand); max-width: 26ch; }
+.cap .sim { font: 500 1.05rem/1 var(--hand); color: var(--ink-soft); }
+.cap .sim b { font-weight: 700; }
+.cap .therm { display: none; }
+#arc { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#sunlab small { margin-left: 2px; }
+#sunlab { position: fixed; left: 0; top: 0; font: 700 1.3rem/1 var(--hand); color: var(--ink); pointer-events: none; white-space: nowrap; text-shadow: 0 0 3px var(--paper), 0 0 6px var(--paper); will-change: transform; }
+#sunglow { position: fixed; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: multiply; background: radial-gradient(circle at var(--sx, 70%) var(--sy, 20%), #ffcf7a 0, #ffe2b0 22%, transparent 62%); }
+@media (prefers-color-scheme: dark) { #sunglow { mix-blend-mode: screen; background: radial-gradient(circle at var(--sx, 70%) var(--sy, 20%), #6b4a1c 0, #3a2a12 25%, transparent 60%); } }
+#sunlab { transition: font-size .18s cubic-bezier(.3,1.6,.5,1); }
+#sunlab.held { font-size: 1.9rem; }
+#sunlab small { font-weight: 500; font-size: .8rem; color: var(--ink-soft); margin-left: 3px; }
+#sunlab:focus-visible { outline: 2px solid var(--warm); outline-offset: 3px; border-radius: 6px; }
+#sunpulse { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+#sunpulse i { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border: 1.5px solid var(--warm); border-radius: 50%; animation: skypulse 2s ease-out infinite; }
+@keyframes skypulse { from { transform: scale(.9); opacity: .8; } to { transform: scale(2.1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #sunpulse i { animation: none; opacity: .5; } }
+#more { position: fixed; right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+#more > button { font: 700 1.5rem/1 var(--hand); color: var(--ink); background: none; border: 0; padding: 6px 8px; cursor: pointer; }
+#more .menu { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+#more .menu[hidden] { display: none; }
+#more .menu button { font: 600 1.3rem/1.1 var(--hand); color: var(--ink); background: none; border: 0; padding: 6px 4px; cursor: pointer; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; text-decoration-color: var(--ink-soft); }
+#more .menu button[aria-pressed="true"] { color: var(--warm); }
+.rail { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+.toast { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); font: 600 1.05rem/1 var(--hand); }
 @media (prefers-reduced-motion: reduce) { .toast, .therm i { transition: none; } }
-html.embed .day, html.embed .rail, html.embed #recenter { display: none !important; }
-html.embed .cap h1, html.embed .cap .common { display: none; }
 </style>
 
 <canvas id="stage" aria-label="Sketched monarch on milkweed. Drag to orbit."></canvas>
+<div id="sunglow" aria-hidden="true"></div>
+<div id="cloudveil" aria-hidden="true" style="position:fixed;inset:0;pointer-events:none;background:#6e7a8e;opacity:0;mix-blend-mode:normal"></div>
 <div id="labels" aria-hidden="true"></div>
 
 <div class="cap" id="cap">
-  <div class="common">Monarch · male · wingspan 9–10 cm</div>
+  <div class="common">Monarch · <button id="sex" class="sex" aria-label="Sex: male. Tap for female" title="Switch male / female">male</button> · wingspan 9–10 cm</div>
   <h1>Danaus plexippus</h1>
   <div class="fact" id="fact" aria-live="polite">&nbsp;</div>
-  <div class="sim"><span id="therm-t">Thorax</span><span class="therm" aria-hidden="true"><i id="therm-fill"></i><s id="therm-need"></s></span></div>
+  <div class="sim" style="flex-wrap:wrap;row-gap:0"><span id="therm-t">Thorax</span><span class="therm" aria-hidden="true"><i id="therm-fill"></i><s id="therm-need"></s></span><span id="sim-env" style="flex-basis:100%;font-size:.88em;opacity:.8"></span></div>
 </div>
 
 <div class="rail" id="rail">
   <button class="ico" id="view" aria-label="View: follow the butterfly" title="Change view"></button>
   <button class="ico" id="cloud" aria-label="Send a cloud over the sun" title="Send a cloud"><svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6-1A4.5 4.5 0 0 0 7 18z"/></svg></button>
   <button class="ico" id="veins" aria-pressed="false" aria-label="Name the wing veins" title="Name the veins"><svg viewBox="0 0 24 24"><path d="M4 20 20 4M4 20l5-14M4 20l10-11M4 20l14-5M4 20l13 0M9 6l6 2"/></svg></button>
+  <button class="ico" id="flip" aria-pressed="false" aria-label="Show the underside" title="Show the underside"><svg viewBox="0 0 24 24"><path d="M12 4v16M12 6C7 6 5 11 6 17l6 1M4 12h-1M21 12h-1M17 9l3 3-3 3"/></svg></button>
   <button class="ico" id="recenter" aria-label="Recenter" title="Recenter" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></button>
 </div>
 
@@ -84,6 +122,18 @@ html.embed .cap h1, html.embed .cap .common { display: none; }
     <div class="readout" id="readout">16°C · 61°F</div>
     <input id="air" type="range" min="5" max="40" step="1" value="16" aria-label="Air temperature">
   </div>
+</div>
+<canvas id="arc" aria-hidden="true"></canvas>
+<div id="sunlab" tabindex="0" role="slider" aria-label="Air temperature: drag the sun" aria-valuemin="5" aria-valuemax="40" aria-valuenow="16"></div>
+<div id="sunpulse" aria-hidden="true"><i></i></div>
+<div id="more">
+  <div class="menu" id="more-menu" hidden>
+    <button id="m-view">change view</button>
+    <button id="m-flip">see underside</button>
+    <button id="m-veins" aria-pressed="false">name the veins</button>
+    <button id="m-play" aria-pressed="false">pause</button>
+  </div>
+  <button id="more-btn" aria-expanded="false" aria-controls="more-menu" aria-label="More">⋯</button>
 </div>
 <div class="toast" id="toast" role="status"></div>
 
@@ -103,7 +153,13 @@ const paper = new THREE.Color(), ink = new THREE.Color();
 const geos = new Set(), washes = [];
 
 function paint(geo) {
-  const w = geo.userData.w, c = new Float32Array(w.length * 3), tmp = new THREE.Color();
+  const w = geo.userData.w, tmp = new THREE.Color();
+  if (geo.userData.alpha) { // detail strokes: ink with alpha = weight, so a faint line over the wash darkens it like a pen would
+    const c = new Float32Array(w.length * 4);
+    for (let i = 0; i < w.length; i++) { c[i * 4] = ink.r; c[i * 4 + 1] = ink.g; c[i * 4 + 2] = ink.b; c[i * 4 + 3] = w[i]; }
+    geo.setAttribute('color', new THREE.BufferAttribute(c, 4)); return;
+  }
+  const c = new Float32Array(w.length * 3);
   for (let i = 0; i < w.length; i++) { tmp.copy(paper).lerp(ink, w[i]); c[i * 3] = tmp.r; c[i * 3 + 1] = tmp.g; c[i * 3 + 2] = tmp.b; }
   geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
 }
@@ -132,6 +188,29 @@ function inkStroke(s, r, out, w) {
   const m = pts.length, peak = s.w * (.8 + r() * .35);
   const pr = i => peak * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, (i / (m - 1)) * 1.04 - .02))), .45);
   for (let i = 0; i < m - 1; i++) { out.push(pts[i].x, pts[i].y, pts[i].z, pts[i + 1].x, pts[i + 1].y, pts[i + 1].z); w.push(Math.min(1, pr(i)), Math.min(1, pr(i + 1))); }
+  if (s.w < .85 || s.d) return;
+  // dip pen: the nib spreads on strokes that run along one direction and thins on the others, so a bold line
+  // swells and pinches along its length. The swell is a second hairline offset sideways by the pressure.
+  const nib = PEN_NIB, t = new THREE.Vector3(), side = new THREE.Vector3(), q = [];
+  for (let i = 0; i < m; i++) {
+    t.subVectors(pts[Math.min(m - 1, i + 1)], pts[Math.max(0, i - 1)]).normalize();
+    side.crossVectors(t, Math.abs(t.y) > .9 ? PEN_X : PEN_Y).normalize();
+    const press = Math.pow(Math.sin(Math.PI * i / (m - 1)), .7) * (.25 + .75 * Math.abs(t.dot(nib)));
+    q.push(pts[i].clone().addScaledVector(side, PEN_SWELL * press * (s.w > .92 ? 1.3 : 1)));
+  }
+  for (let i = 0; i < m - 1; i++) { out.push(q[i].x, q[i].y, q[i].z, q[i + 1].x, q[i + 1].y, q[i + 1].z); w.push(Math.min(1, pr(i)), Math.min(1, pr(i + 1))); }
+}
+const PEN_NIB = new THREE.Vector3(.5, .25, -.83).normalize(), PEN_X = new THREE.Vector3(1, 0, 0), PEN_Y = new THREE.Vector3(0, 1, 0), PEN_SWELL = .0045;
+// a flick of the dip pen: a few blots and a tapered flick near a wing, like ink shaken off the nib
+function splatter(W, mirror, seed) {
+  const r = rng(seed), s = mirror ? -1 : 1, o = W.outline, S = [];
+  for (let k = 0; k < 4; k++) {
+    const p = o[Math.floor(r() * o.length)], cx = W.cp.reduce((a, c) => a + c[0], 0) / W.cp.length, cz = W.cp.reduce((a, c) => a + c[1], 0) / W.cp.length;
+    const d = Math.hypot(p[0] - cx, p[1] - cz), out = .05 + r() * .14, x = p[0] + (p[0] - cx) / d * out, z = p[1] + (p[1] - cz) / d * out, rad = .006 + r() * .012;
+    S.push({ pts: loop(s * x, camber(x), z, rad, 3, 10, 'xz', -.3), w: 1, amp: .001, os: 0 });
+    if (k === 0) S.push({ pts: [[s * x, camber(x), z], [s * (x + (p[0] - cx) / d * .09), camber(x), z + (p[1] - cz) / d * .09]], w: .7, amp: .002, os: .1 });
+  }
+  return S;
 }
 function takes(strokes, seed, material) {
   const g = new THREE.Group();
@@ -140,7 +219,7 @@ function takes(strokes, seed, material) {
     strokes.forEach(s => { inkStroke(s, r, out, w); if (s.twice) inkStroke(s, r, out, w); });
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
-    geo.userData.w = w; geos.add(geo);
+    geo.userData.w = w; geo.userData.alpha = material === matDetail; geos.add(geo);
     const ls = new THREE.LineSegments(geo, material); ls.visible = v === 0; g.add(ls);
   }
   g.userData.boil = true; return g;
@@ -196,10 +275,13 @@ const WINGS = {
       ['CuA2', ['L', .5], null, [1.45, -.36]],
       ['1A+2A', [.16, .06], [.6, -.18], [1.1, -.33]],
     ],
-    band: .15, veinW: .045, apex: ([u, z]) => u > 1.78 && z > .3,
+    band: .12, veinW: .042, apex: () => false, costa: .07, base: .3, inner: .17, spotIn: .024,
+    sub: [[1.7, .69, .026], [1.84, .7, .028]], orange: [[1.92, .58, .036], [2.03, .47, .03], [2.12, .66, .034], [2.17, .56, .034], [2.19, .45, .03]],
+    // black apical patch: costa from x 1.45 out to the margin just above M1's end, inner edge running above M1
+    apexPoly: [[1.35, .76], [1.45, .6], [1.7, .5], [1.97, .41], [2.2, .33], [2.33, .3]],
   },
   hind: {
-    cp: [[.1, -.02], [.7, -.1], [1.4, -.26], [1.82, -.62], [1.76, -1.1], [1.36, -1.5], [.8, -1.62], [.4, -1.3], [.16, -.7]],
+    cp: [[.1, -.02], [.7, -.1], [1.4, -.26], [1.83, -.64], [1.78, -1.1], [1.38, -1.5], [.82, -1.64], [.38, -1.4], [.14, -.76]],
     U: [[.16, -.12], [.55, -.22], [.98, -.42]], L: [[.16, -.2], [.45, -.55], [.86, -.8]], D: [[.98, -.42], [.88, -.6], [.86, -.8]],
     veins: [
       ['h', [.22, -.1], [.26, -.06], [.34, -.06]],
@@ -213,19 +295,19 @@ const WINGS = {
       ['1A+2A', [.17, -.22], [.38, -.8], [.62, -1.52]],
       ['3A', [.17, -.26], [.2, -.5], [.22, -.8]],
     ],
-    band: .12, veinW: .06, apex: () => false, scent: ['CuA2', .35],
+    band: .105, veinW: .05, apex: () => false, scent: ['CuA2', .35], base: 0, spotIn: .022, border: [2.6, 7.2],
   },
 };
 function venation(W) {
   const outline = W.outline = crClosed(W.cp, 14), edge = { U: W.U, L: W.L, D: W.D };
   const at = o => typeof o[0] === 'string' ? q2(...edge[o[0]], o[1]) : o;
-  W.lines = []; W.named = []; const ends = [];
+  W.lines = []; W.named = []; W.kinds = ['cell', 'cell', 'D']; const ends = [];
   [W.U, W.L, W.D].forEach(e => W.lines.push(qpts(...e)));
   W.veins.forEach(([name, from, via, to, kind]) => {
     const a = at(from), end = kind === 'stalk' ? to : outline[nearest(outline, to)];
     if (kind !== 'stalk') ends.push(nearest(outline, to));
     const c = via || [(a[0] + end[0]) / 2 + (end[1] - a[1]) * .06, (a[1] + end[1]) / 2 - (end[0] - a[0]) * .06];
-    const pts = qpts(a, c, end); W.lines.push(pts);
+    const pts = qpts(a, c, end); W.lines.push(pts); W.kinds.push(kind === 'stalk' ? 'stalk' : name === 'h' || name === '3A' ? 'h' : typeof from[0] === 'string' ? 'cell' : 'base');
     if (name && name !== 'h') W.named.push([name, pts[Math.round(pts.length * .62)]]);
     if (W.scent && name === W.scent[0]) W.scentAt = pts[Math.round(pts.length * W.scent[1])];
   });
@@ -233,14 +315,68 @@ function venation(W) {
   const cx = outline.reduce((s, p) => s + p[0], 0) / outline.length, cz = outline.reduce((s, p) => s + p[1], 0) / outline.length;
   for (let k = 0; k < ends.length - 1; k++) {
     const i0 = ends[k], i1 = ends[k + 1]; if (i1 - i0 < 3) continue;
-    const m = outline[Math.round((i0 + i1) / 2)], d = [cx - m[0], cz - m[1]], dl = Math.hypot(...d);
-    if (Math.hypot(m[0] - W.cp[0][0], m[1] - W.cp[0][1]) < 1.3) continue;
-    [[.04, .018], [.1, .034]].forEach(([o, r]) => W.spots.push([m[0] + d[0] / dl * o, m[1] + d[1] / dl * o, r]));
+    const mid = outline[Math.round((i0 + i1) / 2)];
+    if (Math.hypot(mid[0] - W.cp[0][0], mid[1] - W.cp[0][1]) < 1.3) continue;
+    // two rows of white dots in the border, usually a pair per cell in each row; the inner row larger
+    (i1 - i0 >= 5 ? [.3, .7] : [.5]).forEach(f => {
+      const i = Math.round(i0 + (i1 - i0) * f), m = outline[i], a = outline[i - 1], b = outline[(i + 1) % outline.length];
+      let d = [-(b[1] - a[1]), b[0] - a[0]]; if (d[0] * (cx - m[0]) + d[1] * (cz - m[1]) < 0) d = [-d[0], -d[1]]; const dl = Math.hypot(...d);
+      [[.034, .015], [.083, W.spotIn]].forEach(([o, r]) => W.spots.push([m[0] + d[0] / dl * o, m[1] + d[1] / dl * o, r]));
+    });
   }
-  if (W === WINGS.fore) [[1.80, .70, .05], [1.98, .66, .045], [2.10, .55, .04], [2.17, .42, .032], [2.20, .28, .026]].forEach(s => W.spots.push(s));
+  // forewing apex (male, upperside): a few white spots near the costa, and pale-orange subapical spots
+  // (W.orange: cut out of the black, so the orange wash shows through)
+  if (W.sub) W.sub.forEach(s => W.spots.push(s));
+  if (W.orange) W.orange.forEach(s => W.spots.push(s));
 }
-venation(WINGS.fore); venation(WINGS.hind);
-const isDark = (W, u, z, dOut) => dOut < W.band || (W.apex([u, z]) && dOut < .42);
+// The black scale pattern beyond the plain band and veins (male monarch, upperside):
+// veins thickest at the base and on the cross-vein closing the cell, then flaring into the border so its inner edge
+// is scalloped between veins; black costa and apical patch on the forewing; dark scaling around the wing base.
+function paintDark(W, x, X, Y, sx, veins = true, ventral = false) {
+  x.fillStyle = x.strokeStyle = '#000'; x.lineCap = x.lineJoin = 'round';
+  const o = W.outline, path = pts => { x.beginPath(); pts.forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); };
+  if (W.costa) { x.lineWidth = W.costa * 2 * sx; path(o.slice(0, o.findIndex(p => p[0] > 2.3))); x.stroke(); }
+  if (W.inner) { x.lineWidth = W.inner * 2 * sx; path(o.slice(nearest(o, [1.6, -.36]))); x.stroke(); } // forewing inner margin: broad, spotless black
+  if (W.apexPoly && !ventral) { const a = W.apexPoly, i0 = nearest(o, a[0]), i1 = nearest(o, a[a.length - 1]); path([...a, ...o.slice(i0, i1 + 1).reverse()]); x.closePath(); x.fill(); }
+  W.lines.forEach((l, li) => {
+    const kind = W.kinds[li], toEdge = kind === 'cell' && li > 2 || kind === 'base', F = W.band + .11;
+    const len = [0]; for (let i = 1; i < l.length; i++) len.push(len[i - 1] + Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1]));
+    const L = len[len.length - 1];
+    const wd = l.map((_, i) => {
+      const s = len[i] / L, rem = L - len[i];
+      let w = W.veinW * (kind === 'D' ? 1.3 : kind === 'base' || li < 2 ? 1.35 - .35 * Math.min(1, s * 2.5) : 1);
+      if (toEdge && rem < F) w = Math.max(w, W.veinW + .15 * Math.pow(1 - rem / F, 1.3)); else if (!veins) w = 0;
+      return w / 2;
+    });
+    const side = [], back = [];
+    l.forEach((p, i) => { const q = l[Math.min(i + 1, l.length - 1)], r = l[Math.max(i - 1, 0)], dx = q[0] - r[0], dz = q[1] - r[1], d = Math.hypot(dx, dz) || 1;
+      side.push([p[0] - dz / d * wd[i], p[1] + dx / d * wd[i]]); back.push([p[0] + dz / d * wd[i], p[1] - dx / d * wd[i]]); });
+    path([...side, ...back.reverse()]); x.closePath(); x.fill();
+  });
+  if (W.orange && !ventral) { x.fillStyle = '#fff'; W.orange.forEach(([u, z, r]) => { x.beginPath(); x.ellipse(X(u), Y(z), r * 1.25 * sx, r * .8 * sx, -.5, 0, 7); x.fill(); }); }
+  if (!W.base) return;
+  const b = W.cp[0], g = x.createRadialGradient(X(b[0]), Y(b[1]), 0, X(b[0]), Y(b[1]), W.base * sx);
+  g.addColorStop(0, 'rgba(0,0,0,.95)'); g.addColorStop(.45, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(X(b[0]) - W.base * sx, Y(b[1]) - W.base * sx, W.base * 2 * sx, W.base * 2 * sx);
+}
+// isDark samples a raster of the same pattern (band + apex + flares + basal scaling, not the mid-veins).
+function darkMap(W) {
+  const o = W.outline, u0 = Math.min(...o.map(p => p[0])), z0 = Math.min(...o.map(p => p[1]));
+  const sx = 200, cw = Math.ceil((Math.max(...o.map(p => p[0])) - u0) * sx) + 2, ch = Math.ceil((Math.max(...o.map(p => p[1])) - z0) * sx) + 2;
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch; const x = c.getContext('2d');
+  const X = u => (u - u0) * sx, Y = z => (z - z0) * sx;
+  x.fillStyle = '#fff'; x.fillRect(0, 0, cw, ch); x.beginPath(); o.forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); x.closePath();
+  x.save(); x.clip(); x.lineWidth = W.band * 2 * sx; x.strokeStyle = '#000';
+  if (W.border) { x.beginPath(); o.slice(W.border[0] * 14, W.border[1] * 14).forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); }
+  x.stroke(); paintDark(W, x, X, Y, sx, false); x.restore();
+  const d = x.getImageData(0, 0, cw, ch).data;
+  W.dark = (u, z) => { const i = Math.round(X(u)), j = Math.round(Y(z)); return i >= 0 && j >= 0 && i < cw && j < ch && d[(j * cw + i) * 4] < 110; };
+  W.paint = (ctx, X2, Y2, s2) => paintDark(W, ctx, X2, Y2, s2);
+  // underside (for a back-face mask if the wash shows one): apex tan, not black; spots ~1.4x larger; hindwing paler with white-edged veins
+  W.paintV = (ctx, X2, Y2, s2) => paintDark(W, ctx, X2, Y2, s2, true, true);
+}
+venation(WINGS.fore); venation(WINGS.hind); darkMap(WINGS.fore); darkMap(WINGS.hind);
+const isDark = (W, u, z) => W.dark(u, z);
 const inSpot = (W, u, z, k = 1) => W.spots.some(([x, y, r]) => Math.hypot(u - x, z - y) < r * k);
 
 function wingStrokes(W, mirror, seed) {
@@ -267,14 +403,15 @@ function wingStrokes(W, mirror, seed) {
 }
 
 // ---------- heat on the wing ----------
-// A grid over each wing. Sunlight heats each cell (black scales absorb most), warmth diffuses (fast along veins,
-// slow through membrane), leaks to the air, and flows into the thorax at the wing root.
+// A grid over each wing. Each cell runs its own energy balance (see HB below): sun absorbed by its upper and its lower
+// scales, longwave to sky and ground, convection to the moving air. Warmth spreads a little (along veins more than
+// membrane; real lateral conduction in a few-µm wing is small) and flows into the thorax at the wing root.
 const CELL = .022;
 function makeHeat(W) {
   const o = W.outline, us = o.map(p => p[0]), zs = o.map(p => p[1]);
   const minU = Math.min(...us) - CELL * 2, minZ = Math.min(...zs) - CELL * 2;
   const nx = Math.ceil((Math.max(...us) - minU) / CELL) + 3, nz = Math.ceil((Math.max(...zs) - minZ) / CELL) + 3, n = nx * nz;
-  const inside = new Uint8Array(n), D = new Float32Array(n), absorb = new Float32Array(n), root = new Uint8Array(n);
+  const inside = new Uint8Array(n), D = new Float32Array(n), absorb = new Float32Array(n), absorbV = new Float32Array(n), root = new Uint8Array(n);
   const veinPts = W.lines.flat();
   for (let j = 1; j < nz - 1; j++) for (let i = 1; i < nx - 1; i++) {
     const k = j * nx + i, u = minU + (i + .5) * CELL, z = minZ + (j + .5) * CELL;
@@ -283,8 +420,11 @@ function makeHeat(W) {
     const dO = Math.min(...o.map(p => Math.hypot(p[0] - u, p[1] - z)));
     const dV = Math.min(...veinPts.map(p => Math.hypot(p[0] - u, p[1] - z)));
     const vein = dV < CELL * 1.3, spot = inSpot(W, u, z, 1.2), blk = isDark(W, u, z, dO) && !spot;
-    D[k] = vein ? .22 : .035;
-    absorb[k] = vein || blk ? 1 : spot ? .25 : .55;
+    D[k] = vein ? .15 : .03; // explicit-step stability: 4·D + loss per step stays < 1 even in fast flight
+    // solar absorptivity (estimates in the range Kingsolver 1983 and Tsai et al. 2020 use): black scales ~.92, orange
+    // ~.6, white ~.3; rubbed bare membrane .12 (set by the rub tool). Underside: tan apex, paler orange, bigger white spots
+    absorb[k] = vein || blk ? .92 : spot ? .3 : .6;
+    absorbV[k] = vein ? .9 : inSpot(W, u, z, 1.6) ? .3 : blk ? (W.apex([u, z]) ? .65 : .88) : .5;
     root[k] = Math.hypot(u - W.cp[0][0], z - W.cp[0][1]) < .2 ? 1 : 0;
   }
   const cE = new Float32Array(n), cN = new Float32Array(n), hm = (a, b) => 2 * a * b / (a + b);
@@ -292,74 +432,246 @@ function makeHeat(W) {
   const data = new Uint8Array(n * 4);
   const tex = new THREE.DataTexture(data, nx, nz, THREE.RGBAFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
   const idx = []; for (let k = 0; k < n; k++) if (inside[k]) idx.push(k);
-  return { nx, nz, minU, minZ, idx, T: new Float32Array(n), T2: new Float32Array(n), data, tex, rootMean: 0,
-    reset(Ta) { this.T.fill(Ta); this.T2.fill(Ta); },
-    step(S, Ta, Tth, loss, sub) {
-      let T = this.T, T2 = this.T2; const q = .0065, g = .01;
-      for (let s = 0; s < sub; s++) {
-        for (let a = 0; a < idx.length; a++) {
-          const k = idx[a], t = T[k];
-          const lap = cE[k] * (T[k + 1] - t) + cE[k - 1] * (T[k - 1] - t) + cN[k] * (T[k + nx] - t) + cN[k - nx] * (T[k - nx] - t);
-          T2[k] = t + lap + absorb[k] * S * q - loss * (t - Ta) - root[k] * g * (t - Tth);
-        }
-        const sw = T; T = T2; T2 = sw;
-      }
-      this.T = T; this.T2 = T2; let rs = 0, rc = 0;
-      for (let a = 0; a < idx.length; a++) { const k = idx[a]; if (root[k]) { rs += T[k]; rc++; } this.data[k * 4] = Math.max(0, Math.min(255, (T[k] - Ta) / 12 * 255)); }
-      // cells just outside the wing copy their inside neighbour, so the texture fades cleanly at the margin
-      this.rootMean = rc ? rs / rc : Ta; this.tex.needsUpdate = true;
-    },
+  const g = .01; // thorax-to-root coupling per step (wing base ↔ thorax)
+  return { nx, nz, minU, minZ, idx: new Int32Array(idx), cE, cN, absorb, absorbV, root, g, T: new Float32Array(n), T2: new Float32Array(n), data, tex, rootMean: 0, maxT: 0, // maxT: hottest cell, °C above air (read this, not T: with the worker, T stays on the worker)
+    // T holds each cell's excess over the air (°C above air), so moving the air slider never flashes the colour
+    reset() { this.T.fill(0); this.T2.fill(0); },
+    step(a, sub) { const r = heatKernel(this, a, sub, this.data); this.T = r.T; this.T2 = r.T2; this.rootMean = r.rootMean; this.maxT = r.maxT; this.tex.needsUpdate = true; },
   };
 }
+// `sub` explicit steps over the wing's inside cells, then texture R = excess / 12. No closures, so the same source
+// also runs in the heat worker below. a = this wing's budget for one step, already × (step time / heat capacity):
+// eu, el = sun on the upper / lower side (W/m²), l = net sky longwave at air temperature, loss = 2(h_c + h_r).
+function heatKernel(w, a, sub, out) {
+  let T = w.T, T2 = w.T2; const { idx, cE, cN, absorb, absorbV, root, nx, g } = w, { eu, el, l, loss, Eth } = a;
+  for (let s = 0; s < sub; s++) {
+    for (let a = 0; a < idx.length; a++) {
+      const k = idx[a], t = T[k];
+      const lap = cE[k] * (T[k + 1] - t) + cE[k - 1] * (T[k - 1] - t) + cN[k] * (T[k + nx] - t) + cN[k - nx] * (T[k - nx] - t);
+      T2[k] = t + lap + absorb[k] * eu + absorbV[k] * el + l - loss * t - root[k] * g * (t - Eth);
+    }
+    const sw = T; T = T2; T2 = sw;
+  }
+  let rs = 0, rc = 0, mx = 0;
+  for (let b = 0; b < idx.length; b++) { const k = idx[b]; if (root[k]) { rs += T[k]; rc++; } if (T[k] > mx) mx = T[k]; out[k * 4] = Math.max(0, Math.min(255, T[k] / 12 * 255)); }
+  // cells just outside the wing copy their inside neighbour, so the texture fades cleanly at the margin
+  return { T, T2, rootMean: rc ? rs / rc : 0, maxT: mx };
+}
+// The heat sim runs off the main thread when it can, so dragging, orbiting and flight never wait on it. The page posts
+// the frame's sun, thorax and substeps; the worker steps both wings and sends back the texture bytes and root warmth
+// (a frame later). If the worker is still busy, substeps pile up and go in the next batch, so sim time is never lost.
+const heatSim = (() => {
+  let wk = null, busy = false, acc = 0, args = null, sentAt = 0;
+  const wings = () => [heat.fore, heat.hind];
+  function start() {
+    try {
+      const src = heatKernel.toString() + `;let W=[];onmessage=e=>{const d=e.data;if(d.init){W=d.init;return;}if(d.absorb){d.absorb.forEach((a,i)=>{W[i].absorb=a;});return;}
+        const out=[];d.bufs.forEach((b,i)=>{const w=W[i],u=new Uint8Array(b),r=heatKernel(w,d.a[i],d.sub,u);w.T=r.T;w.T2=r.T2;out.push({buf:b,rootMean:r.rootMean,maxT:r.maxT});});
+        postMessage(out,out.map(o=>o.buf));};`;
+      wk = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      wk.onerror = () => { wk = null; busy = false; };
+      wk.postMessage({ init: wings().map(h => ({ T: h.T, T2: h.T2, idx: h.idx, cE: h.cE, cN: h.cN, absorb: h.absorb, absorbV: h.absorbV, root: h.root, nx: h.nx, g: h.g })) });
+      wk.onmessage = e => {
+        busy = false;
+        e.data.forEach((r, i) => { const h = wings()[i]; h.data.set(new Uint8Array(r.buf)); h.tex.needsUpdate = true; h.rootMean = r.rootMean; h.maxT = r.maxT; h.spare = r.buf; });
+        if (acc) send();
+      };
+    } catch (err) { wk = null; }
+  }
+  function send() {
+    const bufs = wings().map(h => { const b = h.spare || new ArrayBuffer(h.data.length); h.spare = null; return b; });
+    wk.postMessage({ ...args, sub: acc, bufs }, bufs); busy = true; acc = 0; sentAt = performance.now();
+  }
+  return {
+    setAbsorb(a) { if (wk) wk.postMessage({ absorb: a.map(x => x.slice()) }); }, // rubbed scales: bare membrane absorbs less
+    reset() { wings().forEach(h => h.reset()); acc = 0; if (wk) wk.terminate(); wk = null; busy = false; if (typeof Worker !== 'undefined') start(); },
+    step(a, sub) { // a = [fore, hind] per-step budgets (see heatKernel)
+      if (wk && busy && performance.now() - sentAt > 2000) { wk.terminate(); wk = null; } // silent worker (blocked): run it here
+      if (!wk) { wings().forEach((h, i) => h.step(a[i], sub)); return; }
+      args = { a }; acc = Math.min(64, acc + sub); if (!busy) send();
+    },
+  };
+})();
 
-// The paint mask: where orange pigment can sit (between the black veins and the black border), drawn smooth at
-// 512 px with canvas strokes. G holds a blurred copy, so the shader can tell how close a spot is to a vein or edge.
-function makeMask(W, hs) {
+// ---------- heat budget: sun, sky and moving air (Kingsolver 1983; Porter & Gates 1969; Gates 1980) ----------
+// The steady-state butterfly model of Kingsolver 1983 (as coded in TrenchR::Tb_butterfly) run as a transient, SI units.
+// Life is slow: sim time runs HB.X times faster (thorax time constant ~2-3 min in life, ~7 s here).
+const HB = {
+  X: 20, sb: 5.67e-8, eps: .97, ka: .025, nu: 1.57e-5, rg: .3, // air at ~20 °C; ground solar reflectance .3 (TrenchR default)
+  v0: .5, vFlap: 1.5,   // m/s: free convection + garden air never fully still (estimate); flapping adds ~1.5 m/s over the wing
+  Cw: 25, Lw: .04,      // wing heat capacity J/m²K (≈.012 kg/m² × ~2 kJ/kg·K, estimate); wing chord 4 cm
+  Dth: .0045, Lth: .009, ri: .0015, fur: .00075, kFur: .13, // thorax 4.5 × 9 mm; core radius, fur depth, fur conductivity (Kingsolver 1983)
+  aTh: .9, mTh: .15, cTh: 3.3, Groot: .0002, // dark thorax absorptivity; .15 g × 3.3 J/g·K; wing-base conductance W/K (small: Tsai 2020)
+  Mshiv: .07, Mfly: .3, // W per g thorax. Shivering: from Kammer 1970's ~1.3 °C/min × heat capacity. Flight: estimate (unverified)
+};
+HB.Cth = HB.mTh * HB.cTh; HB.Ath = Math.PI * HB.Dth * HB.Lth; HB.Rfur = (HB.ri + HB.fur) * Math.log((HB.ri + HB.fur) / HB.ri) / HB.kFur;
+const hbE = { beam: 0, dif: 0, glob: 0, sky: 0, hr: 5.3, side: [[0, 0], [0, 0]], a: [{}, {}] }, hbN = new THREE.Vector3();
+// light and sky at the butterfly. cover = sunCover (direct sun blocked), shadeK = the shade leaf
+function hbSky(Ta, sun, cover, shadeK) {
+  const e = hbE, sy = sun.y;
+  const clear = sy > .02 ? 1361 * Math.pow(.7, Math.pow(1 / sy, .678)) : 0; // clear-sky beam, air-mass fit (Meinel & Meinel 1976)
+  e.beam = clear * (1 - cover) * shadeK;
+  e.dif = clear * (.1 + .2 * cover) * (shadeK < 1 ? .6 : 1); // diffuse sky light: ~10% of beam when clear, more under thin cloud
+  e.glob = e.beam * Math.max(0, sy) + e.dif;
+  e.sky = (.22 * Ta - 20.4) * (1 - .8 * cover); // clear-sky radiant temperature 1.22·Ta − 20.4 °C (Swinbank 1963, via Gates 1980), minus air
+  e.hr = 4 * HB.eps * HB.sb * Math.pow(Ta + 273.15, 3); // linearised longwave, W/m²K
+}
+// sun on the upper and lower side of a wing whose upper surface faces n (beam × cos, sky diffuse, light off the ground)
+function hbSide(n, sun, out) {
+  const e = hbE, c = n.dot(sun), up = (1 + n.y) / 2, dn = 1 - up;
+  out[0] = e.beam * Math.max(0, c) + e.dif * up + HB.rg * e.glob * dn;
+  out[1] = e.beam * Math.max(0, -c) + e.dif * dn + HB.rg * e.glob * up;
+}
+// one frame of the budget: wing per-step coefficients for the kernel, and the thorax ODE (returns new Tth)
+function hbStep(dt, Ta, Tth, sun, vAir, flapW, shut, flying, shivering, rootEx, axis) {
+  const e = hbE, v = Math.sqrt(vAir * vAir + HB.v0 * HB.v0 + (flapW * HB.vFlap) ** 2);
+  const hw = .59 * HB.ka * Math.sqrt(v / (HB.Lw * HB.nu)); // laminar flat plate, h ∝ √(v/L) (Incropera; Porter & Gates)
+  const f = HB.X / 480 / HB.Cw, k = 1 - Math.exp(-dt / .08); // per kernel step; wingbeat-averaged light (real beats ~10 Hz)
+  ['fore', 'hind'].forEach((w, i) => {
+    let u = 0, l = 0; [w + 'R', w + 'L'].forEach(n => { hbN.set(0, 1, 0).applyQuaternion(P[n].getWorldQuaternion(tmpQ)); hbSide(hbN, sun, hbS); u += hbS[0] / 2; l += hbS[1] / 2; });
+    const sd = e.side[i]; sd[0] += (u - sd[0]) * k; sd[1] += (l - sd[1]) * k;
+    const a = e.a[i]; a.eu = sd[0] * f; a.el = sd[1] * f; a.l = e.hr * e.sky * f; a.loss = Math.min(.3, 2 * (hw + e.hr) * f); a.Eth = Tth - Ta;
+  });
+  // thorax: a furry cylinder (Kingsolver 1983: Nu = 0.6 Re^½, then the fur's conduction resistance in series)
+  const vt = Math.sqrt(vAir * vAir + HB.v0 * HB.v0 + (.5 * flapW * HB.vFlap) ** 2), Nu = .6 * Math.sqrt(vt * HB.Dth / HB.nu);
+  const hT = 1 / (HB.Dth / (Nu * HB.ka) + HB.Rfur), sinA = Math.sqrt(Math.max(0, 1 - axis.dot(sun) ** 2)), ex = Tth - Ta;
+  const Qs = HB.aTh * (e.beam * HB.Dth * HB.Lth * sinA * shut + (e.dif + HB.rg * e.glob) * HB.Ath / 2);
+  const M = HB.mTh * ((shivering ? HB.Mshiv : 0) + (flying ? HB.Mfly : 0));
+  const Q = Qs + e.hr * HB.Ath * (e.sky / 2 - ex) + HB.Groot * (rootEx - ex) + M - hT * HB.Ath * ex;
+  e.v = v; return Tth + dt * HB.X * Q / HB.Cth;
+}
+const hbS = [0, 0];
+
+// The paint mask, drawn smooth at 512 px with canvas strokes. R: where orange pigment can sit (between the black
+// veins and the black border). G: a blurred copy, so the shader can tell how close a spot is to a vein or edge.
+// B: the black scales (border, apex, veins) for a dark under-wash. A: the white spots, always left as bare paper.
+function makeMask(W, hs, ventral = false) {
   const cw = 512, ch = Math.round(512 * hs.nz / hs.nx), c = document.createElement('canvas'); c.width = cw; c.height = ch;
-  const x = c.getContext('2d'), sx = cw / (hs.nx * CELL), X = u => (u - hs.minU) * sx, Y = z => (z - hs.minZ) * sx;
+  const x = c.getContext('2d', { willReadFrequently: true }), sx = cw / (hs.nx * CELL), X = u => (u - hs.minU) * sx, Y = z => (z - hs.minZ) * sx;
   const path = new Path2D(); W.outline.forEach(([u, z], i) => i ? path.lineTo(X(u), Y(z)) : path.moveTo(X(u), Y(z))); path.closePath();
-  x.fillStyle = '#000'; x.fillRect(0, 0, cw, ch); x.fillStyle = '#fff'; x.fill(path);
+  const grab = () => { const d = x.getImageData(0, 0, cw, ch).data, o = new Float32Array(cw * ch); for (let i = 0; i < o.length; i++) o[i] = d[i * 4] / 255; return o; };
+  x.fillStyle = '#000'; x.fillRect(0, 0, cw, ch); x.fillStyle = '#fff'; x.fill(path); const inside = grab();
   x.save(); x.clip(path); x.strokeStyle = '#000'; x.lineJoin = x.lineCap = 'round';
   x.lineWidth = W.band * 2 * sx; x.stroke(path);
   const apex = W.outline.filter(p => W.apex(p)); if (apex.length) { x.lineWidth = .84 * sx; x.beginPath(); apex.forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); x.stroke(); }
-  W.lines.forEach(l => { x.lineWidth = W.veinW * sx; x.beginPath(); l.forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); x.stroke(); });
-  x.restore();
-  const src = x.getImageData(0, 0, cw, ch).data, m = new Float32Array(cw * ch);
-  for (let i = 0; i < m.length; i++) m[i] = src[i * 4] / 255;
+  const veins = () => W.lines.forEach(l => { x.lineWidth = W.veinW * sx; x.beginPath(); l.forEach(([u, z], i) => i ? x.lineTo(X(u), Y(z)) : x.moveTo(X(u), Y(z))); x.stroke(); });
+  veins();
+  const pat = ventral ? W.paintV : W.paint; pat && pat(x, X, Y, sx); // [science] scalloped border, vein taper/flare, apex, basal scaling (underside: W.paintV)
+  x.restore(); const m = grab();
+  // where the black scales are: the science pattern (W.dark) plus the veins; without it, everything not orange
+  let blackAt = null;
+  if (W.dark) { x.fillStyle = '#000'; x.fillRect(0, 0, cw, ch); x.strokeStyle = '#fff'; x.lineCap = 'round'; veins(); const v = grab();
+    blackAt = i => v[i] > .5 || W.dark(hs.minU + (i % cw + .5) / sx, hs.minZ + (Math.floor(i / cw) + .5) / sx) ? 1 : 0; }
+  x.fillStyle = '#000'; x.fillRect(0, 0, cw, ch); x.fillStyle = '#fff';
+  W.spots.filter(sp => !(W.orange && W.orange.includes(sp))).forEach(([u, z, r]) => { x.beginPath(); x.arc(X(u), Y(z), r * (ventral ? 1.6 : 1.25) * sx, 0, 6.3); x.fill(); }); const spot = grab();
   const blur = (a, r) => { const b = new Float32Array(a.length), o2 = new Float32Array(a.length);
     for (let j = 0; j < ch; j++) { let s = 0; for (let i = -r; i <= r; i++) s += a[j * cw + Math.max(0, Math.min(cw - 1, i))]; for (let i = 0; i < cw; i++) { b[j * cw + i] = s / (2 * r + 1); s += a[j * cw + Math.min(cw - 1, i + r + 1)] - a[j * cw + Math.max(0, i - r)]; } }
     for (let i = 0; i < cw; i++) { let s = 0; for (let j = -r; j <= r; j++) s += b[Math.max(0, Math.min(ch - 1, j)) * cw + i]; for (let j = 0; j < ch; j++) { o2[j * cw + i] = s / (2 * r + 1); s += b[Math.min(ch - 1, j + r + 1) * cw + i] - b[Math.max(0, j - r) * cw + i]; } }
     return o2; };
-  const soft = blur(m, 1), wide = blur(blur(m, 7), 7), data = new Uint8Array(cw * ch * 4);
-  for (let i = 0; i < m.length; i++) { data[i * 4] = soft[i] * 255; data[i * 4 + 1] = wide[i] * 255; data[i * 4 + 3] = 255; }
+  const dk = new Float32Array(m.length); for (let i = 0; i < m.length; i++) dk[i] = inside[i] * (1 - m[i]) * (1 - spot[i]) * (blackAt ? blackAt(i) : 1);
+  const soft = blur(m, 1), wide = blur(blur(m, 7), 7), dark = blur(dk, 2), sp = blur(spot, 1), data = new Uint8Array(cw * ch * 4);
+  for (let i = 0; i < m.length; i++) { data[i * 4] = soft[i] * 255; data[i * 4 + 1] = wide[i] * 255; data[i * 4 + 2] = dark[i] * 255; data[i * 4 + 3] = sp[i] * 255; }
   const t = new THREE.DataTexture(data, cw, ch, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
   return t;
 }
 
+// Watercolour on the wing: the real monarch pattern, always there (orange cells, black veins and border, white
+// spots), painted loose: three glazes, each a ragged cauliflower front drying to a dark tide line, backrun blooms,
+// pigment pooling against the veins, granulating in the paper tooth and in places running over the ink. The black
+// scales get an uneven granulating dark wash; the white spots stay bare paper. This never changes, so it is painted
+// once per wing side into a texture (bakeWash) and the per-frame shader only looks it up.
+// Heat is a separate layer on top: isotherms in carmine pencil, every 2 °C of wing temperature, hatched where hottest.
+// The paper: watercolour noise baked once into a small tiling texture, so the shader only looks it up.
+// R: broad wet-in-wet pools, G: the ragged cauliflower front, B: backrun blooms, A: an under-layer. All domain-warped.
+const PAPER = (() => {
+  const N = 256, d = new Uint8Array(N * N * 4), hs = (i, j, s) => { let t = Math.imul(i * 374761393 + j * 668265263 + s * 2147483647 | 0, 1274126177); t ^= t >>> 13; t = Math.imul(t, 1103515245); return ((t ^ t >>> 16) >>> 0) / 4294967296; };
+  const vn = (x, y, P, s) => { const i = Math.floor(x), j = Math.floor(y); let fx = x - i, fy = y - j; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    const m = k => ((k % P) + P) % P, a = hs(m(i), m(j), s), b = hs(m(i + 1), m(j), s), c = hs(m(i), m(j + 1), s), e = hs(m(i + 1), m(j + 1), s);
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + e) * fx * fy; };
+  const fbm = (x, y, f, s) => .5 * vn(x * f, y * f, f, s) + .3 * vn(x * f * 2, y * f * 2, f * 2, s + 1) + .2 * vn(x * f * 4, y * f * 4, f * 4, s + 2);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const x = i / N, y = j / N, qx = fbm(x, y, 3, 10) - .5, qy = fbm(x, y, 3, 20) - .5, k = (j * N + i) * 4;
+    d[k] = fbm(x + qx * .35, y + qy * .35, 4, 30) * 255; d[k + 1] = fbm(x + qx * .25, y + qy * .25, 12, 40) * 255;
+    d[k + 2] = fbm(x + qx * .3, y + qy * .3, 9, 50) * 255; d[k + 3] = fbm(x + qy * .3, y + qx * .3, 7, 60) * 255;
+  }
+  const t = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true;
+  return t;
+})();
+const BAKE_VS = `varying vec2 vP; uniform vec4 box; void main(){ vP = box.xy + uv * box.zw; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const BAKE_FS = `
+precision highp float; varying vec2 vP;
+uniform sampler2D mask, paper; uniform vec4 box; uniform float dark, seed, vent;
+// one glaze: coverage with a soft wet body and a hard dark rim where its front dried
+vec2 glaze(float e, float th){ float d = e - th; return vec2(smoothstep(-.015, .05, d), exp(-d*d/.0009) * step(-.02, d)); }
+void main(){
+  vec2 uv = (vP - box.xy) / box.zw;
+  vec4 mk = texture2D(mask, uv); float m = mk.r, mb = mk.g, blk = mk.b, spot = mk.a;
+  vec2 p = vP * .35 + seed;
+  vec4 t1 = texture2D(paper, p);                                   // big, front, bloom, under-layer
+  vec2 tg = texture2D(paper, p * 17.0 + .31).gb;                  // paper tooth / pigment granulation
+  float big = t1.r, mid = t1.g, bf = t1.b, bd = t1.a, grain = tg.x * .6 + tg.y * .4;
+  float spill = smoothstep(.6, .72, texture2D(paper, p * .37 + .53).r); // patches where the wash runs over the ink
+  float paint = smoothstep(.45, .7, max(m, mb * 1.7 * spill));
+  float pool = clamp((m - mb) * 2.4, 0.0, 1.0);                  // pigment collects against veins and border
+  float e = .6 + (mid - .5) * .34 + (big - .5) * .3 + pool * .06;  // how much water each patch got
+  vec2 g1 = glaze(e + .1, .30), g2 = glaze(e + (bd - .5) * .16, .50), g3 = glaze(e + (bf - .5) * .14, .66);
+  float bloom = smoothstep(.5, .7, e) * (exp(-pow((bf - .6) / .022, 2.0)) * .5 - smoothstep(.6, .7, bf) * .3);
+  float dens = g1.x * (.46 + .16 * big) + g2.x * .28 + g3.x * .26 + (g1.y + g2.y + g3.y) * .2 + pool * .22 * g1.x + bloom;
+  dens *= (.62 + .6 * grain) * paint * (1.0 - spot);
+  vec3 cY = vec3(1.0, .72, .16), cO = vec3(.97, .45, .03), cR = vec3(.8, .24, .02);   // gamboge, cadmium, burnt orange
+  if (vent > .5) { cY = vec3(1.0, .82, .45); cO = vec3(.95, .62, .26); cR = vec3(.8, .45, .2); }  // underside: paler, buff orange
+  vec3 col = mix(cY, cO, clamp(g2.x * .8 + big * .5 - .1, 0.0, 1.0));
+  col = mix(col, cR, clamp(g3.x * .5 + pool * .4 + (g1.y + g2.y + g3.y) * .35 + (grain - .5) * .3 * dens, 0.0, 1.0));
+  float a = clamp(dens, 0.0, .93);
+  if (dark > .5) {  // on dark paper thin pigment would read as mud: keep it opaque and let paleness show as a lighter hue
+    float cov = g1.x * paint * (1.0 - spot), pale = 1.0 - clamp(dens / .8, 0.0, 1.0);
+    col = mix(col, vec3(1.0, .82, .45), pale * .55 * cov); a = max(a, cov * .88);
+  }
+  // the black scales: lamp black and Payne's grey, laid unevenly, dried with a hard edge, flecks of bare paper
+  float cov = smoothstep(.2, .55, blk * 1.4 + (mid - .5) * .6), lay = smoothstep(.3, .62, bd);
+  float bk = cov * (1.0 - spot) * (.3 + .5 * lay + .25 * exp(-pow((bd - .62) / .03, 2.0))) * (.45 + .9 * grain * grain) * (1.0 - dark * .75);
+  vec3 pg = dark > .5 ? vec3(.42, .44, .52) : mix(vec3(.2, .22, .3), vec3(.06, .06, .07), lay);
+  float A = a + clamp(bk, 0.0, .85) * (1.0 - a);
+  gl_FragColor = vec4(mix(pg, col, a / max(A, .001)), A);
+}`;
+const bakeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), bakeScene = new THREE.Scene(), bakeQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
+bakeScene.add(bakeQuad);
+function bakeWash(mask, hs, seed, dark, vent = 0) {
+  const h = 1 << Math.round(Math.log2(512 * hs.nz / hs.nx)), rt = new THREE.WebGLRenderTarget(512, h, { depthBuffer: false });
+  rt.texture.generateMipmaps = true; rt.texture.minFilter = THREE.LinearMipmapLinearFilter;
+  bakeQuad.material = new THREE.ShaderMaterial({ vertexShader: BAKE_VS, fragmentShader: BAKE_FS, blending: THREE.NoBlending, depthTest: false,
+    uniforms: { mask: { value: mask }, paper: { value: PAPER }, box: { value: new THREE.Vector4(hs.minU, hs.minZ, hs.nx * CELL, hs.nz * CELL) }, dark: { value: dark }, seed: { value: seed }, vent: { value: vent } } });
+  renderer.setRenderTarget(rt); renderer.render(bakeScene, bakeCam); renderer.setRenderTarget(null); bakeQuad.material.dispose();
+  return rt.texture;
+}
 const WASH_VS = `varying vec2 vP; void main(){ vP = vec2(abs(position.x), position.z); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 const WASH_FS = `
 precision highp float; varying vec2 vP;
-uniform sampler2D heat, mask; uniform vec4 box; uniform float dark;
-float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
-float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
-float fbm(vec2 p){ return .5*n(p)+.25*n(p*2.03)+.125*n(p*4.01)+.0625*n(p*8.13); }
+uniform sampler2D heat, washL, washD, washLV, washDV, paper; uniform vec4 box, cell; uniform float dark, air, frontTop, glow;
 void main(){
   vec2 uv = (vP - box.xy) / box.zw;
-  vec2 mk = texture2D(mask, uv).rg; float m = mk.r, mb = mk.g;
-  if (m < .02) discard;
-  float w = texture2D(heat, uv).r;
-  float big = fbm(vP*1.5 + 3.0), mid = fbm(vP*5.0), fine = fbm(vP*34.0), fiber = fbm(vec2(vP.x*60.0, vP.y*9.0));
-  float e = w + (mid - .5) * .32 + (big - .5) * .18;      // warmth, with a ragged wet front
-  float th = .42;
-  float wet = smoothstep(th - .2, th + .14, e);            // how far the wash has crept
-  float tide = exp(-pow((e - th) / .045, 2.0));             // tide line where the spreading edge dried
-  float pool = clamp((m - mb) * 2.4, 0.0, 1.0);             // pigment collects against veins and border
-  float dens = wet * (.36 + .2*big + .3*pool) + tide * .26 * smoothstep(.1, .5, e);
-  dens *= (.72 + .45*fine) * (.9 + .2*fiber);               // paper grain
-  dens *= m;
-  vec3 light = vec3(.97, .62, .22), deep = vec3(.80, .30, .05);
-  vec3 c = mix(light, deep, clamp(dens * 1.2 + pool * .35, 0.0, 1.0));
-  gl_FragColor = vec4(c, clamp(dens * mix(1.0, 1.1, dark), 0.0, .82));
+  bool top = gl_FrontFacing == (frontTop > .5);                     // upperside or underside of the wing
+  vec4 c = dark > .5 ? (top ? texture2D(washD, uv) : texture2D(washDV, uv)) : (top ? texture2D(washL, uv) : texture2D(washLV, uv));
+  c.rgb = mix(c.rgb, min(vec3(1.0), c.rgb * vec3(1.16, 1.0, .62) + vec3(.10, .045, 0.0)), glow * smoothstep(.12, .35, c.r - c.b)); // [light] backlit: orange cells glow, black veins stay opaque
+  // heat: isotherms in carmine pencil. ex = how much warmer than the air this bit of wing is (°C); T = its temperature.
+  // 4 taps a cell apart smooth out the 8-bit steps; G marks cells inside the wing, so dividing by it keeps the
+  // margin from reading as a false cold edge
+  vec2 hg = (texture2D(heat, uv + cell.xy).rg + texture2D(heat, uv - cell.xy).rg + texture2D(heat, uv + cell.zw).rg + texture2D(heat, uv - cell.zw).rg) * .25;
+  float ex = 12.0 * hg.r / max(hg.g, .2), T = air + ex;
+  float tooth = texture2D(paper, vP * 6.0).b, wob = texture2D(paper, vP * .8 + .7).g;   // pencil tooth; slow hand wobble
+  float v = T * .5 + (wob - .5) * .25, fw = max(fwidth(v), 1e-4);
+  float slope = fw / max(fwidth(vP.x) + fwidth(vP.y), 1e-5);      // isotherm spacing: no lines where the wing is evenly warm
+  float iso = (1.0 - smoothstep(.7, 1.7, abs(fract(v - .5) - .5) / fw)) * smoothstep(18.0, 24.0, T) * smoothstep(.35, .75, slope) * smoothstep(.55, .9, hg.g)
+    * (1.0 - smoothstep(.12, .3, fw));                           // contours closer than a few pixels fade out, so it never turns to mud
+  float hd = dot(vP, vec2(.8, .6)) * 55.0, hf = max(fwidth(hd), 1e-4);
+  float hatch = (1.0 - smoothstep(.35, 1.1, abs(fract(hd) - .5) / hf)) * smoothstep(32.0, 38.0, T) * .55;   // hatching marks the hottest wing, by actual temperature
+  hatch *= smoothstep(.55, .9, hg.g) * (1.0 - smoothstep(.2, .4, hf));
+  float L = clamp(max(iso, hatch) * (.5 + .7 * tooth), 0.0, 1.0) * .9;
+  vec3 carmine = dark > .5 ? vec3(1.0, .42, .5) : vec3(.72, .05, .2);
+  float A = c.a + L * (1.0 - c.a);
+  if (A < .01) discard;
+  gl_FragColor = vec4(mix(c.rgb, carmine, L / max(A, .001)), A);
 }`;
 
 // ---------- the monarch ----------
@@ -369,19 +681,19 @@ function bodyProfile() {
   const segs = [[.42, .14, .13], [.04, .29, .2], [-.74, .5, .13, 4]];
   return z => Math.max(0, ...segs.map(([c, h, r, p = 2]) => r * Math.sqrt(Math.max(0, 1 - Math.abs((z - c) / h) ** p))));
 }
-function bodyStrokes(z0, z1, r, seed) {
+function bodyStrokes(z0, z1, r, seed, rings = 0) {
   R = rng(seed); const S = [];
   for (let k = 0; k < 9; k++) {
     const a = k / 9 * Math.PI * 2 + R() * .2, pts = [];
     for (let z = z0; z <= z1 + 1e-6; z += (z1 - z0) / 30) { const rr = r(z); if (rr > .01) pts.push([Math.cos(a) * rr, Math.sin(a) * rr, z]); }
     S.push({ pts, w: .6, d: k % 3 !== 0 });
   }
-  const step = (z1 - z0) / Math.max(4, Math.round((z1 - z0) / .07)); let j = 0;
-  for (let z = z0 + step / 2; z < z1; z += step, j++) {
-    const rr = r(z); if (rr < .03) continue;
-    const a0 = R() * 6.3, span = 3.6 + R() * 2, pts = [];
-    for (let i = 0; i <= 22; i++) { const a = a0 + span * i / 22; pts.push([Math.cos(a) * rr * 1.02, Math.sin(a) * rr * 1.02, z + .01 * Math.sin(a)]); }
-    S.push({ pts, w: .45, d: j % 2 === 1 });
+  const step = (z1 - z0) / (rings || Math.max(4, Math.round((z1 - z0) / .07))); let j = 0;
+  for (let z = z0 + step / 2; rings >= 0 && z < z1; z += step, j++) {
+    const zz = rings ? z1 - step * (j + 1) + step * .08 : z, rr = r(zz) * (rings ? .97 : 1); if (rr < .03) continue;
+    const a0 = rings ? Math.PI * .5 - 2.4 + R() * .3 : R() * 6.3, span = rings ? 4.8 : 3.6 + R() * 2, pts = [];
+    for (let i = 0; i <= 22; i++) { const a = a0 + span * i / 22; pts.push([Math.cos(a) * rr * 1.02, Math.sin(a) * rr * 1.02, zz + (rings ? 0 : .01 * Math.sin(a))]); }
+    S.push({ pts, w: rings ? .55 : .45, d: !rings && j % 2 === 1 });
   }
   return S;
 }
@@ -392,17 +704,48 @@ function segStrokes(len, r, claw) {
   if (claw) S.push({ pts: [[len, 0, 0], [len + .05, -.03, .02]], w: .7 }, { pts: [[len, 0, 0], [len + .05, -.03, -.02]], w: .7 });
   return S;
 }
+// A small dot lying on the body surface at angle a around the body axis (a = PI/2 is the top) and position z.
+const surfDot = (r, a, z, rad) => Array.from({ length: 13 }, (_, i) => { const t = i / 12 * Math.PI * 2.2, R0 = r(z) + .004;
+  return [Math.cos(a) * R0 - Math.sin(a) * Math.cos(t) * rad, Math.sin(a) * R0 + Math.cos(a) * Math.cos(t) * rad, z + Math.sin(t) * rad * .9]; });
+// Proboscis: two fused galeae, coiled like a watch spring under the head at rest; on a milkweed umbel it unrolls,
+// base first, down into the florets (~1/2 forewing length in Danaus plexippus) and rolls back up before it flies.
+const PROB = { stages: [], k: 0 };
+function buildProboscis(head) {
+  const L = .5, N = 60, base = [-.1, .6]; // (y, z) where it leaves the mouth
+  for (let st = 0; st < 10; st++) {
+    const k = st / 9, phi0 = -.45 - .55 * k, pts = []; let y = base[0], z = base[1], phi = phi0;
+    for (let i = 0; i <= N; i++) {
+      const u = i / N, w = Math.min(1, Math.max(0, (k * 1.3 - u) / .3)), kc = -1 / (.055 - .03 * u), ke = -.35;
+      pts.push([y, z]); phi += (kc + (ke - kc) * w) * L / N; y += Math.sin(phi) * L / N; z += Math.cos(phi) * L / N;
+    }
+    const g = part([-1, 1].map(s => ({ pts: pts.map(([y, z], i) => [s * .006 * (1 - .5 * i / N), y, z]), w: .55 })), 900 + st);
+    g.visible = st === 0; head.add(g); PROB.stages.push(g);
+  }
+}
+function updateProboscis(dt, feed) {
+  PROB.k = feed ? Math.min(1, PROB.k + dt / 1.6) : Math.max(0, PROB.k - dt / .5); // slow unroll, quick recoil
+  const k = PROB.k * (1 - .06 * (PROB.k > .99 ? .5 + .5 * Math.sin(clock * 2.1) : 0)), sel = Math.round(k * 9);   // a little probing between florets
+  PROB.stages.forEach((g, i) => { g.visible = i === sel; });
+  return PROB.k;
+}
 function buildBug() {
-  let seed = 100; const r = bodyProfile();
+  let seed = 100; const r = bodyProfile(), H = Math.PI / 2;
+  // white dots on the black body: a row of 4 at the back of the head and 1 between the antennae; 4 on top of the
+  // thorax (with the head dots, an inverted V seen from above); a few along each side of the thorax
+  const headDots = [[H, .5], [H + .35, .33], [H - .35, .33], [H + .95, .34], [H - .95, .34]].map(([a, z]) => ({ pts: surfDot(r, a, z, .016), w: .6 }));
+  const thxDots = [[H + .4, .22], [H - .4, .22], [H + .75, .08], [H - .75, .08], ...[.16, .02, -.12].flatMap(z => [[-.3, z], [Math.PI + .3, z]])].map(([a, z]) => ({ pts: surfDot(r, a, z, .02), w: .55 }));
+  thxDots.push({ pts: [.12, .15, .18, .21, .24].map(z => [0, r(z) + .004, z]), w: .5 }); // short thin white line down the middle of the thorax
   const add = (name, obj, home = new THREE.Vector3()) => { obj.position.copy(home); bug.add(obj); P[name] = obj; return obj; };
-  const head = add('head', part([...bodyStrokes(.3, .57, r, seed++),
+  const head = add('head', part([...bodyStrokes(.3, .57, r, seed++), ...headDots,
     { pts: loop(.12, .04, .45, .085, 1.4, 20, 'yz', -.25), w: .8 }, { pts: loop(-.12, .04, .45, .085, 1.4, 20, 'yz', -.25), w: .8 },
     ...[-1, 1].map(s => ({ pts: quad3([s * .04, -.1, .5], [s * .05, -.08, .62], [s * .04, .02, .64], 10), w: .75 })), // labial palps
-    { pts: Array.from({ length: 40 }, (_, i) => { const a = i / 40 * Math.PI * 4.5, rr = .075 * (1 - i / 46); return [0, -.09 + Math.cos(a) * rr, .52 + Math.sin(a) * rr * .8]; }), w: .7 }], seed++));
-  add('thorax', part([...bodyStrokes(-.24, .3, r, seed++), ...[[.1, .12, .1], [-.1, .12, .1], [.12, .08, -.08], [-.12, .08, -.08]].map(([x, y, z]) => ({ pts: loop(x, y, z, .025, 1.2, 10), w: .5 }))], seed++));
-  const abd = add('abdomen', new THREE.Group(), new THREE.Vector3(0, 0, -.24)); abd.add(part(bodyStrokes(-1.24, -.24, r, seed++).map(s => ({ ...s, pts: s.pts.map(([x, y, z]) => [x, y, z + .24]) })), seed++));
+  ], seed++)); buildProboscis(head); // the proboscis is drawn by buildProboscis so it can uncoil
+  add('thorax', part([...bodyStrokes(-.24, .3, r, seed++, -1), ...thxDots], seed++));
+  const abd = add('abdomen', new THREE.Group(), new THREE.Vector3(0, 0, -.24)); abd.add(part(bodyStrokes(-1.24, -.24, r, seed++, 8).map(s => ({ ...s, pts: s.pts.map(([x, y, z]) => [x, y, z + .24]) })), seed++));
   [-1, 1].forEach(s => { const a = new THREE.Group(); a.position.set(s * .05, .1, .53);
-    a.add(part([{ pts: quad3([0, 0, 0], [s * .12, .32, .34], [s * .34, .36, .76], 26), w: .85 }, { pts: loop(0, 0, 0, .035, 1.4, 16, 'xz').map(([x, , z]) => [s * .36 + x * .8, .37, .78 + z * 1.7]), w: .8 }], seed++));
+    const sh = quad3([0, 0, 0], [s * .11, .29, .3], [s * .3, .32, .67], 26), club = sh.slice(19); // ~0.3 of forewing length
+    const offs = [[s * .88, 0, -.46], [-s * .88, 0, .46], [0, 1, 0], [0, -1, 0]];
+    a.add(part([{ pts: sh, w: .85 }, ...offs.map(o => ({ pts: club.map((p, i) => { const k = .022 * Math.pow(Math.sin(Math.PI * Math.min(1, (i + .5) / (club.length - .2))), .7); return [p[0] + o[0] * k, p[1] + o[1] * k, p[2] + o[2] * k]; }), w: .75 }))], seed++));
     head.add(a); P['ant' + s] = a; });
   // brush-footed: the front pair is tiny and folded against the chest
   const fl = []; [-1, 1].forEach(s => { const a = [s * .09, -.14, .17]; fl.push({ pts: quad3(a, [s * .16, -.2, .25], [s * .14, -.26, .3], 8), w: .7 }, { pts: [[s * .14, -.26, .3], [s * .1, -.3, .36]], w: .6 }); });
@@ -416,24 +759,289 @@ function buildBug() {
     legs.push({ s, li, phi, hip, fem, tib, tar, twitch: 0 });
   }));
   [['fore', .1], ['hind', -.08]].forEach(([w, z]) => {
-    const W = WINGS[w], hs = heat[w] = makeHeat(W), mask = makeMask(W, hs);
+    const W = WINGS[w], hs = heat[w] = makeHeat(W), mask = makeMask(W, hs), maskV = W.paintV ? makeMask(W, hs, true) : mask; // masks only feed the bake
+    hs.idx.forEach(k => { hs.data[k * 4 + 1] = 255; }); hs.tex.needsUpdate = true; // heat texture G = inside the wing (the sim writes only R)
     [1, -1].forEach(s => {
-      const g = new THREE.Group(); g.add(part(wingStrokes(W, s < 0, seed), seed)); seed++;
+      const g = new THREE.Group(); g.add(part(wingStrokes(W, s < 0, seed), seed)); g.add(part(splatter(W, s < 0, seed + 500), seed + 500)); seed++;
       const shape = new THREE.Shape(W.outline.map(([u, zz]) => new THREE.Vector2(u, zz)));
       const geo = new THREE.ShapeGeometry(shape), pos = geo.attributes.position;
       for (let i = 0; i < pos.count; i++) { const u = pos.getX(i), zz = pos.getY(i); pos.setXYZ(i, s * u, camber(u) - .002, zz); }
-      const m = new THREE.ShaderMaterial({ vertexShader: WASH_VS, fragmentShader: WASH_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-        uniforms: { heat: { value: hs.tex }, mask: { value: mask }, box: { value: new THREE.Vector4(hs.minU, hs.minZ, hs.nx * CELL, hs.nz * CELL) }, dark: { value: 0 } } });
+      const ix = geo.index.array, vt = k => new THREE.Vector3().fromBufferAttribute(pos, ix[k]);   // which way the front face points
+      const nrm = new THREE.Triangle(vt(0), vt(1), vt(2)).getNormal(new THREE.Vector3());
+      const sd = s > 0 ? 0 : .43, vent = !!W.paintV, washL = bakeWash(mask, hs, sd, 0), washLV = vent ? bakeWash(maskV, hs, sd + .21, 0, 1) : washL;
+      const m = new THREE.ShaderMaterial({ vertexShader: WASH_VS, fragmentShader: WASH_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide, extensions: { derivatives: true },
+        uniforms: { heat: { value: hs.tex }, washL: { value: washL }, washLV: { value: washLV }, washD: { value: washL }, washDV: { value: washLV }, paper: { value: PAPER }, frontTop: { value: nrm.y > 0 ? 1 : 0 },
+          box: { value: new THREE.Vector4(hs.minU, hs.minZ, hs.nx * CELL, hs.nz * CELL) }, cell: { value: new THREE.Vector4(.7 / hs.nx, .7 / hs.nz, -.7 / hs.nx, .7 / hs.nz) }, dark: { value: 0 }, air: { value: 16 } } });
+      // dark-paper paint is baked the first time dark mode is on
+      m.userData.bakeDark = () => { m.userData.bakeDark = null; m.uniforms.washD.value = bakeWash(mask, hs, sd, 1); m.uniforms.washDV.value = vent ? bakeWash(maskV, hs, sd + .21, 1, 1) : m.uniforms.washD.value; };
       washes.push(m);
+      m.userData.sex = { W, hs, sd, vent, g, mirror: s < 0, seed: seed - 1, st: g.children[0] }; // [sex] for setSex rebuild
       const mesh = new THREE.Mesh(geo, m); mesh.renderOrder = -1; g.add(mesh);
       g.rotation.order = 'YXZ';
       add(`${w}${s > 0 ? 'R' : 'L'}`, g, new THREE.Vector3(s * .08, .13, z));
     });
   });
-  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, 'rgba(232,115,26,.9)'); gr.addColorStop(1, 'rgba(232,115,26,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  // thorax warmth, in the same language as the wings: a few carmine pencil isotherms ringing the warm body
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), gr2 = rng(4242);
+  x.lineCap = 'round'; x.strokeStyle = 'rgb(184,14,52)';
+  [.34, .58, .82].forEach((r0, k) => { for (let pass = 0; pass < 2; pass++) {
+    const ph = gr2() * 6.3, a0 = gr2() * 6.3, wob = [gr2() * 6.3, gr2() * 6.3]; x.globalAlpha = (.95 - k * .22) * (pass ? .5 : 1); x.lineWidth = 2.2 - k * .5 - pass * .6; x.beginPath();
+    for (let i = 0; i <= 64; i++) { const t = a0 + i / 64 * 6.6, rr = 60 * r0 * (1 + .05 * Math.sin(3 * t + wob[0]) + .03 * Math.sin(5 * t + wob[1]) + pass * .02 * Math.sin(t + ph));
+      i ? x.lineTo(64 + Math.cos(t) * rr, 64 + Math.sin(t) * rr * .92) : x.moveTo(64 + Math.cos(t) * rr, 64 + Math.sin(t) * rr * .92); }
+    x.stroke(); } });
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, opacity: 0 }));
-  glow.scale.set(1.1, 1.1, 1); glow.position.set(0, .05, .02); bug.add(glow); P.glow = glow;
+  glow.scale.set(1.25, 1.25, 1); glow.position.set(0, .05, .02); bug.add(glow); P.glow = glow;
+}
+
+// Watercolour for the environment. Each wash is a smooth "wetness" field f (> 0 where pigment lies) that is cut with a
+// hard step, so edges dry crisp; pigment pools darker along that edge, blooms (backruns) push it out into pale
+// cauliflower shapes, and paper grain breaks it up. Kept paler and greyer than the wings so the monarch stays the colour.
+const ENV = { dark: { value: 0 }, cool: { value: 0 }, warm: { value: 0 }, shade: { value: 0 }, night: { value: 0 }, subj: { value: new THREE.Vector3() } };
+// [light] sun for the garden washes: sunD toward the sun, sunK direct-light strength (0 overcast/night), low = warm low-sun glow,
+// shMap/shMat the plant's sun shadow map, shSoft how far the shadow edge has blurred (cloud thinning the direct beam)
+Object.assign(ENV, { sunD: { value: new THREE.Vector3(0, 1, 0) }, sunK: { value: 0 }, low: { value: 0 }, shMap: { value: null }, shMat: { value: new THREE.Matrix4() }, shSoft: { value: 0 }, px: { value: 1 }, gSh: { value: null } });
+const WC_LIB = `
+precision highp float;
+uniform float dark, cool, warm, shade, night, low; uniform vec3 subj;
+uniform sampler2D noiseT;                                             // pre-baked tileable noise: R, B, A = three unrelated fbm fields, G = fine value noise
+vec4 nz(vec2 p){ return texture2D(noiseT, p / 16.0); }
+float n2(vec2 p){ return texture2D(noiseT, p / 128.0).g; }
+float grain(){ return .8 + .4 * n2(gl_FragCoord.xy * .5); }   // the paper's tooth: fixed to the page, not the world
+float wc(float f, float b, float body){
+  vec2 q = (gl_FragCoord.xy - subj.xy) / max(subj.z, 1.0);                  // white paper reserved around the monarch,
+  f = min(f, (length(q) - .55) * 1.6 + (n2(q * 2.0 + 7.0) - .5) * .12);  // painted around as a watercolourist would: a tight, clean halo
+  float aw = max(fwidth(f) * 1.2, .002), ab = max(fwidth(b) * 1.2, .002);   // edges dry hard: ~1px wide whatever the zoom
+  if (f < -.02) return 0.0;                                                 // bare paper: skip the rest (after the derivatives)
+  float inside = smoothstep(0.0, aw, f), rim = inside * exp(-f / .05);
+  float glaze = smoothstep(.32, .32 + aw, f), gRim = glaze * exp(-(f - .32) / .04);  // a second, smaller layer laid over the first
+  float bl = smoothstep(0.0, ab, b), blRim = exp(-b * b / .0004) * inside;
+  return inside * body * (1.0 - .6 * bl) + glaze * body * .45 + (rim + gRim * .6) * .34 + blRim * .2;
+}
+vec4 tint(vec3 pig, float d){
+  float l = dot(pig, vec3(.3,.59,.11));
+  pig = mix(pig, vec3(.56,.64,.80) * (l + .12), cool * .55);     // cold air: bluer, greyer
+  pig = mix(pig, pig * vec3(1.03,1.0,.93), warm); d *= 1.0 - .3 * warm;   // heat: sun-bleached, a touch warmer
+  pig = mix(pig, vec3(l) * vec3(.9,.93,1.0), shade * .5);        // a cloud over the sun greys the page
+  pig = mix(pig, pig * vec3(1.07,.95,.80) + vec3(.03,.01,0.0), low * .7);   // [light] low sun: the whole page goes golden
+  pig = mix(pig, vec3(.25,.28,.45), night * .6);
+  if (dark > .5) { pig = mix(vec3(l), pig, .8) * .8; d *= .5; }
+  return vec4(pig, clamp(d, 0.0, 1.0));
+}`;
+// tileable noise baked once on the CPU (512 px, ~1 MB) so the wash shaders only sample instead of hashing
+const noiseT = (() => {
+  const N = 512, d = new Uint8Array(N * N * 4), r = rng(5);
+  const lat = P => { const a = new Float32Array(P * P); for (let i = 0; i < a.length; i++) a[i] = r(); return a; };
+  const vn = (a, P, x, y) => { const cx = x * P / N, cy = y * P / N, ix = Math.floor(cx), iy = Math.floor(cy); let fx = cx - ix, fy = cy - iy; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    const g = (i, j) => a[((iy + j) % P) * P + (ix + i) % P]; return (g(0, 0) * (1 - fx) + g(1, 0) * fx) * (1 - fy) + (g(0, 1) * (1 - fx) + g(1, 1) * fx) * fy; };
+  const octs = [0, 1, 2].map(() => [16, 32, 64, 128].map(P => [P, lat(P)])), fine = lat(128), fbm = (oct, x, y) => 255 * oct.reduce((s, [P, a], o) => s + vn(a, P, x, y) * [.5333, .2667, .1333, .0667][o], 0);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const k = (y * N + x) * 4;
+    d[k] = fbm(octs[0], x, y); d[k + 1] = 255 * vn(fine, 128, x, y); d[k + 2] = fbm(octs[1], x, y); d[k + 3] = fbm(octs[2], x, y); }
+  const t = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; return t;
+})();
+ENV.noiseT = { value: noiseT };
+// [light] sun lighting for the washes. sunShadow(w): 0..1, how much of the sun's disc the plant hides from world point w,
+// read from a small depth map rendered from the sun (only when the sun moves). Five taps, jittered by the paper noise, so
+// the edge is a brush edge; the taps spread as cloud thins the direct beam (penumbra widens, then the shadow goes).
+// hatch(): pencil cross-hatching fixed to the page, the way an illustrator marks the side turned from the light.
+const LIGHT_LIB = `
+#include <packing>
+uniform vec3 sunD; uniform float sunK, shSoft, px; uniform sampler2D shMap, gSh; uniform mat4 shMat;
+float shTap(vec2 uv, float z){ return step(unpackRGBAToDepth(texture2D(shMap, uv)), z - .001); }
+vec3 shUV(vec3 w, float bias){ vec4 s = shMat * vec4(w + sunD * bias, 1.0); return s.xyz * .5 + .5; }
+float sunShadow(vec3 w, float bias){
+  if (sunK < .01) return 0.0;
+  vec3 c = shUV(w, bias);
+  if (c.x < .01 || c.y < .01 || c.x > .99 || c.y > .99 || c.z > 1.0) return 0.0;
+  // 4 taps turned per pixel (dithered: reads as granulation), wobbled by the paper noise so the edge is drawn by hand
+  float r = (2.2 + shSoft * 7.0) / 512.0, a = 6.2831 * fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  vec2 j = (nz(w.xz * 1.9 + w.y * .8).rg - .5) * r * 3.0, e = vec2(cos(a), sin(a)) * r * .7, f = vec2(-e.y, e.x);
+  return (shTap(c.xy + j + e, c.z) + shTap(c.xy + j - e, c.z) + shTap(c.xy + j + f, c.z) + shTap(c.xy + j - f, c.z)) * .25;
+}
+float hatch(float k){                                                  // k 0..1: none, one direction, then crossed
+  vec2 q = gl_FragCoord.xy / (5.5 * px); float t = n2(gl_FragCoord.xy * .7 / px);
+  float a = 1.0 - smoothstep(.06, .2, abs(fract(q.x * .8 + q.y * .6 + .3 * n2(q * 3.0)) - .5));
+  float b = 1.0 - smoothstep(.06, .2, abs(fract(q.x * .6 - q.y * .8) - .5));
+  return (a * smoothstep(.3, .6, k) + b * smoothstep(.78, .95, k)) * (.45 + .7 * t);
+}
+vec3 hatchInk(){ return dark > .5 ? vec3(.66,.70,.82) : vec3(.20,.23,.32); }
+`;
+const envMat = (vs, fs, extra = {}, opts = {}) => {
+  const m = new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader: WC_LIB + LIGHT_LIB + fs, uniforms: { ...ENV, ...extra }, transparent: true, depthWrite: false, extensions: { derivatives: true }, ...opts });
+  return m;
+};
+
+// sky and distant fields: four smooth fields baked once on the GPU into a small panorama, read by a dome that sits on the camera
+const ENV_BAKE_FS = `
+precision highp float; varying vec2 vUv; uniform float which;
+float h3(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
+float n3(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(h3(i),h3(i+vec3(1,0,0)),f.x), mix(h3(i+vec3(0,1,0)),h3(i+vec3(1,1,0)),f.x), f.y),
+             mix(mix(h3(i+vec3(0,0,1)),h3(i+vec3(1,0,1)),f.x), mix(h3(i+vec3(0,1,1)),h3(i+vec3(1,1,1)),f.x), f.y), f.z); }
+float fbm3(vec3 p){ return .5*n3(p)+.25*n3(p*2.03+1.7)+.125*n3(p*4.01+3.1)+.0625*n3(p*8.13+5.3); }
+void main(){
+  float lon = (vUv.x - .5) * 6.2831853, lat = (vUv.y - .5) * 3.14159265;
+  vec3 d = vec3(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon));
+  float H = -.33;                                             // the page's horizon, set low so the sky sits behind the plant
+  float big = fbm3(d * 1.7), mid = fbm3(d * 4.3 + 5.0), wob = fbm3(d * 13.0 + 9.0);
+  float sky = min((lat - H - .07) * 4.0, .5) + (big - .5) * 2.4 + (mid - .5) * 1.3 + (wob - .5) * .3 - .12;
+  sky -= max(0.0, lat - .05) * 1.1;                          // thins out higher up: the wash is heaviest just above the land
+  sky -= smoothstep(.55, .8, fbm3(d * 2.2 + 40.0)) * 1.2;      // white paper left for clouds
+  float skyB = fbm3(d * 3.1 + 21.0) + (wob - .5) * .12 - .64;
+  float streak = fbm3(vec3(d.x * 5.0, lat * 60.0, d.z * 5.0));
+  float land = min((H + .01 - lat) * 4.5, (lat - H + .5) * 2.0) + (fbm3(d * 2.6 + 11.0) - .5) * 2.0 + (streak - .5) * .6 + (wob - .5) * .12 - .32;
+  float landB = fbm3(d * 3.7 + 31.0) + (wob - .5) * .12 - .66;
+  // 8-bit targets are too coarse for a crisp edge, so each field is stored as a high and a low byte
+  vec2 v = clamp(which < .5 ? vec2(sky * .25 + .5, skyB + .5) : vec2(land * .25 + .5, landB + .5), 0.0, .999);
+  vec2 hi = floor(v * 255.0) / 255.0;
+  gl_FragColor = vec4(hi.x, fract(v.x * 255.0), hi.y, fract(v.y * 255.0));
+}`;
+function bakeSky() {
+  const s = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), which = { value: 0 };
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { which }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: ENV_BAKE_FS }));
+  s.add(quad);
+  const out = [0, 1].map(k => { const rt = new THREE.WebGLRenderTarget(1024, 512, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.RepeatWrapping, depthBuffer: false });
+    which.value = k; renderer.setRenderTarget(rt); renderer.render(s, cam); return rt.texture; });
+  renderer.setRenderTarget(null); quad.geometry.dispose(); quad.material.dispose(); return out;
+}
+const SKY_FS = `
+uniform sampler2D skyF, landF; varying vec3 vD;
+void main(){
+  vec3 dir = normalize(vD); float lat = asin(clamp(dir.y, -1.0, 1.0)), lon = atan(dir.z, dir.x);
+  vec2 uv = vec2(lon / 6.2831853 + .5, lat / 3.14159265 + .5);
+  vec4 A = texture2D(skyF, uv), B = texture2D(landF, uv);
+  float sf = (A.r + A.g / 255.0 - .5) * 4.0, sb = A.b + A.a / 255.0 - .5, lf = (B.r + B.g / 255.0 - .5) * 4.0, lb = B.b + B.a / 255.0 - .5;
+  bool L = lf > sf; float f = L ? lf : sf, b = L ? lb : sb;     // sky and fields never quite touch: a strip of paper between
+  vec3 pig = L ? mix(vec3(.83,.85,.50), vec3(.58,.72,.40), smoothstep(-.32, -.04, b)) : mix(vec3(.50,.66,.88), vec3(.37,.50,.82), smoothstep(-.3, -.02, b));
+  float d = wc(f, b, .25 + .3 * smoothstep(-.45, -.05, b));
+  if (d < .003) discard;
+  d *= grain() * (L ? .58 : .6);
+  gl_FragColor = tint(pig, d);
+}`;
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), envMat(
+  'varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * viewMatrix * vec4(position + cameraPosition, 1.0); }',
+  SKY_FS, { skyF: { value: null }, landF: { value: null } }, { side: THREE.BackSide }));
+skyDome.frustumCulled = false; skyDome.renderOrder = -10;
+// the dome is the one full-screen wash, so it is painted at half resolution into its own target, and only when the
+// view, the subject or the weather palette has moved; the main pass just lays that sheet down as the page's ground
+const skyLo = (() => {
+  const S = .5, sc = new THREE.Scene(), u = skyDome.material.uniforms, sig = new Float32Array(32), sz = new THREE.Vector2();
+  u.skyS = { value: 1 / S };   // the wash keys grain, edge width and the reserve around the monarch to full-res pixels
+  skyDome.material.fragmentShader = 'uniform float skyS;\n#define FC vec4(gl_FragCoord.xy * skyS, gl_FragCoord.zw)\n' + skyDome.material.fragmentShader.replace(/gl_FragCoord/g, 'FC');
+  sc.add(skyDome);
+  const rt = new THREE.WebGLRenderTarget(4, 4, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, stencilBuffer: false, generateMipmaps: false });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { t: { value: rt.texture } }, depthTest: false, depthWrite: false,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: 'uniform sampler2D t; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(t, vUv).rgb, 1.0); }' }));
+  quad.frustumCulled = false; quad.renderOrder = -10; scene.add(quad);
+  return buf => {
+    const w = Math.max(1, Math.round(buf.x * S)), h = Math.max(1, Math.round(buf.y * S)); let dirty = false;
+    if (rt.width !== w || rt.height !== h) { rt.setSize(w, h); dirty = true; }
+    const e = camera.matrixWorld.elements, pm = camera.projectionMatrix.elements, v = [...e, pm[0], pm[5], pm[8], pm[9], ENV.dark.value, ENV.cool.value, ENV.warm.value, ENV.shade.value, ENV.night.value, ENV.subj.value.x, ENV.subj.value.y, ENV.subj.value.z, paper.r, paper.g, paper.b, ENV.low.value];
+    for (let i = 0; i < 32; i++) { const tol = i >= 25 && i < 28 ? .5 : 1e-4; if (Math.abs(v[i] - sig[i]) > tol) { dirty = true; sig.set(v); break; } }
+    if (!dirty) return;
+    const prev = renderer.getRenderTarget(); renderer.setRenderTarget(rt); renderer.render(sc, camera); renderer.setRenderTarget(prev);
+  };
+})();
+
+// camera-facing blots (flower heads, sun, cloud): each a quad with its own seed so no two dry alike
+const BLOT_VS = `attribute vec2 corner; attribute vec3 blot; varying vec2 vQ; varying vec2 vS; varying vec3 vWb;
+void main(){ vWb = (modelMatrix * vec4(position, 1.0)).xyz; vec4 mv = modelViewMatrix * vec4(position, 1.0); mv.xy += corner * blot.x; gl_Position = projectionMatrix * mv; vQ = corner; vS = blot.yz; }`;
+const BLOT_FS = `
+uniform vec3 pigA, pigB; uniform float body, rough; uniform vec4 ball; varying vec2 vQ; varying vec2 vS; varying vec3 vWb;
+void main(){
+  float r = length(vQ), s = vS.x * 17.0;
+  vec4 N = nz(vQ * 1.6 + s);
+  float f = (1.0 - r) * .7 + (N.r - .5) * rough - .12;
+  float b = N.b - .64;
+  float d = wc(f, b, body) * vS.y;
+  if (d < .003) discard;
+  d *= grain();
+  vec3 pig = mix(pigA, pigB, smoothstep(.35, .65, N.a));
+  if (ball.w > 0.0) {                                                    // [light] the umbel as a ball: florets on the far side sit in its shade
+    float k = dot(normalize(vWb - ball.xyz), sunD), dk = sunK * smoothstep(.2, -.5, k);
+    pig = mix(pig, pig * vec3(.72,.74,.9), dk * .7); d *= 1.0 + .3 * dk - .25 * sunK * smoothstep(.2, .8, k);
+  }
+  gl_FragColor = tint(pig, d);
+}`;
+function blots(list, pigA, pigB, body, rough = .7) {
+  const pos = [], corner = [], blot = [], idx = [];
+  list.forEach(({ p, s, seed, a = 1 }, i) => { [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(c => { pos.push(...p); corner.push(...c); blot.push(s, seed, a); }); idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3); });
+  const geo = new THREE.BufferGeometry(); geo.setIndex(idx);
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('corner', new THREE.Float32BufferAttribute(corner, 2)); geo.setAttribute('blot', new THREE.Float32BufferAttribute(blot, 3));
+  const m = new THREE.Mesh(geo, envMat(BLOT_VS, BLOT_FS, { pigA: { value: new THREE.Color(...pigA) }, pigB: { value: new THREE.Color(...pigB) }, body: { value: body }, rough: { value: rough } }));
+  m.frustumCulled = false; m.renderOrder = -3; return m;
+}
+
+// leaf washes: ribbons laid over each leaf, a little wider than the ink and slightly off register
+const LEAF_FS = `
+varying vec3 vW; varying vec2 vST;
+void main(){
+  vec4 N = nz(vW.xz * 1.1 + vW.y * .7), M = nz(vW.xz * .45 + vW.y * .3 + 4.0);
+  float f = (1.0 - abs(vST.x)) * .55 + (N.r - .5) * 1.0 - .14;
+  f -= .4 * exp(-pow((vST.x - .3) / .17, 2.0)) * smoothstep(.35, .6, M.b);   // a strip of white paper beside the midrib
+  float b = N.b - .63;
+  vec3 pig = mix(vec3(.70,.78,.38), vec3(.42,.60,.36), smoothstep(.3, .7, M.r));
+  float d = wc(f, b, .45) * .68;
+  if (d < .003) discard;
+  d *= grain();
+  // [light] a leaf is a thin sheet: the face we see is sunlit, lit through from behind (glows yellow-green), or turned
+  // away / under another leaf (cool grey glaze + hatching). Overcast (sunK -> 0) flattens all three to the plain wash.
+  vec3 n = normalize(cross(dFdx(vW), dFdy(vW))), v = normalize(cameraPosition - vW);
+  float nl = dot(n, sunD), nv = dot(n, v), same = step(0.0, nl * nv), sh = sunShadow(vW, .35);
+  float lit = sunK * (1.0 - sh) * same * smoothstep(.0, .3, abs(nl));
+  float thru = sunK * (1.0 - sh) * (1.0 - same) * smoothstep(.0, .6, abs(nl));
+  float dk = sunK * clamp(1.0 - lit - thru * .8, 0.0, 1.0);
+  pig = mix(pig, vec3(.80,.88,.30), thru * .55);                        // chlorophyll-filtered light through the blade
+  pig = mix(pig, pig * vec3(.70,.78,.95), dk * .6);                    // the shade side: a cool glaze over the green
+  d *= 1.0 - .3 * lit + .35 * dk;                                       // lit side stays pale, the paper showing through
+  vec4 col = tint(pig, d);
+  float h = hatch(dk * smoothstep(.0, .25, d)) * .4 * (1.0 - night);
+  float A = col.a + h * (1.0 - col.a);
+  gl_FragColor = vec4(mix(col.rgb, hatchInk(), h / max(A, .001)), A);
+}`;
+const LEAF_VS = 'attribute vec2 st; varying vec3 vW; varying vec2 vST; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vST = st; gl_Position = projectionMatrix * viewMatrix * w; }';
+
+// the ground: a yellow-green puddle under the plant, fading out to bare paper
+const GROUND_FS = `
+varying vec3 vW; varying vec2 vST;
+void main(){
+  vec2 p = vW.xz; float r = length(p);
+  vec4 N = nz(p * .2);
+  float f = (1.0 - r / 17.0) * .9 + (N.r - .5) * 1.6 - .2;
+  float b = N.b - .63;
+  vec3 pig = mix(vec3(.84,.84,.48), vec3(.55,.68,.36), smoothstep(.3, .7, N.a));
+  float d = wc(f, b, .45) * .55;
+  // [light] the milkweed's own shadow, laid on as a separate grey-blue wash: pigment pools at the edge as it dries
+  float sh = texture2D(gSh, p / 48.0 + .5).r * sunK * smoothstep(23.0, 15.0, r), sw = .2 + .35 * shSoft;
+  float sb = smoothstep(.35 - sw, .35 + sw, sh + (N.g - .5) * .25), srim = sb * (1.0 - smoothstep(.4, .85, sh)) * .8;
+  float sA = (sb * .26 + srim * .2) * (.8 + .4 * n2(p * 9.0));
+  if (d < .003 && sA < .004) discard;
+  d *= grain();
+  vec4 col = tint(pig, d), sc = tint(vec3(.42,.48,.66), 1.0);
+  float A = col.a + sA * (1.0 - col.a);
+  gl_FragColor = vec4(mix(col.rgb, sc.rgb, sA / max(A, .001)), A);
+}`;
+
+const envV = new THREE.Vector3(), envR = new THREE.Vector3(), envBuf = new THREE.Vector2(), envHSL = {};
+function envFrame(Ta, sunY, cover, subject) {
+  camera.updateMatrixWorld(); renderer.getDrawingBufferSize(envBuf);
+  envV.copy(subject).project(camera); envR.setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(2.1).add(subject).project(camera);
+  ENV.subj.value.set((envV.x + 1) / 2 * envBuf.x, (envV.y + 1) / 2 * envBuf.y, envV.z < 1 ? Math.hypot(envR.x - envV.x, envR.y - envV.y) / 2 * envBuf.x : 0);
+  ENV.dark.value = paper.getHSL(envHSL).l < .5 ? 1 : 0;
+  ENV.cool.value = Math.max(0, Math.min(1, (14 - Ta) / 9)); ENV.warm.value = Math.max(0, Math.min(1, (Ta - 28) / 10));
+  ENV.shade.value = (1 - cover) / .85; ENV.night.value = Math.max(0, Math.min(1, (.12 - sunY) / .25));
+  skyLo(envBuf);
+}
+
+// a cloud over the sun: the page washes grey-blue (ink reads a touch lighter), the sun's rays and warm wash fade behind it
+const cloudVeil = document.getElementById('cloudveil'); let cloudVeilO = -1;
+function cloudFX(cover) {
+  const k = Math.max(0, Math.min(1, (1 - cover) / .85)), o = +(k * .2).toFixed(3);
+  if (o !== cloudVeilO) { cloudVeilO = o; cloudVeil.style.opacity = o; }
+  const rays = sunG.children[0], wash = sunG.children[1]; if (!rays || !wash) return;
+  rays.visible = k < .55;
+  const b = wash.geometry.getAttribute('blot'), a = .8 * (1 - .9 * k);
+  if (Math.abs(b.array[2] - a) > .002) { for (let i = 2; i < b.array.length; i += 3) b.array[i] = a; b.needsUpdate = true; }
 }
 
 // ---------- the garden: one common milkweed (the monarch's host plant), grass, sun, cloud ----------
@@ -448,38 +1056,492 @@ function leafStrokes(node, dir, len, wid, droop) {
   for (let k = 1; k <= 8; k++) { const t0 = k / 10; [1, -1].forEach(sg => S.push({ pts: [pt(t0, 0), pt(t0 + .06, sg * half(t0 + .06) * .55), pt(t0 + .1, sg * half(t0 + .1) * .9)], w: .35, d: true })); }
   return S;
 }
+function leafWash(node, dir, len, wid, droop, r, G) {
+  const side = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+  const shift = side.clone().multiplyScalar((r() - .5) * .35).addScaledVector(dir, (r() - .3) * .3);  // off register, as a quick wash is
+  const half = t => Math.max(.18, wid * Math.pow(Math.sin(Math.PI * Math.max(0, Math.min(1, t * 1.02))), .8)) * 1.4, base = G.pos.length / 3;
+  for (let i = 0; i <= 26; i++) { const t = -.03 + i / 26 * 1.08;
+    [-1.4, 1.4].forEach(k => { const p = node.clone().add(shift).addScaledVector(dir, len * t).addScaledVector(side, k / 1.4 * half(t)); p.y -= droop * t * t + .015; G.pos.push(p.x, p.y, p.z); G.st.push(k, t); });
+    if (i) { const a = base + (i - 1) * 2; G.idx.push(a, a + 1, a + 3, a, a + 3, a + 2); } }
+}
 function buildGarden() {
   const S = [], stalk = []; for (let i = 0; i <= 30; i++) { const y = 2.6 - i / 30 * 20.6; stalk.push([.12 * Math.sin(i * .4), y, 0]); }
   S.push({ pts: stalk, w: .8 }, { pts: stalk.map(([x, y, z]) => [x + .22, y, z]), w: .6 });
+  const G = { pos: [], st: [], idx: [] }, wr = rng(31);
   [[0, 0], [-4.5, Math.PI / 2], [-9, 0], [-13.5, Math.PI / 2]].forEach(([y, rot], li) => [0, Math.PI].forEach(fl => {
-    const a = rot + fl, d = new THREE.Vector3(Math.cos(a), -.08, Math.sin(a)).normalize();
-    S.push(...leafStrokes(new THREE.Vector3(0, y, 0), li === 0 && !fl ? LEAF.dir : d, li === 0 ? LEAF.len : 6.5, 1.5, 1.2));
+    const a = rot + fl, d = new THREE.Vector3(Math.cos(a), -.08, Math.sin(a)).normalize(), node = new THREE.Vector3(0, y, 0), dd = li === 0 && !fl ? LEAF.dir : d, len = li === 0 ? LEAF.len : 6.5;
+    S.push(...leafStrokes(node, dd, len, 1.5, 1.2)); leafWash(node, dd, len, 1.5, 1.2, wr, G);
   }));
-  R = rng(77); const top = [0, 2.6, 0];
+  // the stalk gets a thin green stroke of its own
+  for (let i = 0; i <= 20; i++) { const y = 2.4 - i / 20 * 20.4, base = G.pos.length / 3; [-1, 1].forEach(k => { G.pos.push(.11 + k * .3, y, .05); G.st.push(k * 1.1, i / 20); }); if (i) G.idx.push(base - 2, base - 1, base + 1, base - 2, base + 1, base); }
+  const lg = new THREE.BufferGeometry(); lg.setIndex(G.idx); lg.setAttribute('position', new THREE.Float32BufferAttribute(G.pos, 3)); lg.setAttribute('st', new THREE.Float32BufferAttribute(G.st, 2));
+  const leaves = new THREE.Mesh(lg, envMat(LEAF_VS, LEAF_FS, {}, { side: THREE.DoubleSide })); leaves.renderOrder = -4; garden.add(leaves);
+  R = rng(77); const top = [0, 2.6, 0], florets = [];
   for (let i = 0; i < 26; i++) {
     const a = R() * 6.3, e = .5 + R() * .9, L = 1.6 + R() * .5, f = [Math.cos(a) * Math.cos(e) * L, 2.6 + Math.sin(e) * L, Math.sin(a) * Math.cos(e) * L];
-    S.push({ pts: [top, f], w: .35, d: true });
+    S.push({ pts: [top, f], w: .35, d: true }); florets.push({ p: f, s: .36 + wr() * .18, seed: wr(), a: .75 });
     const fl = []; for (let k = 0; k <= 30; k++) { const t = k / 30 * Math.PI * 2, rr = .16 * (.7 + .3 * Math.cos(5 * t)); fl.push([f[0] + Math.cos(t) * rr, f[1] + .05 * Math.sin(5 * t), f[2] + Math.sin(t) * rr]); }
     S.push({ pts: fl, w: .55 });
   }
+  // common milkweed: a dusty pink-mauve umbel, one loose wash over the whole head and a dab on each floret
+  florets.push({ p: [.15, 3.75, .1], s: 2.2, seed: .37, a: .32 }, { p: [-.4, 3.5, -.2], s: 1.4, seed: .81, a: .3 });
+  const umbel = blots(florets, [.88, .62, .70], [.70, .47, .62], .55, .8); umbel.renderOrder = -4; garden.add(umbel);
   for (let i = 0; i < 120; i++) { const a = R() * 6.3, rr = 3 + R() * 14, x = Math.cos(a) * rr, z = Math.sin(a) * rr, h = .4 + R() * 1.1, lean = R() - .5;
     S.push({ pts: [[x, -18, z], [x + lean * .3, -18 + h * .6, z], [x + lean * .7, -18 + h, z]], w: .4, d: i % 3 > 0, os: .2 }); }
   garden.add(part(S, 901, matPlant));
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(24, 48).rotateX(-Math.PI / 2).translate(0, -18.05, 0), envMat(LEAF_VS.replace('attribute vec2 st;', '').replace('vST = st;', 'vST = vec2(0.0);'), GROUND_FS));
+  ground.renderOrder = -5; garden.add(ground);
+  const [sf, lf] = bakeSky(); skyDome.material.uniforms.skyF.value = sf; skyDome.material.uniforms.landF.value = lf;
 }
 const FOOT = .6; // body centre sits this high above whatever the feet stand on
 const PERCHES = { leaf: (() => { const p = LEAF.dir.clone().multiplyScalar(LEAF.len * .5); p.y = LEAF.y - 1.2 * .25 + FOOT; return p; })(), flower: new THREE.Vector3(0, 4.1 + FOOT * .4, 0) };
 
+// ---------- life on the milkweed: an egg, a young caterpillar and its bites, oleander aphids (1 cm ≈ .5 units) ----------
+const LIFE = {};
+const leafAt = (t, off) => { const side = new THREE.Vector3().crossVectors(LEAF.dir, Y0).normalize(), p = LEAF.dir.clone().multiplyScalar(LEAF.len * t).addScaledVector(side, off); p.y += LEAF.y - 1.2 * t * t; return p; };
+const Y0 = new THREE.Vector3(0, 1, 0);
+const CAT_FS = `
+varying vec2 vST;
+void main(){
+  float u = vST.x, s = fract(u * 9.0); vec3 pig; float d;
+  if (u > .93) { pig = vec3(.10,.10,.11); d = .95; if (abs(u - .965) < .008) { pig = vec3(.96,.86,.35); } }   // black head, pale stripe
+  else if (s < .3) { pig = vec3(.98,.82,.18); d = .9; }                       // yellow band
+  else if (s < .42 || s > .84) { pig = vec3(.10,.10,.11); d = .95; }          // black bands
+  else { pig = vec3(.97,.96,.90); d = .5; }                                   // white band
+  d *= (.7 + .3 * vST.y) * grain();
+  gl_FragColor = tint(pig, d);
+}`;
+function buildLife() {
+  const life = new THREE.Group(); garden.add(life); const S = [], tiny = { amp: .0015, os: .08 };
+  // monarch egg, ~1.2 mm tall, cream, ~23 lengthwise ribs; laid singly under a young leaf
+  const eb = leafAt(.32, .55); eb.y -= .012; const EH = .06, ER = .022, er = h => ER * Math.pow(Math.sin(Math.PI * Math.min(1, .15 + h * .9)), .6) * (1 - .35 * h);
+  for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; S.push({ ...tiny, pts: Array.from({ length: 9 }, (_, i) => { const h = i / 8; return [eb.x + Math.cos(a) * er(h), eb.y - h * EH, eb.z + Math.sin(a) * er(h)]; }), w: .5, d: true }); }
+  [.25, .5, .75].forEach(h => S.push({ ...tiny, pts: loop(eb.x, eb.y - h * EH, eb.z, er(h), 1.05, 14), w: .35, d: true }));
+  life.add(blots([{ p: [eb.x, eb.y - EH * .45, eb.z], s: .034, seed: .53, a: 1 }], [.98, .94, .78], [.93, .88, .66], .7, .4));
+  // chewed leaf edge: young larvae eat in from the edge, leaving rounded bites
+  const side = new THREE.Vector3().crossVectors(LEAF.dir, Y0).normalize(), hw = t => 1.5 * Math.pow(Math.sin(Math.PI * t), .8);
+  [[.70, .75, .22], [.76, .80, .14], [.82, .86, .2]].forEach(([a, b, dp]) => S.push({ ...tiny, pts: Array.from({ length: 11 }, (_, i) => { const t = a + (b - a) * i / 10, o = hw(t) - dp * Math.sin(Math.PI * i / 10); const p = leafAt(t, o); return [p.x, p.y + .01, p.z]; }), w: .6 }));
+  // oleander aphids (Aphis nerii), ~2 mm, bright yellow with black legs and cornicles, crowded on the stalk
+  // a tight colony of 13, heads down feeding; bodies ~2 mm (.1 units) so they read, black legs, antennae and twin cornicles (siphunculi)
+  const aph = [], hd = [], AK = [], ar = rng(404), up = (c, t, n, dt, dy, dn) => [c[0] + t[0] * dt + n[0] * dn, c[1] + dy, c[2] + t[2] * dt + n[2] * dn];
+  for (let i = 0; i < 13; i++) { const y = 1.45 + ar() * .75, a = -.9 + ar() * 2.4, n = [Math.cos(a), 0, Math.sin(a)], t = [-n[2], 0, n[0]], c = [.12 + n[0] * .17, y, n[2] * .17], sz = .8 + ar() * .35;
+    aph.push({ p: c, s: .085 * sz, seed: ar(), a: 1 }); hd.push({ p: up(c, t, n, 0, -.045 * sz, .005), s: .04 * sz, seed: ar(), a: 1 });
+    [-1, 1].forEach(sg => { [-.03, -.005, .02].forEach((dy, j) => AK.push({ ...tiny, pts: [up(c, t, n, sg * .022 * sz, dy * sz, .01), up(c, t, n, sg * .055 * sz, (dy + (j - 1) * .025) * sz, -.005)], w: .55 }));
+      AK.push({ ...tiny, pts: [up(c, t, n, sg * .012 * sz, .02 * sz, .02), up(c, t, n, sg * .02 * sz, .05 * sz, .035)], w: .9 });                          // cornicle
+      AK.push({ ...tiny, pts: [up(c, t, n, sg * .008, -.06 * sz, .01), up(c, t, n, sg * .04 * sz, -.11 * sz, .01)], w: .4 }); }); }                     // antenna
+  life.add(blots(aph, [1, .88, .12], [.98, .76, .06], .85, .45)); life.add(blots(hd, [.95, .72, .08], [.85, .6, .06], .85, .4));
+  // one ant tending them (~4 mm), head down beside the colony to stroke them for honeydew
+  const an = [.07, 0, 1], at = [-1, 0, .07], ac = [.12 + .17 * an[0] + .02, 1.55, .17 * an[2]];
+  life.add(blots([[.07, .05], [-.06, .035], [-.12, .032]].map(([dy, s], i) => ({ p: up(ac, at, an, 0, dy, .01), s, seed: .3 + i * .2, a: 1 })), [.16, .1, .08], [.1, .06, .05], .95, .4));
+  [-1, 1].forEach(sg => { [-.08, -.06, -.04].forEach((dy, j) => AK.push({ ...tiny, pts: [up(ac, at, an, 0, dy + .02, .01), up(ac, at, an, sg * .05, dy + .02 + (j - 1) * .04, 0), up(ac, at, an, sg * .08, dy + (j - 1) * .07, -.01)], w: .5 }));
+    AK.push({ ...tiny, pts: [up(ac, at, an, 0, -.14, .01), up(ac, at, an, sg * .03, -.19, .01), up(ac, at, an, sg * .06, -.2, .01)], w: .45 }); });
+  life.add(part(AK, 779, matKey));
+  life.add(part(S, 777, matPlant));
+  // the caterpillar: ~1.2 cm (an early instar), built in its own frame: x forward, y off the leaf
+  const L = .6, Rr = .04, N = 36, M = 12, pos = [], st = [], idx = [], rad = u => Rr * Math.max(.45, Math.pow(Math.sin(Math.PI * u), .3));
+  for (let i = 0; i <= N; i++) { const u = i / N; for (let j = 0; j <= M; j++) { const a = j / M * Math.PI * 2, r = rad(u); pos.push(u * L - L / 2, r * .85 + Math.sin(a) * r, Math.cos(a) * r); st.push(u, .5 + .5 * Math.sin(a)); if (i && j) { const q = (i - 1) * (M + 1) + j - 1, w = q + M + 1; idx.push(q, w, q + 1, q + 1, w, w + 1); } } }
+  const cg = new THREE.BufferGeometry(); cg.setIndex(idx); cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); cg.setAttribute('st', new THREE.Float32BufferAttribute(st, 2));
+  const cat = new THREE.Group(), body = new THREE.Mesh(cg, envMat('attribute vec2 st; varying vec2 vST; void main(){ vST = st; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', CAT_FS)); body.renderOrder = -2; cat.add(body);
+  const C = [];
+  [-1, 1].forEach(sg => C.push({ ...tiny, pts: Array.from({ length: 13 }, (_, i) => { const u = i / 12; return [u * L - L / 2, rad(u) * .85, sg * rad(u)]; }), w: .7 }));
+  for (let k = 0; k < 9; k++) { const u = (k + .36) / 9, x = u * L - L / 2, r = rad(u); C.push({ ...tiny, pts: Array.from({ length: 9 }, (_, i) => { const a = i / 8 * Math.PI; return [x, r * .85 + Math.sin(a) * r, Math.cos(a) * r]; }), w: .45, d: true }); }
+  // two pairs of black filaments: the longer pair on the second thoracic segment, the shorter near the tail
+  // (filaments are drawn per instar by larvaFilaments)
+  cat.add(part(C, 778, matKey)); life.add(cat);
+  buildChrysalis(life);
+  Object.assign(LIFE, { cat, t: .72, off: .8, dirn: 1, yaw: 0, ph: 0, pause: 0 });
+  larvaExtras(life, cat, body, L, rad, tiny);
+}
+// ---------- [life] monarch chrysalis: ~2.5 cm (1.25 units), jade green, gold dots, hung by its black cremaster from a silk pad under a leaf ----------
+// Tap it for an x-ray: the jade fades and the folded wing (in the wing case, ventral side) shows forming inside.
+const CHRY = { xr: 0, goal: 0, last: 0, mesh: null };
+const CHRY_FS = `
+uniform float xr; varying vec2 vST;
+float dot2(vec2 p, vec2 c, float r){ vec2 d = p - c; d.x *= 2.4; return 1.0 - smoothstep(r * .7, r, length(d)); }
+void main(){
+  float h = vST.x, a = vST.y; vec3 pig = vec3(.46,.74,.55); float d = .62 + .2 * sin(a * 6.283);   // jade, a touch deeper on one side
+  float gold = 0.0;
+  for (int k = 0; k < 12; k++) { float c = (float(k) + .5) / 12.0; gold = max(gold, dot2(vec2(a, h), vec2(c, .31), .022)); }  // the gold band
+  float band = 1.0 - smoothstep(.006, .012, abs(h - .345));                                                                  // black rim under it
+  for (int k = 0; k < 4; k++) { float c = float(k) / 4.0 + .12; gold = max(gold, dot2(vec2(a, h), vec2(c, .87), .028)); gold = max(gold, dot2(vec2(a, h), vec2(c + .1, .07), .02)); }
+  // the forewing case, folded down one side: orange membrane, black veins and margin (developing, so pale)
+  vec2 w = vec2((fract(a * 2.0) - .5) / .34, (h - .36) / .44); float inW = step(0.0, w.y) * step(w.y, 1.0) * step(abs(w.x), .95 - .55 * w.y * w.y);
+  float ang = atan(w.x + .02, w.y + .15), vein = 1.0 - smoothstep(.0, .05, abs(fract(ang * 2.6 + .5) - .5));
+  float edge = smoothstep(.75, .95, max(abs(w.x) / max(.05, .95 - .55 * w.y * w.y), w.y));
+  vec3 wing = mix(vec3(.93,.52,.16), vec3(.1,.08,.07), max(vein * .85, edge));
+  vec3 c = mix(pig, vec3(.85,.93,.86), xr * .6); float dd = mix(d, .18, xr);
+  c = mix(c, vec3(.1,.1,.1), band * (1.0 - xr * .5)); dd = max(dd, band * .9);
+  c = mix(c, vec3(.96,.80,.30), gold); dd = max(dd, gold * .95);
+  c = mix(c, wing, inW * xr); dd = mix(dd, .9, inW * xr);
+  gl_FragColor = tint(c, dd * grain());
+}`;
+function buildChrysalis(parent) {
+  const top = leafAt(.3, -.75); top.y -= .03; const L = 1.25, N = 30, M = 24, pos = [], st = [], idx = [], tiny = { amp: .002, os: .06 };
+  const rad = h => .27 * Math.pow(Math.sin(Math.PI * Math.min(1, .06 + h * .95)), .55) * (1 - .18 * h) * (h < .12 ? .5 + h / .24 : 1);
+  const P = (h, a, s = 1) => [top.x + Math.cos(a) * rad(h) * s, top.y - .1 - h * L, top.z + Math.sin(a) * rad(h) * s];
+  for (let i = 0; i <= N; i++) { const h = i / N; for (let j = 0; j <= M; j++) { pos.push(...P(h, j / M * Math.PI * 2)); st.push(h, j / M); if (i && j) { const q = (i - 1) * (M + 1) + j - 1, w = q + M + 1; idx.push(q, w, q + 1, q + 1, w, w + 1); } } }
+  const g = new THREE.BufferGeometry(); g.setIndex(idx); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('st', new THREE.Float32BufferAttribute(st, 2));
+  const m = new THREE.Mesh(g, envMat('attribute vec2 st; varying vec2 vST; void main(){ vST = st; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', CHRY_FS, { xr: { value: 0 } }));
+  m.renderOrder = -2; parent.add(m); CHRY.mesh = m;
+  const S = [];
+  [0, 1, 2, 3, 4, 5].forEach(k => { const a = k / 6 * Math.PI * 2; S.push({ ...tiny, pts: Array.from({ length: 17 }, (_, i) => P(i / 16, a)), w: k % 3 ? .4 : .7, d: k % 3 > 0 }); });
+  S.push({ ...tiny, pts: loop(top.x, top.y - .1 - .345 * L, top.z, rad(.345), 1.05, 24), w: .8 });                       // the black line of the crown
+  S.push({ ...tiny, pts: [[top.x, top.y, top.z], [top.x + .01, top.y - .06, top.z], [top.x, top.y - .11, top.z]], w: 1 });  // cremaster
+  S.push({ ...tiny, pts: loop(top.x, top.y - .1, top.z, .03, 1.1, 14), w: .8 });
+  [-1, 1].forEach(sg => S.push({ ...tiny, pts: [[top.x + sg * .07, top.y + .015, top.z], [top.x, top.y - .005, top.z + sg * .03], [top.x - sg * .06, top.y + .015, top.z + sg * .02]], w: .35, d: true }));  // silk pad threads
+  parent.add(part(S, 1201, matKey));
+  parent.add(blots([{ p: [top.x, top.y + .01, top.z], s: .1, seed: .61, a: .9 }], [.98, .97, .94], [.92, .92, .9], .5, .5));  // the white silk pad
+}
+function chrysTick() {
+  const now = performance.now(), dt = Math.min(.1, (now - (CHRY.last || now)) / 1000); CHRY.last = now; if (!CHRY.mesh) return;
+  CHRY.xr += (CHRY.goal - CHRY.xr) * Math.min(1, dt * 3); CHRY.mesh.material.uniforms.xr.value = CHRY.xr;
+}
+const chrysRC = new THREE.Raycaster(), chrysNDC = new THREE.Vector2();
+function chrysTap(e) {
+  if (!CHRY.mesh) return false; const r = canvas.getBoundingClientRect();
+  chrysNDC.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); chrysRC.setFromCamera(chrysNDC, camera);
+  if (!chrysRC.intersectObject(CHRY.mesh, false).length) return false;
+  CHRY.goal = CHRY.goal ? 0 : 1; toast(CHRY.goal ? 'Inside, the wings are forming' : 'Chrysalis: about 2.5 cm', 2200); return true;
+}
+const lifeM = new THREE.Matrix4(), lifeQ = new THREE.Quaternion(), lifeQ2 = new THREE.Quaternion();
+function lifeTick(dt) {
+  chrysTick();
+  const c = LIFE; if (!c.cat) return;
+  if (c.pause > 0) c.pause -= dt;                                     // stops to chew at the edge, head bobbing
+  else { c.ph += dt / 1.8; const step = Math.max(0, Math.sin(c.ph * Math.PI * 2)); c.t += c.dirn * step * dt * .008;
+    if (c.t > .86 || c.t < .68) { c.t = Math.max(.68, Math.min(.86, c.t)); c.dirn *= -1; c.pause = 6; } }
+  c.yaw += ((c.dirn > 0 ? 0 : Math.PI) - c.yaw) * Math.min(1, dt * .8);
+  const p = leafAt(c.t, c.off), f = leafAt(c.t + .01, c.off).sub(p).normalize(), side = new THREE.Vector3().crossVectors(LEAF.dir, Y0).normalize(), n = new THREE.Vector3().crossVectors(side, f).normalize();
+  if (n.y < 0) n.negate(); const z = new THREE.Vector3().crossVectors(f, n);
+  lifeM.makeBasis(f, n, z); lifeQ.setFromRotationMatrix(lifeM); lifeQ2.setFromAxisAngle(Y0, c.yaw); c.cat.quaternion.copy(lifeQ).multiply(lifeQ2);
+  c.cat.position.copy(p).addScaledVector(n, .012);
+  const s = c.pause > 0 ? 0 : Math.sin(c.ph * Math.PI * 2);                          // a wave runs down the body: stretch, then gather
+  c.cat.scale.set(1 + .07 * s, 1 - .05 * s, 1);
+  if (c.pause > 0) c.cat.rotateZ(.06 * Math.sin(c.pause * 9));
+  larvaTick(dt);
+}
+// ---------- larva: tap to step through the 5 instars; mandibles + growing chew marks while it feeds ----------
+// Lengths (1 cm = .5 units): ~3 mm hatchling to ~4.5 cm fifth instar; filaments lengthen each molt.
+const LARVA = { inst: 3, cm: [.3, .7, 1.2, 2.2, 4.5], fil: [.35, .6, 1, 1.5, 2.1], rc: new THREE.Raycaster(), ndc: new THREE.Vector2() };
+function larvaExtras(life, cat, body, L, rad, tiny) {
+  Object.assign(LARVA, { cat, body, L, rad, tiny });
+  // mandibles: two short dark jaws at the head (x = +L/2), flicked side to side while chewing
+  LARVA.jaws = [-1, 1].map(sg => { const j = new THREE.Group(); j.position.set(L / 2 + .005, rad(1) * .6, sg * .012);
+    j.add(part([{ ...tiny, pts: [[0, 0, 0], [.018, -.008, sg * .004], [.026, -.02, -sg * .006]], w: 1 }], 781 + sg, matKey)); cat.add(j); return j; });
+  // a fresh bite at the leaf edge that widens as it eats (scaled from 0)
+  const side = new THREE.Vector3().crossVectors(LEAF.dir, Y0).normalize(), e = leafAt(.79, 1.5 * Math.pow(Math.sin(Math.PI * .79), .8));
+  const bite = new THREE.Group(); bite.position.set(e.x, e.y + .012, e.z); bite.scale.setScalar(.05);
+  bite.add(part([{ ...tiny, pts: Array.from({ length: 11 }, (_, i) => { const a = Math.PI * i / 10; return [side.x * -Math.sin(a) * .2 + LEAF.dir.x * Math.cos(a) * .2, 0, side.z * -Math.sin(a) * .2 + LEAF.dir.z * Math.cos(a) * .2]; }), w: .6 }], 782, matPlant));
+  life.add(bite); LARVA.bite = bite; LARVA.eaten = .05;
+  larvaFilaments();
+}
+function larvaFilaments() {
+  const { cat, L, rad, tiny } = LARVA, k = LARVA.fil[LARVA.inst - 1]; if (LARVA.filG) cat.remove(LARVA.filG);
+  const F = [];
+  [[.86, .17, 1], [.12, .1, -1]].forEach(([u, l0, dir]) => [-1, 1].forEach(sg => { const len = l0 * k, x = u * L - L / 2, y0 = rad(u) * 1.8; F.push({ ...tiny, pts: quad3([x, y0, sg * .015], [x + dir * len * .1, y0 + len * .8, sg * (.02 + len * .2)], [x + dir * len * .7, y0 + len * .75, sg * (.03 + len * .35)], 8), w: .8 }); }));
+  LARVA.filG = part(F, 783, matKey); cat.add(LARVA.filG);
+}
+function larvaTick(dt) {
+  const c = LIFE, g = LARVA; if (!g.cat) return;
+  const sc = g.cm[g.inst - 1] / 1.2; g.cat.scale.multiplyScalar(sc);   // lifeTick set the crawl wave; size it to this instar
+  const chew = c.pause > 0, tt = performance.now() / 1000;
+  g.jaws.forEach((j, i) => { j.rotation.y = chew ? (i ? 1 : -1) * (.15 + .35 * Math.max(0, Math.sin(tt * 14))) : 0; });
+  if (chew && dt > 0) { g.eaten = Math.min(1.4, g.eaten + dt * .03 * sc); g.bite.scale.setScalar(g.eaten); }
+}
+function larvaTap(e) {
+  const g = LARVA; if (!g.body) return false; const r = canvas.getBoundingClientRect();
+  g.ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); g.rc.setFromCamera(g.ndc, camera);
+  if (!g.rc.intersectObject(g.body, false).length) return false;
+  g.inst = g.inst % 5 + 1; larvaFilaments();
+  const mm = g.cm[g.inst - 1] * 10;
+  toast(`Instar ${g.inst} of 5 · ~${mm < 10 ? mm.toFixed(0) + ' mm' : (mm / 10).toFixed(1) + ' cm'}: it molts 4 times`, 2600); return true;
+}
+// ---------- the sky: a hand-inked sun and watercolour clouds that live in the scene ----------
+// Both sit on a big sphere around the camera, as the painted dome does, so they keep their place in the sky as you orbit.
+// Azimuth is real. Height (t, 0..1) is laid over the band of sky the page shows, from the painted horizon to the top of
+// the view, and stands for the sun's true elevation, 6-84°. The page's camera looks down at the plant, so a literal
+// sky would sit off the top of the screen.
+// sunDir: unit vector toward the sun. sunCover: 0..1 of the direct sun blocked at the butterfly (Beer-Lambert through
+// the cloud puffs, averaged over the sun's disc). wind: scene wind in m/s; the clouds drift with it.
+var sunDir = new THREE.Vector3(.4, .7, -.4).normalize(), wind = new THREE.Vector3(), sunCover = 0; // shared names (var: other teams declare them too)
+let skyUI = null; const VIEW_AZ = .6 - Math.PI; // the default camera looks along this azimuth
+const SKY = { R: 250, b0: -.33, b1: -.2, sun: { az: VIEW_AZ - .07, t: (16 - 5) / 35 }, clouds: [], drag: null, send: null, hinted: false, setting: false, g: 0, gv: 0,
+  v: new THREE.Vector3(), w: new THREE.Vector3(), o: new THREE.Vector3(), c: new THREE.Vector3(), rt: new THREE.Vector3(), up: new THREE.Vector3(), sp: { x: -1e4, y: -1e4, on: false } };
+const SUN_R = 4.6, WIND0 = new THREE.Vector3(1.6, 0, -1.1), CLOUD_H = 45, GROUND_Y = -18.03;
+const skyDir = (az, t, out) => { const lat = SKY.b0 + (SKY.b1 - SKY.b0) * t; return out.set(Math.cos(lat) * Math.sin(az), Math.sin(lat), Math.cos(lat) * Math.cos(az)); };
+const sunElev = t => (6 + 78 * Math.pow(Math.max(0, Math.min(1, t)), .7)) * Math.PI / 180;
+const physDir = (az, t, out) => { const e = sunElev(t); return out.set(Math.cos(e) * Math.sin(az), Math.sin(e), Math.cos(e) * Math.cos(az)); };
+const skyInk = (pts, w, o = {}) => ({ pts, w, amp: .3, os: 9, ...o });
+// the sun: [0] rays, [1] warm bloom, [2] the inked disc, [3] a pale halo. cloudFX reads [0] and [1].
 const sunG = new THREE.Group(); scene.add(sunG);
-sunG.add(part([{ pts: loop(0, 0, 0, 2.2, 1.15, 40, 'yz'), w: .8 }, ...Array.from({ length: 12 }, (_, i) => { const a = i / 12 * Math.PI * 2; return { pts: [[0, Math.cos(a) * 2.9, Math.sin(a) * 2.9], [0, Math.cos(a) * 4, Math.sin(a) * 4]], w: .6 }; })], 950));
+sunG.add(part(Array.from({ length: 13 }, (_, i) => { const a = i / 13 * 6.283 + .2, l = i % 2 ? .55 : .9, k = (i % 3 - 1) * .07, r0 = SUN_R * 1.28;
+  return skyInk([[Math.cos(a) * r0, Math.sin(a) * r0, 0], [Math.cos(a + k) * (r0 + SUN_R * l * .5), Math.sin(a + k) * (r0 + SUN_R * l * .5), 0], [Math.cos(a) * (r0 + SUN_R * l), Math.sin(a) * (r0 + SUN_R * l), 0]], .7); }), 950));
+sunG.add(blots([{ p: [0, 0, -2], s: SUN_R * 1.9, seed: .21, a: .8 }], [.99, .86, .45], [.97, .70, .36], .45, .5));
+sunG.add(part([skyInk(loop(0, 0, 0, SUN_R, 1.18, 44, 'xy'), .92), skyInk(loop(.35, -.3, 0, SUN_R * .94, 1.04, 40, 'xy'), .5),
+  ...[0, 1, 2, 3].map(i => skyInk(Array.from({ length: 6 }, (_, k) => { const a = -1.1 + k * .14 + i * .05, r = SUN_R * (.45 + i * .13); return [Math.cos(a) * r, Math.sin(a) * r, 0]; }), .4, { d: true }))], 951));
+const halo = blots([{ p: [0, 0, -4], s: SUN_R * 3.3, seed: .63, a: .26 }], [1, .9, .62], [.98, .78, .5], .3, .9); halo.renderOrder = -3.5; sunG.add(halo);
+// clouds: a cumulus silhouette inked as the outer arcs of its puffs over a flat base, a little hatching in the belly,
+// a grey-blue wash on each puff. The puffs double as the cloud's volume for the sun ray-cast.
 const cloudG = new THREE.Group(); scene.add(cloudG);
-cloudG.add(part([[-3, 0, 2.2], [-1, .9, 2.6], [1.2, .6, 2.4], [3, 0, 2], [0, -.4, 3.2]].map(([z, y, r]) => ({ pts: loop(0, y, z, r, .62, 30, 'yz').map(([x, yy, zz]) => [x, Math.max(-.6, yy), zz]), w: .7 })), 960));
+const SHADOW_FS = `
+uniform vec3 puffs[7]; uniform float str, seed; varying vec2 vU;
+void main(){
+  vec2 p = (vU - .5) * 2.0; float f = -1.0;
+  for (int i = 0; i < 7; i++) { vec3 q = puffs[i]; if (q.z > 0.0) f = max(f, 1.0 - length(p - q.xy) / q.z); }
+  vec4 N = nz(p * 2.2 + seed);
+  f = f * .8 + (N.r - .5) * .7 - .08;
+  float d = wc(f, N.b - .64, .5) * str;
+  if (d < .003) discard;
+  d *= grain();
+  gl_FragColor = tint(vec3(.40, .46, .62), d);
+}`;
+function makeCloud(seed, az, t) {
+  const r = rng(seed), W = 28 + r() * 14, n = 5 + Math.floor(r() * 2), puffs = [], S = [];
+  for (let i = 0; i < n; i++) { const u = (i + .5) / n - .5, c = 1 - 2 * Math.abs(u), rad = W * (.12 + .09 * c + .03 * r());
+    puffs.push([u * W * .82, rad * .5 + c * W * .06, rad]); }
+  puffs.push([(r() - .5) * W * .25, W * .27, W * .16]);
+  const inside = (x, y, j) => puffs.some(([px, py, pr], k) => k !== j && Math.hypot(x - px, y - py) < pr * .97);
+  puffs.forEach(([px, py, pr], j) => { let run = [], det = []; const flush = () => { if (run.length > 2) S.push(skyInk(run, .78)); run = []; }, flushD = () => { if (det.length > 2 && det.length < 9) S.push(skyInk(det, .38, { d: true })); det = []; };
+    for (let k = 0; k <= 48; k++) { const a = k / 48 * 6.283 + Math.PI, x = px + Math.cos(a) * pr, y = py + Math.sin(a) * pr;
+      if (y < 0) { flush(); flushD(); continue; }
+      if (inside(x, y, j)) { flush(); if (y > py + pr * .3) det.push([x, y, 0]); else flushD(); } else { flushD(); run.push([x, y, 0]); } }
+    flush(); flushD(); });
+  const x0 = Math.min(...puffs.map(([x, , pr]) => x - pr * .9)), x1 = Math.max(...puffs.map(([x, , pr]) => x + pr * .9));
+  S.push(skyInk(Array.from({ length: 12 }, (_, i) => [x0 + (x1 - x0) * i / 11, .3 * Math.sin(i * 1.7 + seed), 0]), .55));
+  for (let i = 0; i < 6; i++) { const x = x0 + (x1 - x0) * (.15 + i * .13); S.push(skyInk([[x, .8, 0], [x + 2.6, 3.4, 0]], .35, { d: true })); }
+  const g = new THREE.Group(); g.add(part(S, 970 + seed));
+  g.add(blots(puffs.map(([x, y, pr]) => ({ p: [x, y, -1], s: pr * 1.3, seed: r(), a: .55 })), [.72, .76, .86], [.52, .57, .70], .45, .7));
+  cloudG.add(g);
+  const H = Math.max(...puffs.map(([, y, pr]) => y + pr)), hw = (x1 - x0) / 2, cx = (x0 + x1) / 2;
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), envMat('varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', SHADOW_FS,
+    { puffs: { value: Array.from({ length: 7 }, (_, i) => puffs[i] ? new THREE.Vector3((puffs[i][0] - cx) / hw, (puffs[i][1] - H / 2) / (H / 2), puffs[i][2] / hw) : new THREE.Vector3()) }, str: { value: 0 }, seed: { value: seed * 3.7 } }));
+  sh.renderOrder = -4.5; sh.frustumCulled = false; sh.visible = false; scene.add(sh);
+  SKY.clouds.push({ g, puffs, az, t, hw, H, sh, wp: puffs.map(() => new THREE.Vector3()) });
+}
+function skyBand(dt) { // the band of sky the page shows: painted horizon .. a little under the top of the view
+  const v = SKY.v.set(0, 1, .5).unproject(camera).sub(camera.position).normalize();
+  const want = Math.max(-.16, Math.asin(v.y)) - .045; SKY.b1 += (want - SKY.b1) * Math.min(1, dt * 5);
+  SKY.b0 = SKY.b1 - camera.fov * Math.PI / 180 * .4; // the sun's whole range spans ~40% of the screen: about 9 px per degree
+}
+const skyPx = () => H / (2 * SKY.R * Math.tan(camera.fov * Math.PI / 360)); // screen px per world unit on the sky sphere
+function skyPlace(dt) { // after the camera moves: put sun and clouds on the sphere, billboarded, and the label on the sun
+  camera.updateMatrixWorld(); skyBand(dt);
+  const held = SKY.drag && SKY.drag.o === SKY.sun ? 1 : 0, h = Math.min(dt, .05);
+  SKY.gv += ((held - SKY.g) * 220 - SKY.gv * 15) * h; SKY.g += SKY.gv * h;
+  sunG.scale.setScalar(1 + .22 * SKY.g); sunG.children[0].rotation.z -= h * (.04 + .9 * Math.max(0, SKY.g));
+  skyDir(SKY.sun.az, SKY.sun.t, SKY.v); sunG.position.copy(camera.position).addScaledVector(SKY.v, SKY.R); sunG.quaternion.copy(camera.quaternion);
+  for (const c of SKY.clouds) { skyDir(c.az, c.t, SKY.v); c.g.position.copy(camera.position).addScaledVector(SKY.v, SKY.R * .92); c.g.quaternion.copy(camera.quaternion); c.g.updateMatrixWorld(); // clouds hang in front of the sun
+    c.puffs.forEach(([x, y], i) => c.g.localToWorld(c.wp[i].set(x, y, 0))); }
+  sunG.updateMatrixWorld();
+  const p = SKY.v.copy(sunG.position).project(camera), on = p.z < 1 && Math.abs(p.x) < 1.2 && Math.abs(p.y) < 1.2;
+  SKY.sp.x = (p.x + 1) / 2 * W_; SKY.sp.y = (1 - p.y) / 2 * H; SKY.sp.on = on; skyUI && skyUI();
+}
+function skyTick(dt) { // before the light: wind, drift, sunDir, then the cover ray-cast from the butterfly
+  const g = 1 + .25 * Math.sin(clock * .37) * Math.sin(clock * .11 + 1); wind.copy(WIND0).multiplyScalar(g);
+  for (const c of SKY.clouds) {
+    const held = SKY.drag && SKY.drag.o === c;
+    if (!held && (c.vaz || c.vt)) { c.az += c.vaz * dt; c.t += c.vt * dt; const f = Math.exp(-1.1 * dt); c.vaz *= f; c.vt *= f;
+      if (c.t < -.1 || c.t > 1.15) { c.t = Math.max(-.1, Math.min(1.15, c.t)); c.vt *= -.4; }
+      if (Math.abs(c.vaz) + Math.abs(c.vt) < .004) c.vaz = c.vt = 0; }
+    const sp = held ? Math.hypot(SKY.drag.vaz, SKY.drag.vt) : Math.hypot(c.vaz || 0, c.vt || 0), st = 1 + Math.min(.22, sp * .3);
+    c.lift = (c.lift || 0) + ((held ? 1 : 0) - (c.lift || 0)) * Math.min(1, dt * 12);
+    c.g.scale.set(st * (1 + .06 * c.lift), (1 + .06 * c.lift) / Math.sqrt(st), 1);
+  }
+  if (SKY.sun.t > 1 || SKY.sun.t < 0) if (!(SKY.drag && SKY.drag.o === SKY.sun)) SKY.sun.t += (Math.max(0, Math.min(1, SKY.sun.t)) - SKY.sun.t) * Math.min(1, dt * 12); // rubber band back
+  if (playing) for (const c of SKY.clouds) {
+    if (c.vaz || c === (SKY.drag && SKY.drag.o) || (SKY.send && SKY.send.c === c)) continue;
+    c.az += (wind.x * Math.cos(c.az) - wind.z * Math.sin(c.az)) / 300 * dt; // along the wind: d(az) = wind . east / distance
+    const dh = SKY.w.set(Math.sin(c.az), 0, Math.cos(c.az)), wd = SKY.o.copy(wind).normalize();
+    if (dh.dot(wd) > .9) { const p = skyDir(c.az, c.t, SKY.c).add(camera.position).project(camera); // gone downwind and out of view: a new one comes up upwind
+      if (p.z > 1 || Math.abs(p.x) > 1.3 || Math.abs(p.y) > 1.3) { c.az = Math.atan2(-wd.x, -wd.z) + (Math.random() - .5) * 1.2; c.t = .22 + Math.random() * .33; } }
+    // a cloud that has drifted well off the side of the view comes back in just past the upwind edge, so the sky is never empty
+    const cv = camera.getWorldDirection(SKY.c), caz = Math.atan2(cv.x, cv.z), off = Math.atan2(Math.sin(c.az - caz), Math.cos(c.az - caz)), half = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect);
+    const drift = Math.sign(wind.x * Math.cos(c.az) - wind.z * Math.sin(c.az)) || 1, edge = half + c.hw / SKY.R * 1.2;
+    if (off * drift > edge + .35) { c.az = caz - drift * edge; c.t = .22 + Math.random() * .33; c.vaz = c.vt = 0; }
+  }
+  if (SKY.send) { const s = SKY.send, c = s.c; s.k = Math.min(1, s.k + dt / 2.5); const e = s.k * s.k * (3 - 2 * s.k);
+    const da = Math.atan2(Math.sin(SKY.sun.az - s.az0), Math.cos(SKY.sun.az - s.az0)); c.az = s.az0 + da * e; c.t = s.t0 + (SKY.sun.t - c.H / 2 / SKY.R / (SKY.b1 - SKY.b0) - s.t0) * e; if (s.k >= 1) SKY.send = null; }
+  physDir(SKY.sun.az, SKY.sun.t, sunDir);
+  // cover: five rays toward points on the sun's disc, each through every puff (a sphere); optical depth grows with the
+  // chord, so a ray through a puff's middle is nearly dark and one grazing its edge barely dimmed. The sky sphere stands
+  // for the sky at infinity, so a ray from the butterfly meets the clouds at the same angles as one from the sphere's
+  // centre: cast from there, so what you see over the sun is what shades the butterfly, from any view.
+  const o = camera.position, rt = SKY.rt.setFromMatrixColumn(sunG.matrixWorld, 0), up = SKY.up.setFromMatrixColumn(sunG.matrixWorld, 1);
+  let T = 0;
+  for (let s = 0; s < 5; s++) {
+    const d = SKY.v.copy(sunG.position); if (s) d.addScaledVector(s < 3 ? rt : up, (s % 2 ? 1 : -1) * SUN_R * .6);
+    d.sub(o).normalize(); let tau = 0;
+    for (const c of SKY.clouds) c.puffs.forEach(([, , pr], i) => { const oc = SKY.c.copy(c.wp[i]).sub(o), tca = oc.dot(d); if (tca <= 0) return;
+      const d2 = oc.lengthSq() - tca * tca, r2 = pr * pr * .9; if (d2 < r2) tau += 2.8 * Math.sqrt(1 - d2 / r2); });
+    T += Math.exp(-tau) / 5;
+  }
+  sunCover += (1 - T - sunCover) * Math.min(1, dt * 6);
+  sunG.children[2].visible = sunCover < .8 || !!REAL; // a thick cloud hides the disc; cloudFX already takes the rays and the bloom
+  cloudT = sunCover > .05 ? sunCover : 0; // older code reads cloudT > 0 as "a cloud is over the sun"
+  // shadows on the ground: each cloud put CLOUD_H above the butterfly along its true direction, thrown down along the sun
+  const sk = Math.min(1, Math.max(0, (sunDir.y - .06) / .2)) * .6;
+  for (const c of SKY.clouds) {
+    const cd = physDir(c.az, c.t + (c.H / 2) / SKY.R / (SKY.b1 - SKY.b0), SKY.c), L = CLOUD_H / Math.max(.08, cd.y);
+    const cp = SKY.w.copy(bug.position).addScaledVector(cd, L), k = (cp.y - GROUND_Y) / sunDir.y; cp.addScaledVector(sunDir, -k);
+    const far = Math.hypot(cp.x, cp.z); c.sh.visible = sk > .01 && far < 34; if (!c.sh.visible) continue;
+    const sc = L / SKY.R; c.sh.position.set(cp.x, GROUND_Y, cp.z);
+    c.sh.rotation.y = c.az; // local x along the cloud's horizontal width
+    c.sh.scale.set(c.hw * sc, 1, c.H / 2 * sc / Math.max(.45, sunDir.y));
+    c.sh.material.uniforms.str.value = sk * Math.min(1, (34 - far) / 6);
+  }
+}
+function sendCloud() { // the nearest cloud glides over the sun (the hidden cloud button, and 'c' on the sun's label)
+  let best = null, bd = 1e9;
+  for (const c of SKY.clouds) { const d = Math.abs(Math.atan2(Math.sin(c.az - SKY.sun.az), Math.cos(c.az - SKY.sun.az))) + Math.abs(c.t - SKY.sun.t) * .3; if (d < bd) { bd = d; best = c; } }
+  if (best) SKY.send = { c: best, az0: best.az, t0: best.t, k: 0 };
+}
+[[11, -.15, .55], [23, .17, .42], [37, .45, .8], [41, -.5, .55], [53, .8, .4]].forEach(([s, da, t]) => makeCloud(s, VIEW_AZ + da, t)); // two in view on a phone, the rest drift in
 
 // ---------- world state ----------
-let tod = 11, air = 16, flyMin = 19, playing = !reduce, cloudT = 0, Tth = 15, hold = false;
+let tod = 11, air = 16, taS = 16, flyMin = 19, playing = !reduce, cloudT = 0, Tth = 15, hold = false;
 const sunDirAt = t => { const a = Math.PI * (t - 6.5) / 13; return new THREE.Vector3(Math.cos(a), Math.sin(a) * .9, -.45).normalize(); };
-const NEED = 28;
+// Thorax thresholds, °C. Monarchs can fly from a thorax of ~13-16 (Masters et al. 1988) and fly well in the high 20s;
+// with no sun they shiver first, up to ~4 °C above air (Kammer 1970). Wings, not thorax, end basking: ~40 °C wing
+// stops it and ~42 °C makes butterflies move (Tsai et al. 2020). Heat runs HB.X (20x) faster than life.
+const NEED = 28, FLY_MIN = 15, SHIVER_GO = 18, LAND = 20, WING_HOT = 40, THX_HOT = 38;
+// a lower milkweed leaf, shaded by the plant: where it goes when too hot (light there is a quarter of full sun)
+PERCHES.shade = (() => { const d = new THREE.Vector3(0, -.08, 1).normalize(), p = d.multiplyScalar(6.5 * .45).add(new THREE.Vector3(0, -4.5, 0)); p.y -= 1.2 * .2 - FOOT; return p; })();
+// ---------- cast shadow: the wings' own outlines thrown along the sun onto the leaf (or flower) it stands on ----------
+// each frame the four wing outlines and the body are projected along the sun ray onto a level plane at foot height,
+// painted soft into a small canvas (penumbra widens with height), and laid down as a grey-blue wash that dries darker at its rim
+const SH = { N: 160, SZ: 10, cv: null, cx: null, tex: null, mesh: null, y: 0, q: new THREE.Vector3(), v: new THREE.Vector3() };
+function initShadow() {
+  SH.cv = document.createElement('canvas'); SH.cv.width = SH.cv.height = SH.N; SH.cx = SH.cv.getContext('2d');
+  SH.tex = new THREE.CanvasTexture(SH.cv);
+  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    uniforms: { map: { value: SH.tex }, str: { value: 0 }, dark: ENV.dark },
+    vertexShader: 'varying vec2 vU; varying vec3 vW; void main(){ vU = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: `uniform sampler2D map; uniform float str, dark; varying vec2 vU; varying vec3 vW;
+float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + 1.0), f.x), f.y); }
+void main(){
+  float a = texture2D(map, vU).a, wob = n(vW.xz * 3.1) - .5;
+  float blot = smoothstep(.1, .55, a + .12 * wob), rim = blot * (1.0 - smoothstep(.45, .9, a)) * .6; // pigment pools at the drying edge
+  float grain = .7 + .6 * n(vW.xz * 23.0) * n(vW.zx * 9.0 + 3.0);                                    // granulation in the paper tooth
+  float A = clamp((blot * .36 + rim * .4) * grain * str, 0.0, .45);
+  if (A < .004) discard;
+  gl_FragColor = vec4(dark > .5 ? vec3(.03, .04, .09) : vec3(.33, .40, .56), A);
+}` });
+  SH.mesh = new THREE.Mesh(new THREE.PlaneGeometry(SH.SZ, SH.SZ).rotateX(-Math.PI / 2), mat); SH.mesh.renderOrder = -3; scene.add(SH.mesh);
+  // the leaves' outlines (as buildGarden lays them), so the wash can be clipped to leaf and not hang in the air past an edge
+  SH.leaves = []; [[0, 0], [-4.5, Math.PI / 2], [-9, 0], [-13.5, Math.PI / 2]].forEach(([y, rot], li) => [0, Math.PI].forEach(fl => {
+    const a = rot + fl, d = li === 0 && !fl ? LEAF.dir : new THREE.Vector3(Math.cos(a), -.08, Math.sin(a)).normalize(), len = li === 0 ? LEAF.len : 6.5, side = new THREE.Vector3().crossVectors(d, Y0).normalize(), pts = [];
+    for (let i = 0; i <= 52; i++) { const u = i <= 26 ? i / 26 : (52 - i) / 26, k = i <= 26 ? 1 : -1, h = 1.5 * 1.15 * Math.pow(Math.sin(Math.PI * Math.min(1, u * 1.02)), .8), p = new THREE.Vector3(0, y, 0).addScaledVector(d, len * u).addScaledVector(side, k * h); p.y -= 1.2 * u * u; pts.push(p); }
+    SH.leaves.push({ y, pts }); }));
+}
+function castShadow(sun, light) {
+  if (!SH.mesh) initShadow();
+  const perched = fl.mode === 'perch' || fl.mode === 'settle', b = bug.position;
+  SH.y = perched ? b.y - FOOT : PERCHES.leaf.y - FOOT; // in flight: the shadow falls on the big leaf below, fading with height
+  const hgt = b.y - SH.y, k = light * Math.min(1, Math.max(0, (sun.y - .06) / .2)) * Math.exp(-Math.max(0, hgt - FOOT) * .35);
+  SH.mesh.visible = k > .01 && hgt > 0; if (!SH.mesh.visible) return;
+  const t0 = hgt / sun.y, cx = b.x - sun.x * t0, cz = b.z - sun.z * t0, N = SH.N, sc = N / SH.SZ, x = SH.cx, q = SH.q;
+  SH.mesh.position.set(cx, SH.y + .02, cz); SH.mesh.material.uniforms.str.value = k;
+  const toC = p => { const t = (p.y - SH.y) / sun.y; return [(p.x - sun.x * t - cx) * sc + N / 2, (p.z - sun.z * t - cz) * sc + N / 2]; };
+  x.clearRect(0, 0, N, N); x.save();
+  // draw far off-canvas and let the canvas's own shadowBlur bring a softened copy back: a cheap blur that works everywhere
+  x.shadowColor = '#000'; x.shadowBlur = 3.5 + Math.max(0, hgt - FOOT) * 5; x.shadowOffsetX = N * 4; x.translate(-N * 4, 0);
+  x.fillStyle = x.strokeStyle = '#000';
+  ['foreR', 'foreL', 'hindR', 'hindL'].forEach(n => { const W = WINGS[n.slice(0, 4)], s = n.endsWith('R') ? 1 : -1, g = P[n]; x.beginPath();
+    W.outline.forEach(([u, zz], i) => { if (i % 2) return; const [X, Z] = toC(g.localToWorld(q.set(s * u, camber(u), zz))); i ? x.lineTo(X, Z) : x.moveTo(X, Z); }); x.closePath(); x.fill(); });
+  x.beginPath(); [-1.2, -.6, 0, .5].forEach((z, i) => { const [X, Z] = toC(bug.localToWorld(q.set(0, 0, z))); i ? x.lineTo(X, Z) : x.moveTo(X, Z); });
+  x.lineWidth = .24 * sc; x.lineCap = 'round'; x.stroke();
+  x.restore();
+  if (SH.y < 2) { x.save(); x.globalCompositeOperation = 'destination-in'; x.fillStyle = '#000'; x.beginPath();   // keep the wash only where a leaf lies under it
+    SH.leaves.forEach(L => { if (SH.y > L.y + .4 || SH.y < L.y - 1.8) return; L.pts.forEach((p, i) => { const X = (p.x - cx) * sc + N / 2, Z = (p.z - cz) * sc + N / 2; i ? x.lineTo(X, Z) : x.moveTo(X, Z); }); x.closePath(); });
+    x.fill(); x.restore(); }
+  SH.tex.needsUpdate = true;
+}
+// ---------- [light] sunlight on the garden: one shadow map from the sun, shading terms for leaves, umbel, ground and wings ----------
+// shared with the sky team: sunDir (unit, toward the sun) and sunCover (0 clear .. 1 direct beam fully blocked)
+const LT = { rt: null, cam: null, sc: null, last: new THREE.Vector3(), n: new THREE.Vector3(), v: new THREE.Vector3(), w: new THREE.Vector3(), q: new THREE.Quaternion() };
+function lightInit() {
+  // a 512² depth map from an orthographic "sun camera" over the plant and its ground; RGBA-packed so it works on any phone
+  LT.rt = new THREE.WebGLRenderTarget(512, 512, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false, stencilBuffer: false });
+  LT.cam = new THREE.OrthographicCamera(-30, 30, 30, -30, 1, 200); LT.sc = new THREE.Scene();
+  const dm = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
+  garden.traverse(o => { if (o.isMesh && o.geometry.getAttribute('st')) LT.sc.add(new THREE.Mesh(o.geometry, dm)); });     // leaves + stalk ribbons
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), dm); ball.scale.set(1.9, 1.1, 1.9); ball.position.set(0, 3.6, 0); LT.sc.add(ball); // the umbel, as a squat ball of florets
+  garden.traverse(o => { if (o.isMesh && o.geometry.getAttribute('corner') && o.renderOrder === -4) o.material.uniforms.ball = { value: new THREE.Vector4(0, 3.6, 0, 1) }; });
+  ENV.shMap.value = LT.rt.texture;
+  // the ground is flat, so its shadow is baked once per sun move into a 256² sheet (16 taps), and the ground wash reads one texel
+  LT.g = new THREE.WebGLRenderTarget(256, 256, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: false, stencilBuffer: false });
+  LT.gs = new THREE.Scene(); LT.gc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), envMat('varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', `varying vec2 vUv;
+void main(){
+  vec3 w = vec3((vUv.x - .5) * 48.0, -18.05, (vUv.y - .5) * 48.0), c = shUV(w, .1); float o = 0.0;
+  for (int i = 0; i < 16; i++) { float t = float(i) * 2.39996, q = sqrt((float(i) + .5) / 16.0) * 3.5 / 512.0; o += shTap(c.xy + vec2(cos(t), sin(t)) * q, c.z); }
+  gl_FragColor = vec4(c.z > 1.0 ? 0.0 : o / 16.0, 0.0, 0.0, 1.0);
+}`, {}, { transparent: false, depthTest: false, depthWrite: false, blending: THREE.NoBlending }));
+  q.frustumCulled = false; LT.gs.add(q); ENV.gSh.value = LT.g.texture;
+}
+function lightFrame() {
+  if (!LT.rt) lightInit();
+  const up = Math.max(0, Math.min(1, (sunDir.y - .02) / .15)), clear = 1 - Math.max(0, Math.min(1, sunCover));
+  ENV.px.value = renderer.getPixelRatio(); ENV.sunD.value.copy(sunDir); ENV.sunK.value = up * clear * (1 - ENV.night.value);
+  ENV.shSoft.value = Math.min(1, sunCover * 1.5);                                         // thin cloud: the shadow edge blurs before it fades
+  ENV.low.value = up * clear * (1 - Math.max(0, Math.min(1, (sunDir.y - .12) / .4)));      // golden only when the sun is low
+  if (sunDir.y > .01 && LT.last.dot(sunDir) < .99996) {                                     // the map is redrawn only when the sun moves (~0.5°)
+    LT.last.copy(sunDir); const c = LT.cam;
+    c.position.copy(sunDir).multiplyScalar(90).add(LT.v.set(0, -10, 0)); c.up.set(0, 1, 0); if (Math.abs(sunDir.y) > .98) c.up.set(0, 0, 1);
+    c.lookAt(0, -10, 0); c.updateMatrixWorld(); ENV.shMat.value.multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse);
+    const prev = renderer.getRenderTarget(), cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
+    renderer.setClearColor(0xffffff, 1); renderer.setRenderTarget(LT.rt); renderer.clear(); renderer.render(LT.sc, c);
+    renderer.setRenderTarget(LT.g); renderer.render(LT.gs, LT.gc);
+    renderer.setRenderTarget(prev); renderer.setClearColor(cc, ca);
+  }
+  // monarch wings glow when lit from behind: the sun on the far side of the wing from the eye, strongest looking into the light
+  const cam = camera.position;
+  for (let i = 0; i < washes.length; i++) {
+    const m = washes[i], g = m.userData.sex && m.userData.sex.g; if (!g) continue;
+    if (!m.uniforms.glow) m.uniforms.glow = { value: 0 };
+    g.getWorldQuaternion(LT.q); LT.n.set(0, 1, 0).applyQuaternion(LT.q); g.getWorldPosition(LT.w); LT.v.subVectors(cam, LT.w).normalize();
+    const nv = LT.n.dot(LT.v), ns = LT.n.dot(sunDir), back = nv * ns < 0 ? Math.min(1, Math.abs(ns) * 1.6) : 0;
+    m.uniforms.glow.value = ENV.sunK.value * back * (.55 + .45 * Math.max(0, -LT.v.dot(sunDir)));
+  }
+}
+let hotState = false, hotT = 0, shivering = false, shiverT = 0, darkT = 0, wingMax = 0, peakAt = 0;
+const peakExcess = h => { if (h.maxT !== undefined) return h.maxT; let m = 0; for (let a = 0; a < h.idx.length; a++) { const v = h.T[h.idx[a]]; if (v > m) m = v; } return m; };
 
 // flight: bouts of flapping then short glides, wandering between waypoints, banking into turns
+// [flock] two more monarchs flap-gliding loose loops around the garden, far off (shared geometry/materials, no heat sim)
+const FLOCK = { b: [], t: 0 };
+function flockTick(dt) {
+  if (!FLOCK.b.length) {
+    const orig = [], idx = {}; bug.traverse(o => orig.push(o));
+    Object.keys(P).forEach(k => { idx[k] = orig.indexOf(P[k]); });
+    [[12, 2.5, .22, 0, .9], [16, .8, -.17, 2.6, 1.7]].forEach(([r, y, w, a0, ph]) => {
+      const sv = bug.userData; bug.userData = {}; const c = bug.clone(true); bug.userData = sv;
+      const all = []; c.traverse(o => all.push(o)); const Q = {}; Object.keys(idx).forEach(k => { Q[k] = all[idx[k]]; });
+      if (Q.glow) Q.glow.visible = false; c.scale.setScalar(.8); scene.add(c);
+      FLOCK.b.push({ c, Q, r, y, w, a: a0, ph, beats: 3, glide: 0, flapW: 1 });
+    });
+  }
+  FLOCK.t += dt;
+  for (const m of FLOCK.b) {
+    if (m.glide > 0) m.glide -= dt;
+    else { const b = m.ph; m.ph += dt * 2 * Math.PI * 7; if (Math.floor(b / 6.283) !== Math.floor(m.ph / 6.283) && --m.beats <= 0) { m.glide = .4 + Math.random() * .9; m.beats = 2 + (Math.random() * 4 | 0); } }
+    m.flapW = smooth(m.flapW, m.glide > 0 ? 0 : 1, Math.min(1, dt * 6));
+    m.a += dt * m.w * (.8 + .3 * m.flapW);
+    const wob = Math.sin(m.a * 2.3 + m.r), rr = m.r + 1.5 * wob;
+    const x = Math.cos(m.a) * rr, z = Math.sin(m.a) * rr, y = m.y + .8 * Math.sin(m.a * 1.7) - .1 * Math.cos(m.ph) * m.flapW - (1 - m.flapW) * .3;
+    m.c.position.set(x, y, z);
+    // the others fly only when the day lets one fly (warm air or sun), and never sweep right past the lens
+    m.c.visible = (taS >= 17 || (taS >= 13 && sunCover < .5 && sunDir.y > .25)) && m.c.position.distanceTo(camera.position) > camera.position.distanceTo(bug.position) + 1.5; // only behind the hero
+    const dx = -Math.sin(m.a) * Math.sign(m.w), dz = Math.cos(m.a) * Math.sign(m.w);
+    m.c.rotation.set(-.12 + .15 * m.flapW, Math.atan2(dx, dz), -.35 * Math.sign(m.w), 'YXZ');
+    ['fore', 'hind'].forEach(w => {
+      const lag = w === 'hind' ? .35 : 0, wv = Math.sin(m.ph - lag) + .3 * Math.sin(2 * (m.ph - lag));
+      const th = m.flapW * (.42 + .62 * wv) + (1 - m.flapW) * .32, sw = m.flapW * .2 * Math.cos(m.ph - lag) * (w === 'fore' ? 1 : .6);
+      [1, -1].forEach(s => { const g = m.Q[w + (s > 0 ? 'R' : 'L')]; if (g) { g.rotation.z = s * th; g.rotation.y = -s * sw; } });
+    });
+  }
+}
 const fl = { mode: 'perch', at: 'leaf', t: 0, vel: new THREE.Vector3(), wp: new THREE.Vector3(), beats: 4, glide: 0, phase: 0, flapW: 0, heading: 0, bank: 0, settle: 0, from: new THREE.Vector3(), fromQ: new THREE.Quaternion() };
 const pickWaypoint = () => { const a = Math.random() * 6.3, r = 5 + Math.random() * 6; return fl.wp.set(Math.cos(a) * r, 2 + Math.random() * 6, Math.sin(a) * r); };
 
@@ -507,9 +1569,11 @@ canvas.addEventListener('pointerdown', e => {
   canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); dragging = true; vAz = 0;
   down = ptrs.size === 1 ? { t: performance.now(), moved: 0 } : null;
   if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); zoom0 = zoom; }
+  RUB.down(e);
 });
 canvas.addEventListener('pointermove', e => {
   if (!ptrs.has(e.pointerId)) return;
+  if (RUB.move(e)) return;
   const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
   if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; if (pinch0) zoom = Math.min(6, Math.max(.4, zoom0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch0)); return; }
   const dx = e.clientX - prev[0], dy = e.clientY - prev[1]; if (down) down.moved += Math.abs(dx) + Math.abs(dy);
@@ -517,8 +1581,10 @@ canvas.addEventListener('pointermove', e => {
   az -= dx * .009; el = Math.max(-.15, Math.min(1.5, el + dy * .007)); vAz = -dx * .0009;
 });
 const up = e => {
+  RUB.up(e);
   ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; dragging = ptrs.size > 0;
-  if (down && !ptrs.size && down.moved < 8 && performance.now() - down.t < 300) { const now = performance.now(); if (now - lastTap < 350) setView(view); lastTap = now; }
+  if (down && !ptrs.size && down.moved < 8 && performance.now() - down.t < 300 && chrysTap(e)) { down = null; return; }
+  if (down && !ptrs.size && down.moved < 8 && performance.now() - down.t < 300 && !larvaTap(e)) { const now = performance.now(); if (now - lastTap < 350) setView(view); lastTap = now; }
   if (!ptrs.size) down = null;
 };
 canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
@@ -526,30 +1592,60 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.min(6, M
 
 const airEl = document.getElementById('air'), readout = document.getElementById('readout'), playBtn = document.getElementById('play');
 airEl.oninput = () => { air = +airEl.value; };
-// Embedded in Hatch (?embed=1): the map's place and date drive the air temperature, and a cloudy hour sends a cloud over.
-if (new URLSearchParams(location.search).has('embed')) {
-  document.documentElement.classList.add('embed');
-  addEventListener('message', e => {
-    const m = e.data; if (!m || m.type !== 'exo-air' || e.origin !== location.origin) return;
-    air = Math.max(5, Math.min(40, +m.t)); airEl.value = String(air);
-    if (m.cloudy && cloudT === 0) cloudT = 9;
-  });
-  parent.postMessage({ type: 'exo-ready' }, location.origin);
-}
 const setPlay = on => { playing = on; playBtn.innerHTML = on ? PAUSE_I : PLAY_I; playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play'); playBtn.setAttribute('aria-pressed', String(on)); };
 setPlay(playing); playBtn.onclick = () => setPlay(!playing);
-document.getElementById('cloud').onclick = () => { cloudT = 9; toast('A cloud drifts over the sun'); };
+document.getElementById('cloud').onclick = () => { sendCloud(); toast('A cloud drifts over the sun'); };
 const veinBtn = document.getElementById('veins');
 veinBtn.onclick = () => { hold = !hold; veinBtn.setAttribute('aria-pressed', String(hold)); if (hold) { setView('wings'); toast('Vein names on'); } else toast('Vein names off'); };
+// [sex] male / female: females have noticeably thicker black veins and no androconial scent patch on hindwing CuA2.
+let female = false;
+const sexBtn = document.getElementById('sex');
+function setSex(fem) {
+  female = fem; WINGS.fore.veinW = fem ? .066 : .042; WINGS.hind.veinW = fem ? .08 : .05;
+  const H = WINGS.hind; if (H.scentAt) H.scent0 = H.scentAt; H.scentAt = fem ? null : H.scent0;
+  darkMap(WINGS.fore); darkMap(WINGS.hind);
+  const R0 = R, masks = new Map();
+  washes.forEach(m => { const d = m.userData.sex; if (!d) return;
+    if (!masks.has(d.W)) { const mk = makeMask(d.W, d.hs); masks.set(d.W, [mk, d.vent ? makeMask(d.W, d.hs, true) : mk]); }
+    const [mk, mv] = masks.get(d.W), wl = bakeWash(mk, d.hs, d.sd, 0), wlv = d.vent ? bakeWash(mv, d.hs, d.sd + .21, 0, 1) : wl, u = m.uniforms;
+    [u.washL, u.washLV, u.washD, u.washDV].forEach(t => t.value && t.value.dispose && t.value.dispose());
+    u.washL.value = u.washD.value = wl; u.washLV.value = u.washDV.value = wlv;
+    m.userData.bakeDark = () => { m.userData.bakeDark = null; u.washD.value = bakeWash(mk, d.hs, d.sd, 1); u.washDV.value = d.vent ? bakeWash(mv, d.hs, d.sd + .21, 1, 1) : u.washD.value; };
+    d.st.traverse(o => { if (o.geometry) { geos.delete(o.geometry); o.geometry.dispose(); } }); d.g.remove(d.st);
+    d.st = part(wingStrokes(d.W, d.mirror, d.seed), d.seed); d.st.traverse(o => o.geometry && paint(o.geometry)); d.g.add(d.st);
+  });
+  R = R0; boilAt = -1e9;
+  sexBtn.textContent = fem ? 'female' : 'male'; sexBtn.setAttribute('aria-label', `Sex: ${fem ? 'female' : 'male'}. Tap for ${fem ? 'male' : 'female'}`);
+  toast(fem ? 'Female: thicker veins, no scent patch' : 'Male: thin veins, scent patch on hindwing');
+}
+sexBtn.onclick = () => setSex(!female);
+
+// underside flip: shut the wings and swing the camera side-on so the ventral pattern shows, then restore
+const flipBtn = document.getElementById('flip'); let flipT = 0, flipSave = null;
+const flipEnd = () => { flipT = 0; flipBtn.setAttribute('aria-pressed', 'false'); if (flipSave) { ({ el, zoom } = flipSave); flipSave = null; } };
+flipBtn.onclick = () => {
+  if (flipT > 0) return flipEnd();
+  if (fl.mode !== 'perch') return toast('Once it lands');
+  flipSave = { el, zoom }; flipT = 7; flipBtn.setAttribute('aria-pressed', 'true'); moved = true; recBtn.hidden = false;
+  toast('Underside: paler buff hindwing, white-edged veins', 3200);
+};
+function flipCam(dt, flying) { // runs in the camera step; also blocks takeoff while active
+  if (flipT <= 0) return false; if (flying) { flipEnd(); return false; }
+  flipT -= dt; if (flipT <= 0) { flipEnd(); return false; }
+  const f = tmp.set(0, 0, 1).applyQuaternion(bug.quaternion), want = Math.atan2(-f.x, -f.z) + Math.PI / 2, k = Math.min(1, dt * 2.2);
+  az += Math.atan2(Math.sin(want - az), Math.cos(want - az)) * k; el += (.06 - el) * k; zoom += (1.5 - zoom) * k; vAz = 0;
+  return true;
+}
 
 // the day timeline: air temperature curve behind the slider, hour ticks underneath
 const track = document.getElementById('track'), tsvg = document.getElementById('trackSvg');
-const thumbX = t => 11 + (t - 5) / 35 * (track.clientWidth - 22);
+let trackW = track.clientWidth; // cached: reading layout every frame would force a reflow
+const thumbX = t => 11 + (t - 5) / 35 * (trackW - 22);
 const F = c => Math.round(c * 9 / 5 + 32);
 // the air-temperature scale: a shaded band shows where it can warm up enough to fly (estimated from the sim itself)
 drawTrack = () => {
-  const w = track.clientWidth; if (!w) return;
-  const a = thumbX(Math.min(40, flyMin)), b = thumbX(40);
+  const w = trackW = track.clientWidth; if (!w) return;
+  const a = thumbX(Math.min(40, flyMin)), b = thumbX(40), key = `${w}|${a.toFixed(1)}|${paper.getHexString()}`; if (key === drawTrack.key) return; drawTrack.key = key;
   const ticks = [5, 10, 15, 20, 25, 30, 35, 40].map(t => `<text x="${thumbX(t)}" y="60">${t}°</text><line class="base" x1="${thumbX(t)}" x2="${thumbX(t)}" y1="43" y2="49"/>`).join('');
   tsvg.innerHTML = `<rect class="fill" x="${a}" y="30" width="${Math.max(0, b - a)}" height="16"/><text x="${(a + b) / 2}" y="40" style="fill:var(--warm)">can fly in sun</text><line class="base" x1="${thumbX(5)}" x2="${thumbX(40)}" y1="46" y2="46"/>${ticks}`;
 };
@@ -561,50 +1657,270 @@ let W_ = 1, H = 1, top = 0, bot = 0;
 function fitDist(r) { const v = camera.fov * Math.PI / 360, band = Math.max(120, H - top - bot); return Math.max(r / Math.tan(v) * (H / band), r / Math.tan(Math.atan(Math.tan(v) * camera.aspect))); }
 function resize() {
   W_ = canvas.clientWidth; H = canvas.clientHeight; renderer.setSize(W_, H, false); camera.aspect = W_ / H;
-  top = document.getElementById('cap').getBoundingClientRect().bottom + 6; bot = document.documentElement.classList.contains('embed') ? 6 : H - document.getElementById('day').getBoundingClientRect().top + 6;
+  top = document.getElementById('cap').getBoundingClientRect().bottom + 6; bot = H - document.getElementById('more').getBoundingClientRect().top + 6;
   camera.setViewOffset(W_, H, 0, -(top - bot) / 2, W_, H); camera.updateProjectionMatrix(); drawTrack();
 }
 
+buildLife();
 applyTheme(); buildBug(); buildGarden(); applyTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 new ResizeObserver(resize).observe(canvas); new ResizeObserver(drawTrack).observe(track); addEventListener('resize', resize); resize();
 document.fonts && document.fonts.ready.then(resize);
-heat.fore.reset(air); heat.hind.reset(air); Tth = air;
+heatSim.reset(); Tth = air;
 
 // ---------- loop ----------
 const tmp = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), qPerch = new THREE.Quaternion(), qFly = new THREE.Quaternion(), mtx = new THREE.Matrix4();
 const Y = new THREE.Vector3(0, 1, 0), nW = new THREE.Vector3(), pos = new THREE.Vector3().copy(PERCHES.leaf);
-const factEl = document.getElementById('fact'), thermT = document.getElementById('therm-t'), thermF = document.getElementById('therm-fill');
+const simEnv = document.getElementById('sim-env'), factEl = document.getElementById('fact'), thermT = document.getElementById('therm-t'), thermF = document.getElementById('therm-fill');
 document.getElementById('therm-need').style.left = ((NEED - 5) / 35 * 100) + '%';
-function basis(fwd, upv, q) { const z = fwd.clone().normalize(), x = new THREE.Vector3().crossVectors(upv, z).normalize(), y = new THREE.Vector3().crossVectors(z, x); mtx.makeBasis(x, y, z); return q.setFromRotationMatrix(mtx); }
+const bX = new THREE.Vector3(), bY = new THREE.Vector3(), bZ = new THREE.Vector3(), hsun = new THREE.Vector3(), upP = new THREE.Vector3(), fwdB = new THREE.Vector3();
+function basis(fwd, upv, q) { const z = bZ.copy(fwd).normalize(), x = bX.crossVectors(upv, z).normalize(), y = bY.crossVectors(z, x); mtx.makeBasis(x, y, z); return q.setFromRotationMatrix(mtx); }
 const smooth = (a, b, k) => a + (b - a) * k;
+let boilAt = -1e9; const boilers = [];
+const ui = {};
+// ---------- motion art: pencil ghosts of the beating wings, and a few pen flicks behind the body ----------
+// Only in flight. Each wing's outline is one shared line loop; the ghosts replay its pose from a few frames ago.
+const MA = { on: false, ghosts: [], hist: {}, mats: [], flick: null, flickAt: 0, n: 0 };
+function motionInit() {
+  MA.on = true; const NAMES = ['foreR', 'foreL', 'hindR', 'hindL'];
+  MA.mats = [.3, .18, .09].map(o => new THREE.LineBasicMaterial({ color: ink.clone(), transparent: true, opacity: o, depthWrite: false }));
+  NAMES.forEach(n => {
+    const W = WINGS[n.slice(0, 4)], s = n.endsWith('R') ? 1 : -1, o = W.outline.filter((_, i) => i % 2 === 0);
+    const geo = new THREE.BufferGeometry().setFromPoints(o.map(([u, z]) => new THREE.Vector3(s * u, camber(u), z)));
+    MA.hist[n] = Array.from({ length: 8 }, () => [0, 0]);
+    MA.mats.forEach((m, k) => { const l = new THREE.LineLoop(geo, m); l.rotation.order = 'YXZ'; l.position.copy(P[n].position); l.visible = false; l.userData.w = n; l.userData.k = k + 1; bug.add(l); MA.ghosts.push(l); });
+  });
+  const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(5 * 6), 3));
+  MA.fmat = new THREE.LineBasicMaterial({ color: ink.clone(), transparent: true, opacity: 0, depthWrite: false });
+  MA.flick = new THREE.LineSegments(fg, MA.fmat); MA.flick.visible = false; bug.add(MA.flick);
+}
+function motionArt(flying, now) {
+  if (reduce) return; if (!MA.on) motionInit();
+  const on = flying, flap = on ? fl.flapW : 0, i = MA.n = (MA.n + 1) % 8;
+  MA.mats.forEach(m => m.color.copy(ink)); MA.fmat.color.copy(ink);
+  for (const n in MA.hist) { const g = P[n], h = MA.hist[n]; h[i][0] = g.rotation.z; h[i][1] = g.rotation.y; }
+  // ghosts sampled by frame looked like random wing positions, so they stay off
+  MA.ghosts.forEach(l => { l.visible = false; if (true) return; const h = MA.hist[l.userData.w][(i - l.userData.k * 2 + 16) % 8];
+    l.rotation.z = h[0]; l.rotation.y = h[1]; });
+  MA.mats.forEach((m, k) => m.opacity = [.3, .18, .09][k] * flap);
+  // speed flicks: short tapered pen strokes trailing the abdomen, redrawn a few times a second like a hand re-inking them
+  const sp = on ? Math.min(1, fl.vel.length() / 4.2) : 0; MA.flick.visible = sp > .15; MA.fmat.opacity = .45 * sp;
+  if (MA.flick.visible && now - MA.flickAt > 140) { MA.flickAt = now; const a = MA.flick.geometry.attributes.position, r = Math.random;
+    for (let k = 0; k < 5; k++) { const x = (r() - .5) * .9, y = (r() - .3) * .5, z0 = -1.35 - r() * .25, len = (.2 + r() * .35) * sp;
+      a.setXYZ(k * 2, x, y, z0); a.setXYZ(k * 2 + 1, x * 1.15, y + .02, z0 - len); }
+    a.needsUpdate = true; }
+}
+// ---------- thermoregulation posture: shuffle round to put the back to the sun, open flatter the colder it is; shiver ----------
+// A cold monarch on a perch turns in a few small leg steps (~12° each, alternate diagonal pairs) until the sun is behind it,
+// then spreads its wings for a dorsal bask: nearly flat when cold, half-raised near flight temperature, closing up as it
+// warms past it (Kammer 1970; Rawlins 1980). Shivering: wings held shut and vibrating with tiny amplitude, abdomen pumping.
+const BK = { yaw: NaN, from: 0, to: 0, k: 1, wait: 0, side: 1, shiv: 0, pump: 0 };
+function baskStep(dt, goal, active) {
+  if (isNaN(BK.yaw)) BK.yaw = goal + .7; // arrives a little off the sun line, then shuffles round
+  BK.wait = Math.max(0, BK.wait - dt);
+  if (BK.k < 1) { BK.k = Math.min(1, BK.k + dt / .22); const e = BK.k * BK.k * (3 - 2 * BK.k); BK.yaw = BK.from + (BK.to - BK.from) * e; return; }
+  const err = Math.atan2(Math.sin(goal - BK.yaw), Math.cos(goal - BK.yaw));
+  if (!active || Math.abs(err) < .1 || BK.wait > 0) return;
+  BK.from = BK.yaw; BK.to = BK.yaw + Math.sign(err) * Math.min(Math.abs(err), .21); BK.k = 0; BK.wait = .36 + Math.random() * .12;
+  BK.side = -BK.side; legs.forEach(L => { if ((L.li === 0) === (L.s === BK.side)) L.twitch = 1; }); // one diagonal pair lifts and steps
+}
+// wing opening for a dorsal bask: 0 is flat, 1.45 shut over the back
+const baskPose = T => T < NEED ? .5 - .45 * Math.min(1, (NEED - T) / 12) : .5 + .6 * Math.min(1, (T - NEED) / 8);
+function shiverTremor(dt, airborne) { // wing tremor (rad): ~9-14 Hz, a couple of hundredths of a radian
+  BK.shiv = smooth(BK.shiv, shivering && !airborne ? 1 : 0, Math.min(1, dt * 3));
+  return airborne ? 0 : BK.shiv * (.022 * Math.sin(clock * 2 * Math.PI * 9.3) + .012 * Math.sin(clock * 2 * Math.PI * 13.7 + 1.3));
+}
+function shiverPump(airborne) { // slight abdominal pumping while it shivers (an offset on top of the resting pose)
+  const v = airborne ? 0 : BK.shiv, w = Math.sin(clock * 2 * Math.PI * 1.7), p = v * Math.max(0, w), pump = v * .03 * w;
+  P.abdomen.rotation.x += pump - BK.pump; BK.pump = pump;
+  P.abdomen.scale.set(1 + .035 * p, 1 + .05 * p, 1 - .02 * p);
+}
+// ---------- rub the scales off: press and hold a wing (~250 ms), then drag ----------
+// Scales are the colour (pigment + structure); under them is clear, slightly smoky chitin membrane with the veins.
+// Rubbed cells lose most of their sun absorption in the heat sim (bare membrane is nearly transparent).
+// ---------- courtship: a visiting female; males pursue females in the air ("aerial hawking", then a spiral) ----------
+// A light sketched copy of the wings: orange wash, ink outline, thicker dark veins, and no hindwing scent patch (females lack it).
+const MATE = (() => {
+  const M = { g: null, wings: [], mats: [], wait: 25 + Math.random() * 20, t: -1, ph: 0, a: 0, from: new THREE.Vector3(), out: new THREE.Vector3() };
+  if (/[?&]mate\b/.test(location.search)) M.wait = 1.5;
+  function build() {
+    M.g = new THREE.Group(); M.g.visible = false; M.g.scale.setScalar(.95); scene.add(M.g);
+    const fill = new THREE.MeshBasicMaterial({ color: 0xd9782a, transparent: true, opacity: .7, side: THREE.DoubleSide, depthWrite: false });
+    const line = new THREE.LineBasicMaterial({ color: ink.clone() }), vein = new THREE.LineBasicMaterial({ color: ink.clone(), transparent: true, opacity: .8 });
+    M.mats = [line, vein];
+    ['fore', 'hind'].forEach(w => [1, -1].forEach(s => {
+      const o = WINGS[w].outline.filter((_, i) => i % 2 === 0), piv = new THREE.Group(); piv.position.copy(P[w + (s > 0 ? 'R' : 'L')].position);
+      const sh = new THREE.Shape(o.map(([u, z]) => new THREE.Vector2(s * u, z))), fm = new THREE.Mesh(new THREE.ShapeGeometry(sh), fill);
+      fm.rotation.x = Math.PI / 2; piv.add(fm);
+      piv.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(o.map(([u, z]) => new THREE.Vector3(s * u, camber(u), z))), line));
+      // females: broader dark veins, drawn as doubled strokes from the root fanning to the margin
+      const vp = [], n = o.length;
+      for (let k = 1; k < 7; k++) { const [u, z] = o[Math.floor(n * (.08 + k * .11)) % n]; for (const d of [0, .012]) vp.push(new THREE.Vector3(0, .003, d), new THREE.Vector3(s * u * .92, camber(u * .92) + .003, z * .92 + d)); }
+      piv.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(vp), vein));
+      M.g.add(piv); M.wings.push({ piv, s, lag: w === 'hind' ? .35 : 0 });
+    }));
+    const body = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -.32), new THREE.Vector3(0, 0, .36)]);
+    M.g.add(new THREE.Line(body, line));
+  }
+  // dt, is the main monarch flying, is it warm and sunny enough to court
+  M.tick = (dt, flying, ok) => {
+    if (!dt) return; if (!M.g) build(); M.mats.forEach(m => m.color.copy(ink));
+    const c = bug.position;
+    if (M.t < 0) { if (flying && ok && (M.wait -= dt) <= 0) { M.t = 0; M.from.set(c.x + 6, c.y + 2, c.z - 5); M.g.position.copy(M.from); M.g.visible = true; } return; }
+    M.t += dt; M.ph += dt * 2 * Math.PI * 7;
+    const T = M.t, chase = 1.6, spin = 7, leave = 2.5;
+    if (T > chase && T - dt <= chase) toast('Courtship: males chase females in the air', 3500);
+    if (T > chase + .5 && T < chase + spin && !(flying && ok)) M.t = chase + spin; // he lands or it clouds over: she leaves
+    M.a += dt * 2.6;
+    const r = .75 + .25 * Math.sin(T * 1.7), want = new THREE.Vector3(c.x + r * Math.cos(M.a), c.y + .25 * Math.sin(T * 2.3) + .15, c.z + r * Math.sin(M.a));
+    const p = M.g.position, prev = p.clone();
+    if (T < chase) p.lerpVectors(M.from, want, T / chase);
+    else if (T < chase + spin) p.lerp(want, Math.min(1, dt * 6));
+    else { if (T - dt < chase + spin) M.out.set(c.x - 7, c.y + 3, c.z + 6); p.lerp(M.out, Math.min(1, dt * 1.1)); if (T > chase + spin + leave) { M.g.visible = false; M.t = -1; M.wait = 35 + Math.random() * 15; return; } }
+    const v = p.clone().sub(prev); if (v.lengthSq() > 1e-8) M.g.rotation.y = Math.atan2(v.x, v.z) + Math.PI; M.g.rotation.z = -.3 * Math.sin(M.a);
+    M.wings.forEach(({ piv, s, lag }) => { const wv = Math.sin(M.ph - lag) + .3 * Math.sin(2 * (M.ph - lag)); piv.rotation.z = s * (.42 + .62 * wv); });
+  };
+  return M;
+})();
+const RUB = (() => {
+  const NAMES = ['foreR', 'foreL', 'hindR', 'hindL'], RES = 160, BARE = .12, sides = {}, base = {};
+  const rc = new THREE.Raycaster(), ndc = new THREE.Vector2(), loc = new THREE.Vector3();
+  const col = new THREE.Color(), smoke = new THREE.Color(.55, .52, .46);
+  const VS = `varying vec2 vP; void main(){ vP = vec2(abs(position.x), position.z); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
+  const FS = `precision highp float; varying vec2 vP; uniform sampler2D rubT, paper; uniform vec4 box; uniform vec3 col;
+    void main(){ float r = texture2D(rubT, (vP - box.xy) / box.zw).r, n = texture2D(paper, vP * 7.0).b - .5;
+      float a = smoothstep(.12, .55, r + n * .35); if (a < .01) discard;
+      gl_FragColor = vec4(col * (.97 + n * .08), a * .9); }`;
+  let mat0 = null, armed = null, on = false, prev = null, shown = false, dirtyHeat = false, sentAt = 0;
+  function init() {
+    if (mat0) return; mat0 = 1;
+    ['fore', 'hind'].forEach(w => { base[w] = heat[w].absorb.slice(); });
+    NAMES.forEach(n => {
+      const g = P[n], wash = g.children.find(c => c.isMesh); if (!wash) return;
+      const hs = heat[n.slice(0, 4)], cw = RES, ch = Math.max(8, Math.round(RES * hs.nz / hs.nx)), data = new Uint8Array(cw * ch * 4);
+      const tex = new THREE.DataTexture(data, cw, ch, THREE.RGBAFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+      const m = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        uniforms: { rubT: { value: tex }, paper: { value: PAPER }, box: { value: new THREE.Vector4(hs.minU, hs.minZ, hs.nx * CELL, hs.nz * CELL) }, col: { value: new THREE.Color() } } });
+      const ov = new THREE.Mesh(wash.geometry, m); ov.renderOrder = -.5; g.add(ov);
+      sides[n] = { wash, hs, cw, ch, data, tex, m, cell: new Float32Array(hs.nx * hs.nz) };
+    });
+  }
+  function hit(e) {
+    init(); const r = canvas.getBoundingClientRect();
+    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); rc.setFromCamera(ndc, camera);
+    const meshes = NAMES.filter(n => sides[n]).map(n => sides[n].wash), h = rc.intersectObjects(meshes, false)[0]; if (!h) return null;
+    const n = NAMES.find(k => sides[k] && sides[k].wash === h.object); h.object.worldToLocal(loc.copy(h.point));
+    return { n, u: Math.abs(loc.x), z: loc.z, p: h.point.clone() };
+  }
+  function dab(S, u, z) {
+    const hs = S.hs, sx = S.cw / (hs.nx * CELL), cx = (u - hs.minU) * sx, cz = (z - hs.minZ) * sx, rad = .055 * sx;
+    for (let j = Math.max(0, Math.floor(cz - rad)); j <= Math.min(S.ch - 1, Math.ceil(cz + rad)); j++)
+      for (let i = Math.max(0, Math.floor(cx - rad)); i <= Math.min(S.cw - 1, Math.ceil(cx + rad)); i++) {
+        const d = Math.hypot(i - cx, j - cz) / rad; if (d >= 1) continue; const k = (j * S.cw + i) * 4;
+        S.data[k] = Math.min(255, S.data[k] + (1 - d * d) * 70 * (.7 + Math.random() * .6)); }
+    S.tex.needsUpdate = true;
+    const ci = Math.floor((u - hs.minU) / CELL), cj = Math.floor((z - hs.minZ) / CELL);
+    for (let j = cj - 2; j <= cj + 2; j++) for (let i = ci - 2; i <= ci + 2; i++) { if (i < 0 || j < 0 || i >= hs.nx || j >= hs.nz) continue;
+      const d = Math.hypot(minU0(hs, i) - u, minZ0(hs, j) - z) / .055; if (d < 1) S.cell[j * hs.nx + i] = Math.min(1, S.cell[j * hs.nx + i] + (1 - d * d) * .3); }
+    dirtyHeat = true; idle = 0;
+  }
+  // for fun: bare patches slowly re-paint (~8 s) once rubbing stops. Honest note: a real monarch's scales never regrow.
+  let regrowSaid = false, idle = 0;
+  function regrow(dt) {
+    if (!mat0) return; idle += dt; if (idle < .8) return; let any = false;
+    NAMES.forEach(n => { const S = sides[n]; if (!S) return; let hit = false;
+      for (let k = 0; k < S.data.length; k += 4) if (S.data[k]) { S.data[k] = Math.max(0, S.data[k] - Math.max(1, Math.round(dt * 32))); hit = true; }
+      for (let k = 0; k < S.cell.length; k++) if (S.cell[k] > 0) { S.cell[k] = Math.max(0, S.cell[k] - dt / 8); hit = true; }
+      if (hit) { S.tex.needsUpdate = true; any = true; } });
+    if (any) { dirtyHeat = true; if (!regrowSaid) { regrowSaid = true; toast('Real scales never regrow', 2400); } }
+  }
+  const minU0 = (hs, i) => hs.minU + (i + .5) * CELL, minZ0 = (hs, j) => hs.minZ + (j + .5) * CELL;
+  function pushHeat() {
+    dirtyHeat = false; sentAt = performance.now();
+    ['fore', 'hind'].forEach(w => { const a = heat[w].absorb, b = base[w], L = sides[w + 'L'], R = sides[w + 'R'];
+      for (let k = 0; k < a.length; k++) { const f = ((L ? L.cell[k] : 0) + (R ? R.cell[k] : 0)) / 2; a[k] = b[k] + (BARE - b[k]) * f; } });
+    heatSim.setAbsorb && heatSim.setAbsorb([heat.fore.absorb, heat.hind.absorb]);
+  }
+  // ink-stipple dust: loose scales drifting off and fading
+  const N = 160, dpos = new Float32Array(N * 3), dal = new Float32Array(N), vel = new Float32Array(N * 3), life = new Float32Array(N); let di = 0;
+  const dgeo = new THREE.BufferGeometry(); dgeo.setAttribute('position', new THREE.BufferAttribute(dpos, 3)); dgeo.setAttribute('al', new THREE.BufferAttribute(dal, 1));
+  const dmat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { ink: { value: new THREE.Color() }, px: { value: 2.6 * Math.min(2, devicePixelRatio || 1) } },
+    vertexShader: `attribute float al; varying float vA; uniform float px; void main(){ vA = al; gl_PointSize = px * (.6 + al * .6); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `precision highp float; varying float vA; uniform vec3 ink; void main(){ if (vA < .01 || length(gl_PointCoord - .5) > .5) discard; gl_FragColor = vec4(ink, vA * .85); }` });
+  const dust = new THREE.Points(dgeo, dmat); dust.frustumCulled = false; dust.renderOrder = 4; scene.add(dust);
+  function puff(p) { for (let s = 0; s < 2; s++) { if (Math.random() < .35) continue; const k = di++ % N;
+    dpos[k * 3] = p.x + (Math.random() - .5) * .04; dpos[k * 3 + 1] = p.y + .01; dpos[k * 3 + 2] = p.z + (Math.random() - .5) * .04;
+    vel[k * 3] = (Math.random() - .5) * .25; vel[k * 3 + 1] = .05 + Math.random() * .15; vel[k * 3 + 2] = (Math.random() - .5) * .25; life[k] = 1; } }
+  return {
+    down(e) { armed = null; if (ptrs.size !== 1) return; const h = hit(e); if (!h) return;
+      armed = { x: e.clientX, y: e.clientY, id: setTimeout(() => { if (!armed) return; on = true; armed = null; vAz = 0; if (down) down.moved = 99; prev = null;
+        if (!shown) { shown = true; toast('Scales rub off like dust', 2200); } }, 250) }; },
+    move(e) {
+      if (armed && Math.hypot(e.clientX - armed.x, e.clientY - armed.y) > 8) { clearTimeout(armed.id); armed = null; }
+      if (!on) return false; if (ptrs.size !== 1) { on = false; return false; }
+      ptrs.set(e.pointerId, [e.clientX, e.clientY]); const h = hit(e); if (!h) { prev = null; return true; }
+      const S = sides[h.n], steps = prev && prev.n === h.n ? Math.min(12, Math.ceil(Math.hypot(h.u - prev.u, h.z - prev.z) / .012)) : 1;
+      for (let s = 1; s <= steps; s++) { const t = s / steps; dab(S, prev && steps > 1 ? prev.u + (h.u - prev.u) * t : h.u, prev && steps > 1 ? prev.z + (h.z - prev.z) * t : h.z); }
+      puff(h.p); prev = h; return true;
+    },
+    up() { if (armed) clearTimeout(armed.id); armed = null; on = false; prev = null; if (dirtyHeat) pushHeat(); },
+    tick(dt) {
+      if (!on) regrow(dt);
+      if (dirtyHeat && performance.now() - sentAt > 300) pushHeat();
+      dmat.uniforms.ink.value.copy(ink);
+      if (mat0) { col.copy(paper).lerp(smoke, .22); NAMES.forEach(n => sides[n] && sides[n].m.uniforms.col.value.copy(col)); }
+      let any = false;
+      for (let k = 0; k < N; k++) { if (life[k] <= 0) { dal[k] = 0; continue; } any = true; life[k] -= dt * .6;
+        vel[k * 3 + 1] -= dt * .12; for (let a = 0; a < 3; a++) { vel[k * 3 + a] *= 1 - dt * .8; dpos[k * 3 + a] += vel[k * 3 + a] * dt; }
+        vel[k * 3] += (Math.random() - .5) * dt * .3; dal[k] = Math.max(0, life[k]); }
+      if (any || di) { dgeo.attributes.position.needsUpdate = dgeo.attributes.al.needsUpdate = true; }
+    },
+  };
+})();
+
 let last = performance.now(), boil = 0, uiTick = 0, story = '', storyAt = -1e9, trackTick = 0, pose = .03, legBlend = 0, clock = 0;
 
 function frame(now) {
-  const dt = Math.min(.05, (now - last) / 1000); last = now; clock += dt;
-  cloudT = Math.max(0, cloudT - (playing ? dt : 0));
-  const Ta = air, sun = sunDirAt(tod), cover = cloudT > 0 ? 1 - .85 * Math.min(1, Math.min(cloudT, 9 - cloudT) / 1.2) : 1;
-  const S = Math.pow(Math.max(0, sun.y), .6) * cover;
-  const night = S < .03, hot = Tth > 35;
-  const hsun = new THREE.Vector3(sun.x, 0, sun.z).normalize();
-  basis(hsun.clone().negate(), night ? Y : Y.clone().addScaledVector(sun, .7).normalize(), qPerch);
+  const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; clock += dt; // a rAF stamp can predate `last` (a throttled iframe): never step backwards
+  REAL && REAL.tick(now);
+  skyTick(dt); // [sky] sets wind, sunDir, sunCover (and cloudT for older readers)
+  taS += (air - taS) * Math.min(1, dt * 2.5); const Ta = taS, sun = sunDir, cover = 1 - .85 * sunCover;
+  const shaded = fl.at === 'shade' && (fl.mode === 'perch' || fl.mode === 'settle');
+  const S = Math.pow(Math.max(0, sun.y), .6) * cover * (shaded ? .25 : 1);
+  // too hot: wings past ~40 °C or the thorax past ~38 °C; cools off with a few degrees of hysteresis
+  const wingT = Ta + wingMax;
+  if (!hotState && (wingT > WING_HOT || Tth > THX_HOT)) { hotState = true; hotT = 0; }
+  else if (hotState && hotT > 5 && wingT < WING_HOT - 4 && Tth < THX_HOT - 3) hotState = false;
+  const night = S < .03, hot = hotState;
+  hsun.set(sun.x, 0, sun.z).normalize();
+  // basking: back tipped toward the sun. Shut wings (night, heat, shivering): body level, so the closed wings are edge-on to the sun
+  baskStep(dt, Math.atan2(-hsun.x, -hsun.z), playing && fl.mode === 'perch');
+  const coldK = Math.max(0, Math.min(1, (NEED - Tth) / 12));
+  basis(fwdB.set(Math.sin(BK.yaw), 0, Math.cos(BK.yaw)), night || hot || shivering ? Y : upP.copy(Y).addScaledVector(sun, .35 + .55 * coldK).normalize(), qPerch);
 
   // --- behaviour ---
   if (playing) {
     fl.t += dt;
     if (fl.mode === 'perch') {
-      pos.copy(PERCHES[fl.at]); bug.quaternion.slerp(qPerch, Math.min(1, dt * 2));
-      if (!hold && Tth >= NEED && fl.t > 4 && S > .15) { fl.mode = 'fly'; fl.t = 0; fl.vel.set(0, 3, 0).addScaledVector(hsun, -1.5); pickWaypoint(); fl.beats = 6; fl.glide = 0; }
+      pos.copy(PERCHES[fl.at]); bug.quaternion.slerp(qPerch, Math.min(1, dt * 7));
+      hotT = hot ? hotT + dt : 0;
+      // no sun on it and air not too cold: it shivers its flight muscles before flying (Kammer 1970: 13-17 °C air)
+      darkT = S <= .15 ? darkT + dt : 0;
+      shivering = !hold && !hot && !night && darkT > 2 && Ta >= 11 && Tth < NEED; shiverT = shivering ? shiverT + dt : 0;
+      const go = fl.t > 4 && !hold && !(flipT > 0) && !hot && (fl.at !== 'shade' || fl.t > 12) && (S > .15 ? Tth >= NEED : shiverT > 4 && Tth >= SHIVER_GO);
+      const flee = hot && hotT > 6 && fl.at !== 'shade' && !hold; // posture was not enough: move into shade
+      if (go || flee) { fl.mode = flee ? 'land' : 'fly'; if (flee) fl.at = 'shade'; else if (fl.at === 'shade') fl.at = 'flower'; fl.t = 0; shivering = false;
+        fl.vel.set(0, 3, 0).addScaledVector(hsun, -1.5); pickWaypoint(); fl.beats = 6; fl.glide = 0; }
     } else if (fl.mode === 'fly' || fl.mode === 'land') {
-      if (fl.mode === 'fly' && (hold || Tth < NEED - 6 || fl.t > 18)) { fl.mode = 'land'; fl.at = fl.at === 'leaf' ? 'flower' : 'leaf'; }
+      if (fl.mode === 'fly' && (hold || hot || Tth < LAND || fl.t > 18)) { fl.mode = 'land'; fl.at = hot ? 'shade' : fl.at === 'leaf' ? 'flower' : 'leaf'; }
       const goal = fl.mode === 'land' ? tmp.copy(PERCHES[fl.at]).add(new THREE.Vector3(0, .9, 0)) : fl.wp;
       if (fl.mode === 'fly' && pos.distanceTo(fl.wp) < 1.6) pickWaypoint();
       const want = goal.clone().sub(pos), d = want.length(); want.setLength(Math.min(4.2, 1 + d * 1.2));
       fl.vel.lerp(want, 1 - Math.exp(-dt * 1.6));
       if (fl.glide > 0) { fl.glide -= dt; fl.vel.y -= 1.1 * dt; if (fl.glide <= 0) fl.beats = 3 + Math.floor(Math.random() * 5); }
       pos.addScaledVector(fl.vel, dt);
-      if (fl.mode === 'land' && d < .5) { fl.mode = 'settle'; fl.settle = 0; fl.from.copy(pos); fl.fromQ.copy(bug.quaternion); }
+      if (fl.mode === 'land' && d < .5) { fl.mode = 'settle'; fl.settle = 0; BK.yaw = fl.heading; BK.k = 1; fl.from.copy(pos); fl.fromQ.copy(bug.quaternion); }
       // facing: along the velocity, banked into the turn
       const h = Math.atan2(fl.vel.x, fl.vel.z), dh = Math.atan2(Math.sin(h - fl.heading), Math.cos(h - fl.heading)); fl.heading = h;
       fl.bank = smooth(fl.bank, Math.max(-.6, Math.min(.6, -dh / Math.max(dt, .001) * .35)), Math.min(1, dt * 3));
@@ -619,21 +1935,24 @@ function frame(now) {
   const flying = fl.mode === 'fly' || fl.mode === 'land';
   // wingbeat: fast downstroke, slower upstroke; count beats, then hold a shallow V to glide
   if (playing && flying) {
-    if (fl.glide <= 0) { const before = fl.phase; fl.phase += dt * 2 * Math.PI * 6; if (Math.floor(before / 6.283) !== Math.floor(fl.phase / 6.283) && --fl.beats <= 0 && fl.mode === 'fly') fl.glide = .5 + Math.random() * .9; }
+    // wingbeat slowed so each beat reads on a phone screen (6-8 Hz strobed at 30-60 fps)
+    if (fl.glide <= 0) { const before = fl.phase; fl.phase += dt * 2 * Math.PI * (4.2 + .8 * Math.min(1, Math.max(0, (Tth - 18) / 14))); if (Math.floor(before / 6.283) !== Math.floor(fl.phase / 6.283) && --fl.beats <= 0 && fl.mode === 'fly') fl.glide = .5 + Math.random() * .9; }
   }
   fl.flapW = smooth(fl.flapW, flying && fl.glide <= 0 ? 1 : 0, Math.min(1, dt * 6));
   legBlend = smooth(legBlend, flying ? 1 : 0, Math.min(1, dt * 3));
-  pose = smooth(pose, night || hot ? 1.45 : .2, Math.min(1, dt * 1.5));
+  pose = smooth(pose, night || hot || shivering || flipT > 0 ? 1.45 : baskPose(Tth), Math.min(1, dt * 1.5));
   const wave = Math.sin(fl.phase) + .3 * Math.sin(2 * fl.phase);
   const flapTheta = .42 + .62 * wave, glideTheta = .32, airborne = flying || fl.mode === 'settle' ? 1 : 0;
+  const tremor = shiverTremor(dt, airborne);
   ['fore', 'hind'].forEach(w => {
     const lag = w === 'hind' ? .35 : 0, wv = Math.sin(fl.phase - lag) + .3 * Math.sin(2 * (fl.phase - lag));
-    const th = airborne ? fl.flapW * (.42 + .62 * wv) + (1 - fl.flapW) * glideTheta : pose;
+    const th = airborne ? fl.flapW * (.42 + .62 * wv) + (1 - fl.flapW) * glideTheta : pose + tremor * (w === 'hind' ? .8 : 1); // shivering: a fine fast tremor
     const sweep = airborne ? fl.flapW * .2 * Math.cos(fl.phase - lag) * (w === 'fore' ? 1 : .6) : 0;
     [1, -1].forEach(s => { const g = P[w + (s > 0 ? 'R' : 'L')]; g.rotation.z = s * th; g.rotation.y = -s * sweep; });
   });
   bug.position.copy(pos); if (airborne) bug.position.y -= .1 * Math.cos(fl.phase) * fl.flapW; // downstroke lifts the body
   P.abdomen.rotation.x = airborne ? .1 * Math.sin(fl.phase + 1) * fl.flapW + .08 : smooth(P.abdomen.rotation.x, 0, .1);
+  shiverPump(airborne);
   P.ant1.rotation.x = P['ant-1'].rotation.x = .05 * Math.sin(clock * 1.3) - (airborne ? .12 : 0);
   // legs: grip when perched, tuck back in flight, the odd small step
   if (!flying && Math.random() < dt * .25) legs[Math.floor(Math.random() * legs.length)].twitch = 1;
@@ -645,57 +1964,78 @@ function frame(now) {
     L.tib.rotation.z = smooth(-1.7, -2.5, legBlend) + .3 * tw;
     L.tar.rotation.z = smooth(.85, -.5, legBlend) - .2 * tw;
   });
+  const sipK = updateProboscis(dt, playing && fl.mode === 'perch' && fl.at === 'flower' && !night && !hot && fl.t > 1);
 
-  // --- heat ---
+  motionArt(flying, now);
+  // --- heat --- (energy budget: HB, hbStep)
   bug.updateMatrixWorld(true);
-  let expo = 0; ['foreR', 'foreL'].forEach(n => { nW.set(0, 1, 0).applyQuaternion(P[n].getWorldQuaternion(tmpQ)); const d = nW.dot(sun); expo += d > 0 ? d : -d * .6; }); expo /= 2;
   if (playing) {
-    const loss = .00035 * (flying ? 2 : 1), sub = Math.min(32, Math.max(1, Math.round(dt * 480))); // 480 steps per second, whatever the frame rate
-    heat.fore.step(S * expo, Ta, Tth, loss, sub); heat.hind.step(S * expo, Ta, Tth, loss, sub);
-    const rootT = (heat.fore.rootMean + heat.hind.rootMean) / 2;
-    Tth += dt * (.12 * (rootT - Tth) + .07 * (Ta + 9 * S - Tth) + (flying ? .35 * (Ta + 6 - Tth) : 0));
+    hbSky(Ta, sunDir, sunCover, shaded ? .25 : 1);
+    const ax = flying ? fl.vel.x : 0, ay = flying ? fl.vel.y : 0, az = flying ? fl.vel.z : 0, vAir = Math.hypot(ax - wind.x, ay - wind.y, az - wind.z); // airspeed = |flight − wind|
+    const sub = Math.min(32, Math.max(1, Math.round(dt * 480))); // 480 kernel steps per sim second, whatever the frame rate
+    const rootEx = (heat.fore.rootMean + heat.hind.rootMean) / 2;
+    Tth = hbStep(dt, Ta, Tth, sunDir, vAir, fl.flapW, pose > 1 ? .6 : 1, flying, shivering, rootEx, nW.set(0, 0, 1).applyQuaternion(bug.quaternion));
+    heatSim.step(hbE.a, sub);
+    if (clock - peakAt > .25) { peakAt = clock; wingMax = Math.max(peakExcess(heat.fore), peakExcess(heat.hind)); }
   }
-  P.glow.material.opacity = Math.max(0, Math.min(.85, (Tth - Ta - 2) / 12));
+  P.glow.material.opacity = Math.max(0, Math.min(.85, (Tth - 18) / 18)); // actual body temperature, not warmth above the air
+  for (let i = 0; i < washes.length; i++) { const m = washes[i]; m.uniforms.air.value = Ta; if (m.uniforms.dark.value && m.userData.bakeDark) m.userData.bakeDark(); } // isotherms use wing temperature
 
   const nextStory = night ? 'Night. It roosts with its wings shut.'
+    : (fl.mode === 'land' || fl.mode === 'settle') && fl.at === 'shade' ? 'Too hot. Off into the shade.'
+    : hot && fl.at === 'shade' && !flying ? 'Too hot. It waits in the shade.'
+    : hot && !flying ? 'Too hot. Wings shut, edge-on to the sun.'
+    : shivering ? 'No sun. It shivers to warm its flight muscles.'
     : cloudT > 0 && !flying ? 'A cloud. Thin wings lose their heat in seconds.'
     : fl.mode === 'fly' && fl.t < 2 ? 'Warm enough. Takeoff.'
-    : fl.mode === 'land' || fl.mode === 'settle' ? (Tth < NEED - 5 ? 'Cooling off. Time to land and bask.' : 'Landing for a rest.')
-    : flying ? 'Flying. Working flight muscles keep its body warm.'
-    : hot ? 'Too hot. It folds its wings up for shade.'
+    : fl.mode === 'land' || fl.mode === 'settle' ? (Tth < LAND + 2 ? 'Cooling off. Time to land and bask.' : 'Landing for a rest.')
+    : sipK > .9 && fl.t < 9 ? 'Sipping nectar through its uncoiled proboscis.'
+    : flying ? (fl.t < 9 ? 'Flying. Its flight muscles make heat.' : 'Wingbeat slowed. Real: ~10 a second.')
     : hold ? 'Resting, wings open.'
-    : Tth >= NEED ? 'Warm enough to fly.'
-    : Ta < flyMin - 1 ? 'Too cold to fly. It spreads its wings to soak up sun.'
-    : 'Warming up. Its dark scales soak up the sun.';
+    : Tth >= NEED ? 'Warm enough to fly well.'
+    : Tth < FLY_MIN ? 'Too cold to fly. Wings spread to the sun.'
+    : Ta < flyMin - 1 ? 'Cool air. It basks to fly well.'
+    : 'Warming up. Its dark body and wings soak up sun.';
   if (nextStory !== story && now - storyAt > 3500) { story = nextStory; storyAt = now; factEl.textContent = story; }
   // learn how much warmer than the air basking gets it, to mark "can fly" on the scale
-  if (!flying && fl.mode === 'perch' && cloudT === 0 && fl.t > 20) { const g = Tth - Ta; flyMin = smooth(flyMin, NEED - g, Math.min(1, dt * .2)); }
-  if (now - uiTick > 200) {
-    uiTick = now;
-    readout.textContent = `${air}°C · ${F(air)}°F`;
-    readout.style.left = Math.max(40, Math.min(track.clientWidth - 40, thumbX(air))) + 'px';
-    if (now - trackTick > 2000) { trackTick = now; drawTrack(); }
-    thermT.innerHTML = `Thorax <b>${Math.round(Tth)}°C</b> · flies easily at ~${NEED}°C`;
-    thermF.style.width = Math.max(0, Math.min(100, (Tth - 5) / 35 * 100)) + '%';
-  }
+  if (!flying && fl.mode === 'perch' && cloudT === 0 && fl.t > 20 && fl.at !== 'shade' && pose < 1) { const g = Tth - Ta; flyMin = smooth(flyMin, NEED - g, Math.min(1, dt * .2)); }
+  // UI: the readout follows the thumb the moment it moves; DOM is written only when a shown value changes
+  const tw = trackW, ro = `${air}°C · ${F(air)}°F`, rx = Math.round(Math.max(40, Math.min(tw - 40, thumbX(air))));
+  if (ro !== ui.ro) { ui.ro = ro; readout.textContent = ro; }
+  if (rx !== ui.rx) { ui.rx = rx; readout.style.left = rx + 'px'; }
+  const th = Math.round(Tth); if (th !== ui.th) { ui.th = th; thermT.innerHTML = `body <b>${th}°</b> · flies from ${FLY_MIN}°, well at ${NEED}°`; }
+  const se = `sunlight ${Math.round(hbE.glob / 10) * 10} W/m² · ${wind.length() < .05 ? 'calm' : `wind ${wind.length().toFixed(1)} m/s`}`; if (se !== ui.se) { ui.se = se; simEnv.textContent = se; }
+  const fw = (Math.max(0, Math.min(100, (Tth - 5) / 35 * 100))).toFixed(1); if (fw !== ui.fw) { ui.fw = fw; thermF.style.width = fw + '%'; }
+  if (now - trackTick > 2000) { trackTick = now; drawTrack(); }
 
-  sunG.position.copy(sun).multiplyScalar(90); sunG.lookAt(0, 0, 0); sunG.rotateY(Math.PI / 2); sunG.visible = sun.y > -.05;
-  cloudG.visible = cloudT > 0; cloudG.position.copy(sunG.position); cloudG.lookAt(0, 0, 0); cloudG.rotateY(Math.PI / 2); cloudG.translateZ((4.5 - cloudT) * 2.4);
 
   // --- camera ---
   const vw = VIEWS[view];
   target.lerp(view === 'garden' ? tmp.set(0, -5, 0) : bug.position, Math.min(1, dt * (view === 'garden' ? 2 : 3)));
   if (!dragging) {
     el += (vw.el - el) * Math.min(1, dt * (alignBody ? 2.5 : moved ? 0 : .8));
-    if (alignBody && !flying) { const f = new THREE.Vector3(0, 0, 1).applyQuaternion(bug.quaternion); const want = Math.atan2(-f.x, -f.z); az += Math.atan2(Math.sin(want - az), Math.cos(want - az)) * Math.min(1, dt * 2.5); }
+    if (alignBody && !flying) { const f = tmp.set(0, 0, 1).applyQuaternion(bug.quaternion); const want = Math.atan2(-f.x, -f.z); az += Math.atan2(Math.sin(want - az), Math.cos(want - az)) * Math.min(1, dt * 2.5); }
     else { az += vAz; vAz *= .95; }
   }
+  if (!dragging) flipCam(dt, flying);
   dist += (fitDist(vw.r) / zoom - dist) * Math.min(1, dt * 4);
   camera.position.set(target.x + dist * Math.cos(el) * Math.sin(az), target.y + dist * Math.sin(el), target.z + dist * Math.cos(el) * Math.cos(az));
   camera.lookAt(target);
+  skyPlace(dt); // [sky]
   matDetail.opacity = Math.max(0, Math.min(1, (dist - 3.5) / 4)); matDetail.visible = matDetail.opacity > .01;
 
-  if (!reduce && now - boil > 150) { boil = now; scene.traverse(o => { if (o.userData.boil) { const i = o.children.findIndex(c => c.visible); o.children[i].visible = false; o.children[(i + 1) % 3].visible = true; } }); }
+  if (!reduce && now - boil > 150) { // swap each ink group to its next take; the list is cached and refreshed every few seconds
+    boil = now; if (now - boilAt > 4000) { boilAt = now; boilers.length = 0; scene.traverse(o => { if (o.userData.boil) boilers.push(o); }); }
+    for (const o of boilers) { const ch = o.children, i = o.userData.bi ?? Math.max(0, ch.findIndex(c => c.visible)); ch[i].visible = false; o.userData.bi = (i + 1) % ch.length; ch[o.userData.bi].visible = true; }
+  }
+  lifeTick(playing ? dt : 0);
+  castShadow(sun, cover * (shaded ? .25 : 1)); cloudFX(cover);
+  flockTick(playing ? dt : 0);
+  castShadow(sun, cover * (shaded ? .25 : 1));
+  lightFrame();
+  envFrame(Ta, sun.y, cover, bug.position);
+  RUB.tick(dt);
+  MATE.tick(playing ? dt : 0, fl.mode === 'fly', !night && cloudT === 0 && Ta >= 17);
   renderer.render(scene, camera);
 
   labelBox.hidden = !hold;
@@ -706,7 +2046,174 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 setView('follow', true);
-setTimeout(() => toast('Drag to orbit · pinch to zoom', 3500), 600);
+
+// ---------- a real day: inside Hatch (?embed=1), the map's pinned place and date drive the sky ----------
+// Hatch posts that place's hourly record (Open-Meteo: air, cloud, wind). The sun stands where it really stood there
+// that day (solar position from latitude, longitude and the hour), so dragging the sun walks through the real day:
+// the air follows the hourly temperature, a cloudy hour brings a cloud over the sun, and the wind blows as recorded.
+// Azimuth is squeezed toward the view (×.45) so the whole arc stays on the page; height is the true elevation.
+const AZ_SIGN = -1; // morning on the left, as if facing the noon sun
+const REAL = (() => {
+  if (!new URLSearchParams(location.search).has('embed')) return null;
+  document.documentElement.classList.add('embed');
+  const rad = Math.PI / 180, R = { day: null, hr: 12, rise: 6, set: 18, lastCloud: 0, noonAz: Math.PI, dev: 1 };
+  // sun position (low-precision almanac, ~0.5°): elevation and azimuth (from north, clockwise), radians
+  const solar = (lat, lon, ms) => {
+    const d = ms / 864e5 - 10957.5, g = (357.529 + .98560028 * d) * rad, q = 280.459 + .98564736 * d;
+    const L = (q + 1.915 * Math.sin(g) + .02 * Math.sin(2 * g)) * rad, e = (23.439 - .00000036 * d) * rad;
+    const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+    const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24, H = (gmst * 15 + lon) * rad - ra, p = lat * rad;
+    const el = Math.asin(Math.sin(p) * Math.sin(dec) + Math.cos(p) * Math.cos(dec) * Math.cos(H));
+    const az = Math.atan2(-Math.sin(H), Math.tan(dec) * Math.cos(p) - Math.sin(p) * Math.cos(H));
+    return { el, az: (az + 2 * Math.PI) % (2 * Math.PI) };
+  };
+  const at = (arr, h) => { if (!arr) return null; const a = Math.max(0, Math.min(23, Math.floor(h))), b = Math.min(23, a + 1), f = h - a, x = arr[a], y = arr[b];
+    return x == null ? y : y == null ? x : x + (y - x) * f; };
+  const sunAt = h => solar(R.day.lat, R.day.lon, R.day.utc0 + h * 3600e3);
+  const tFor = el => Math.pow(Math.max(0, Math.min(1, (el / rad - 6) / 78)), 1 / .7); // inverse of sunElev
+  // the day's arc is squeezed sideways to fit the page (a phone shows ~15° of sky across, a real day spans ~200°)
+  const fitK = () => { const half = Math.atan(Math.tan(camera.fov * rad / 2) * camera.aspect); return Math.min(.6, half * .62 / Math.max(.2, R.dev || 1)); };
+  const shift = () => -Math.atan(Math.tan(camera.fov * rad / 2) * camera.aspect) * .3 * AZ_SIGN * -1; // the plant stands left of centre: the day's arc sits right of it
+  const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
+  const azFor = az => VIEW_AZ + shift() + AZ_SIGN * wrapA(az - R.noonAz) * fitK();
+  const clock12 = h => { const hh = Math.floor(h), mm = Math.round((h - hh) * 60) % 60, H12 = ((hh + 11) % 12) + 1; return `${H12}${mm ? ':' + String(mm).padStart(2, '0') : ''} ${hh < 12 ? 'am' : 'pm'}`; };
+  R.setHour = h => {
+    h = Math.max(R.rise, Math.min(R.set, h)); R.hr = h;
+    const s = sunAt(h); SKY.sun.t = tFor(s.el); SKY.sun.az = azFor(s.az);
+    const t = at(R.day.temps, h); if (t != null) air = t;
+    const ws = at(R.day.ws, h), wd = R.day.wd ? R.day.wd[Math.round(Math.min(23, h))] : null;
+    if (ws != null && wd != null) { const to = VIEW_AZ + AZ_SIGN * wrapA(((wd + 180) % 360) * rad - R.noonAz); /* turned like the sky, not squeezed */ WIND0.set(Math.sin(to) * ws, 0, Math.cos(to) * ws); }
+    R.cloud = at(R.day.cloud, h);
+  };
+  R.step = k => { R.setHour(R.hr + k); R.touched = performance.now(); };
+  // the day's path: a dotted ink arc with a tick on each hour, faint, brighter on open and while the sun is held
+  const arcC = document.getElementById('arc'), ax = arcC.getContext('2d'), pv = new THREE.Vector3();
+  R.opened = 0; R.touched = 0;
+  R.drawArc = held => {
+    const dpr = Math.min(devicePixelRatio || 1, 2), w = Math.round(W_ * dpr), h = Math.round(H * dpr);
+    if (arcC.width !== w || arcC.height !== h) { arcC.width = w; arcC.height = h; }
+    ax.setTransform(dpr, 0, 0, dpr, 0, 0); ax.clearRect(0, 0, W_, H);
+    if (!R.day) return;
+    const now = performance.now(), k = Math.max(held ? 1 : 0, 1 - (now - Math.max(R.opened, R.touched)) / 2500);
+    const a = .22 + .5 * Math.max(0, k);
+    const pt = hh => { const s = sunAt(hh); skyDir(azFor(s.az), tFor(s.el), pv).multiplyScalar(SKY.R).add(camera.position).project(camera); return [(pv.x + 1) / 2 * W_, (1 - pv.y) / 2 * H, pv.z < 1]; };
+    ax.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink') || '#141414';
+    ax.fillStyle = ax.strokeStyle; ax.globalAlpha = a; ax.lineWidth = 1.2; ax.setLineDash([2, 5]); ax.lineCap = 'round';
+    ax.beginPath(); let first = true;
+    for (let hh = R.rise; hh <= R.set + 1e-6; hh += .25) { const [x, y, ok] = pt(hh); if (!ok) { first = true; continue; } first ? ax.moveTo(x, y) : ax.lineTo(x, y); first = false; }
+    ax.stroke(); ax.setLineDash([]);
+    ax.font = '600 13px Caveat, cursive'; ax.textAlign = 'center';
+    for (let hh = Math.ceil(R.rise); hh <= R.set; hh++) { const [x, y, ok] = pt(hh); if (!ok) continue;
+      ax.beginPath(); ax.arc(x, y, 1.6, 0, 6.3); ax.fill();
+      if (hh % 3 === 0) ax.fillText(hh === 12 ? 'noon' : `${((hh + 11) % 12) + 1}${hh < 12 ? 'am' : 'pm'}`, x, y - 8); }
+    ax.globalAlpha = 1;
+  };
+  R.dragTo = e => { R.touched = performance.now(); // the nearest point of the day's arc to the finger
+    const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, v = new THREE.Vector3();
+    let best = R.hr, bd = 1e9;
+    for (let h = R.rise; h <= R.set + 1e-6; h += 1 / 12) { const s = sunAt(h); skyDir(azFor(s.az), tFor(s.el), v).multiplyScalar(SKY.R).add(camera.position).project(camera);
+      const d = Math.hypot((v.x + 1) / 2 * W_ - x, (1 - v.y) / 2 * H - y); if (d < bd) { bd = d; best = h; } }
+    const was = Math.round(R.hr); R.setHour(best); if (Math.round(best) !== was) { try { navigator.vibrate && navigator.vibrate(6); } catch (_) {} }
+  };
+  R.label = () => { const t = Math.round(air); return { now: Math.round(R.hr * 4) / 4, text: `${clock12(R.hr)}, ${t} degrees Celsius`, html: `${clock12(Math.round(R.hr * 4) / 4)} · ${t}°C<small>/ ${F(t)}°F</small>` }; };
+  // each frame: weather the hour calls for (a cloudy hour sends the nearest cloud over the sun; a clear one moves it off)
+  R.tick = now => {
+    if (!R.day || R.cloud == null || SKY.drag || SKY.send || now - R.lastCloud < 2500) return;
+    if (R.cloud >= 65 && sunCover < .4) { sendCloud(); R.lastCloud = now; }
+    else if (R.cloud < 35 && sunCover > .4) { for (const c of SKY.clouds) { const da = Math.atan2(Math.sin(c.az - SKY.sun.az), Math.cos(c.az - SKY.sun.az)); if (Math.abs(da) < .25) c.vaz = (da < 0 ? -1 : 1) * .5; } R.lastCloud = now; }
+  };
+  addEventListener('message', e => {
+    const m = e.data; if (!m || m.type !== 'exo-day' || e.origin !== location.origin || e.source !== parent) return;
+    R.day = m;
+    let rise = null, set = null; for (let h = 0; h <= 24; h += .1) if (sunAt(h).el > 6 * rad) { if (rise == null) rise = h; set = h; }
+    R.rise = rise == null ? 11 : Math.ceil(rise * 4) / 4; R.set = set == null ? 13 : Math.floor(set * 4) / 4;
+    // centre the arc on the day's highest sun, and measure how far it swings either side
+    let top = R.rise, el = -1; for (let h = R.rise; h <= R.set; h += .1) { const e = sunAt(h).el; if (e > el) { el = e; top = h; } }
+    R.noonAz = sunAt(top).az; R.dev = Math.max(...[R.rise, R.set].map(h => Math.abs(Math.atan2(Math.sin(sunAt(h).az - R.noonAz), Math.cos(sunAt(h).az - R.noonAz)))));
+    document.querySelector('.cap .common').firstChild.textContent = m.place + ' · '; document.querySelector('.cap .common').lastChild.textContent = '';
+    const h0 = m.hour != null ? m.hour : 10;
+    R.setHour(h0); R.opened = performance.now();
+    // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
+    document.fonts.ready.then(() => setTimeout(() => parent.postMessage({ type: 'exo-live' }, location.origin), 250));
+    const lab = document.getElementById('sunlab'); lab.setAttribute('aria-label', 'Time of day: drag the sun'); lab.setAttribute('aria-valuemin', R.rise); lab.setAttribute('aria-valuemax', R.set);
+  });
+  addEventListener('keydown', e => { if (e.key === 'Escape') parent.postMessage({ type: 'exo-close' }, location.origin); });
+  parent.postMessage({ type: 'exo-ready' }, location.origin);
+  window.__exo = { SKY, R, air: () => air, cover: () => sunCover, tth: () => Tth, ta: () => taS };
+  return R;
+})();
+// ---------- "touch the world" controls ----------
+(() => {
+  // [sky] the sun and the clouds are grabbed in the scene: a press on one drags it across the sky, anywhere else orbits as before.
+  // The sun's height is the day: it sets the air (the hidden #air input stays the single source of truth) and the sunlight.
+  const lab = document.getElementById('sunlab'), pulse = document.getElementById('sunpulse'), sk = SKY, ray = new THREE.Vector3();
+  const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} };
+  const setAir = v => { v = Math.max(5, Math.min(40, Math.round(v))); if (+airEl.value !== v) { if (v % 5 === 0) buzz(6); sk.setting = true; airEl.value = v; airEl.dispatchEvent(new Event('input')); sk.setting = false; } };
+  airEl.addEventListener('input', () => { if (!sk.setting) sk.sun.t = (+airEl.value - 5) / 35; });
+  let shown = '', lx = -1, ly = -1, vis = null, glowO = -1, gx = -1, gy = -1; const glow = document.getElementById('sunglow');
+  skyUI = () => { // the handwritten temperature rides under the sun; the first-run pulse sits on it
+    if (REAL) REAL.drawArc(!!(sk.drag && sk.drag.o === sk.sun));
+    const v = +airEl.value;
+    if (REAL && REAL.day) { const k = REAL.label(); if (k.html !== shown) { shown = k.html; lab.innerHTML = k.html; lab.setAttribute('aria-valuenow', k.now); lab.setAttribute('aria-valuetext', k.text); } }
+    else if (v + '' !== shown) { shown = v + ''; lab.innerHTML = `${v}°<small>${F(v)}°F</small>`; lab.setAttribute('aria-valuenow', v); lab.setAttribute('aria-valuetext', v + ' degrees Celsius'); }
+    const x = Math.round(sk.sp.x), y = Math.round(sk.sp.y + SUN_R * 2 * skyPx());
+    if (x !== lx || y !== ly) { lx = x; ly = y; lab.style.transform = `translate(${x}px, ${y}px) translate(-50%, 0)`; if (!sk.hinted) pulse.style.transform = `translate(${x}px, ${Math.round(sk.sp.y)}px)`; }
+    const go = (sk.sp.on ? .15 + .55 * Math.max(0, Math.min(1, ((REAL && REAL.day ? air : v) - 5) / 35)) : 0) * (1 - Math.min(1, sunCover)) * (1 + .3 * Math.max(0, sk.g)); // sunlight on the page: warmer, wider with a hotter day
+    if (Math.abs(go - glowO) > .01) { glowO = go; glow.style.opacity = go.toFixed(2); }
+    if (Math.abs(x - gx) + Math.abs(sk.sp.y - gy) > 2) { gx = x; gy = sk.sp.y; glow.style.setProperty('--sx', x + 'px'); glow.style.setProperty('--sy', Math.round(gy) + 'px'); }
+    if (vis !== sk.sp.on) { vis = sk.sp.on; lab.style.visibility = pulse.style.visibility = vis ? '' : 'hidden'; }
+  };
+  const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  const toSky = e => { const r = canvas.getBoundingClientRect(); ray.set((e.clientX - r.left) / r.width * 2 - 1, 1 - (e.clientY - r.top) / r.height * 2, .5).unproject(camera).sub(camera.position).normalize();
+    return { az: Math.atan2(ray.x, ray.z), t: (Math.asin(ray.y) - sk.b0) / (sk.b1 - sk.b0) }; };
+  const pick = e => { // the sun's middle wins, then any cloud puff, then the sun's rim
+    const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, px = skyPx();
+    const ds = sk.sp.on ? Math.hypot(x - sk.sp.x, y - sk.sp.y) : 1e9, sunR = Math.max(48, SUN_R * 1.9 * px);
+    if (ds < sunR * .7) return sk.sun;
+    let best = ds < sunR ? sk.sun : null, bd = best ? ds - sunR : 1e9; // otherwise the nearest thing in the sky, with a forgiving margin,
+    for (const c of sk.clouds) for (let i = 0; i < c.puffs.length; i++) { ray.copy(c.wp[i]).project(camera); // so a near miss grabs, not spins the world
+      const d = ray.z < 1 ? Math.hypot(x - (ray.x + 1) / 2 * W_, y - (1 - ray.y) / 2 * H) - c.puffs[i][2] * px * c.g.scale.x : 1e9;
+      if (d < bd) { bd = d; best = c; } }
+    if (!best && ds - sunR < 40) best = sk.sun;
+    return bd < 36 || best === sk.sun ? best : null; };
+  addEventListener('pointerdown', e => {
+    if (e.target !== canvas || sk.drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const o = pick(e); if (!o) return;
+    e.stopImmediatePropagation(); e.preventDefault(); canvas.setPointerCapture(e.pointerId);
+    const s = toSky(e); sk.drag = { id: e.pointerId, o, daz: wrap(o.az - s.az), dt: o.t - s.t, vaz: 0, vt: 0, ts: performance.now() }; o.vaz = o.vt = 0;
+    buzz(12); if (o === sk.sun) lab.classList.add('held');
+    if (sk.send && sk.send.c === o) sk.send = null;
+    canvas.style.cursor = 'grabbing';
+    if (!sk.hinted) { sk.hinted = true; pulse.remove(); }
+  }, true);
+  addEventListener('pointermove', e => {
+    const d = sk.drag;
+    if (!d) { if (e.pointerType === 'mouse' && !e.buttons && e.target === canvas) canvas.style.cursor = pick(e) ? 'grab' : ''; return; }
+    if (e.pointerId !== d.id) return; e.stopImmediatePropagation();
+    const s = toSky(e), o = d.o, az0 = o.az, t0 = o.t, now = performance.now(), ddt = Math.max(.008, (now - d.ts) / 1000); d.ts = now;
+    o.az = s.az + d.daz; const raw = s.t + d.dt;
+    if (o === sk.sun && REAL && REAL.day) REAL.dragTo(e);
+    else if (o === sk.sun) { const c = Math.max(0, Math.min(1, raw)); o.t = c + (raw - c) * .25; setAir(5 + 35 * c); } // past either end it stretches, then springs back
+    else o.t = Math.max(-.1, Math.min(1.15, raw));
+    const k = Math.min(1, ddt * 14); d.vaz += (wrap(o.az - az0) / ddt - d.vaz) * k; d.vt += ((o.t - t0) / ddt - d.vt) * k;
+  }, true);
+  const end = e => { const d = sk.drag; if (!d || e.pointerId !== d.id) return; e.stopImmediatePropagation();
+    if (d.o !== sk.sun && performance.now() - d.ts < 80) { d.o.vaz = Math.max(-1.5, Math.min(1.5, d.vaz)); d.o.vt = Math.max(-3, Math.min(3, d.vt)); } // a flick keeps the cloud going
+    sk.drag = null; canvas.style.cursor = ''; lab.classList.remove('held'); };
+  addEventListener('pointerup', end, true); addEventListener('pointercancel', end, true);
+  lab.addEventListener('keydown', e => { const k = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+    if (k && REAL && REAL.day) { REAL.step(k * .25); e.preventDefault(); }
+    else if (k) { setAir(+airEl.value + k); sk.sun.t = (+airEl.value - 5) / 35; e.preventDefault(); } else if (e.key === 'c') sendCloud(); });
+  // hand-lettered menu for the rarer actions
+  const moreBtn = document.getElementById('more-btn'), menu = document.getElementById('more-menu');
+  moreBtn.onclick = () => { menu.hidden = !menu.hidden; moreBtn.setAttribute('aria-expanded', String(!menu.hidden)); moreBtn.textContent = menu.hidden ? '⋯' : '×'; };
+  const close = () => { menu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); moreBtn.textContent = '⋯'; };
+  document.getElementById('m-view').onclick = () => { document.getElementById('view').click(); close(); };
+  document.getElementById('m-flip').onclick = () => { document.getElementById('flip').click(); close(); };
+  const mv = document.getElementById('m-veins'); mv.onclick = () => { document.getElementById('veins').click(); mv.setAttribute('aria-pressed', String(hold)); close(); };
+  const mp = document.getElementById('m-play'); mp.onclick = () => { playBtn.click(); mp.textContent = playing ? 'pause' : 'play'; mp.setAttribute('aria-pressed', String(!playing)); close(); };
+})();
+setTimeout(() => toast(REAL ? 'Drag the sun through her day' : 'Drag the sun or a cloud', 3500), 600);
 requestAnimationFrame(frame);
 })();
 </script>
