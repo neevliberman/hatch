@@ -136,3 +136,109 @@ def test_surprises_pick_the_biggest_gaps_with_enough_photos():
     from pipeline.atlas.seen import surprises
     rows = [[500, 100, 5.0, None], [50, 5, 10.0, None], [100, 400, 0.25, None], [900, 800, None, -9], [300, 280, None, None]]
     assert surprises(rows) == [0, 2, 3]  # 10x on 50 photos is too few to list
+
+
+
+# spread.py: the time bar's band. Each case is a few runs of a simulated species; a "null" never moves between years,
+# so it should almost never get a band.
+YEARS = np.arange(2015, 2026)
+
+
+def _band_rate(gen, reps=6, seed=0):
+    from pipeline.atlas.spread import spread
+    rng = np.random.default_rng(seed)
+    bands = []
+    for _ in range(reps):
+        doy, lat, year, lng = gen(rng)
+        bands.append(spread(doy, lat, year, rng, lng)[0] or 0)
+    return np.mean(np.array(bands) > 0), float(np.median(bands))
+
+
+def _season(rng, slides, n, lat=None):
+    doy = np.concatenate([np.round(rng.normal(170 - s, 10, n)) for s in slides])
+    la = rng.uniform(37, 48, doy.size) if lat is None else lat
+    return doy, la, np.repeat(YEARS[:len(slides)], n), rng.uniform(-95, -82, doy.size)
+
+
+def test_spread_finds_a_real_year_to_year_slide():
+    from pipeline.atlas.spread import spread
+    rng = np.random.default_rng(1)
+    moving = rng.choice([-12, -8, -4, 0, 4, 8, 12], len(YEARS))  # slides with sd ~ 7-9 days
+    half, slides, _, _ = spread(*_season(rng, moving, 200)[:3], rng)
+    assert 6 <= half <= 20 and np.corrcoef(list(slides.values()), moving)[0, 1] > 0.9
+    assert spread(*_season(rng, moving, 30)[:3], rng)[0] is None  # too few photos a year
+
+
+def test_spread_gives_no_band_to_chance_alone():
+    rate, _ = _band_rate(lambda r: _season(r, np.zeros(len(YEARS)), 200))
+    assert rate <= 1 / 6
+
+
+def test_spread_sees_through_clumped_photos():
+    def outings(r, n=120, k=8):  # each year's photos from k outings, each at one place over a few days
+        doy, lat, lng = [], [], []
+        for _ in YEARS:
+            day, la, lo = r.normal(170, 10, k), r.uniform(38, 47, k), r.uniform(-95, -82, k)
+            j = r.integers(0, k, n)
+            doy.append(np.round(day[j] + r.normal(0, 1.5, n)))
+            lat.append(la[j] + r.normal(0, 0.1, n))
+            lng.append(lo[j] + r.normal(0, 0.1, n))
+        return np.concatenate(doy), np.concatenate(lat), np.repeat(YEARS, n), np.concatenate(lng)
+    assert _band_rate(outings)[0] <= 1 / 6
+    assert _band_rate(lambda r: outings(r, 120, 20))[0] <= 1 / 6
+
+
+def test_spread_with_uneven_years():
+    ns = (40 * 1.5 ** np.arange(len(YEARS))).astype(int)  # 40 photos the first year, 2,300 the last
+
+    def uneven(r):
+        doy = np.concatenate([np.round(r.normal(170, 10, n)) for n in ns])
+        return doy, r.uniform(37, 48, doy.size), np.repeat(YEARS, ns), r.uniform(-95, -82, doy.size)
+    assert _band_rate(uneven)[0] <= 1 / 6
+
+
+def test_spread_moves_two_broods_together():
+    def two(r, sd):
+        doy = []
+        for s in r.normal(0, sd, len(YEARS)):
+            k = r.random(300) < r.uniform(0.2, 0.6)  # the second brood's size changes from year to year too
+            doy.append(np.round(np.where(k, r.normal(220, 9, 300), r.normal(150, 9, 300)) - s))
+        doy = np.concatenate(doy)
+        return doy, r.uniform(37, 48, doy.size), np.repeat(YEARS, 300), r.uniform(-95, -82, doy.size)
+    rate, half = _band_rate(lambda r: two(r, 5))
+    assert rate == 1 and 4 <= half <= 11  # truth: an 80% interval of +-6.4 days
+    assert _band_rate(lambda r: two(r, 0))[0] <= 1 / 6
+
+
+def test_spread_reads_latitude_and_is_not_fooled_by_it():
+    from pipeline.atlas.spread import lat_slope
+
+    def leaning(r):  # never moves in time; 4 days later a degree north; each year's photos lean north or south
+        doy, lat = [], []
+        for _ in YEARS:
+            la = np.clip(r.normal(r.uniform(39, 46), 2, 300), 36.6, 49.4)
+            doy.append(np.round(170 + 4 * (la - 42) + r.normal(0, 8, 300)))
+            lat.append(la)
+        return np.concatenate(doy), np.concatenate(lat), np.repeat(YEARS, 300), r.uniform(-95, -82, 300 * len(YEARS))
+    doy, lat, _, _ = leaning(np.random.default_rng(2))
+    assert 3 <= lat_slope(doy, lat) <= 5
+    assert _band_rate(leaning)[0] <= 1 / 6
+
+
+def test_spread_sees_through_a_map_wide_event_weekend():
+    def event(r, n=150, frac=0.3):  # each year a bioblitz weekend, at a random date, holds 30% of the photos
+        doy = []
+        for _ in YEARS:
+            ev = r.normal(170, 12)
+            doy.append(np.round(np.where(r.random(n) < frac, ev + r.integers(0, 2, n), r.normal(170, 12, n))))
+        doy = np.concatenate(doy)
+        return doy, r.uniform(37, 48, doy.size), np.repeat(YEARS, n), r.uniform(-97, -81, doy.size)
+    assert _band_rate(event)[0] <= 1 / 6
+
+
+def test_spread_never_bands_identical_years():
+    from pipeline.atlas.spread import spread
+    rng = np.random.default_rng(4)
+    one = np.round(rng.normal(170, 10, 200))  # the very same photos every year: every slide 0, no noise at all
+    doy = np.tile(one, len(YEARS))
+    assert spread(doy, rng.uniform(37, 48, doy.size), np.repeat(YEARS, 200), rng, rng.uniform(-95, -82, doy.size))[0] is None

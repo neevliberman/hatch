@@ -12,6 +12,8 @@
   a typical year (the map's colour scale).
 Analogy: the network is a recipe; this writes the recipe card (weights) and the pantry list (species, places).
   python3 pipeline/atlas/export.py            # needs notebooks/data/atlas/model/run2/atlas.pt and warmth.npz
+Then the files built from these: dots.py (sighting dots), seen.py (expected vs seen), warm.py (warm the spring) and
+spread.py (the time bar's band of usual years, from the dots; rerun it whenever dots.py or species.json changes).
 """
 import json
 import sys

@@ -157,6 +157,29 @@ export class Atlas {
       return { expected: scaled(0), seen: scaled(1), photos: row[0], expectedPhotos: row[1], ratio: row[2], days: row[3], lastDay: f.file.last_day };
     });
   }
+  /**
+   * How many days either way a species' peak usually falls from its typical date (pipeline/atlas/spread.py: each
+   * year's photos slid against the other years', chance taken out; an 80% prediction interval). spread.bin is ~2 KB,
+   * fetched once (a failed fetch is not retried); null for a species with too few years of photos or a spread chance
+   * could make, when the file is missing, or when it was built for another species list (its header's count and hash).
+   */
+  spread(i: number): Promise<number | null> {
+    this.spreads ??= bin('spread.bin').then((b) => {
+      if (!b || b.byteLength < 12) return null;
+      const head = new DataView(b);
+      const magic = String.fromCharCode(...new Uint8Array(b, 0, 4));
+      const names = this.species.map((s) => s.name).join('\n');
+      let h = 0x811c9dc5;
+      for (let k = 0; k < names.length; k++) h = Math.imul(h ^ names.charCodeAt(k), 0x01000193) >>> 0;
+      const ok = magic === 'SPR1' && head.getUint32(4, true) === this.species.length && head.getUint32(8, true) === h;
+      return ok ? new Uint8Array(b, 12) : null;
+    });
+    return this.spreads.then((b) => {
+      const v = b?.[i];
+      return v === undefined || v === 255 ? null : v;
+    });
+  }
+  private spreads: Promise<Uint8Array | null> | null = null;
   /** The n species whose ATLAS_YEAR season ran furthest off schedule (>= 50 photos expected): [index, days early (negative: late)]. */
   async offSchedule(n = 10): Promise<OffSchedule> {
     await this.seen(0);

@@ -154,7 +154,8 @@ pipeline/species/ every further species (Japanese beetle so far): one list, one 
 pipeline/front/   migrant trackers (monarch, red admiral): sightings so far, no forecast
 pipeline/basemap/ builds the map detail (lakes, rivers, highways, forests, woods) from public-domain data
 pipeline/radar/   radar replays: NEXRAD scans -> public/radar/<event>/ (run by hand, needs Py-ART)
-pipeline/atlas/   the Living Atlas: GBIF data, one network for ~1,950 species, gate, export to public/atlas/
+pipeline/atlas/   the Living Atlas: GBIF data, one network for ~1,950 species, gate, export to public/atlas/ (export.py, then dots.py,
+                  seen.py, warm.py, spread.py: the time bar's band of usual years, from the dots)
 pipeline/league/  challenger models, sealed nightly forecasts, weekly grading
 pipeline/south/   Christmas beetle shadow forecast (Australia)
 pipeline/activity/ moths-tonight activity line from the weather

@@ -214,8 +214,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #strip { grid-column: 1 / -1; margin: 0; font-size: 12.5px; line-height: 1.35; }
 #honesty b { font-weight: 600; }
 #app.tracker .forecast-note { display: none; }
-.atlas-note, #app.atlas .forecast-note, .vs-note { display: none; }
-#app.vs .vs-note { display: inline; }
+.atlas-note, #app.atlas .forecast-note, .vs-note, .range-note { display: none; }
+#app.vs .vs-note, #app.range .range-note { display: inline; }
 .vs-note b { color: var(--moon); font-weight: 600; }
 #app.atlas .atlas-note { display: inline; }
 #app.atlas .dots .long { display: none; } /* the date pill already says typical year */
@@ -424,6 +424,14 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .ribbon .band { stroke: none; }
 .ribbon .frame { fill: none; stroke: var(--muted); stroke-width: 1; }
 .ribbon .seen { fill: var(--ink-wash); }
+/* Where a peak usually falls (spread.py): pencil wash, softened at both ends (scrubber.ts's gradient), and a pencil
+   bracket along the bottom. The key's swatch (.range-key) is the same wash. */
+.ribbon stop { stop-color: var(--text); stop-opacity: 0.06; }
+.ribbon stop:nth-child(2), .ribbon stop:nth-child(3) { stop-opacity: 0.2; }
+.ribbon .range-edge { fill: none; stroke: var(--muted); stroke-width: 1; }
+.range-note .nw { white-space: nowrap; }
+.range-key { display: inline-block; width: 14px; height: 9px; margin-right: 4px; vertical-align: -1px; border-bottom: 1px solid var(--muted);
+  background: color-mix(in srgb, var(--text) 20%, transparent); }
 /* Sightings of a wave the forecast leaves out, in its dots' colour: seen, not forecast. */
 .ribbon .seen-only { fill-opacity: 0.4; }
 .ribbon .seen-line { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linejoin: round; }

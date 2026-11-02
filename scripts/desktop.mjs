@@ -441,7 +441,7 @@ const noWebglUnit = async () => {
 // a missing one) so the default-season and stale rules can be checked on any day; ?today= fakes the clock.
 const distDir = resolve(process.env.DIST_DIR ?? 'dist');
 if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json'))) {
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
   const server = createServer((req, res) => {
     const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
     let f = join(distDir, path);
@@ -598,6 +598,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           await shotL('4-scorecard');
         }
         await page.keyboard.press('Escape');
+        // Back out to the whole Midwest first. Zoomed in, each species switch redraws the fine hexagons, and on software GL
+        // (CI) one frame can take 10-25 s; a click waits for two frames, so the picker's rows timed out at 30 s.
+        await page.evaluate(() => window.__hatch.map.fit(window.__hatch.padding()));
+        await page.waitForFunction(() => window.__hatch.luna.res() <= 4, null, { timeout: 60000 }).catch(() => fail('live mode stayed on the fine hexagons after zooming out'));
         // The firefly has a part in the served file: picking it from live mode stays live, and its menu offers live.
         // The beetle has none: it lands on all years, its menu has no live option, and says why at the top.
         if (await page.locator('#species').isVisible()) {
@@ -1519,14 +1523,64 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     console.log('seasons: checked');
   };
+  // The usual years' band on the time bar (spread.py): a typical year shades where its peak usually falls, centred on it,
+  // with its key line (swatch and words); two broods' shades never overlap; 2026 (expected vs seen) and a species with too few years of photos draw neither. Light and dark (the
+  // phone in mobile.mjs). ONLY=band runs just this.
+  const bandUnit = async ([w, h, phone], browser) => {
+    const tag = `band ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    for (const scheme of ['light', 'dark']) {
+      const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone, colorScheme: scheme });
+      const page = await ctx.newPage();
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      const isOn = (id) => page.waitForFunction((k) => window.__hatch.current().id === k, id, { timeout: 60000 });
+      try {
+        await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&date=05-25`);
+        await isOn('poecilocapsus-lineatus-atlas');
+        await page.locator('#bar .ribbon .range').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('a typical year drew no band of usual years'));
+        const p = await page.evaluate(() => window.__hatch.current().profile());
+        // One band (one brood), a few days to a few weeks wide, around the peak the bar's note names.
+        const pk = p.notes.find((k) => /^peak /.test(k.text))?.at;
+        const r = p.range?.[0];
+        if (p.range?.length !== 1 || !(r.to - r.from >= 6 && r.to - r.from <= 40)) fail(`the band is ${JSON.stringify(p.range)}`);
+        else if (!(Math.abs((r.from + r.to) / 2 - pk) <= 0.5)) fail(`the band (${r.from}-${r.to}) is not centred on the peak (${pk})`);
+        if (!(await page.locator('#bar .ribbon .range-edge').count())) fail('the band has no bracket marking its span');
+        if (!(await page.locator('#strip .range-note').isVisible()) || !(await page.locator('#strip .range-note .range-key').isVisible())) fail('the band has no key line with a swatch');
+        await page.waitForTimeout(1500);
+        await page.screenshot({ path: `${out}/band-${phone ? 'phone' : 'desktop'}-${scheme}.png`, timeout: 60000 }).catch(() => {});
+        if (scheme === 'dark') continue;
+        await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&year=2026&date=05-25`);
+        await isOn('poecilocapsus-lineatus-atlas');
+        await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('2026 drew no photos seen'));
+        if (await page.locator('#bar .ribbon .range').count()) fail('2026 (expected vs seen) still draws the usual years\' band');
+        if (await page.locator('#strip .range-note').isVisible()) fail('2026 still shows the band\'s key line');
+        // A two-brood skipper: a shade for each brood, in order, never overlapping (overlaps merge, never darken).
+        await page.goto(`${origin}/?species=lon-zabulon&noauto&date=07-01`);
+        await isOn('lon-zabulon-atlas');
+        await page.locator('#bar .ribbon .range').first().waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('the zabulon skipper drew no band'));
+        const sw = (await page.evaluate(() => window.__hatch.current().profile())).range ?? [];
+        if (sw.length !== 2 || sw[1].from <= sw[0].to) fail(`the zabulon skipper's two broods' shades are ${JSON.stringify(sw)}`);
+        await page.goto(`${origin}/?species=forficula-auricularia&noauto&date=07-01`);
+        await isOn('forficula-auricularia-atlas');
+        await page.waitForTimeout(3000);
+        if (await page.locator('#bar .ribbon .range').count()) fail('a species with too few years of photos draws a band');
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+    }
+    console.log(`${tag}: checked`);
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
+  if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
