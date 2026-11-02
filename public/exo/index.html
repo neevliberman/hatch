@@ -71,6 +71,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 .cap .sim { font: 500 1.05rem/1 var(--hand); color: var(--ink-soft); }
 .cap .sim b { font-weight: 700; }
 .cap .therm { display: none; }
+#arc { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#sunlab small { margin-left: 2px; }
 #sunlab { position: fixed; left: 0; top: 0; font: 700 1.3rem/1 var(--hand); color: var(--ink); pointer-events: none; white-space: nowrap; text-shadow: 0 0 3px var(--paper), 0 0 6px var(--paper); will-change: transform; }
 #sunglow { position: fixed; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: multiply; background: radial-gradient(circle at var(--sx, 70%) var(--sy, 20%), #ffcf7a 0, #ffe2b0 22%, transparent 62%); }
 @media (prefers-color-scheme: dark) { #sunglow { mix-blend-mode: screen; background: radial-gradient(circle at var(--sx, 70%) var(--sy, 20%), #6b4a1c 0, #3a2a12 25%, transparent 60%); } }
@@ -121,6 +123,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
     <input id="air" type="range" min="5" max="40" step="1" value="16" aria-label="Air temperature">
   </div>
 </div>
+<canvas id="arc" aria-hidden="true"></canvas>
 <div id="sunlab" tabindex="0" role="slider" aria-label="Air temperature: drag the sun" aria-valuemin="5" aria-valuemax="40" aria-valuenow="16"></div>
 <div id="sunpulse" aria-hidden="true"><i></i></div>
 <div id="more">
@@ -1373,7 +1376,7 @@ function skyTick(dt) { // before the light: wind, drift, sunDir, then the cover 
     T += Math.exp(-tau) / 5;
   }
   sunCover += (1 - T - sunCover) * Math.min(1, dt * 6);
-  sunG.children[2].visible = sunCover < .8; // a thick cloud hides the disc; cloudFX already takes the rays and the bloom
+  sunG.children[2].visible = sunCover < .8 || !!REAL; // a thick cloud hides the disc; cloudFX already takes the rays and the bloom
   cloudT = sunCover > .05 ? sunCover : 0; // older code reads cloudT > 0 as "a cloud is over the sun"
   // shadows on the ground: each cloud put CLOUD_H above the butterfly along its true direction, thrown down along the sun
   const sk = Math.min(1, Math.max(0, (sunDir.y - .06) / .2)) * .6;
@@ -1529,7 +1532,7 @@ function flockTick(dt) {
     const x = Math.cos(m.a) * rr, z = Math.sin(m.a) * rr, y = m.y + .8 * Math.sin(m.a * 1.7) - .1 * Math.cos(m.ph) * m.flapW - (1 - m.flapW) * .3;
     m.c.position.set(x, y, z);
     // the others fly only when the day lets one fly (warm air or sun), and never sweep right past the lens
-    m.c.visible = (taS >= 17 || (taS >= 13 && sunCover < .5 && sunDir.y > .25)) && m.c.position.distanceTo(camera.position) > 7;
+    m.c.visible = (taS >= 17 || (taS >= 13 && sunCover < .5 && sunDir.y > .25)) && m.c.position.distanceTo(camera.position) > camera.position.distanceTo(bug.position) + 1.5; // only behind the hero
     const dx = -Math.sin(m.a) * Math.sign(m.w), dz = Math.cos(m.a) * Math.sign(m.w);
     m.c.rotation.set(-.12 + .15 * m.flapW, Math.atan2(dx, dz), -.35 * Math.sign(m.w), 'YXZ');
     ['fore', 'hind'].forEach(w => {
@@ -1879,7 +1882,7 @@ const RUB = (() => {
 let last = performance.now(), boil = 0, uiTick = 0, story = '', storyAt = -1e9, trackTick = 0, pose = .03, legBlend = 0, clock = 0;
 
 function frame(now) {
-  const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; // a rAF stamp can predate `last` (a throttled iframe): never step backwards clock += dt;
+  const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; clock += dt; // a rAF stamp can predate `last` (a throttled iframe): never step backwards
   REAL && REAL.tick(now);
   skyTick(dt); // [sky] sets wind, sunDir, sunCover (and cloudT for older readers)
   taS += (air - taS) * Math.min(1, dt * 2.5); const Ta = taS, sun = sunDir, cover = 1 - .85 * sunCover;
@@ -2000,8 +2003,8 @@ function frame(now) {
   const tw = trackW, ro = `${air}°C · ${F(air)}°F`, rx = Math.round(Math.max(40, Math.min(tw - 40, thumbX(air))));
   if (ro !== ui.ro) { ui.ro = ro; readout.textContent = ro; }
   if (rx !== ui.rx) { ui.rx = rx; readout.style.left = rx + 'px'; }
-  const th = Math.round(Tth); if (th !== ui.th) { ui.th = th; thermT.innerHTML = `body <b>${th}°</b> · flies from ${FLY_MIN}°`; }
-  const se = `sun ${Math.round(hbE.beam / 10) * 10} W/m² · ${wind.length() < .05 ? 'calm' : `wind ${wind.length().toFixed(1)} m/s`}`; if (se !== ui.se) { ui.se = se; simEnv.textContent = se; }
+  const th = Math.round(Tth); if (th !== ui.th) { ui.th = th; thermT.innerHTML = `body <b>${th}°</b> · flies from ${FLY_MIN}°, well at ${NEED}°`; }
+  const se = `sunlight ${Math.round(hbE.glob / 10) * 10} W/m² · ${wind.length() < .05 ? 'calm' : `wind ${wind.length().toFixed(1)} m/s`}`; if (se !== ui.se) { ui.se = se; simEnv.textContent = se; }
   const fw = (Math.max(0, Math.min(100, (Tth - 5) / 35 * 100))).toFixed(1); if (fw !== ui.fw) { ui.fw = fw; thermF.style.width = fw + '%'; }
   if (now - trackTick > 2000) { trackTick = now; drawTrack(); }
 
@@ -2069,26 +2072,50 @@ const REAL = (() => {
   const sunAt = h => solar(R.day.lat, R.day.lon, R.day.utc0 + h * 3600e3);
   const tFor = el => Math.pow(Math.max(0, Math.min(1, (el / rad - 6) / 78)), 1 / .7); // inverse of sunElev
   // the day's arc is squeezed sideways to fit the page (a phone shows ~15° of sky across, a real day spans ~200°)
-  const fitK = () => { const half = Math.atan(Math.tan(camera.fov * rad / 2) * camera.aspect); return Math.min(.6, half * .75 / Math.max(.2, R.dev || 1)); };
-  const azFor = az => VIEW_AZ + AZ_SIGN * (az - R.noonAz) * fitK();
+  const fitK = () => { const half = Math.atan(Math.tan(camera.fov * rad / 2) * camera.aspect); return Math.min(.6, half * .62 / Math.max(.2, R.dev || 1)); };
+  const shift = () => -Math.atan(Math.tan(camera.fov * rad / 2) * camera.aspect) * .3 * AZ_SIGN * -1; // the plant stands left of centre: the day's arc sits right of it
+  const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
+  const azFor = az => VIEW_AZ + shift() + AZ_SIGN * wrapA(az - R.noonAz) * fitK();
   const clock12 = h => { const hh = Math.floor(h), mm = Math.round((h - hh) * 60) % 60, H12 = ((hh + 11) % 12) + 1; return `${H12}${mm ? ':' + String(mm).padStart(2, '0') : ''} ${hh < 12 ? 'am' : 'pm'}`; };
   R.setHour = h => {
     h = Math.max(R.rise, Math.min(R.set, h)); R.hr = h;
     const s = sunAt(h); SKY.sun.t = tFor(s.el); SKY.sun.az = azFor(s.az);
     const t = at(R.day.temps, h); if (t != null) air = t;
     const ws = at(R.day.ws, h), wd = R.day.wd ? R.day.wd[Math.round(Math.min(23, h))] : null;
-    if (ws != null && wd != null) { const to = azFor(((wd + 180) % 360) * rad) ; WIND0.set(Math.sin(to) * ws, 0, Math.cos(to) * ws); }
+    if (ws != null && wd != null) { const to = VIEW_AZ + AZ_SIGN * wrapA(((wd + 180) % 360) * rad - R.noonAz); /* turned like the sky, not squeezed */ WIND0.set(Math.sin(to) * ws, 0, Math.cos(to) * ws); }
     R.cloud = at(R.day.cloud, h);
   };
-  R.step = k => R.setHour(R.hr + k);
-  R.dragTo = e => { // the nearest point of the day's arc to the finger
+  R.step = k => { R.setHour(R.hr + k); R.touched = performance.now(); };
+  // the day's path: a dotted ink arc with a tick on each hour, faint, brighter on open and while the sun is held
+  const arcC = document.getElementById('arc'), ax = arcC.getContext('2d'), pv = new THREE.Vector3();
+  R.opened = 0; R.touched = 0;
+  R.drawArc = held => {
+    const dpr = Math.min(devicePixelRatio || 1, 2), w = Math.round(W_ * dpr), h = Math.round(H * dpr);
+    if (arcC.width !== w || arcC.height !== h) { arcC.width = w; arcC.height = h; }
+    ax.setTransform(dpr, 0, 0, dpr, 0, 0); ax.clearRect(0, 0, W_, H);
+    if (!R.day) return;
+    const now = performance.now(), k = Math.max(held ? 1 : 0, 1 - (now - Math.max(R.opened, R.touched)) / 2500);
+    const a = .22 + .5 * Math.max(0, k);
+    const pt = hh => { const s = sunAt(hh); skyDir(azFor(s.az), tFor(s.el), pv).multiplyScalar(SKY.R).add(camera.position).project(camera); return [(pv.x + 1) / 2 * W_, (1 - pv.y) / 2 * H, pv.z < 1]; };
+    ax.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink') || '#141414';
+    ax.fillStyle = ax.strokeStyle; ax.globalAlpha = a; ax.lineWidth = 1.2; ax.setLineDash([2, 5]); ax.lineCap = 'round';
+    ax.beginPath(); let first = true;
+    for (let hh = R.rise; hh <= R.set + 1e-6; hh += .25) { const [x, y, ok] = pt(hh); if (!ok) { first = true; continue; } first ? ax.moveTo(x, y) : ax.lineTo(x, y); first = false; }
+    ax.stroke(); ax.setLineDash([]);
+    ax.font = '600 13px Caveat, cursive'; ax.textAlign = 'center';
+    for (let hh = Math.ceil(R.rise); hh <= R.set; hh++) { const [x, y, ok] = pt(hh); if (!ok) continue;
+      ax.beginPath(); ax.arc(x, y, 1.6, 0, 6.3); ax.fill();
+      if (hh % 3 === 0) ax.fillText(hh === 12 ? 'noon' : `${((hh + 11) % 12) + 1}${hh < 12 ? 'am' : 'pm'}`, x, y - 8); }
+    ax.globalAlpha = 1;
+  };
+  R.dragTo = e => { R.touched = performance.now(); // the nearest point of the day's arc to the finger
     const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, v = new THREE.Vector3();
     let best = R.hr, bd = 1e9;
     for (let h = R.rise; h <= R.set + 1e-6; h += 1 / 12) { const s = sunAt(h); skyDir(azFor(s.az), tFor(s.el), v).multiplyScalar(SKY.R).add(camera.position).project(camera);
       const d = Math.hypot((v.x + 1) / 2 * W_ - x, (1 - v.y) / 2 * H - y); if (d < bd) { bd = d; best = h; } }
     const was = Math.round(R.hr); R.setHour(best); if (Math.round(best) !== was) { try { navigator.vibrate && navigator.vibrate(6); } catch (_) {} }
   };
-  R.label = () => { const t = Math.round(air); return { now: Math.round(R.hr * 4) / 4, text: `${clock12(R.hr)}, ${t} degrees Celsius`, html: `${clock12(Math.round(R.hr * 4) / 4)} · ${t}°<small>${F(t)}°F</small>` }; };
+  R.label = () => { const t = Math.round(air); return { now: Math.round(R.hr * 4) / 4, text: `${clock12(R.hr)}, ${t} degrees Celsius`, html: `${clock12(Math.round(R.hr * 4) / 4)} · ${t}°C<small>/ ${F(t)}°F</small>` }; };
   // each frame: weather the hour calls for (a cloudy hour sends the nearest cloud over the sun; a clear one moves it off)
   R.tick = now => {
     if (!R.day || R.cloud == null || SKY.drag || SKY.send || now - R.lastCloud < 2500) return;
@@ -2096,20 +2123,21 @@ const REAL = (() => {
     else if (R.cloud < 35 && sunCover > .4) { for (const c of SKY.clouds) { const da = Math.atan2(Math.sin(c.az - SKY.sun.az), Math.cos(c.az - SKY.sun.az)); if (Math.abs(da) < .25) c.vaz = (da < 0 ? -1 : 1) * .5; } R.lastCloud = now; }
   };
   addEventListener('message', e => {
-    const m = e.data; if (!m || m.type !== 'exo-day' || e.origin !== location.origin) return;
+    const m = e.data; if (!m || m.type !== 'exo-day' || e.origin !== location.origin || e.source !== parent) return;
     R.day = m;
     let rise = null, set = null; for (let h = 0; h <= 24; h += .1) if (sunAt(h).el > 6 * rad) { if (rise == null) rise = h; set = h; }
     R.rise = rise == null ? 11 : Math.ceil(rise * 4) / 4; R.set = set == null ? 13 : Math.floor(set * 4) / 4;
     // centre the arc on the day's highest sun, and measure how far it swings either side
     let top = R.rise, el = -1; for (let h = R.rise; h <= R.set; h += .1) { const e = sunAt(h).el; if (e > el) { el = e; top = h; } }
     R.noonAz = sunAt(top).az; R.dev = Math.max(...[R.rise, R.set].map(h => Math.abs(Math.atan2(Math.sin(sunAt(h).az - R.noonAz), Math.cos(sunAt(h).az - R.noonAz)))));
-    document.querySelector('.cap .common').textContent = m.place;
+    document.querySelector('.cap .common').firstChild.textContent = m.place + ' · '; document.querySelector('.cap .common').lastChild.textContent = '';
     const h0 = m.hour != null ? m.hour : 10;
-    R.setHour(h0);
+    R.setHour(h0); R.opened = performance.now();
     // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
     document.fonts.ready.then(() => setTimeout(() => parent.postMessage({ type: 'exo-live' }, location.origin), 250));
     const lab = document.getElementById('sunlab'); lab.setAttribute('aria-label', 'Time of day: drag the sun'); lab.setAttribute('aria-valuemin', R.rise); lab.setAttribute('aria-valuemax', R.set);
   });
+  addEventListener('keydown', e => { if (e.key === 'Escape') parent.postMessage({ type: 'exo-close' }, location.origin); });
   parent.postMessage({ type: 'exo-ready' }, location.origin);
   window.__exo = { SKY, R, air: () => air, cover: () => sunCover, tth: () => Tth, ta: () => taS };
   return R;
@@ -2124,6 +2152,7 @@ const REAL = (() => {
   airEl.addEventListener('input', () => { if (!sk.setting) sk.sun.t = (+airEl.value - 5) / 35; });
   let shown = '', lx = -1, ly = -1, vis = null, glowO = -1, gx = -1, gy = -1; const glow = document.getElementById('sunglow');
   skyUI = () => { // the handwritten temperature rides under the sun; the first-run pulse sits on it
+    if (REAL) REAL.drawArc(!!(sk.drag && sk.drag.o === sk.sun));
     const v = +airEl.value;
     if (REAL && REAL.day) { const k = REAL.label(); if (k.html !== shown) { shown = k.html; lab.innerHTML = k.html; lab.setAttribute('aria-valuenow', k.now); lab.setAttribute('aria-valuetext', k.text); } }
     else if (v + '' !== shown) { shown = v + ''; lab.innerHTML = `${v}°<small>${F(v)}°F</small>`; lab.setAttribute('aria-valuenow', v); lab.setAttribute('aria-valuetext', v + ' degrees Celsius'); }

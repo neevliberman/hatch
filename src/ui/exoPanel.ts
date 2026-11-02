@@ -9,6 +9,23 @@
  */
 import { weather, type Day } from './weather';
 
+/** The nearest town or city label on the basemap within ~40 km, for the caption ("Near Peoria"). */
+let towns: Promise<[string, number, number][]> | null = null;
+async function nearTown(lng: number, lat: number): Promise<string | undefined> {
+  towns ??= fetch(new URL('basemap/detail.json', document.baseURI).href)
+    .then((r) => (r.ok ? r.json() : { labels: [] }))
+    .then((j) => ((j.labels ?? []) as [string, number, number, number, string][]).filter((l) => l[4] === 'city' || l[4] === 'town').map((l) => [l[0], l[1], l[2]] as [string, number, number]))
+    .catch(() => []);
+  const k = Math.cos((lat * Math.PI) / 180);
+  let best: string | undefined;
+  let bd = (40 / 111) ** 2;
+  for (const [n, x, y] of await towns) {
+    const d = ((x - lng) * k) ** 2 + (y - lat) ** 2;
+    if (d < bd) [bd, best] = [d, n];
+  }
+  return best;
+}
+
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 export const exoEnabled = () => new URLSearchParams(location.search).has('exo');
@@ -39,6 +56,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
   let spot: { lngLat: [number, number]; label?: string } | null = null;
   let at = 0;
   let lastKey = '';
+  let place: string | undefined;
   let opener: HTMLElement | null = null;
 
   /** Hand Exo the day: where, when, and the hourly air, cloud and wind. */
@@ -49,9 +67,9 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     // Today: open on the hour it is there now. Any other day: mid-morning, so the warm-up is still ahead.
     const nowH = (Date.now() - utc0) / 36e5;
     const hour = nowH >= 0 && nowH < 24 ? nowH : 10;
-    const place = `${spot.label ? `Near ${spot.label}` : 'Here'} · ${fmtDate(at)} · ${day.note.toLowerCase()}`;
+    const where = `${place ? `Near ${place}` : 'Here'} · ${fmtDate(at)}${day.note === 'Recorded' ? '' : ` · ${day.note.toLowerCase()}`}`;
     frame.contentWindow?.postMessage(
-      { type: 'exo-day', place, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom },
+      { type: 'exo-day', place: where, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom },
       location.origin,
     );
   };
@@ -61,7 +79,8 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     if (e.data?.type === 'exo-ready') {
       ready = true;
       push();
-    } else if (e.data?.type === 'exo-live') {
+    } else if (e.data?.type === 'exo-close') close(); // Escape pressed inside Exo
+    else if (e.data?.type === 'exo-live') {
       root.classList.add('live'); // Exo shows this place's day: fade it in
       noteEl.textContent = '';
     }
@@ -73,11 +92,19 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     const key = `${lat.toFixed(2)},${lng.toFixed(2)},${fmtDate(at)}`;
     if (key === lastKey) return;
     lastKey = key;
-    noteEl.textContent = 'Reading the weather…';
-    const got = await weather(lat, lng, at);
+    if (!root.classList.contains('live')) noteEl.textContent = `Reading ${fmtDate(at)}'s weather…`;
+    const live = root.classList.contains('live');
+    const [got, town] = await Promise.all([weather(lat, lng, at), spot.label ? Promise.resolve(spot.label) : nearTown(lng, lat)]);
     if (key !== lastKey) return; // the pin or the date moved on
+    if (!got) {
+      // keep showing the day already open; say so only if there is nothing on screen
+      noteEl.textContent = live ? '' : 'No weather came back for this place and day.';
+      if (live) lastKey = '';
+      return;
+    }
     day = got;
-    if (!got) noteEl.textContent = 'No weather came back for this place and day.';
+    place = town;
+    if (live) noteEl.textContent = '';
     push();
   };
 
@@ -87,8 +114,16 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     root.style.setProperty('--oy', `${y}px`);
   };
 
+  let shutTimer = 0;
+  /** Everything else on the page is inert while Exo is open (a real modal: Tab cannot reach the map underneath). */
+  const inert = (on: boolean) => {
+    for (const el of document.body.children) if (el !== root && el instanceof HTMLElement) el.inert = on;
+  };
   const close = () => {
+    if (root.hidden || root.classList.contains('shut')) return;
     const done = () => {
+      shutTimer = 0;
+      inert(false);
       root.hidden = true;
       root.classList.remove('shut', 'live');
       frame.src = 'about:blank'; // unloads Exo, which stops its WebGL loop
@@ -99,13 +134,22 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     if (reduce.matches) return done();
     root.classList.remove('open', 'live');
     root.classList.add('shut');
-    setTimeout(done, 420);
+    shutTimer = window.setTimeout(done, 420);
   };
   closeBtn.addEventListener('click', close);
   root.addEventListener('keydown', (e) => e.key === 'Escape' && close());
 
   const open = (x: number, y: number) => {
+    if (shutTimer) {
+      // reopened while it was shrinking away: grow it back, keep the loaded Exo
+      clearTimeout(shutTimer);
+      shutTimer = 0;
+      root.classList.remove('shut');
+      root.classList.add('open', 'live');
+      inert(true);
+    }
     if (root.hidden) {
+      inert(true);
       blot(x, y);
       root.hidden = false;
       frame.src = `${import.meta.env.BASE_URL}exo/index.html?embed=1`;
