@@ -199,31 +199,49 @@ export function pickOffSchedule(rows: readonly (readonly [number, number, number
   return out.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0] - b[0]).slice(0, n);
 }
 type SeenRows = [number, number, number | null, number | null][];
-let rowing: Promise<SeenRows | null> | null = null;
-/** The year's rows of seen-YEAR.json ([seen, expected, ratio, days] per species), fetched once for the off-schedule and quiet strips; null when missing. */
-const seenRows = (year: number): Promise<SeenRows | null> =>
-  (rowing ??= json<{ species: SeenRows }>(`seen-${year}.json`).then((f) => f?.species ?? ((rowing = null), null)));
+type SeenFile = { last_day: number; species: SeenRows };
+let seenFiling: Promise<SeenFile | null> | null = null;
+/** seen-YEAR.json, fetched once for the off-schedule and quiet strips; null when missing. */
+const seenFile = (year: number): Promise<SeenFile | null> =>
+  (seenFiling ??= json<SeenFile>(`seen-${year}.json`).then((f) => (f?.species ? f : ((seenFiling = null), null))));
 /** The year's most off-schedule species for the species picker, from seen-YEAR.json. Null when missing. */
 export function loadOffSchedule(year: number, n = 10): Promise<OffSchedule | null> {
-  return seenRows(year).then((r) => (r ? pickOffSchedule(r, n) : null));
+  return seenFile(year).then((f) => (f ? pickOffSchedule(f.species, n) : null));
 }
 /** Photos a species needs expected before a shortfall is worth ranking, and how far below expected counts as quiet. */
 export const QUIET_MIN_EXPECTED = 100;
 export const QUIET_BELOW = 0.6;
+/**
+ * The seen counts are research-grade iNaturalist photos only, and a photo takes weeks to months to reach that: a species
+ * whose typical season peaks this close to the file's last day has had too little time for its identifications, and
+ * reads quiet when it is only waiting (2026: species peaking in the last six weeks ran a median 0.83 of expected and were
+ * twice as often under QUIET_BELOW as those peaking earlier). Those are left out of the quiet strip.
+ */
+export const QUIET_LATE_DAYS = 42;
 /** A quiet species: its index and the photos it had (of those expected). */
 export type Quiet = { i: number; seen: number; expected: number };
-/** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and under QUIET_BELOW. */
+/** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and
+ * under QUIET_BELOW, and not `late` (a species whose identifications are still coming in). */
 // Near zero (under 5% of expected) is almost always a periodical brood's off-year or a data gap, not a quiet year.
-export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10): Quiet[] {
+export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, late: (i: number) => boolean = () => false): Quiet[] {
   const out: Quiet[] = [];
   rows.forEach((r, i) => {
-    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
+    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05 && !late(i)) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
   });
   return out.sort((a, b) => a.seen / a.expected - b.seen / b.expected || b.expected - a.expected || a.i - b.i).slice(0, n);
 }
-/** The year's quietest species for the species picker, from seen-YEAR.json. Null when missing. */
+/** The year's quietest species for the species picker, from seen-YEAR.json, leaving out those whose typical season
+ * (season.bin) peaks within QUIET_LATE_DAYS of its last day. Null when missing; without season.bin none are left out. */
 export function loadQuiet(year: number, n = 10): Promise<Quiet[] | null> {
-  return seenRows(year).then((r) => (r ? pickQuiet(r, n) : null));
+  return Promise.all([seenFile(year), loadSeasons()]).then(([f, b]) => {
+    if (!f) return null;
+    const late = (i: number) => {
+      const c = b && typical(b, i);
+      const d = c && seasonsOf(c);
+      return !!d && d.peak > f.last_day - QUIET_LATE_DAYS;
+    };
+    return pickQuiet(f.species, n, late);
+  });
 }
 /** "9 d early" / "4 d late". */
 export const offNote = (days: number) => `${Math.abs(days)} d ${days > 0 ? 'early' : 'late'}`;

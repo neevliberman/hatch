@@ -1417,6 +1417,23 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (!/photos/i.test(cap) || /declin|decreas|fewer insects|abundan/i.test(cap)) fail(`the quiet strip's caption reads "${cap}"`);
       const notes = await page.locator('#sp-quiet .sp-n').allTextContents();
       if (!notes.length || notes.some((t) => !/^\d+ of \d+$/.test(t) || +t.split(' of ')[0] >= 0.6 * +t.split(' of ')[1])) fail(`the quiet chips read ${notes.join(' | ')}`);
+      // Identifications lag: no chip may be a species whose typical season peaks in the six weeks before the file's
+      // last day (QUIET_LATE_DAYS), whose photos are still waiting for IDs.
+      const late = await page.evaluate(async (keys) => {
+        const [bin, seen, sp] = await Promise.all([fetch('atlas/season.bin').then((r) => r.arrayBuffer()), fetch('atlas/seen-2026.json').then((r) => r.json()), fetch('atlas/species.json').then((r) => r.json())]);
+        const b = new Uint8Array(bin), steps = 62;
+        const key = (n) => n.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+        return keys.filter((k) => {
+          const i = sp.findIndex((s) => key(s.name) === k);
+          if (i < 0) return false;
+          let pk = 0;
+          for (let j = 1; j < steps; j++) if (b[i * 2 * steps + j] > b[i * 2 * steps + pk]) pk = j;
+          return 60 + 4 * pk > seen.last_day - 42;
+        });
+      }, await chip.evaluateAll((els) => els.map((e) => e.dataset.key)));
+      if (late.length) fail(`the quiet strip lists species whose season peaks too late for their IDs to be in: ${late.join(', ')}`);
+      const tip = (await page.locator('#sp-quiet .sp-lab').getAttribute('title')) ?? '';
+      if (!/identif/i.test(tip)) fail(`the quiet strip's tooltip doesn't say identifications are still coming in: "${tip}"`);
       const sb = await page.locator('#sp-quiet').boundingBox();
       const sh = await page.locator('#species-sheet').boundingBox();
       if (!sb || !sh || sb.x < sh.x - 1 || sb.x + sb.width > sh.x + sh.width + 1 || sb.y + sb.height > sh.y + sh.height + 1) fail('the quiet strip spills out of the species sheet');

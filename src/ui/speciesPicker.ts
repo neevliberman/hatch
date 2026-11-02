@@ -7,7 +7,9 @@ import { loadWatch, saveWatch, WATCH_MAX } from './watch';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
 const offCaption = (year: number) => `${year}: furthest off schedule`;
-const quietCaption = (year: number) => `${year}: fewer photos`;
+const quietCaption = (year: number) => `${year}: fewer photos so far`;
+// The seen counts are research-grade photos only: a hard-to-name insect's photos can wait months for identifications.
+const QUIET_NOTE = 'Photo-based: counts identified iNaturalist photos, not insects. Hard-to-identify species are still gaining IDs.';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** Where the browse stands: every insect, one order, or one family in it. */
@@ -250,7 +252,7 @@ export function mountSpeciesPicker(
     quiet
       .map(({ i, seen, expected }) => {
         const s = all?.find((x) => x.i === i);
-        const n = `<span class="sp-n" title="${seen} photos so far, ${expected} expected">${seen} of ${expected}</span>`;
+        const n = `<span class="sp-n" title="${seen} identified photos so far, ${expected} expected">${seen} of ${expected}</span>`;
         return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
       .join('');
@@ -278,7 +280,7 @@ export function mountSpeciesPicker(
     });
   };
   const quietList = () =>
-    quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear)}</li>${quietRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
+    quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear)}</li>${quietRows()}<li class="sp-note sp-fine">${QUIET_NOTE}</li>` : '';
   const offList = () =>
     off.length && all ? `<li class="sp-sec">${offCaption(surpriseYear)}</li>${offRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
   const surpriseRows = () => (odd.length && all ? `<li class="sp-sec">${surpriseYear} surprises</li>${surprises()}` : '');
@@ -317,7 +319,7 @@ export function mountSpeciesPicker(
       twinStrip.innerHTML = `<li class="sp-lab" title="Typical season across the Midwest">Flies with</li>${twinRows()}`;
       oddStrip.innerHTML = `<li class="sp-lab">${surpriseYear} surprises</li>${surprises()}`;
       offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${offCaption(surpriseYear)}</li>${offRows()}`;
-      quietStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${quietCaption(surpriseYear)}</li>${quietRows()}`;
+      quietStrip.innerHTML = `<li class="sp-lab" title="${QUIET_NOTE}">${quietCaption(surpriseYear)}</li>${quietRows()}`;
       treeCrumbs?.();
       tree.shown();
       glow();
