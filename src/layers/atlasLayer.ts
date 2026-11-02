@@ -189,14 +189,17 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   };
   const css = (c: RGBA) => `rgba(${c[0]},${c[1]},${c[2]},${(c[3] / 255).toFixed(2)})`;
 
-  // "Also out here": the species most likely in a photo at a cell on a day, worked out on the CPU (milliseconds).
+  // "Also out here": the species most likely in a photo at a cell on a day, worked out on the CPU (milliseconds). Only
+  // the top few and this species' own are kept (all ~1,900 for each of 200 hovered spots would be ~15 MB).
   const near = new Map<string, { i: number; s: number }[]>();
   const ranked = (c: number, doy: number) => {
     const k = `${c}|${doy}|${drawn()}`;
     let r = near.get(k);
     if (!r) {
       const ls = atlas.net.logShares(atlas.cells[c]!, doy, aheadAt(c, doy));
-      r = [...ls].map((v, i) => ({ i, s: Math.exp(v) })).sort((a, b) => b.s - a.s);
+      const all = [...ls].map((v, i) => ({ i, s: Math.exp(v) })).sort((a, b) => b.s - a.s);
+      r = all.slice(0, 6); // the card's four, after leaving out this species and "other"
+      if (!r.some((x) => x.i === sp.i)) r.push(all.find((x) => x.i === sp.i)!);
       if (near.size > 200) near.clear();
       near.set(k, r);
     }

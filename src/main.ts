@@ -119,6 +119,24 @@ function start() {
     syncUrl();
   });
   const loaded = new Map<string, LunaLayer>([['luna', luna]]);
+  // The Atlas species kept loaded, the one on screen among them: the least recently shown goes past this many. Each
+  // keeps the days of its field worked out (up to ~7 MB when every warmth run of a season was played; ~1 MB a season
+  // played once), which a slow graphics card takes seconds to work out again, so a short flip back and forth (the
+  // card's "also out here", the watch list) stays instant while a long browse through the ~1,900 stays near 60 MB.
+  // The few hand-built species (SPECIES) always stay.
+  const ATLAS_KEPT = 8;
+  const keepLoaded = (key: string) => {
+    const layer = loaded.get(key);
+    if (!layer) return;
+    loaded.delete(key);
+    loaded.set(key, layer); // most recent last
+    const atlas = [...loaded.keys()].filter((k) => !SPECIES.some((e) => e.key === k));
+    for (const k of atlas.slice(0, Math.max(0, atlas.length - ATLAS_KEPT))) {
+      if (k === curKey) continue;
+      registry.unregister(loaded.get(k)!.id);
+      loaded.delete(k);
+    }
+  };
 
   const time = new TimeAxis(registry.activeTime()!, clock);
   let spec: TimeSpec | null = registry.activeTime();
@@ -466,6 +484,7 @@ function start() {
     const prev = cur;
     cur = next;
     curKey = entry.key;
+    keepLoaded(entry.key);
     speciesPick.show(entry.key, entry.label);
     fillPicker();
     picker.value = mode;
