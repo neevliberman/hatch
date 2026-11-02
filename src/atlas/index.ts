@@ -123,13 +123,32 @@ export function pickOffSchedule(rows: readonly (readonly [number, number, number
   });
   return out.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0] - b[0]).slice(0, n);
 }
-let offering: Promise<OffSchedule | null> | null = null;
-/** The year's most off-schedule species for the species picker, from seen-YEAR.json. Fetched once; null when missing. */
+type SeenRows = [number, number, number | null, number | null][];
+let rowing: Promise<SeenRows | null> | null = null;
+/** The year's rows of seen-YEAR.json ([seen, expected, ratio, days] per species), fetched once for the off-schedule and quiet strips; null when missing. */
+const seenRows = (year: number): Promise<SeenRows | null> =>
+  (rowing ??= json<{ species: SeenRows }>(`seen-${year}.json`).then((f) => f?.species ?? ((rowing = null), null)));
+/** The year's most off-schedule species for the species picker, from seen-YEAR.json. Null when missing. */
 export function loadOffSchedule(year: number, n = 10): Promise<OffSchedule | null> {
-  offering ??= json<{ species: [number, number, number | null, number | null][] }>(`seen-${year}.json`).then((f) =>
-    f ? pickOffSchedule(f.species, n) : ((offering = null), null),
-  );
-  return offering;
+  return seenRows(year).then((r) => (r ? pickOffSchedule(r, n) : null));
+}
+/** Photos a species needs expected before a shortfall is worth ranking, and how far below expected counts as quiet. */
+export const QUIET_MIN_EXPECTED = 100;
+export const QUIET_BELOW = 0.6;
+/** A quiet species: its index and the photos it had (of those expected). */
+export type Quiet = { i: number; seen: number; expected: number };
+/** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and under QUIET_BELOW. */
+// Near zero (under 5% of expected) is almost always a periodical brood's off-year or a data gap, not a quiet year.
+export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10): Quiet[] {
+  const out: Quiet[] = [];
+  rows.forEach((r, i) => {
+    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
+  });
+  return out.sort((a, b) => a.seen / a.expected - b.seen / b.expected || b.expected - a.expected || a.i - b.i).slice(0, n);
+}
+/** The year's quietest species for the species picker, from seen-YEAR.json. Null when missing. */
+export function loadQuiet(year: number, n = 10): Promise<Quiet[] | null> {
+  return seenRows(year).then((r) => (r ? pickQuiet(r, n) : null));
 }
 /** "9 d early" / "4 d late". */
 export const offNote = (days: number) => `${Math.abs(days)} d ${days > 0 ? 'early' : 'late'}`;

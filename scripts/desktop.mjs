@@ -1362,13 +1362,49 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // The "fewer photos than expected" strip (seen-2026.json): chips read "seen of expected" photos, the caption says photos
+  // and never declines, it fits the sheet, and a chip opens the species on 2026. Desktop and phone.
+  const quietUnit = async ([w, h, phone], browser) => {
+    const tag = `quiet ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      await page.waitForTimeout(1500);
+      await page.locator('#species').click();
+      const chip = page.locator('#sp-quiet [data-season="2026"]');
+      await chip.first().waitFor({ timeout: 15000 }).catch(() => fail('the species picker shows no quiet strip'));
+      const n = await chip.count();
+      if (n < 1 || n > 10) fail(`the quiet strip has ${n} chips`);
+      const cap = (await page.locator('#sp-quiet .sp-lab').textContent()) ?? '';
+      if (!/photos/i.test(cap) || /declin|decreas|fewer insects|abundan/i.test(cap)) fail(`the quiet strip's caption reads "${cap}"`);
+      const notes = await page.locator('#sp-quiet .sp-n').allTextContents();
+      if (!notes.length || notes.some((t) => !/^\d+ of \d+$/.test(t) || +t.split(' of ')[0] >= 0.6 * +t.split(' of ')[1])) fail(`the quiet chips read ${notes.join(' | ')}`);
+      const sb = await page.locator('#sp-quiet').boundingBox();
+      const sh = await page.locator('#species-sheet').boundingBox();
+      if (!sb || !sh || sb.x < sh.x - 1 || sb.x + sb.width > sh.x + sh.width + 1 || sb.y + sb.height > sh.y + sh.height + 1) fail('the quiet strip spills out of the species sheet');
+      await page.screenshot({ path: `${out}/quiet-${phone ? 'phone' : 'desktop'}.png`, timeout: 60000 }).catch(() => {});
+      const key = await chip.first().getAttribute('data-key');
+      await chip.first().click();
+      await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`the first quiet species (${key}) did not open`));
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 }).catch(() => fail('a quiet species did not open on 2026'));
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
+  if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
   server.close();
