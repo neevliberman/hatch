@@ -545,6 +545,7 @@ if (existsSync(join(distDir, 'radar'))) {
         if (!/photos/i.test(cap) || /declin|decreas|fewer insects|abundan/i.test(cap)) fail(`the quiet strip's caption reads "${cap}"`);
         const notes = await page.locator('#sp-quiet .sp-n').allTextContents();
         if (!notes.length || notes.some((t) => !/^\d+ of \d+$/.test(t))) fail(`the quiet chips read ${notes.join(' | ')}`);
+        await page.locator('#sp-quiet').scrollIntoViewIfNeeded(); // on a short screen the sheet scrolls to it
         const sb = await page.locator('#sp-quiet').boundingBox();
         if (!sb || sb.x < 0 || sb.x + sb.width > width + 1 || sb.y + sb.height > height + 1) fail('the quiet strip is off-screen');
         await page.screenshot({ path: `${out}/quiet-${phone}-${orient}.png` });
@@ -552,6 +553,42 @@ if (existsSync(join(distDir, 'radar'))) {
         await chip.first().click({ timeout: 20000 });
         await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`the first quiet species (${key}) did not open`));
         await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 }).catch(() => fail('a quiet species did not open on 2026'));
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+      console.log(`${tag}: checked`);
+    }
+  }
+  // The "Flies with" strip (pickTwins over season.bin), over http: three chips that never list the species on the map,
+  // on screen, and one opens its species. ONLY=twins runs just this.
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    for (const orient of ['portrait', 'landscape']) {
+      if ((process.env.ONLY && process.env.ONLY !== 'twins') || !mine()) continue;
+      const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
+      const tag = `twins ${phone} ${orient}`;
+      const fail = (m) => problems.push(`${tag}: ${m}`);
+      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      try {
+        await page.goto(`${origin}/?noauto&today=2027-01-15`);
+        await page.waitForTimeout(1500);
+        await page.locator('#species').click({ timeout: 20000 });
+        const chip = page.locator('#sp-twins [data-key]');
+        await chip.first().waitFor({ timeout: 15000 }).catch(() => fail('the species sheet shows no "Flies with" strip'));
+        const keys = await chip.evaluateAll((els) => els.map((e) => e.dataset.key));
+        if (keys.length !== 3 || keys.includes('luna')) fail(`the luna moth's "Flies with" chips are ${keys.join(', ')}`);
+        const sb = await page.locator('#sp-twins').boundingBox();
+        if (!sb || sb.x < 0 || sb.x + sb.width > width + 1 || sb.y + sb.height > height + 1) fail('the "Flies with" strip is off-screen');
+        // A short screen (phone on its side): the strips may push the tree, but it keeps a usable 160px (the sheet scrolls).
+        const th = (await page.locator('.sp-tree').boundingBox())?.height ?? 0;
+        if (th < 159) fail(`the tree of life is squeezed to ${Math.round(th)}px`);
+        await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
+        await page.screenshot({ path: `${out}/twins-${phone}-${orient}.png` });
+        await chip.first().click({ timeout: 20000 });
+        await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), keys[0], { timeout: 30000 }).catch(() => fail(`the first twin (${keys[0]}) did not open`));
       } catch (e) {
         fail(`stopped: ${e.message.split('\n')[0]}`);
       }

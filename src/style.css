@@ -848,7 +848,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 @media (max-width: 700px) { #species-sheet { top: 52px; left: 8px; right: 8px; width: auto; max-height: calc(100dvh - 140px); } }
 /* The tree of life inside it (src/ui/treeOfLife.ts): the sheet grows to give the wheel room, the featured species
    become a strip of chips above it, and the selection's card sits at the wheel's foot. */
-#species-sheet.sp-has-tree { width: min(580px, calc(100vw - 16px)); height: min(82vh, 700px); max-height: none; }
+#species-sheet.sp-has-tree { width: min(580px, calc(100vw - 16px)); height: min(82vh, 700px); max-height: none; overflow-y: auto; overscroll-behavior: contain; }
+/* On a short screen the strips and the tree share by scrolling: the tree keeps at least 160px (.sp-tree), and
+   nothing above it is squeezed. */
+#species-sheet.sp-has-tree > :not(.sp-tree) { flex-shrink: 0; }
 .sp-has-tree .sp-crumbs { display: flex; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: none; gap: 2px; align-items: center; }
 .sp-has-tree .sp-crumbs > * { flex: none; }
 #species-sheet .sp-strip { display: flex; flex: none; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 2px 8px 8px; scrollbar-width: none;
@@ -857,7 +860,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sp-strip .sp-row { width: auto; min-height: 40px; padding: 3px 12px 3px 3px; border: 1px solid var(--line); border-radius: 22px; gap: 8px; }
 .sp-strip .sp-row img, .sp-strip .sp-blank { width: 32px; height: 32px; border-radius: 50%; }
 .sp-strip .sp-name i { display: none; }
-#sp-odd { list-style: none; margin: -4px 0 0; align-items: center; }
+#sp-twins, #sp-odd { list-style: none; margin: -4px 0 0; align-items: center; }
+#sp-twins[hidden] { display: none; }
 #sp-odd[hidden] { display: none; }
 #sp-off { list-style: none; margin: -4px 0 0; align-items: center; }
 #sp-off[hidden] { display: none; }
@@ -880,7 +884,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sp-go:hover, .sp-wx:hover, .sp-go:focus-visible, .sp-wx:focus-visible { background: var(--track-faint); outline: none; }
 .sp-go:focus-visible, .sp-wx:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .sp-lab { flex: none; font: 600 16px/1.1 var(--font-note); color: var(--accent); white-space: nowrap; }
-.sp-tree { position: relative; flex: 1; min-height: 0; border-top: 1px solid var(--line); touch-action: none; overflow: hidden; }
+.sp-tree { position: relative; flex: 1; min-height: 160px; border-top: 1px solid var(--line); touch-action: none; overflow: hidden; }
 .sp-tree[hidden] { display: none; }
 .tol-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; cursor: grab; touch-action: none; }
 .tol-canvas:active { cursor: grabbing; }

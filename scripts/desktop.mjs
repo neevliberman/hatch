@@ -1406,13 +1406,52 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // The "Flies with" strip (pickTwins over season.bin): three chips, never the species on the map, it fits the sheet, and
+  // a chip opens that species, whose own strip then leaves it out. Desktop and phone. ONLY=twins runs just this.
+  const twinsUnit = async ([w, h, phone], browser) => {
+    const tag = `twins ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      await page.waitForTimeout(1500);
+      await page.locator('#species').click();
+      const chip = page.locator('#sp-twins [data-key]');
+      await chip.first().waitFor({ timeout: 15000 }).catch(() => fail('the species picker shows no "Flies with" strip'));
+      const keys = await chip.evaluateAll((els) => els.map((e) => e.dataset.key));
+      if (keys.length !== 3 || new Set(keys).size !== 3 || keys.includes('luna')) fail(`the luna moth's "Flies with" chips are ${keys.join(', ')}`);
+      if (((await page.locator('#sp-twins .sp-lab').textContent()) ?? '') !== 'Flies with') fail('the strip is not captioned "Flies with"');
+      const sb = await page.locator('#sp-twins').boundingBox();
+      const sh = await page.locator('#species-sheet').boundingBox();
+      if (!sb || !sh || sb.x < sh.x - 1 || sb.x + sb.width > sh.x + sh.width + 1 || sb.y + sb.height > sh.y + sh.height + 1) fail('the "Flies with" strip spills out of the species sheet');
+      await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
+      await page.screenshot({ path: `${out}/twins-${phone ? 'phone' : 'desktop'}.png`, timeout: 60000 }).catch(() => {});
+      const key = keys[0];
+      await chip.first().click();
+      await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), key, { timeout: 30000 }).catch(() => fail(`the first twin (${key}) did not open`));
+      await page.waitForTimeout(500);
+      await page.locator('#species').click();
+      await page.waitForFunction((k) => {
+        const ks = [...document.querySelectorAll('#sp-twins [data-key]')].map((e) => e.dataset.key);
+        return ks.length === 3 && !ks.includes(k);
+      }, key, { timeout: 15000 }).catch(() => fail(`after switching to ${key}, its "Flies with" strip is missing or lists itself`));
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
+  if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
