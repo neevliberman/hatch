@@ -596,6 +596,31 @@ if (existsSync(join(distDir, 'radar'))) {
       console.log(`${tag}: checked`);
     }
   }
+  // The usual years' band on the time bar (spread.py), on a 390 x 844 phone in Chrome's engine, light and dark: drawn
+  // in a typical year with its key line, which stays on screen. ONLY=band runs just this.
+  for (const scheme of ['light', 'dark']) {
+    if ((process.env.ONLY && process.env.ONLY !== 'band') || !browsers.chromium || !mine()) continue;
+    const tag = `band phone ${scheme}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browsers.chromium.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, colorScheme: scheme });
+    const page = await ctx.newPage();
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&date=05-25`);
+      await page.waitForFunction(() => window.__hatch.current().id === 'poecilocapsus-lineatus-atlas', null, { timeout: 60000 });
+      await page.locator('#bar .ribbon .range').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('a typical year drew no band of usual years'));
+      const key = await page.locator('#strip .range-note').boundingBox();
+      if (!key) fail('the band has no key line');
+      else if (key.x < 0 || key.x + key.width > 391 || key.y + key.height > 845) fail('the band\'s key line is off-screen');
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: `${out}/band-phone-${scheme}.png` });
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  }
   server.close();
 } else problems.push(`radar replays not checked: no ${join(distDir, 'radar')} (run npm run build first)`);
 for (const b of Object.values(browsers)) await b.close();

@@ -71,6 +71,7 @@ function cutProfile(p: SeasonProfile, off: number, n: number): SeasonProfile {
     bands: p.bands.map((b) => ({ ...b, share: cut(b.share) })),
     seen: cut(p.seen),
     seenOnly: p.seenOnly?.map((o) => ({ ...o, seen: cut(o.seen) })),
+    range: p.range?.map((r) => ({ from: r.from - off, to: r.to - off })).filter((r) => r.to > 0 && r.from < n - 1),
     notes: p.notes.map((k) => ({ ...k, at: k.at - off })).filter((k) => k.at >= 0 && k.at < n),
   };
 }
@@ -545,6 +546,7 @@ function start() {
       ribbonFrame = 0;
       ribbonOf = profileNow();
       $('app').classList.toggle('vs', !!cur.seasons && !!ribbonOf?.seenOnly); // the key line for expected vs seen
+      $('app').classList.toggle('range', !!ribbonOf?.range); // ... and for the bar's band of usual years
       setRibbon(ribbonNow());
     }));
   registry.subscribe(drawRibbon);

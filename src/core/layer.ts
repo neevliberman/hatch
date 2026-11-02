@@ -159,6 +159,9 @@ export interface SeasonProfile {
   /** Washes in their own colour under the line, on the same scale: part of `seen`, such as a wave the forecast does
    * not cover, in the colour of its dots on the map; or, with `seen` the photos expected, the ones seen. */
   seenOnly?: { color: string; seen: number[] }[];
+  /** Where each peak falls in most years (8 of 10), from day index `from` to `to` (fractional): soft bands across the
+   * bar. Only from a real year-to-year spread (spread.py), never a guess. */
+  range?: { from: number; to: number }[];
   /** Handwritten notes on the line, at a day index. */
   notes: { at: number; text: string }[];
 }

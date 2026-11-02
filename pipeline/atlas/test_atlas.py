@@ -136,3 +136,21 @@ def test_surprises_pick_the_biggest_gaps_with_enough_photos():
     from pipeline.atlas.seen import surprises
     rows = [[500, 100, 5.0, None], [50, 5, 10.0, None], [100, 400, 0.25, None], [900, 800, None, -9], [300, 280, None, None]]
     assert surprises(rows) == [0, 2, 3]  # 10x on 50 photos is too few to list
+
+
+def test_spread_finds_real_year_to_year_slides_and_not_chance():
+    from pipeline.atlas.spread import spread
+    rng = np.random.default_rng(1)
+    years = np.arange(2015, 2026)
+
+    def species(slides, n=200):
+        doy = np.concatenate([rng.normal(170 - s, 10, n) for s in slides])
+        lat = rng.uniform(37, 48, doy.size)
+        return np.round(doy), lat, np.repeat(years, n)
+
+    moving = rng.choice([-12, -8, -4, 0, 4, 8, 12], len(years))  # slides with sd ~ 7-9 days
+    half, slides, _, _ = spread(*species(moving), rng)
+    assert 6 <= half <= 16 and np.corrcoef(list(slides.values()), moving)[0, 1] > 0.9
+    half, _, _, _ = spread(*species(np.zeros(len(years))), rng)  # the same season every year: chance only
+    assert half <= 2.5
+    assert spread(*species(moving, n=10), rng)[0] is None  # too few photos a year

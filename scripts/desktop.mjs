@@ -1519,14 +1519,57 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     console.log('seasons: checked');
   };
+  // The usual years' band on the time bar (spread.py): a typical year shades where its peak falls in 8 years of 10, with
+  // its key line; 2026 (expected vs seen) and a species with too few years of photos draw neither. Light and dark (the
+  // phone in mobile.mjs). ONLY=band runs just this.
+  const bandUnit = async ([w, h, phone], browser) => {
+    const tag = `band ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    for (const scheme of ['light', 'dark']) {
+      const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone, colorScheme: scheme });
+      const page = await ctx.newPage();
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      const isOn = (id) => page.waitForFunction((k) => window.__hatch.current().id === k, id, { timeout: 60000 });
+      try {
+        await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&date=05-25`);
+        await isOn('poecilocapsus-lineatus-atlas');
+        await page.locator('#bar .ribbon .range').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('a typical year drew no band of usual years'));
+        const p = await page.evaluate(() => window.__hatch.current().profile());
+        // One band (one brood), a few days to a few weeks wide, around the peak the bar's note names.
+        const pk = p.notes.find((k) => /^peak /.test(k.text))?.at;
+        const r = p.range?.[0];
+        if (p.range?.length !== 1 || !(r.to - r.from >= 6 && r.to - r.from <= 40)) fail(`the band is ${JSON.stringify(p.range)}`);
+        else if (!(pk > r.from && pk < r.to)) fail(`the band (${r.from}-${r.to}) misses the peak (${pk})`);
+        if (!(await page.locator('#strip .range-note').isVisible())) fail('the band has no key line');
+        await page.waitForTimeout(1500);
+        await page.screenshot({ path: `${out}/band-${phone ? 'phone' : 'desktop'}-${scheme}.png`, timeout: 60000 }).catch(() => {});
+        if (scheme === 'dark') continue;
+        await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&year=2026&date=05-25`);
+        await isOn('poecilocapsus-lineatus-atlas');
+        await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('2026 drew no photos seen'));
+        if (await page.locator('#bar .ribbon .range').count()) fail('2026 (expected vs seen) still draws the usual years\' band');
+        if (await page.locator('#strip .range-note').isVisible()) fail('2026 still shows the band\'s key line');
+        await page.goto(`${origin}/?species=forficula-auricularia&noauto&date=07-01`);
+        await isOn('forficula-auricularia-atlas');
+        await page.waitForTimeout(3000);
+        if (await page.locator('#bar .ribbon .range').count()) fail('a species with too few years of photos draws a band');
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+    }
+    console.log(`${tag}: checked`);
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
+  if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);

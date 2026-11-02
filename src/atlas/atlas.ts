@@ -157,6 +157,19 @@ export class Atlas {
       return { expected: scaled(0), seen: scaled(1), photos: row[0], expectedPhotos: row[1], ratio: row[2], days: row[3], lastDay: f.file.last_day };
     });
   }
+  /**
+   * How many days a species' season slides, earlier or later, in 8 years of 10 (pipeline/atlas/spread.py: each
+   * year's photos slid against the other years', chance taken out). spread.bin is ~2 KB, fetched the first time it is
+   * asked for; null for a species with too few years of photos, or when the file is missing.
+   */
+  spread(i: number): Promise<number | null> {
+    this.spreads ??= bin('spread.bin').then((b) => (b ? new Uint8Array(b) : ((this.spreads = null), null)));
+    return this.spreads.then((b) => {
+      const v = b?.[i];
+      return v === undefined || v === 255 ? null : v;
+    });
+  }
+  private spreads: Promise<Uint8Array | null> | null = null;
   /** The n species whose ATLAS_YEAR season ran furthest off schedule (>= 50 photos expected): [index, days early (negative: late)]. */
   async offSchedule(n = 10): Promise<OffSchedule> {
     await this.seen(0);
