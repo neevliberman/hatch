@@ -1614,14 +1614,18 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     try {
       await page.goto(`${origin}/?species=${first}&noauto&date=06-15`);
       await isOn(page, first);
-      await page.evaluate(() => (window.__firstLayer = window.__hatch.current()));
+      await page.evaluate(() => (window.__firstLayer = new WeakRef(window.__hatch.current())));
       for (const [k, q] of rest) await pick(k, q);
       const atlasCount = await page.evaluate(() => window.__hatch.registry.all().filter((l) => /-atlas$/.test(l.id)).length);
       if (atlasCount > KEPT) fail(`${atlasCount} Atlas species still loaded after ${rest.length + 1} (at most ${KEPT})`);
       if (await page.evaluate((k) => window.__hatch.registry.all().some((l) => l.id === `${k}-atlas`), first)) fail(`${first}, the least recently shown, was kept`);
       if (!(await page.evaluate((k) => window.__hatch.registry.isActive(`${k}-atlas`), rest[rest.length - 1][0]))) fail('the species on screen is not active');
+      // Let go means freed: nothing else (a callback's scope, the species shown after it) may still hold it.
+      const cdp = await ctx.newCDPSession(page);
+      for (let i = 0; i < 3; i++) await cdp.send('HeapProfiler.collectGarbage');
+      if (await page.evaluate(() => !!window.__firstLayer.deref())) fail(`${first} was let go but something still holds it (never freed)`);
       await pick(first, 'Papilio glaucus');
-      if (await page.evaluate(() => window.__hatch.current() === window.__firstLayer)) fail(`${first} came back as the same layer: it was never let go`);
+      if (await page.evaluate(() => window.__hatch.current() === window.__firstLayer.deref())) fail(`${first} came back as the same layer: it was never let go`);
       const back = await colours(page);
       if (!back) fail(`${first} drew no settled map on coming back`);
       else {

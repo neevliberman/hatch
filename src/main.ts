@@ -481,7 +481,9 @@ function start() {
     const fromThisLink = speciesPending === entry.key || (!!entry.sci && speciesPending === atlasKey(entry.sci));
     const mode = wish && offers.includes(wish) ? wish : fromThisLink && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
     next.setMode(mode);
-    const prev = cur;
+    // Its id, not the layer: the closure below keeps this call's scope, which the layer loaded in it keeps through its
+    // callbacks, so holding the layer would chain every species ever shown and none let go could be freed.
+    const prevId = cur.id;
     cur = next;
     curKey = entry.key;
     keepLoaded(entry.key);
@@ -514,7 +516,7 @@ function start() {
     asSwitch(() => {
       registry.setTime(cur.id, fitSeason(cur, timeFor(cur, picker.value, at?.[0], at?.[1])));
       // Old one off first, so the two never draw together for a frame.
-      registry.setActive(prev.id, false);
+      registry.setActive(prevId, false);
       registry.setActive(cur.id, true);
     });
     if (live && !at) wantDay = dayOf(time.cursor); // its as-of day becomes the day asked for, as in switchMode
