@@ -1247,12 +1247,129 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     console.log(`${tag}: checked`);
   }
   };
+  // The watch list (src/ui/watch.ts), over http with the Atlas: the star in the species sheet toggles, three species can be
+  // watched and each shows in the Watching row with a countdown, the list survives a reload, a cross removes one, the
+  // list stops at 12, and a missing, mangled or blocked localStorage never breaks the page. Desktop and phone.
+  const watchUnit = async ([w, h, phone], browser) => {
+    const tag = `watch ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    page.on('request', (r) => !r.url().startsWith(origin) && !/^(data|blob):/.test(r.url()) && !PHOTOS.test(r.url()) && fail(`external request ${r.url()}`));
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const shotW = (step) => page.screenshot({ path: `${out}/watch-${phone ? 'phone' : 'desktop'}-${step}.png`, timeout: 60000 })
+      .catch((e) => console.log(`watch-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
+    const KEY = 'hatch-watch';
+    const stored = () => page.evaluate((k) => localStorage.getItem(k), KEY);
+    const chips = () => page.locator('#sp-watch .sp-go');
+    const star = page.locator('.sp-star');
+    const open = async () => {
+      await page.locator('#species').click();
+      await page.locator('#species-sheet').waitFor({ state: 'visible' });
+    };
+    const go = async (key) => {
+      await page.goto(`${origin}/?noauto&today=2027-01-15&date=08-01${key ? `&species=${key}` : ''}`);
+      if (key) await page.waitForFunction((k) => window.__hatch?.current?.().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`${key} never opened`));
+      await page.waitForTimeout(1200);
+    };
+    try {
+      await go('papilio-glaucus');
+      await page.evaluate((k) => localStorage.removeItem(k), KEY);
+      await page.reload();
+      await page.waitForTimeout(1500);
+      await open();
+      if ((await star.getAttribute('aria-pressed')) !== 'false') fail('the star starts on');
+      if (await page.locator('#sp-watch').isVisible()) fail('the Watching row shows with nothing watched');
+      await page.keyboard.press('Escape');
+      // Three species, one after another, each from its own page (the list is the only thing that carries over).
+      const three = ['papilio-glaucus', 'papilio-polyxenes', 'poecilocapsus-lineatus'];
+      for (const k of three) {
+        if (k !== three[0]) await go(k);
+        await open();
+        // Keyboard operable: focus the star and press Enter.
+        await star.focus();
+        await page.keyboard.press('Enter');
+        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Stop watching /.test((await star.getAttribute('aria-label')) ?? '')) fail(`${k}: Enter on the star did not watch it`);
+        await page.keyboard.press('Escape');
+      }
+      if ((await stored()) !== JSON.stringify([...three].reverse())) fail(`the watch list saved as ${await stored()}`);
+      // Back on a different species, the sheet lists all three with a countdown each.
+      await go('papilio-glaucus');
+      await open();
+      await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 3, null, { timeout: 10000 })
+        .catch(async () => fail(`the Watching row shows ${await chips().count()} of 3 species after a reload`));
+      // Their countdowns arrive once season.bin is in.
+      await page.waitForFunction(() => [...document.querySelectorAll('#sp-watch .sp-go span')].every((s) => /^out (now|in \d+ days?)$/.test(s.textContent)), null, { timeout: 15000 })
+        .catch(async () => fail(`the Watching countdowns read ${JSON.stringify(await page.locator('#sp-watch .sp-go span').allTextContents())}`));
+      if ((await star.getAttribute('aria-pressed')) !== 'true') fail('the star is not on for a watched species after a reload');
+      const row = await page.locator('#sp-watch').boundingBox();
+      if (!row || row.x < 0 || row.x + row.width > w + 1 || row.height > 70) fail(`the Watching row is ${row ? `${Math.round(row.width)}x${Math.round(row.height)}` : 'missing'}, not a compact strip`);
+      for (const c of await chips().all()) {
+        const b = await c.boundingBox();
+        if (!b || b.height < 36) fail('a Watching chip is under 36 px tall');
+      }
+      await page.waitForTimeout(600);
+      await shotW('1-picker');
+      // Dark mode.
+      await page.evaluate(() => document.getElementById('theme-btn').click());
+      await page.waitForTimeout(500);
+      await shotW('2-picker-dark');
+      await page.evaluate(() => document.getElementById('theme-btn').click());
+      // A chip opens its species.
+      await page.locator('#sp-watch [data-key="papilio-polyxenes"]').click();
+      await page.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { timeout: 30000 }).catch(() => fail('a Watching chip did not open its species'));
+      // A cross removes one, and the store follows.
+      await open();
+      await page.locator('#sp-watch [data-unwatch="poecilocapsus-lineatus"]').click();
+      if ((await chips().count()) !== 2) fail('the chip\'s cross did not remove it');
+      if ((await stored()) !== JSON.stringify(['papilio-polyxenes', 'papilio-glaucus'])) fail(`after a cross the watch list saved as ${await stored()}`);
+      // The cap: twelve other species fill it, a thirteenth is refused with a note.
+      const names = await page.evaluate(async () => (await (await fetch('atlas/species.json')).json()).slice(0, 30).map((s) => s.name.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')));
+      await page.evaluate(([k, v]) => localStorage.setItem(k, JSON.stringify(v)), [KEY, names.filter((n) => !['papilio-polyxenes', 'actias-luna', 'photinus-pyralis', 'popillia-japonica', 'danaus-plexippus', 'vanessa-atalanta'].includes(n)).slice(0, 12)]);
+      await go('papilio-polyxenes');
+      await open();
+      await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 12, null, { timeout: 10000 })
+        .catch(async () => fail(`twelve saved species show ${await chips().count()} chips`));
+      await star.click();
+      if ((await star.getAttribute('aria-pressed')) !== 'false' || !/full/.test((await page.locator('#sp-wnote').textContent()) ?? '') || (await chips().count()) !== 12) fail('a thirteenth species was not refused');
+      await shotW('3-full');
+      // Missing, mangled and blocked storage: the page loads, the sheet opens, nothing is watched, nothing throws.
+      for (const bad of ['{not json', '{"a":1}', '[1,null,"BAD KEY!",{}]', '"x"', '["gone-species"]']) {
+        await page.evaluate(([k, v]) => localStorage.setItem(k, v), [KEY, bad]);
+        await go('papilio-polyxenes');
+        await open();
+        await page.waitForTimeout(800);
+        if (await chips().count()) fail(`with the saved list ${bad} the Watching row is not empty`);
+        await star.click();
+        if ((await star.getAttribute('aria-pressed')) !== 'true') fail(`with the saved list ${bad} the star does not work`);
+      }
+      const blocked = await ctx.newPage();
+      blocked.on('pageerror', (e) => fail(`blocked storage: pageerror: ${e.message}`));
+      await blocked.addInitScript(() => {
+        Object.defineProperty(window, 'localStorage', { get: () => { throw new DOMException('blocked', 'SecurityError'); } });
+      });
+      await blocked.goto(`${origin}/?noauto&today=2027-01-15`);
+      await blocked.waitForTimeout(2500);
+      await blocked.locator('#species').click();
+      await blocked.locator('.sp-star').click();
+      if ((await blocked.locator('.sp-star').getAttribute('aria-pressed')) !== 'true') fail('with storage blocked the star does not work for the visit');
+      if (!(await blocked.locator('#map').isVisible())) fail('with storage blocked the map is gone');
+      await blocked.close();
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
+  const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
+  if (process.env.ONLY === 'watch') units.splice(0, units.length, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
   server.close();
 } else {

@@ -864,6 +864,19 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sp-early { color: color-mix(in srgb, var(--sun) 65%, #000); font-weight: 600; }
 .sp-late { color: var(--o-dip); font-weight: 600; }
 .sp-fine { padding: 2px 10px 6px; font-size: 12px; }
+/* The watch list: a strip of small chips (name over its countdown, then a cross), under the search box. */
+#sp-watch { list-style: none; margin: 0; align-items: center; }
+#sp-watch[hidden] { display: none; }
+.sp-star { flex: none; }
+.sp-star[aria-pressed="true"] { color: var(--accent); }
+.sp-star[aria-pressed="true"] path { fill: currentColor; }
+.sp-chip { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
+.sp-go { display: block; max-width: 168px; min-height: 40px; padding: 3px 4px 3px 12px; border: 0; background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.sp-go b { display: block; font-weight: 600; font-size: 13.5px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-go span { display: block; font-size: 12px; line-height: 1.2; color: var(--muted); white-space: nowrap; }
+.sp-wx { flex: none; width: 32px; border: 0; background: none; font: inherit; font-size: 18px; color: var(--muted); cursor: pointer; }
+.sp-go:hover, .sp-wx:hover, .sp-go:focus-visible, .sp-wx:focus-visible { background: var(--track-faint); outline: none; }
+.sp-go:focus-visible, .sp-wx:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .sp-lab { flex: none; font: 600 16px/1.1 var(--font-note); color: var(--accent); white-space: nowrap; }
 .sp-tree { position: relative; flex: 1; min-height: 0; border-top: 1px solid var(--line); touch-action: none; overflow: hidden; }
 .sp-tree[hidden] { display: none; }

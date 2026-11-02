@@ -39,14 +39,26 @@ const fmt = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 's
  * year's. Analogy: the arrivals board for one platform.
  */
 export function nearLine(place: string, who: string, due: Due, now: number): string {
+  const head = `Near ${place === 'you' ? 'you' : place.replace(/, [A-Z]{2}$/, '')}: ${who}`;
+  const w = when(due, now);
+  if (w.on) return w.peak !== null ? `${head} out now, peak about ${fmt(w.peak)}` : `${head} out now`;
+  return `${head} in ${plural(w.days)} (${fmt(w.next)})`;
+}
+
+/** The same countdown, short enough for a chip: "out now" or "out in 12 days". */
+export function dueShort(due: Due, now: number): string {
+  const w = when(due, now);
+  return w.on ? 'out now' : `out in ${plural(w.days)}`;
+}
+
+/** Where a season stands today: in it (with its peak, if still ahead), or the start of the next one and the days to wait. */
+function when(due: Due, now: number) {
   const y = new Date(now).getUTCFullYear();
   const at = (year: number, doy: number) => Date.UTC(year, 0, Math.round(doy));
   const doy = dayOfYear(now);
-  const head = `Near ${place === 'you' ? 'you' : place.replace(/, [A-Z]{2}$/, '')}: ${who}`;
   const later = due.year !== undefined && due.year > y; // a season already over this year, counted to next year's
-  if (!later && doy >= due.start && doy <= due.end) return doy < due.peak - 3 ? `${head} out now, peak about ${fmt(at(y, due.peak))}` : `${head} out now`;
-  const year = later ? due.year! : doy < due.start ? y : y + 1;
-  const next = at(year, due.start);
-  const days = Math.max(1, Math.ceil((next - now) / DAY));
-  return `${head} in ${days} day${days === 1 ? '' : 's'} (${fmt(next)})`;
+  if (!later && doy >= due.start && doy <= due.end) return { on: true as const, peak: doy < due.peak - 3 ? at(y, due.peak) : null };
+  const next = at(later ? due.year! : doy < due.start ? y : y + 1, due.start);
+  return { on: false as const, next, days: Math.max(1, Math.ceil((next - now) / DAY)) };
 }
+const plural = (days: number) => `${days} day${days === 1 ? '' : 's'}`;

@@ -88,7 +88,7 @@ const blank = async (page) => {
 
 for (const [phone, engine, pw0, ph0, dpr] of phones) {
   for (const orient of ['portrait', 'landscape']) {
-    if (!mine()) continue;
+    if (process.env.ONLY || !mine()) continue; // ONLY=watch: a local shortcut to run just the watch-list cases
     const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
     const tag = `${phone} ${orient}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
@@ -350,6 +350,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       await shot('6-drawer');
       await tap('#drawer-close');
     }
+
     await ctx.close();
     console.log(`${tag}: map ${Math.round(a.map * 100)}% (with card ${Math.round(b.map * 100)}%)`);
   }
@@ -378,7 +379,7 @@ if (existsSync(join(distDir, 'radar'))) {
   for (const [phone, engine, pw0, ph0, dpr] of small) {
     for (const orient of ['portrait', 'landscape']) {
       for (const [id, ev] of Object.entries(RADARS)) {
-        if (!mine()) continue;
+        if (process.env.ONLY || !mine()) continue;
         const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
         const tag = `radar ${id} ${phone} ${orient}`;
         const fail = (m) => problems.push(`${tag}: ${m}`);
@@ -446,6 +447,75 @@ if (existsSync(join(distDir, 'radar'))) {
         await ctx.close();
         console.log(`${tag}: checked`);
       }
+    }
+  }
+  // The watch list (src/ui/watch.ts), over http (the one-file build has no species picker): the star in the species sheet
+  // toggles, the choice survives a reload, a "Watching" chip shows with its countdown and a cross removes it, and a
+  // mangled saved value never breaks the page. The smallest phone of each engine, both ways up.
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    for (const orient of ['portrait', 'landscape']) {
+      if (!mine()) continue;
+      const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
+      const tag = `watch ${phone} ${orient}`;
+      const fail = (m) => problems.push(`${tag}: ${m}`);
+      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      const stored = () => page.evaluate(() => localStorage.getItem('hatch-watch'));
+      const fresh = async () => {
+        await page.goto(`${origin}/?noauto&today=2027-01-15`);
+        await page.waitForTimeout(1500);
+      };
+      const tapW = async (sel) => {
+        try {
+          await page.locator(sel).click({ timeout: 20000 }); // a click, not a tap: software GL keeps the page too busy for Playwright's touch to settle
+          return true;
+        } catch (e) {
+          return fail(`could not tap ${sel}: ${e.message.split('\n').slice(0, 14).join(' | ')}`), false;
+        }
+      };
+      try {
+        await fresh();
+        await page.evaluate(() => localStorage.removeItem('hatch-watch'));
+        await page.reload();
+        await page.waitForTimeout(1500);
+        await tapW('#species');
+        const star = page.locator('.sp-star');
+        if ((await star.getAttribute('aria-pressed')) !== 'false' || !/^Watch /.test((await star.getAttribute('aria-label')) ?? '')) fail('the watch star does not start off, labelled "Watch ..."');
+        if (await page.locator('#sp-watch').isVisible()) fail('the Watching row shows with nothing watched');
+        const sb = await star.boundingBox();
+        if (!sb || sb.width < 24 || sb.height < 24 || sb.x < 0 || sb.x + sb.width > width + 1) fail('the watch star is too small or off-screen');
+        await tapW('.sp-star');
+        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Stop watching /.test((await star.getAttribute('aria-label')) ?? '')) fail('tapping the star did not watch the species');
+        if ((await stored()) !== '["luna"]') fail(`the watch list saved as ${await stored()}`);
+        const chip = page.locator('#sp-watch .sp-go');
+        if ((await chip.count()) !== 1) fail('the Watching row shows no chip for the watched species');
+        else {
+          const cb = await chip.boundingBox();
+          if (!cb || cb.height < 24 || cb.x < 0 || cb.x + cb.width > width + 1) fail('the Watching chip is too small or off-screen');
+          await page.waitForFunction(() => /^out (now|in \d+ days?)$/.test(document.querySelector('#sp-watch .sp-go span')?.textContent ?? ''), null, { timeout: 15000 })
+            .catch(async () => fail(`the chip's countdown reads "${await chip.locator('span').textContent()}"`));
+        }
+        await page.screenshot({ path: `${out}/watch-${phone}-${orient}.png` });
+        await fresh();
+        await tapW('#species');
+        if ((await page.locator('#sp-watch .sp-go').count()) !== 1 || (await page.locator('.sp-star').getAttribute('aria-pressed')) !== 'true') fail('the watch list did not survive a reload');
+        await tapW('#sp-watch .sp-wx');
+        if ((await page.locator('#sp-watch .sp-go').count()) !== 0 || (await stored()) !== null) fail('the chip\'s cross did not stop watching');
+        // Mangled values: the page opens, the sheet opens, nothing is watched.
+        for (const bad of ['{not json', '{"a":1}', '[1,null,"BAD KEY!",{}]', '"luna"']) {
+          await page.evaluate((v) => localStorage.setItem('hatch-watch', v), bad);
+          await fresh();
+          if (!(await tapW('#species')) || (await page.locator('#species-sheet').isHidden())) fail(`with the saved watch list ${bad}, the species sheet does not open`);
+          else if (await page.locator('#sp-watch .sp-go').count()) fail(`with the saved watch list ${bad}, the Watching row is not empty`);
+        }
+        await page.evaluate(() => localStorage.removeItem('hatch-watch'));
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+      console.log(`${tag}: checked`);
     }
   }
   server.close();

@@ -1,6 +1,7 @@
 /**
  * The Atlas's species list, on its own so the species picker can load it without the network (src/atlas/atlas.ts).
  */
+import type { Due } from '../core/layer';
 
 /** One output of the network: a species (or, last, every other insect). */
 export interface AtlasSpecies {
@@ -34,17 +35,44 @@ export const json = <T>(f: string): Promise<T | null> =>
   fetch(atlasUrl(f)).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
 
 let seasons: Promise<Uint8Array | null> | null = null;
+/** season.bin, fetched once (null when missing). */
+function loadSeasons(): Promise<Uint8Array | null> {
+  seasons ??= fetch(atlasUrl('season.bin'))
+    .then((r) => (r.ok ? r.arrayBuffer() : null))
+    .catch(() => null)
+    .then((b) => (b ? new Uint8Array(b) : ((seasons = null), null)));
+  return seasons;
+}
+/**
+ * Each species' typical season as days of year (first day at a quarter of its best, its peak, its last: the bar the
+ * tree's glow uses), Midwest-wide, from season.bin. The function returns null for a species with no curve; the promise
+ * resolves null when the file is missing.
+ */
+export async function seasonDues(): Promise<((i: number) => Due | null) | null> {
+  const b = await loadSeasons();
+  if (!b) return null;
+  const n = b.length / (2 * STEPS);
+  return (i) => {
+    if (!(i >= 0 && i < n)) return null;
+    const at = i * 2 * STEPS;
+    let pk = 0;
+    for (let k = 1; k < STEPS; k++) if (b[at + k]! > b[at + pk]!) pk = k;
+    if (!b[at + pk]) return null;
+    const lim = b[at + pk]! / 4;
+    let s = pk, e = pk;
+    while (s > 0 && b[at + s - 1]! >= lim) s--;
+    while (e < STEPS - 1 && b[at + e + 1]! >= lim) e++;
+    const day = (k: number) => SEASON[0] + k * STEP;
+    return { start: day(s), peak: day(pk), end: day(e) };
+  };
+}
 /**
  * How far into its season every species is on a day: its expected photos over the map that day, as a share of its
  * own best day (0-1; season.bin, the same curves as each species' time bar). `year`: ATLAS_YEAR's own season, else a
  * typical year's. Fetched once, for the tree of life's "out now" glow, without the network.
  */
 export async function outOn(doy: number, year: boolean): Promise<Float32Array | null> {
-  seasons ??= fetch(atlasUrl('season.bin'))
-    .then((r) => (r.ok ? r.arrayBuffer() : null))
-    .catch(() => null)
-    .then((b) => (b ? new Uint8Array(b) : ((seasons = null), null)));
-  const b = await seasons;
+  const b = await loadSeasons();
   if (!b) return null;
   const n = b.length / (2 * STEPS);
   if (doy < SEASON[0] || doy > SEASON[1]) return new Float32Array(n); // winter: the curves stop at the season's edges

@@ -1,7 +1,10 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, json, loadIndex, loadOffSchedule, loadSurprises, offNote, outOn, type AtlasSpecies, type Surprise } from '../atlas/index';
+import { atlasKey, json, loadIndex, loadOffSchedule, loadSurprises, offNote, outOn, seasonDues, type AtlasSpecies, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
-import { CROSS } from './icons';
+import type { Due } from '../core/layer';
+import { CROSS, STAR } from './icons';
+import { dueShort } from './near';
+import { loadWatch, saveWatch, WATCH_MAX } from './watch';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
 const offCaption = (year: number) => `${year}: furthest off schedule`;
@@ -40,6 +43,8 @@ export function mountSpeciesPicker(
   onPick: (key: string, season?: string) => void,
   /** The map's day (its day of year, whether it is ATLAS_YEAR's own season, and its words), for the tree's glow. */
   day?: () => { doy: number; year: boolean; label: string },
+  /** The watch list's clock (the page's, so ?today= moves it) and, for a species with a saved place, its season there. */
+  watching?: { now: () => number; due: (key: string) => Due | null },
 ): SpeciesPicker {
   const bySci = new Map(featured.filter((e) => e.sci).map((e) => [e.sci!, e.key] as const));
   const keyOf = (s: AtlasSpecies) => bySci.get(s.name) ?? atlasKey(s.name);
@@ -57,7 +62,10 @@ export function mountSpeciesPicker(
   // A plain list of buttons (Tab or the arrow keys walk it), not a listbox: each row is an action, not a selection.
   sheet.innerHTML = `<div class="sp-head"><input id="sp-q" type="search" aria-controls="sp-list"
       placeholder="Search insects" autocomplete="off" enterkeyhint="search" aria-label="Search insects">
+    <button type="button" class="sp-star icon-btn" aria-pressed="false">${STAR}</button>
     <button type="button" class="sp-x icon-btn" aria-label="Close">${CROSS}</button></div>
+    <ul id="sp-watch" class="sp-strip" aria-label="Watching" hidden></ul>
+    <p id="sp-wnote" class="sp-fine" role="status" hidden></p>
     <nav class="sp-crumbs" aria-label="Tree of life" aria-live="polite"></nav>
     <ul id="sp-list" aria-label="Species"></ul>
     <ul id="sp-odd" class="sp-strip" aria-label="${surpriseYear} surprises" hidden></ul>
@@ -70,6 +78,69 @@ export function mountSpeciesPicker(
   const offStrip = sheet.querySelector<HTMLUListElement>('#sp-off')!; // the most off-schedule, a third strip
   const treeHost = sheet.querySelector<HTMLElement>('.sp-tree')!;
   const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
+
+  // The watch list: species starred from the sheet's head, kept in this browser (src/ui/watch.ts). Each shows as a chip
+  // with the same one-line countdown as "Coming out near you" (src/ui/near.ts), from the saved place when it is the
+  // species on the map, else from the Atlas's typical Midwest season (season.bin, fetched only if something is watched).
+  const star = sheet.querySelector<HTMLButtonElement>('.sp-star')!;
+  const watchStrip = sheet.querySelector<HTMLUListElement>('#sp-watch')!;
+  const watchNote = sheet.querySelector<HTMLElement>('#sp-wnote')!;
+  let watched = loadWatch();
+  let currentLabel = button.querySelector('.sp-face')?.textContent ?? '';
+  let curves: ((i: number) => Due | null) | null = null;
+  let curvesTried = false;
+  const labelOf = (key: string): string | null => {
+    const f = featured.find((e) => e.key === key);
+    if (f) return f.label;
+    const s = all?.find((x) => keyOf(x) === key);
+    return s ? nameOf(s) : key === currentKey ? currentLabel : null;
+  };
+  const setStar = () => {
+    const on = watched.includes(currentKey);
+    const text = `${on ? 'Stop watching' : 'Watch'} ${currentLabel}`;
+    star.setAttribute('aria-pressed', String(on));
+    star.setAttribute('aria-label', text);
+    star.title = text;
+  };
+  const renderWatch = () => {
+    if (all && watched.some((k) => labelOf(k) === null)) {
+      watched = watched.filter((k) => labelOf(k) !== null); // a species the Atlas no longer lists
+      saveWatch(watched);
+    }
+    const now = watching?.now() ?? Date.now();
+    const chips = watched.map((k) => {
+      const name = labelOf(k);
+      if (name === null) return ''; // the Atlas list is not in yet
+      const here = watching?.due(k) ?? null;
+      const i = here || !curves ? -1 : indexOfKey(k);
+      const due = here ?? (i >= 0 ? curves!(i) : null);
+      const when = due ? dueShort(due, now) : '';
+      const title = due ? (here ? 'Season at your saved place' : 'Typical season across the Midwest') : '';
+      return `<li class="sp-chip"><button type="button" class="sp-go" data-key="${esc(k)}"${title ? ` title="${title}"` : ''}><b>${esc(name)}</b><span>${when}</span></button><button type="button" class="sp-wx" data-unwatch="${esc(k)}" aria-label="Stop watching ${esc(name)}">&times;</button></li>`;
+    });
+    watchStrip.hidden = !chips.some(Boolean) || !!q.trim();
+    watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${chips.join('')}`;
+    setStar();
+    // The typical-season curves are only fetched once something is watched that no saved place speaks for.
+    if (all && !curves && !curvesTried && watched.length) {
+      curvesTried = true;
+      void seasonDues().then((c) => {
+        curves = c;
+        if (c) renderWatch();
+      });
+    }
+  };
+  const toggleWatch = () => {
+    watchNote.hidden = true;
+    if (watched.includes(currentKey)) watched = watched.filter((k) => k !== currentKey);
+    else if (watched.length >= WATCH_MAX) {
+      watchNote.textContent = `Watch list is full (${WATCH_MAX}). Remove one first.`;
+      watchNote.hidden = false;
+      return;
+    } else watched = [currentKey, ...watched];
+    saveWatch(watched);
+    renderWatch();
+  };
   const pick = (key: string, season?: string) => {
     open(false);
     button.focus();
@@ -178,6 +249,7 @@ export function mountSpeciesPicker(
     list.classList.toggle('sp-strip', !treeHost.hidden);
     oddStrip.hidden = treeHost.hidden || !odd.length;
     offStrip.hidden = treeHost.hidden || !off.length;
+    renderWatch();
     if (!all) {
       list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Loading the rest…</li>`;
       crumbs.innerHTML = '';
@@ -233,6 +305,7 @@ export function mountSpeciesPicker(
     sheet.hidden = !on;
     button.setAttribute('aria-expanded', String(on));
     if (!on) return;
+    watchNote.hidden = true;
     render();
     // Touch screens: land on the close button instead, so the keyboard doesn't cover the tree until search is tapped.
     (matchMedia('(pointer: fine)').matches ? input : sheet.querySelector<HTMLElement>('.sp-x')!).focus();
@@ -248,6 +321,7 @@ export function mountSpeciesPicker(
   };
   button.addEventListener('click', () => open(sheet.hidden));
   sheet.querySelector('.sp-x')!.addEventListener('click', () => (open(false), button.focus()));
+  star.addEventListener('click', toggleWatch);
   input.addEventListener('input', () => {
     q = input.value;
     render();
@@ -255,7 +329,14 @@ export function mountSpeciesPicker(
   sheet.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
     if (!b) return;
-    if (b.dataset.key) pick(b.dataset.key, b.dataset.season);
+    if (b.dataset.unwatch) {
+      const chip = b.closest('li');
+      const next = (chip?.nextElementSibling ?? chip?.previousElementSibling)?.querySelector<HTMLElement>('.sp-go');
+      watched = watched.filter((k) => k !== b.dataset.unwatch);
+      saveWatch(watched);
+      renderWatch();
+      (next ? watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${next.dataset.key}"]`) : star)?.focus();
+    } else if (b.dataset.key) pick(b.dataset.key, b.dataset.season);
     else if (b.dataset.order) (path = { order: b.dataset.order }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.family) (path = { ...path, family: b.dataset.family }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.crumb !== undefined) (path = b.dataset.crumb ? { order: path.order } : {}), render();
@@ -280,7 +361,7 @@ export function mountSpeciesPicker(
     }
     if (e.target === treeHost.querySelector('canvas')) return; // the tree walks its own branches
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    const items = [...sheet.querySelectorAll<HTMLButtonElement>('#sp-list button, #sp-odd:not([hidden]) button, #sp-off:not([hidden]) button')];
+    const items = [...sheet.querySelectorAll<HTMLButtonElement>('#sp-watch:not([hidden]) .sp-go, #sp-list button, #sp-odd:not([hidden]) button, #sp-off:not([hidden]) button')];
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
     const next = e.key === 'ArrowDown' ? (i < 0 ? 0 : Math.min(items.length - 1, i + 1)) : i <= 0 ? -1 : i - 1;
     e.preventDefault();
@@ -312,6 +393,8 @@ export function mountSpeciesPicker(
     },
     show(key, label) {
       currentKey = key;
+      currentLabel = label;
+      setStar();
       const i = indexOfKey(key);
       tree?.mark(i >= 0 ? i : null);
       button.querySelector('.sp-face')!.textContent = label;
