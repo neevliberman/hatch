@@ -1583,15 +1583,91 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     console.log(`${tag}: checked`);
   };
+  // Memory: only the last ATLAS_KEPT (src/main.ts) Atlas species stay loaded. Flips through more than that from the
+  // picker, comes back to the first, and checks it was let go and loaded again: it draws, and its map's colours are
+  // the very ones a fresh page draws for it. ONLY=evict runs just this.
+  const evictUnit = async (browser) => {
+    const tag = 'evict';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const KEPT = 8;
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    await ctx.route(PHOTOS, (r) => r.abort()); // the picker's photos: not what this checks
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const first = 'papilio-glaucus';
+    const rest = [['papilio-polyxenes', 'Papilio polyxenes'], ['bombus-griseocollis', 'Bombus griseocollis'], ['xylocopa-virginica', 'Xylocopa virginica'],
+      ['plathemis-lydia', 'Plathemis lydia'], ['epargyreus-clarus', 'Epargyreus clarus'], ['phyciodes-tharos', 'Phyciodes tharos'], ['pieris-rapae', 'Pieris rapae'],
+      ['junonia-coenia', 'Junonia coenia'], ['oncopeltus-fasciatus', 'Oncopeltus fasciatus']];
+    const isOn = (p, k) => p.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, k, { timeout: 60000 });
+    const pick = async (k, q) => {
+      // Software GL can spend 10-25 s on one frame, and a click waits for two: generous timeouts, as elsewhere in the Atlas.
+      await page.locator('#species').click({ timeout: 90000 });
+      await page.locator('#sp-q').fill(q, { timeout: 90000 });
+      await page.locator(`#sp-list [data-key="${k}"]`).first().click({ timeout: 90000 });
+      await isOn(page, k);
+    };
+    // Every cell's colour on the map's day, once the field for that very day has landed (two reads a second apart agree).
+    const colours = (p) => p.evaluate(async () => {
+      const h = window.__hatch;
+      const read = () => {
+        const hex = h.current().render({ t: h.time.cursor, zoom: 5, theme: { bg: '#000', hexEdge: [0, 0, 0, 0], text: '#000' } }).find((l) => /-forecast-r4$/.test(l.id));
+        return hex ? JSON.stringify(hex.props.data.map((d) => hex.props.getFillColor(d))) : null;
+      };
+      let last = null;
+      for (let i = 0; i < 60; i++) {
+        const now = read();
+        if (now && now === last) return { day: new Date(h.time.cursor).toISOString().slice(5, 10), cells: JSON.parse(now) };
+        last = now;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      return null;
+    });
+    try {
+      await page.goto(`${origin}/?species=${first}&noauto&date=06-15`, { timeout: 90000 });
+      await isOn(page, first);
+      await page.evaluate(() => (window.__firstLayer = new WeakRef(window.__hatch.current())));
+      for (const [k, q] of rest) await pick(k, q);
+      const atlasCount = await page.evaluate(() => window.__hatch.registry.all().filter((l) => /-atlas$/.test(l.id)).length);
+      if (atlasCount > KEPT) fail(`${atlasCount} Atlas species still loaded after ${rest.length + 1} (at most ${KEPT})`);
+      if (await page.evaluate((k) => window.__hatch.registry.all().some((l) => l.id === `${k}-atlas`), first)) fail(`${first}, the least recently shown, was kept`);
+      if (!(await page.evaluate((k) => window.__hatch.registry.isActive(`${k}-atlas`), rest[rest.length - 1][0]))) fail('the species on screen is not active');
+      // Let go means freed: nothing else (a callback's scope, the species shown after it) may still hold it.
+      const cdp = await ctx.newCDPSession(page);
+      for (let i = 0; i < 3; i++) await cdp.send('HeapProfiler.collectGarbage');
+      await cdp.detach();
+      if (await page.evaluate(() => !!window.__firstLayer.deref())) fail(`${first} was let go but something still holds it (never freed)`);
+      await pick(first, 'Papilio glaucus');
+      if (await page.evaluate(() => window.__hatch.current() === window.__firstLayer.deref())) fail(`${first} came back as the same layer: it was never let go`);
+      const back = await colours(page);
+      if (!back) fail(`${first} drew no settled map on coming back`);
+      else {
+        const lit = back.cells.filter((c) => c[3] > 0).length;
+        if (lit < 300) fail(`${first} came back with only ${lit} coloured cells`);
+        // The same page, loaded afresh (a second Atlas page at once would share the one software-GL process and starve both).
+        await page.goto(`${origin}/?species=${first}&noauto&date=${back.day}`, { timeout: 90000 });
+        await isOn(page, first);
+        const ref = await colours(page);
+        const differ = ref ? ref.cells.filter((c, i) => c.join() !== back.cells[i]?.join()).length : -1;
+        if (!ref || ref.day !== back.day || differ) fail(`${first} reloaded differs from a fresh load on ${back.day} (${differ} cells)`);
+        else console.log(`${tag}: ${first} reloaded after ${rest.length} others, ${lit} coloured cells match a fresh load on ${back.day}`);
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
+  if (process.env.ONLY === 'evict') units.splice(0, units.length, evictUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);

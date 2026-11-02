@@ -119,6 +119,24 @@ function start() {
     syncUrl();
   });
   const loaded = new Map<string, LunaLayer>([['luna', luna]]);
+  // The Atlas species kept loaded, the one on screen among them: the least recently shown goes past this many. Each
+  // keeps the days of its field worked out (up to ~7 MB when every warmth run of a season was played; ~1 MB a season
+  // played once), which a slow graphics card takes seconds to work out again, so a short flip back and forth (the
+  // card's "also out here", the watch list) stays instant while a long browse through the ~1,900 stays near 60 MB.
+  // The few hand-built species (SPECIES) always stay.
+  const ATLAS_KEPT = 8;
+  const keepLoaded = (key: string) => {
+    const layer = loaded.get(key);
+    if (!layer) return;
+    loaded.delete(key);
+    loaded.set(key, layer); // most recent last
+    const atlas = [...loaded.keys()].filter((k) => !SPECIES.some((e) => e.key === k));
+    for (const k of atlas.slice(0, Math.max(0, atlas.length - ATLAS_KEPT))) {
+      if (k === curKey) continue;
+      registry.unregister(loaded.get(k)!.id);
+      loaded.delete(k);
+    }
+  };
 
   const time = new TimeAxis(registry.activeTime()!, clock);
   let spec: TimeSpec | null = registry.activeTime();
@@ -463,7 +481,9 @@ function start() {
     const fromThisLink = speciesPending === entry.key || (!!entry.sci && speciesPending === atlasKey(entry.sci));
     const mode = wish && offers.includes(wish) ? wish : fromThisLink && asked && offers.includes(asked) ? asked : offers.includes(picker.value) ? picker.value : TYPICAL;
     next.setMode(mode);
-    const prev = cur;
+    // Its id, not the layer: the closure below keeps this call's scope, which the layer loaded in it keeps through its
+    // callbacks, so holding the layer would chain every species ever shown and none let go could be freed.
+    const prevId = cur.id;
     cur = next;
     curKey = entry.key;
     speciesPick.show(entry.key, entry.label);
@@ -495,9 +515,10 @@ function start() {
     asSwitch(() => {
       registry.setTime(cur.id, fitSeason(cur, timeFor(cur, picker.value, at?.[0], at?.[1])));
       // Old one off first, so the two never draw together for a frame.
-      registry.setActive(prev.id, false);
+      registry.setActive(prevId, false);
       registry.setActive(cur.id, true);
     });
+    keepLoaded(entry.key); // after the switch, so letting one go never redraws a half-switched view
     if (live && !at) wantDay = dayOf(time.cursor); // its as-of day becomes the day asked for, as in switchMode
     syncUrl();
     goLiveIfWanted();

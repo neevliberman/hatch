@@ -16,6 +16,14 @@ export class LayerRegistry {
     this.emit();
   }
 
+  /** Forget a layer (an Atlas species let go to bound memory). Deck.gl finalizes its map layers, GPU buffers and all,
+   * once they leave the drawn list, so nothing else needs releasing. */
+  unregister(id: string): void {
+    if (!this.layers.delete(id)) return;
+    this.active.delete(id);
+    this.emit();
+  }
+
   all(): HatchLayer[] {
     return [...this.layers.values()].map((e) => e.layer);
   }
