@@ -121,15 +121,18 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   };
   const cells = atlas.cells.map((c, i) => ({ id: c.h, i }));
 
-  // Expected vs seen in ATLAS_YEAR (Atlas.seen), fetched the first time that year is shown.
+  // Expected vs seen in ATLAS_YEAR (Atlas.seen), fetched the first time that year is shown. A failed fetch (a dropped
+  // connection) tries again a few times, waiting longer each time, rather than leaving the year without its photos.
   let year: Seen | null = null;
   let askedYear = false;
+  let yearTries = 0;
   const askYear = () => {
     if (askedYear || mode === TYPICAL) return;
     askedYear = true;
     void atlas.seen(sp.i).then((s) => {
       year = s;
-      onData();
+      if (s) return onData();
+      if (++yearTries < 4) setTimeout(() => ((askedYear = false), askYear()), 1000 * 2 ** yearTries);
     });
   };
   askYear();

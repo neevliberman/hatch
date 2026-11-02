@@ -449,6 +449,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     if (!f.startsWith(distDir) || !existsSync(f)) return res.writeHead(404).end();
     res.writeHead(200, { 'content-type': types[extname(f)] ?? 'application/octet-stream' }).end(readFileSync(f));
   });
+  // Node closes an idle kept-alive socket after 5 s; a browser reusing it at that moment gets ERR_CONNECTION_RESET, and on
+  // a slow runner that dropped a file now and then (the Atlas's 2026 photos). Keep idle sockets open longer than a test.
+  server.keepAliveTimeout = 120000;
+  server.headersTimeout = 121000;
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const stub = JSON.parse(readFileSync(join(distDir, 'live/latest.json'), 'utf8'));
@@ -852,7 +856,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // the year went (spotted lanternflies: far more than expected, still spreading west).
       await page.goto(origin + '/?species=lycorma-delicatula&noauto&year=2026&date=09-10');
       await isOn('lycorma-delicatula-atlas');
-      await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 })
+      // The year's photo counts land while the first field is worked out, which holds the page's one thread for seconds
+      // a step on software GL: on a busy runner they can draw 20 s+ after the request (they did, and failed at 20 s).
+      await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 60000 })
         .catch(() => fail('2026 drew no photos seen on the time bar'));
       if (!(await page.locator('#strip .vs-note').isVisible())) fail('the time bar draws expected vs seen with no key saying which is which');
       const ohio = await clearSpot([-84.5, 39.5, -81, 41.5]);
@@ -1550,9 +1556,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.waitForTimeout(1500);
         await page.screenshot({ path: `${out}/band-${phone ? 'phone' : 'desktop'}-${scheme}.png`, timeout: 60000 }).catch(() => {});
         if (scheme === 'dark') continue;
+        // The first fetch of 2026's photos drops (as a reset connection would): the year asks again and still draws them.
+        let dropped = 0;
+        await page.route('**/seen-2026.bin', (rt) => (dropped++ ? rt.continue() : rt.abort('connectionreset')));
         await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&year=2026&date=05-25`);
         await isOn('poecilocapsus-lineatus-atlas');
-        await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('2026 drew no photos seen'));
+        await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 60000 }).catch(() => fail(`2026 drew no photos seen (after ${dropped} tries)`));
+        if (dropped < 2) fail(`the dropped fetch of 2026's photos was not tried again (${dropped} tries)`);
+        await page.unroute('**/seen-2026.bin');
         if (await page.locator('#bar .ribbon .range').count()) fail('2026 (expected vs seen) still draws the usual years\' band');
         if (await page.locator('#strip .range-note').isVisible()) fail('2026 still shows the band\'s key line');
         // A two-brood skipper: a shade for each brood, in order, never overlapping (overlaps merge, never darken).
