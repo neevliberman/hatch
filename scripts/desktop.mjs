@@ -441,7 +441,7 @@ const noWebglUnit = async () => {
 // a missing one) so the default-season and stale rules can be checked on any day; ?today= fakes the clock.
 const distDir = resolve(process.env.DIST_DIR ?? 'dist');
 if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json'))) {
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
   const server = createServer((req, res) => {
     const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
     let f = join(distDir, path);

@@ -369,7 +369,7 @@ const distDir = resolve(process.env.DIST_DIR ?? 'dist');
 // CI builds only the one-file page for this script, so build the http one here rather than skip the replays.
 if (!process.env.DIST_DIR && !existsSync(join(distDir, 'radar'))) execSync('npx vite build --logLevel warn', { stdio: 'inherit' });
 if (existsSync(join(distDir, 'radar'))) {
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
   const server = createServer((req, res) => {
     const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
     let f = join(distDir, path);
