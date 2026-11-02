@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fly the Relay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout: the sky fills the screen; a two-line HUD sits top-left, the hint line floats low. One thumb steers. */
+:root { --paper: #f7f7f4; --ink: #141414; --soft: #5c5c58; --warm: #d9620f; --hand: "Caveat", "Segoe Print", cursive; --display: "Instrument Serif", Georgia, serif; }
+html, body { height: 100%; margin: 0; background: var(--paper); color: var(--ink); overflow: hidden; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; cursor: ns-resize; }
+.hud { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); left: max(14px, env(safe-area-inset-left, 0px)); pointer-events: none; display: grid; gap: 4px; font: 700 1.25rem/1 var(--hand); }
+.hud .gen b { font: italic 400 1.5rem/1 var(--display); }
+.bar { display: flex; align-items: center; gap: 8px; font-size: 1rem; color: var(--soft); }
+.bar i { display: block; width: 92px; height: 8px; border: 1px solid var(--ink); border-radius: 4px; overflow: hidden; position: relative; }
+.bar i s { position: absolute; inset: 0 auto 0 0; width: 50%; background: var(--warm); }
+.bar.fuel i s { background: #4f8a3c; }
+.bar.low i { border-color: #b3261e; }
+.bar.low i s { background: #b3261e; }
+.hint { position: fixed; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); text-align: center; font: 700 1.5rem/1.1 var(--hand); color: var(--ink); pointer-events: none; opacity: 0; transition: opacity .4s; text-shadow: 0 0 4px var(--paper), 0 0 8px var(--paper); padding: 0 16px; }
+.hint.on { opacity: 1; }
+.card { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 24px; background: rgba(247, 247, 244, .88); opacity: 0; pointer-events: none; transition: opacity .5s; }
+.card.on { opacity: 1; pointer-events: auto; }
+.card h1 { margin: 0; font: italic 400 2.2rem/1.05 var(--display); text-wrap: balance; max-width: 18ch; }
+.card p { margin: 0; font: 700 1.5rem/1.15 var(--hand); color: var(--soft); max-width: 26ch; text-wrap: balance; }
+.card button { font: 700 1.5rem/1 var(--hand); color: var(--ink); background: none; border: 0; border-bottom: 2px solid var(--warm); padding: 6px 4px; cursor: pointer; }
+.card button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.card.end { background: radial-gradient(ellipse at center, rgba(12, 14, 16, .8), rgba(12, 14, 16, 0) 72%); color: #f7f7f4; }
+body.over .hud, body.over .hint { opacity: 0; }
+.card.end h1, .card.end p { color: #f7f7f4; text-shadow: 0 0 6px #141414; }
+.card.end button { color: #f7f7f4; }
+@media (prefers-reduced-motion: reduce) { .hint, .card { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A monarch flying south. Drag up and down to steer."></canvas>
+<div class="hud" id="hud">
+  <div class="gen" id="gen"></div>
+  <div class="bar warm" id="bwarm"><span>warm</span><i><s id="fwarm"></s></i></div>
+  <div class="bar fuel" id="bfuel"><span>fuel</span><i><s id="ffuel"></s></i></div>
+</div>
+<div class="hint" id="hint" role="status"></div>
+<div class="card" id="card" role="dialog" aria-live="polite"><h1 id="ct"></h1><p id="cp"></p><button id="cb" type="button" hidden></button></div>
+
+<script>
+(() => {
+const Q = new URLSearchParams(location.search);
+const FF = Math.max(1, Math.min(20, +Q.get('ff') || 1));   // test hook: run the clock faster
+const $ = id => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const resize = () => {
+  DPR = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+};
+addEventListener('resize', resize); resize();
+
+// ---------- seeded randomness, so the world is the same every flight ----------
+let seed = 7;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+// ---------- the world ----------
+const TRIP_S = 84;                 // nominal seconds for the whole trip
+const SPEED = 150;                 // px/s at full strength
+const LEN = TRIP_S * SPEED * 1.15;
+const KM = 3000;
+const thermals = [], flowers = [], clouds = [], hills = [], trees = [];
+function build() {
+  seed = 7;
+  thermals.length = flowers.length = clouds.length = hills.length = trees.length = 0;
+  for (let x = 650; x < LEN; x += 820 + rnd() * 380) thermals.push({ x, w: 64 + rnd() * 34, k: 0.8 + rnd() * 0.2 });
+  for (let x = 380; x < LEN; x += 240 + rnd() * 260) flowers.push({ x, h: 34 + rnd() * 22, taken: false, ph: rnd() * 6 });
+  for (let x = 900; x < LEN; x += 1250 + rnd() * 700) clouds.push({ x, y: 0.12 + rnd() * 0.16, w: 240 + rnd() * 120, vx: -8 + rnd() * 16 });
+  for (let i = 0; i < 90; i++) hills.push(rnd());
+  for (let i = 0; i < 9; i++) trees.push({ x: (i + 0.5) / 9 + (rnd() - 0.5) * 0.04, s: 0.6 + rnd() * 0.8 });
+}
+
+// ---------- the monarch and the run ----------
+const bf = {};
+const run = {};
+function reset() {
+  build();
+  Object.assign(run, { mode: 'fly', t: 0, pos: 0, gen: 1, hint: '', hintT: 0, shown: {}, pause: 0, nectar: 0, ending: 0 });
+  Object.assign(bf, { y: H * 0.45, vy: 0, target: H * 0.45, warm: 0.62, fuel: 0.8, rate: 5, amp: 0.7, phase: 0, soar: 0, basking: false, shade: 0, th: 0 });
+  card(null);
+  say('Drag up and down to steer.', 4);
+}
+
+// ---------- input: absolute finger height steers; keys nudge ----------
+let ptrDown = false, mouseSeen = false;
+const setTarget = y => { bf.target = clamp(y, 56, groundY() - 14); };
+cv.addEventListener('pointerdown', e => { ptrDown = true; cv.setPointerCapture(e.pointerId); setTarget(e.clientY); });
+cv.addEventListener('pointermove', e => { if (ptrDown || (e.pointerType === 'mouse' && (mouseSeen = true))) setTarget(e.clientY); });
+cv.addEventListener('pointerup', () => { ptrDown = false; });
+cv.addEventListener('pointercancel', () => { ptrDown = false; });
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp' || e.key === 'w') { setTarget(bf.target - 60); e.preventDefault(); }
+  else if (e.key === 'ArrowDown' || e.key === 's') { setTarget(bf.target + 60); e.preventDefault(); }
+  else if (e.key === 'r' && run.mode === 'end') reset();
+});
+$('cb').addEventListener('click', () => { if (run.mode === 'end') reset(); });
+
+const groundY = () => H * 0.84;
+const BX = () => W * (W < 520 ? 0.3 : 0.28);
+
+// ---------- text ----------
+function say(s, secs) { run.hint = s; run.hintT = secs; $('hint').textContent = s; $('hint').classList.add('on'); }
+function once(key, s, secs) { if (!run.shown[key]) { run.shown[key] = 1; say(s, secs || 3.2); } }
+function card(c) {
+  const el = $('card');
+  if (!c) { el.classList.remove('on', 'end'); return; }
+  $('ct').textContent = c.t; $('cp').textContent = c.p;
+  $('cb').hidden = !c.b; $('cb').textContent = c.b || '';
+  el.classList.toggle('end', !!c.end);
+  el.classList.add('on');
+  if (c.b) $('cb').focus({ preventScroll: true });
+}
+
+// ---------- physics ----------
+const inShade = () => {
+  let s = 0;
+  for (const c of clouds) s = Math.max(s, smooth(c.w * 0.62, c.w * 0.3, Math.abs(run.pos - c.x)));
+  return s;
+};
+const thermalAt = () => {
+  let best = 0;
+  for (const t of thermals) {
+    const d = Math.abs(run.pos - t.x);
+    if (d < t.w) best = Math.max(best, (1 - d / t.w) * t.k * thermalAlive(t));
+  }
+  return best;
+};
+const thermalAlive = t => {
+  let sh = 0;
+  for (const c of clouds) sh = Math.max(sh, smooth(c.w * 0.62, c.w * 0.3, Math.abs(t.x - c.x)));
+  return 1 - 0.85 * sh;
+};
+
+function step(dt) {
+  const gy = groundY();
+  const sh = inShade(), th = thermalAt();
+  bf.shade = sh; bf.th = th;
+
+  // warmth: sun and thermals heat, shade cools, working muscles make a little heat
+  const effortHeat = bf.basking ? 0 : 0.03;
+  const aloftNow = 1 - clamp(bf.y / gy, 0, 1);                    // thin air up high is colder
+  const dW = (bf.basking ? 0.14 : 0.085) * (1 - sh) + th * 0.2 - sh * 0.1 - (0.045 + 0.07 * aloftNow) + effortHeat;
+  bf.warm = clamp(bf.warm + dW * dt, 0, 1);
+  const cap = smooth(0.18, 0.5, bf.warm) * (bf.fuel > 0.02 ? 1 : 0.55);
+
+  // steering: lag toward the finger, weakened by cold
+  const want = clamp((bf.target - bf.y) * 3, -210, 210);
+  const climb = want < 0 ? -want / 210 : 0;
+  let desired = want * (want < 0 ? cap : 0.6 + 0.4 * cap);
+  desired += (1 - cap) * 130;                         // cold wings sink
+  bf.vy += (desired - bf.vy) * Math.min(1, 6 * dt);
+  bf.vy -= th * 190 * cap * dt * 6;                     // thermal lift
+  bf.y += bf.vy * dt;
+
+  // ground: land and bask when cold, bounce off when warm
+  bf.basking = false;
+  if (bf.y > gy - 10) {
+    bf.y = gy - 10; bf.vy = 0;
+    if (cap < 0.62) bf.basking = true; else bf.vy = -90;
+  }
+  if (bf.y < 56) { bf.y = 56; bf.vy = Math.max(0, bf.vy); }
+  if (bf.basking && cap > 0.75) bf.basking = false;
+
+  // fuel: climbing burns it, soaring nearly doesn't, flowers refill
+  const soaring = th > 0.3 && cap > 0.7;
+  bf.soar += ((soaring ? 1 : 0) - bf.soar) * Math.min(1, 4 * dt);
+  const burn = bf.basking ? 0.003 : soaring ? 0.004 : 0.011 + 0.03 * climb;
+  bf.fuel = clamp(bf.fuel - burn * dt, 0, 1);
+  for (const f of flowers) {
+    if (f.taken) continue;
+    const fx = f.x - run.pos;
+    if (Math.abs(fx) < 34 && bf.y > gy - f.h - 46) { f.taken = true; bf.fuel = clamp(bf.fuel + 0.34, 0, 1); run.nectar++; sparkle(BX(), bf.y); once('nectar', 'Nectar. Fuel up.', 2.4); }
+  }
+
+  // forward speed: stronger cap, more tailwind aloft
+  const aloft = 1 - clamp(bf.y / gy, 0, 1);
+  const tail = 40 * aloft;
+  const spd = bf.basking ? 0 : SPEED * (0.5 + 0.5 * cap) * (bf.fuel > 0.02 ? 1 : 0.6) + tail;
+  run.pos += spd * dt;
+
+  // wings: rate and amplitude glide toward the state's values, so the flap never snaps
+  let rate, amp;
+  if (bf.basking) { rate = 0.25; amp = 0.9; }
+  else if (cap < 0.45) { rate = 14; amp = 0.18 + 0.2 * cap; }          // shivering
+  else if (bf.soar > 0.5) { rate = 0.5; amp = 0.35; }                  // gliding
+  else { rate = 4.8 + 3.6 * climb; amp = 0.62 + 0.3 * climb; }         // cruising or climbing
+  const k = Math.min(1, 3.2 * dt);
+  bf.rate += (rate - bf.rate) * k; bf.amp += (amp - bf.amp) * k;
+  bf.phase += Math.PI * 2 * bf.rate * dt;
+
+  // hints, the first time each thing happens
+  for (const t of thermals) if (t.x - run.pos < W * 0.55 && t.x - run.pos > 0) once('th', 'Warm air. Ride it up.', 3.4);
+  if (sh > 0.6) once('sh', 'Shade chills you.', 3);
+  if (bf.fuel < 0.25) once('fuel', 'Hungry. Dive for flowers.', 3);
+  if (bf.basking) once('bask', 'Too cold. Basking until you warm.', 3.4);
+  if (bf.soar > 0.6) once('soar', 'Gliding costs no fuel.', 3);
+
+  // generations: no single monarch flies it all
+  const prog = run.pos / LEN;
+  if (run.gen === 1 && prog > 0.33) relay(2, 'She laid eggs and is gone.', 'You are her daughter. Gen 2.');
+  else if (run.gen === 2 && prog > 0.64) relay(3, 'Gen 2 is gone too.', 'You are her daughter. Gen 3.');
+  else if (prog >= 1 && run.mode === 'fly') { run.mode = 'end'; run.ending = 0; card({ t: 'Nobody flew it all.', p: `${run.gen} generations, ${KM.toLocaleString()} km. Welcome to Michoacán.`, b: 'Fly again', end: true }); }
+
+  if (run.hintT > 0 && (run.hintT -= dt) <= 0) $('hint').classList.remove('on');
+}
+function relay(g, t, p) { run.mode = 'relay'; run.pause = 3; run.gen = g; card({ t, p }); bf.warm = Math.max(bf.warm, 0.55); bf.fuel = Math.max(bf.fuel, 0.6); }
+
+// ---------- drawing helpers: a pen that wobbles a little ----------
+function wob(x0, y0, x1, y1, seedv, amp = 1.3) {
+  const n = Math.max(2, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 18));
+  ctx.beginPath(); ctx.moveTo(x0, y0);
+  for (let i = 1; i <= n; i++) {
+    const u = i / n, j = Math.sin(seedv * 12.9 + i * 78.2) * amp;
+    ctx.lineTo(lerp(x0, x1, u) + j * 0.4, lerp(y0, y1, u) + j);
+  }
+  ctx.stroke();
+}
+const sparks = [];
+function sparkle(x, y) { for (let i = 0; i < 9; i++) sparks.push({ x, y, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 100, life: 0.7 }); }
+
+function drawSky(t) {
+  const gy = groundY();
+  ctx.fillStyle = '#f7f7f4'; ctx.fillRect(0, 0, W, H);
+  // sun, upper right: a disk, rays, and a glow that fades when a cloud is over you
+  const sx = W * 0.82, sy = H * 0.14, vis = 1 - 0.7 * bf.shade;
+  const g = ctx.createRadialGradient(sx, sy, 6, sx, sy, Math.max(W, H) * 0.6);
+  g.addColorStop(0, `rgba(255,207,122,${0.55 * vis})`); g.addColorStop(0.35, `rgba(255,226,176,${0.22 * vis})`); g.addColorStop(1, 'rgba(255,226,176,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#d9620f'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.5 + 0.5 * vis;
+  ctx.beginPath(); ctx.arc(sx, sy, 18, 0, 7); ctx.stroke();
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283 + t * 0.05; wob(sx + Math.cos(a) * 26, sy + Math.sin(a) * 26, sx + Math.cos(a) * 38, sy + Math.sin(a) * 38, i); }
+  ctx.globalAlpha = 1;
+  // hills, slow parallax
+  for (let layer = 0; layer < 2; layer++) {
+    const par = 0.12 + layer * 0.12, base = gy - 24 - layer * 22;
+    ctx.beginPath(); ctx.moveTo(0, gy);
+    for (let x = 0; x <= W + 20; x += 20) {
+      const u = (x + run.pos * par) / 20, i = Math.floor(u) % hills.length;
+      const hv = lerp(hills[i], hills[(i + 1) % hills.length], u % 1);
+      ctx.lineTo(x, base - hv * (46 + layer * 20));
+    }
+    ctx.lineTo(W, gy); ctx.closePath();
+    ctx.fillStyle = layer ? 'rgba(140,150,130,.14)' : 'rgba(140,150,130,.08)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(20,20,20,.35)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+}
+
+function drawClouds(t) {
+  const gy = groundY(), bx = BX();
+  for (const c of clouds) {
+    c.x += c.vx * 0.016 * FF * 0;                       // clouds hold still in the world; the trip moves past them
+    const cx = bx + (c.x - run.pos);
+    if (cx < -c.w || cx > W + c.w) continue;
+    const cy = c.y * H;
+    // shadow on the ground: faint hatching under the cloud
+    ctx.strokeStyle = 'rgba(70,80,100,.22)'; ctx.lineWidth = 1;
+    for (let i = -6; i <= 6; i++) { const x = cx + i * c.w * 0.1; wob(x, cy + 30, x - 20, gy, i + c.x, 1); }
+    ctx.fillStyle = 'rgba(110,122,142,.32)';
+    ctx.beginPath(); ctx.ellipse(cx, cy, c.w * 0.5, 26, 0, 0, 7); ctx.ellipse(cx - c.w * 0.18, cy - 16, c.w * 0.26, 24, 0, 0, 7); ctx.ellipse(cx + c.w * 0.2, cy - 12, c.w * 0.22, 20, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#141414'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.ellipse(cx, cy, c.w * 0.5, 26, 0, Math.PI * 0.9, Math.PI * 2.1); ctx.stroke();
+    ctx.font = '700 18px Caveat, cursive'; ctx.fillStyle = '#5c5c58'; ctx.textAlign = 'center'; ctx.fillText('cold', cx, cy + 5);
+  }
+}
+
+function drawGround(t) {
+  const gy = groundY(), bx = BX();
+  ctx.fillStyle = 'rgba(120,140,100,.12)'; ctx.fillRect(0, gy, W, H - gy);
+  ctx.strokeStyle = '#141414'; ctx.lineWidth = 1.6;
+  wob(0, gy, W, gy, 3, 1.6);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(20,20,20,.5)';
+  for (let x = -((run.pos) % 26); x < W; x += 26) {
+    const j = Math.sin((x + run.pos) * 0.37) * 5;
+    ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + j, gy - 10 - Math.abs(j)); ctx.stroke();
+  }
+  // thermals: wavy dashed columns rising off warm ground
+  for (const th of thermals) {
+    const sx = bx + (th.x - run.pos);
+    if (sx < -th.w || sx > W + th.w) continue;
+    const alive = thermalAlive(th), top = gy - H * 0.78;
+    const gr = ctx.createLinearGradient(0, gy, 0, top);
+    gr.addColorStop(0, `rgba(255,190,100,${0.28 * alive})`); gr.addColorStop(1, 'rgba(255,190,100,0)');
+    ctx.fillStyle = gr; ctx.fillRect(sx - th.w * 0.7, top, th.w * 1.4, gy - top);
+    ctx.strokeStyle = '#d9620f'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.75 * alive + 0.1;
+    ctx.setLineDash([5, 7]); ctx.lineDashOffset = t * 40;
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath();
+      for (let y = gy; y > top; y -= 10) { const x = sx + k * th.w * 0.42 + Math.sin(y * 0.035 + t * 1.6 + k) * 9; y === gy ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+  // milkweed: stem, leaf, and a pink umbel; the one you drank from fades
+  for (const f of flowers) {
+    const sx = bx + (f.x - run.pos);
+    if (sx < -30 || sx > W + 30) continue;
+    const sway = Math.sin(t * 1.4 + f.ph) * 2, hy = gy - f.h;
+    ctx.strokeStyle = '#141414'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(sx, gy); ctx.quadraticCurveTo(sx + sway, gy - f.h * 0.5, sx + sway, hy); ctx.stroke();
+    ctx.fillStyle = 'rgba(160,190,140,.7)';
+    ctx.beginPath(); ctx.ellipse(sx - 9, gy - f.h * 0.45, 9, 3.5, -0.5, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = f.taken ? 'rgba(200,170,180,.5)' : '#e9879f';
+    for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; ctx.beginPath(); ctx.arc(sx + sway + Math.cos(a) * 6, hy + Math.sin(a) * 5, 3.8, 0, 7); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(sx + sway, hy, 4, 0, 7); ctx.fill(); ctx.stroke();
+  }
+}
+
+function wing(ext, far) {
+  // one side of the butterfly seen from the side: fore and hind wing hinged at the thorax, squashed by how open it is
+  const ink = '#141414';
+  ctx.save();
+  ctx.scale(1, ext);
+  ctx.fillStyle = far ? 'rgba(232,150,60,.55)' : 'rgba(240,138,36,.92)';
+  ctx.strokeStyle = ink; ctx.lineWidth = (far ? 1.1 : 1.7) / Math.max(ext, 0.3);
+  ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(8, -28, 36, -48, 54, -34); ctx.bezierCurveTo(58, -18, 30, -6, 0, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-6, -14, -24, -34, -40, -26); ctx.bezierCurveTo(-46, -12, -22, -2, 0, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.lineWidth = 1 / Math.max(ext, 0.3); ctx.strokeStyle = ink;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(48, -33); ctx.moveTo(0, 0); ctx.lineTo(34, -14); ctx.moveTo(0, 0); ctx.lineTo(-34, -25); ctx.moveTo(0, 0); ctx.lineTo(-30, -9); ctx.stroke();
+  ctx.fillStyle = ink;
+  for (const [px, py] of [[52, -30], [46, -38], [38, -42], [-40, -24], [-34, -30]]) { ctx.beginPath(); ctx.arc(px, py, 1.5, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+
+function drawButterfly(t) {
+  const sc = clamp(Math.min(W, H) / 330, 1.1, 1.8);
+  const flap = 0.5 + 0.5 * Math.sin(bf.phase);                 // 0 closed .. 1 open
+  const mid = 0.55, open = lerp(mid, flap, bf.amp);
+  const ext = bf.basking ? lerp(0.18, 0.95, flap) : clamp(0.12 + 0.88 * open, 0.12, 1);
+  const bob = bf.basking ? 0 : -Math.cos(bf.phase) * 3 * bf.amp * clamp(bf.rate / 6, 0.2, 1);
+  const pitch = bf.basking ? 0 : clamp(bf.vy / 400, -0.35, 0.45);
+  ctx.save();
+  ctx.translate(BX(), bf.y + bob); ctx.scale(sc, sc); ctx.rotate(pitch);
+  ctx.save(); ctx.translate(-3, -1); ctx.rotate(-0.18); wing(clamp(ext * 0.92, 0.1, 1), true); ctx.restore();
+  ctx.strokeStyle = '#141414'; ctx.fillStyle = '#141414'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.ellipse(-4, 3, 22, 3.6, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(19, 2, 3.5, 0, 7); ctx.fill();
+  ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(20, 0); ctx.quadraticCurveTo(28, -9, 33, -8); ctx.moveTo(20, 0); ctx.quadraticCurveTo(26, -4, 32, -2); ctx.stroke();
+  ctx.save(); ctx.rotate(-0.18); wing(ext, false); ctx.restore();
+  ctx.restore();
+}
+
+function drawSparks(dt) {
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i]; s.life -= dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 160 * dt;
+    if (s.life <= 0) { sparks.splice(i, 1); continue; }
+    ctx.fillStyle = `rgba(233,135,159,${s.life})`; ctx.beginPath(); ctx.arc(s.x, s.y, 2.6, 0, 7); ctx.fill();
+  }
+}
+
+function drawForest(t) {
+  // the end: oyamel firs in ink, every branch heavy with resting monarchs
+  ctx.fillStyle = '#1c2024'; ctx.fillRect(0, 0, W, H);
+  const g = ctx.createRadialGradient(W * 0.5, H * 0.1, 10, W * 0.5, H * 0.1, H);
+  g.addColorStop(0, 'rgba(255,200,120,.35)'); g.addColorStop(1, 'rgba(255,200,120,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  seed = 99;
+  for (const tr of trees) {
+    const x = tr.x * W, base = H * 0.96, h = H * (0.5 + 0.3 * tr.s);
+    ctx.strokeStyle = '#0c0e10'; ctx.lineWidth = 4 + tr.s * 3;
+    ctx.beginPath(); ctx.moveTo(x, base); ctx.lineTo(x, base - h); ctx.stroke();
+    ctx.lineWidth = 2;
+    for (let b = 0; b < 7; b++) {
+      const by = base - h * (0.22 + b * 0.1), len = (h * 0.3) * (1 - b * 0.1);
+      for (const d of [-1, 1]) {
+        const ex = x + d * len, ey = by + len * 0.25;
+        ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(ex, ey); ctx.stroke();
+        for (let m = 0; m < 4; m++) {
+          const u = 0.35 + m * 0.17 + rnd() * 0.05, mx = lerp(x, ex, u), my = lerp(by, ey, u) + 4;
+          const fl = Math.sin(t * 3 + mx * 0.1 + my) > 0.96 ? 1 : 0;
+          ctx.fillStyle = `rgba(${240 - fl * 20},${138 + fl * 40},36,.95)`;
+          ctx.beginPath(); ctx.ellipse(mx, my, 3.2, 5 - fl * 2, 0, 0, 7); ctx.fill();
+        }
+      }
+    }
+  }
+}
+
+// ---------- frame loop ----------
+let last = performance.now();
+function frame(now) {
+  const rdt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = rdt * FF;
+  run.t += dt;
+  if (run.mode === 'fly') step(dt);
+  else if (run.mode === 'relay') { run.pause -= rdt; bf.phase += dt * 4; if (run.pause <= 0) { run.mode = 'fly'; card(null); } }
+  else if (run.mode === 'end') { bf.phase += dt * 3; }
+
+  document.body.classList.toggle('over', run.mode === 'end');
+  if (run.mode === 'end') drawForest(run.t);
+  else { drawSky(run.t); drawClouds(run.t); drawGround(run.t); drawButterfly(run.t); drawSparks(dt); }
+
+  const prog = clamp(run.pos / LEN, 0, 1);
+  $('gen').innerHTML = `Gen <b>${run.gen}</b> · ${Math.max(0, Math.round(KM * (1 - prog) / 10) * 10).toLocaleString()} km to go`;
+  $('fwarm').style.width = Math.round(bf.warm * 100) + '%';
+  $('ffuel').style.width = Math.round(bf.fuel * 100) + '%';
+  $('bwarm').classList.toggle('low', bf.warm < 0.3);
+  $('bfuel').classList.toggle('low', bf.fuel < 0.2);
+  requestAnimationFrame(frame);
+}
+
+reset();
+requestAnimationFrame(frame);
+window.__fly = { run, bf, thermals, flowers, clouds, setTarget, reset, LEN, groundY };
+})();
+</script>
+</body>
+</html>
