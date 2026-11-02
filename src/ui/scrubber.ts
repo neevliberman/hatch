@@ -43,14 +43,18 @@ function ribbon(p: SeasonProfile): string {
   const curve = (seen: number[]) => seen.map((v, i) => `${xs[i]} ${(14 - (v / top) * 12.5).toFixed(2)}`).join('L');
   const line = curve(p.seen);
   const only = (p.seenOnly ?? []).map((o) => `<path class="seen-only" fill="${o.color}" d="M0 14L${curve(o.seen)}L1000 14Z"/>`);
-  // Where each peak falls in most years: a pencil wash across the bar, feathered at both ends (the range is a spread,
-  // not a fence), under the line.
+  // Where each peak usually falls: a pencil wash across the bar centred on the peak, its ends softened (a spread, not
+  // a fence), with a pencil bracket along the bottom marking its span; under the line.
   const x = (i: number) => Math.max(0, Math.min(1000, (i / (n - 1)) * 1000));
   const range = (p.range ?? [])
-    .map((r) => `<rect class="range" x="${x(r.from).toFixed(1)}" width="${(x(r.to) - x(r.from)).toFixed(1)}" height="28" fill="url(#t-range-wash)"/>`)
+    .map((r) => {
+      const a = x(r.from).toFixed(1), b = x(r.to).toFixed(1);
+      return `<rect class="range" x="${a}" width="${(x(r.to) - x(r.from)).toFixed(1)}" height="28" fill="url(#t-range-wash)"/>` +
+        `<path class="range-edge" d="M${a} 23V27H${b}V23" vector-effect="non-scaling-stroke"/>`;
+    })
     .join('');
   const wash = range
-    ? '<defs><linearGradient id="t-range-wash"><stop offset="0"/><stop offset="0.3"/><stop offset="0.7"/><stop offset="1"/></linearGradient></defs>'
+    ? '<defs><linearGradient id="t-range-wash"><stop offset="0"/><stop offset="0.18"/><stop offset="0.82"/><stop offset="1"/></linearGradient></defs>'
     : '';
   return `<svg viewBox="0 0 1000 28" preserveAspectRatio="none">${wash}${areas.join('')}${range}<path class="seen" d="M0 14L${line}L1000 14Z"/>${only.join('')}` +
     `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>` +

@@ -1519,8 +1519,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     console.log('seasons: checked');
   };
-  // The usual years' band on the time bar (spread.py): a typical year shades where its peak falls in 8 years of 10, with
-  // its key line; 2026 (expected vs seen) and a species with too few years of photos draw neither. Light and dark (the
+  // The usual years' band on the time bar (spread.py): a typical year shades where its peak usually falls, centred on it,
+  // with its key line (swatch and words); two broods' shades never overlap; 2026 (expected vs seen) and a species with too few years of photos draw neither. Light and dark (the
   // phone in mobile.mjs). ONLY=band runs just this.
   const bandUnit = async ([w, h, phone], browser) => {
     const tag = `band ${phone ? 'phone' : 'desktop'}`;
@@ -1540,8 +1540,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         const pk = p.notes.find((k) => /^peak /.test(k.text))?.at;
         const r = p.range?.[0];
         if (p.range?.length !== 1 || !(r.to - r.from >= 6 && r.to - r.from <= 40)) fail(`the band is ${JSON.stringify(p.range)}`);
-        else if (!(pk > r.from && pk < r.to)) fail(`the band (${r.from}-${r.to}) misses the peak (${pk})`);
-        if (!(await page.locator('#strip .range-note').isVisible())) fail('the band has no key line');
+        else if (!(Math.abs((r.from + r.to) / 2 - pk) <= 0.5)) fail(`the band (${r.from}-${r.to}) is not centred on the peak (${pk})`);
+        if (!(await page.locator('#bar .ribbon .range-edge').count())) fail('the band has no bracket marking its span');
+        if (!(await page.locator('#strip .range-note').isVisible()) || !(await page.locator('#strip .range-note .range-key').isVisible())) fail('the band has no key line with a swatch');
         await page.waitForTimeout(1500);
         await page.screenshot({ path: `${out}/band-${phone ? 'phone' : 'desktop'}-${scheme}.png`, timeout: 60000 }).catch(() => {});
         if (scheme === 'dark') continue;
@@ -1550,6 +1551,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('2026 drew no photos seen'));
         if (await page.locator('#bar .ribbon .range').count()) fail('2026 (expected vs seen) still draws the usual years\' band');
         if (await page.locator('#strip .range-note').isVisible()) fail('2026 still shows the band\'s key line');
+        // A two-brood swallowtail: its shades come in order and never overlap (overlaps merge, never darken).
+        await page.goto(`${origin}/?species=papilio-glaucus&noauto&date=07-01`);
+        await isOn('papilio-glaucus-atlas');
+        await page.locator('#bar .ribbon .range').first().waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('the swallowtail drew no band'));
+        const sw = (await page.evaluate(() => window.__hatch.current().profile())).range ?? [];
+        if (sw.some((x, i) => i > 0 && x.from <= sw[i - 1].to)) fail(`the swallowtail's shades overlap: ${JSON.stringify(sw)}`);
         await page.goto(`${origin}/?species=forficula-auricularia&noauto&date=07-01`);
         await isOn('forficula-auricularia-atlas');
         await page.waitForTimeout(3000);

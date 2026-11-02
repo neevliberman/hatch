@@ -345,9 +345,14 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         const notes = top >= d0 && top < d0 + n ? [{ at: top - d0, text: `peak ${fmt(y, top)}` }] : [];
         const g = isDark() ? BRIGHT : palette.stages.peak;
         const seenOnly = vs ? [{ color: `rgb(${g[0]},${g[1]},${g[2]})`, seen: Array.from({ length: n }, (_, j) => at(vs.seen, d0 + j)) }] : undefined;
-        const range = sd
-          ? (seasonsOf(line)?.broods ?? []).map((b) => ({ from: b.peak - by - sd - d0, to: b.peak - by + sd - d0 })).filter((b) => b.to > 0 && b.from < n - 1)
-          : [];
+        // One wash per brood, centred on its peak; washes that overlap merge into one (a union, never darker).
+        const range: { from: number; to: number }[] = [];
+        for (const b of sd ? (seasonsOf(line)?.broods ?? []) : []) {
+          const w = { from: b.peak - by - sd - d0, to: b.peak - by + sd - d0 };
+          const last = range[range.length - 1];
+          if (last && w.from <= last.to) last.to = Math.max(last.to, w.to);
+          else if (w.to > 0 && w.from < n - 1) range.push(w);
+        }
         profiles.set(pk, (p = { bands: [], seen, notes, ...(seenOnly ? { seenOnly } : {}), ...(range.length ? { range } : {}) }));
       }
       return p;
@@ -487,7 +492,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
             ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.`]
             : []),
           ...(mode === TYPICAL && spread && spread >= MIN_BAND
-            ? [`The shade on the time bar: its peak lands within ${spread} days of the usual date in about 8 years of 10 (its photos ${FIRST_YEAR}-${ATLAS_YEAR - 1}, year by year, with chance taken out).`]
+            ? [`The shade on the time bar: where its peak usually falls, about ${spread} days either side of the usual date in most years (its photos ${FIRST_YEAR}-${ATLAS_YEAR - 1}, year by year, with chance taken out)${(seasonsOf(curve(TYPICAL))?.broods?.length ?? 1) > 1 ? '. One width for every brood, though later broods usually vary more' : ''}.`]
             : []),
           ...(warm
             ? [`Spring ${warm > 0 ? '+' : '−'}${Math.abs(warm)} °F: every day’s high and low moved that much, the network rerun. It follows warmth ${follows > 0.66 ? 'closely' : follows > 0.33 ? 'partly' : 'hardly at all'}.`]

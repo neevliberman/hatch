@@ -158,12 +158,22 @@ export class Atlas {
     });
   }
   /**
-   * How many days a species' season slides, earlier or later, in 8 years of 10 (pipeline/atlas/spread.py: each
-   * year's photos slid against the other years', chance taken out). spread.bin is ~2 KB, fetched the first time it is
-   * asked for; null for a species with too few years of photos, or when the file is missing.
+   * How many days either way a species' peak usually falls from its typical date (pipeline/atlas/spread.py: each
+   * year's photos slid against the other years', chance taken out; an 80% prediction interval). spread.bin is ~2 KB,
+   * fetched once (a failed fetch is not retried); null for a species with too few years of photos or a spread chance
+   * could make, when the file is missing, or when it was built for another species list (its header's count and hash).
    */
   spread(i: number): Promise<number | null> {
-    this.spreads ??= bin('spread.bin').then((b) => (b ? new Uint8Array(b) : ((this.spreads = null), null)));
+    this.spreads ??= bin('spread.bin').then((b) => {
+      if (!b || b.byteLength < 12) return null;
+      const head = new DataView(b);
+      const magic = String.fromCharCode(...new Uint8Array(b, 0, 4));
+      const names = this.species.map((s) => s.name).join('\n');
+      let h = 0x811c9dc5;
+      for (let k = 0; k < names.length; k++) h = Math.imul(h ^ names.charCodeAt(k), 0x01000193) >>> 0;
+      const ok = magic === 'SPR1' && head.getUint32(4, true) === this.species.length && head.getUint32(8, true) === h;
+      return ok ? new Uint8Array(b, 12) : null;
+    });
     return this.spreads.then((b) => {
       const v = b?.[i];
       return v === undefined || v === 255 ? null : v;
