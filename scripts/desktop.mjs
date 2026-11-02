@@ -547,6 +547,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const stale = (await badge.getAttribute('class')).includes('stale');
       // Amber only when the nightly run is overdue; a frozen or rebuilt file shows its age without it.
       if (stale !== (label === 'late file')) fail(stale ? 'fresh data marked stale' : 'a late file is not marked stale');
+      // Past 30 September the nightly runs have stopped for the year: it says the season is over, never an age that
+      // reads as a broken feed. In season it says how fresh the data is.
+      const said = (await badge.textContent()) ?? '';
+      if (label === 'off-season pick') {
+        if (said !== 'season over') fail(`off-season the badge reads "${said}", not "season over"`);
+        if (!/season ended Sep 30/.test((await badge.getAttribute('title')) ?? '')) fail(`off-season the badge's title reads "${await badge.getAttribute('title')}"`);
+      } else if (query.includes(inSeason) && /season over|days old/.test(said)) fail(`in season the badge reads "${said}"`);
       // The address bar follows the view on a throttle; a software-GL page can take seconds per frame, so wait for it.
       await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 10000 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
@@ -1100,12 +1107,26 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
             const [x, y] = window.__hatch.map.project(lngLat);
             return [...g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3)];
           };
-          return { sheet: at(sheet), off: at(off) };
+          // The lightest pixel of a 9 x 9 patch: the hexagon's own colour, past any tree mark or line drawn over it.
+          const lightest = (lngLat) => {
+            const [x, y] = window.__hatch.map.project(lngLat);
+            if (x < 5 || y < 5 || x > innerWidth - 5 || y > innerHeight - 5) return null; // off a phone's screen
+            const d = g.getImageData(Math.round(x * k) - 4, Math.round(y * k) - 4, 9, 9).data;
+            let best = [0, 0, 0];
+            for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > best[0] + best[1] + best[2]) best = [d[i], d[i + 1], d[i + 2]];
+            return best;
+          };
+          return { sheet: at(sheet), off: at(off), offLight: lightest(off) };
         }, [png.toString('base64'), ev.sheet, ev.off]);
         if (paper(px.sheet) && !paper(px.off)) break;
         await page.waitForTimeout(500);
       }
       if (!paper(px.sheet) || paper(px.off)) fail(`no radar sheet at its place (inside ${px.sheet}, outside ${px.off})`);
+      // The species' forecast is not part of the replay: its hexagons outside the sheet dim (map.ts OVERLAY_DIM), so
+      // they stay within a third of the paper's colour instead of the full peak green or orange.
+      if (px.offLight?.some((v, i) => v < 0.68 * px.sheet[i])) fail(`the forecast hexagons do not dim under the replay (outside ${px.offLight}, paper ${px.sheet})`);
+      // Nor is the replay that species' season: the species and season menus step aside while it is up.
+      if (await page.locator('#top .season:visible').count()) fail('the species or season menu stays up over the replay');
       const t0 = await page.locator('#radar .rd-time').textContent();
       const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000 })
         .then(() => true, () => false);
@@ -1169,6 +1190,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           .catch(async () => fail(`closing it again did not bring the Midwest back: ${JSON.stringify(await view())}`));
       }
       if (await page.locator('#dock').isHidden()) fail('the time bar did not come back');
+      if (!(await page.locator('#season').isVisible())) fail('the season menu did not come back');
       await urlIs(null);
       if (new URL(page.url()).searchParams.has('radar')) fail(`the link still names the replay after closing: ${page.url()}`);
       await shotR('3-closed');
@@ -1733,18 +1755,58 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // Species search (searchSpecies, src/atlas/names.ts): an exact or whole-word match on the common name, or a featured
+  // species, comes first ("luna" is the luna moth, not the Lunate Zale Moth; "cicada" a cicada, not the Cicada-killer;
+  // "bumble" a bumble bee, not the Bumble Flower Beetle), and Enter picks that top row. A species iNaturalist keeps as a
+  // subspecies has its English name (names.py: the Red-spotted Purple). ONLY=search runs just this.
+  const searchUnit = async (browser) => {
+    const tag = 'search';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    await ctx.route(PHOTOS, (r) => r.abort());
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      await page.locator('#species').click({ timeout: 60000 });
+      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000 });
+      // [query, the top row's key, or a test of its name]
+      for (const [q, want] of [['luna', 'luna'], ['monarch', 'monarch'], ['firefly', 'firefly'], ['cicada', /^[\w' -]* Cicada$/], ['bumble', /Bumble Bee$/],
+        ['red-spotted purple', 'limenitis-astyanax']]) {
+        await page.locator('#sp-q').fill(q);
+        const top = page.locator('#sp-list .sp-row').first();
+        await top.waitFor({ timeout: 10000 }).catch(() => {});
+        const [key, name] = await top.evaluate((b) => [b.dataset.key, b.querySelector('.sp-name').firstChild.textContent]).catch(() => [null, null]);
+        if (typeof want === 'string' ? key !== want : !want.test(name ?? '')) fail(`searching "${q}" puts "${name}" (${key}) first`);
+        if (q === 'red-spotted purple' && name !== 'Red-spotted Purple') fail(`Limenitis astyanax is listed as "${name}"`);
+      }
+      // Enter picks the top row: "luna" opens the luna moth, not a lunate one.
+      await page.locator('#sp-q').fill('luna');
+      await page.locator('#sp-q').press('Enter');
+      await page.waitForFunction(() => /^luna/.test(window.__hatch.current().id), null, { timeout: 30000 })
+        .catch(async () => fail(`Enter on "luna" opened ${await page.evaluate(() => window.__hatch.current().id)}`));
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));
   if (process.env.ONLY === 'evict') units.splice(0, units.length, evictUnit);
+  if (process.env.ONLY === 'search') units.splice(0, units.length, searchUnit);
+  if (process.env.ONLY === 'live') units.splice(0, units.length, ...cases.map((c) => (b) => liveUnit(c, b)));
+  if (process.env.ONLY === 'radar') units.splice(0, units.length, radarUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);

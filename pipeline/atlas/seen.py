@@ -17,6 +17,7 @@ or worse than expected, without being fooled by the exam being easy or hard.
   came than expected (the slide that best fits its whole season), or null when within chance or with fewer than
   MIN_TIMING photos.
   python3 pipeline/atlas/seen.py            # needs the records through YEAR, warmth.npz and model/run2/atlas.pt
+  python3 pipeline/atlas/seen.py --repick   # only the surprises again, from the shipped files (see repick)
 """
 import json
 import sys
@@ -36,6 +37,16 @@ MIN_TIMING = 30   # photos before its timing is judged
 Z = 3.0           # a gap counts once it is this many standard errors from expected
 MIN_RATIO = 1.25  # ... and at least this many times more (or fewer) photos than expected
 MIN_DAYS = 3.0    # ... or at least this many days earlier or later
+# Periodical insects: their adults come out only in a brood's year (Magicicada: 13 or 17 years apart, each brood in its
+# own region), and the network has no brood calendar, so it expects some every year. A year with almost none (2026:
+# Cassin's 17-year Cicada at 1%) only says which broods were due, not that the insect did anything odd, so they are never
+# surprises. Genera, as species.json names them.
+PERIODICAL_GENERA = frozenset({"Magicicada"})
+
+
+def periodical(name):
+    """True for a species that comes out only in its brood's years (PERIODICAL_GENERA)."""
+    return name.split(" ")[0] in PERIODICAL_GENERA
 
 
 def dispersion(o, e):
@@ -99,17 +110,35 @@ def ribbon(day_counts, last):
     return out
 
 
-def surprises(rows, more=3, fewer=3, timing=2, min_photos=100):
+def surprises(rows, more=3, fewer=3, timing=2, min_photos=100, skip=frozenset()):
     """The year's biggest surprises among species with plenty of photos (seen, or expected when fewer): the most
     photos over expected (in photos, so a widespread species' boom outranks a rare one's few extra), the furthest
-    under (as a share: an absent year), and the furthest early or late. Species indices, biggest first, none twice."""
-    over = sorted((i for i, r in enumerate(rows) if r[2] and r[2] > 1 and r[0] >= min_photos), key=lambda i: rows[i][1] - rows[i][0])
-    under = sorted((i for i, r in enumerate(rows) if r[2] and r[2] < 1 and r[1] >= min_photos), key=lambda i: rows[i][2])
-    slid = sorted((i for i, r in enumerate(rows) if r[3] and r[0] >= 2 * min_photos), key=lambda i: -abs(rows[i][3]))
+    under (as a share: an absent year), and the furthest early or late. Species indices, biggest first, none twice.
+    `skip`: indices never listed (the periodical species: a brood's off-year is not a surprise)."""
+    ok = [i for i in range(len(rows)) if i not in skip]
+    over = sorted((i for i in ok if rows[i][2] and rows[i][2] > 1 and rows[i][0] >= min_photos), key=lambda i: rows[i][1] - rows[i][0])
+    under = sorted((i for i in ok if rows[i][2] and rows[i][2] < 1 and rows[i][1] >= min_photos), key=lambda i: rows[i][2])
+    slid = sorted((i for i in ok if rows[i][3] and rows[i][0] >= 2 * min_photos), key=lambda i: -abs(rows[i][3]))
     out = []
     for lst, k in ((over, more), (under, fewer), (slid, timing)):
         out += [i for i in lst if i not in out][:k]
     return out
+
+
+def periodicals(names):
+    """The indices of the periodical species in a list of scientific names."""
+    return frozenset(i for i, s in enumerate(names) if periodical(s))
+
+
+def repick():
+    """Pick the surprises again from the shipped seen-YEAR.json and species.json (no records or network needed): for a
+    change to surprises() alone, such as a species it now leaves out."""
+    path = OUT / f"seen-{YEAR}.json"
+    f = json.loads(path.read_text())
+    names = [s["name"] for s in json.loads((OUT / "species.json").read_text())[:-1]]
+    f["surprises"] = surprises(f["species"][:-1], skip=periodicals(names))
+    path.write_text(json.dumps(f, separators=(",", ":")))
+    print("surprises:", ", ".join(names[i] for i in f["surprises"]))
 
 
 @torch.no_grad()
@@ -148,7 +177,7 @@ def main():
         ratio, shift = judge(seen[s], expected[s], phi, phi_t)
         rows.append([int(seen[s].sum()), round(float(expected[s].sum()), 1), ratio, shift])
 
-    picks = surprises(rows[:-1])
+    picks = surprises(rows[:-1], skip=periodicals(sp))
     o, e = ribbon(seen, last), ribbon(expected, last)
     top = np.maximum(o.max(1), e.max(1))[:, None]
     scaled = np.stack([e, o], 1) / np.where(top > 0, top, 1)[:, None]
@@ -168,4 +197,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    repick() if sys.argv[1:] == ["--repick"] else main()

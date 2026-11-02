@@ -72,6 +72,10 @@ export interface Padding {
   dock?: number;
 }
 
+/** How strongly the species' hexagons still show while an overlay (a radar replay) is up: a hint of the map, not a story.
+ * Per layer, and a place can hold two (a shore copy, a day blending into the next), so it is kept low. */
+const OVERLAY_DIM = 0.15;
+
 interface Opts {
   container: HTMLDivElement;
   registry: LayerRegistry;
@@ -529,12 +533,15 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }).map(recoloured))
       .map((l) => (l.props.autoHighlight ? l.clone({ highlightedObjectIndex: hovered?.id === l.id ? hovered.index : -1 }) : l));
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
-    const hexes = dataLayers.filter((l) => isHexes(l.id));
+    const on = overlay.length > 0;
+    // While an overlay tells its story (a radar replay), the species' forecast is not part of it: its hexagons fade to
+    // OVERLAY_DIM, as the sighting dots stand down, so their peak colours never read as echo or compete with it.
+    const hexes = dataLayers.filter((l) => isHexes(l.id))
+      .map((l) => (on ? l.clone({ opacity: (l.props.opacity ?? 1) * OVERLAY_DIM, pickable: false, autoHighlight: false }) : l));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
     // An overlay goes over the woods' tree marks and under the lakes, roads and rivers; its over-water part just after
     // the last layer of water: the lakes, or zoomed in, the shore (lakes drawn again over the state lines, so a coast
     // never shows as an ink line off the shore). So a swarm over a lake shows, and the rivers stay on top of it.
-    const on = overlay.length > 0;
     const cut = on ? mid.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
     const at = cut < 0 ? mid.length : cut;
     const dry = mid.reduce((d, l, i) => (/^water-|^(sea|lakes)-top$|^shore-wet$/.test(l.id) ? i + 1 : d), at);

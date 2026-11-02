@@ -28,7 +28,7 @@ import { animating, hexFade, ripples } from './motion';
 import { fineDays, fineLevel, fineManifest, forgetFine, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { makeFront } from './front';
 import { dueOf, isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
-import { isStale, type Live } from './liveData';
+import { isStale, seasonOver, type Live } from './liveData';
 import { MOTH_NIGHT_NOTE, mothNightLine } from './activity';
 import { modelChecks, windowCheck } from './replayData';
 import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
@@ -146,7 +146,7 @@ export function replayTimeSpec(mode: Mode, month?: number, day?: number, now = D
       end: Date.UTC(y, 8, 30),
       stepMs: TimeAxis.DAY,
       initial: month === undefined ? live.asOf : Date.UTC(y, month, day ?? 1),
-      asOf: { at: live.asOf, stale: isStale(live, now) },
+      asOf: { at: live.asOf, stale: isStale(live, now), over: seasonOver(live, now) },
     };
   }
   month ??= 5;

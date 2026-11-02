@@ -776,8 +776,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .place-water { font: 600 17px/18px var(--font-note); color: var(--place-water); }
 .place-park { font: 600 16px/18px var(--font-note); color: var(--place-park); }
 
-/* Phones: the species menu shows just the species' own sketch mark (src/species.ts sets --mark), one small square
-   however long the list grows; opening it lists the full names. The header's mark steps aside so it isn't doubled. */
+/* Phones: the species button names the species on the map (a group sketch would show every moth as the luna), in two
+   short lines at most, cut with an ellipsis. It takes the title's room: the title steps aside while there is a species
+   menu (the page's name stays in the tab, and for screen readers), so the header stays one row. */
 @media (max-width: 430px) {
   /* Both menus draw their own arrow: their text is see-through (a face drawn over it), and so would the native one be. */
   .season select { --chev: var(--chev-img) no-repeat right 10px center / 10px 6px;
@@ -786,10 +787,11 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .season.species { flex: none; } /* the label shrinking would cap the select's width (max-width: 100%) */
   .season.species select { width: 72px; padding: 0; background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev), var(--panel); }
   .season.species option, .season.species optgroup { color: var(--text); background: var(--panel-solid); }
-  .season.species .pick-btn .sp-face { display: none; } /* the mark alone; its name is the button's label */
-  .season.species .pick-btn { width: 72px; padding: 0; color: transparent;
-    background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev-img) no-repeat right 10px center / 10px 6px, var(--panel); }
-  #top:has(.species:not([hidden])) .brand .mark { display: none; }
+  .season.species:has(.pick-btn) { flex: 1 1 0; min-width: 72px; }
+  /* No arrow: the name is the whole button, and a tap on it opens the list. */
+  .season.species .pick-btn { width: 100%; max-width: none; padding: 0 8px; font-size: 13px; line-height: 1.15; background: var(--panel); }
+  .season.species .pick-btn .sp-face { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; }
+  #app:not(.radar-on) #top:has(.species:not([hidden])) .brand { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
   /* The season menu's face shows just the season (main.ts sets data-face); the open menu keeps the counts. */
   .season:not(.species) { position: relative; }
   .season:not(.species) option { color: var(--text); background: var(--panel-solid); }
@@ -808,8 +810,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sc-try li::marker { color: var(--ac); }
 
 /* Radar replay (src/radar/): a specimen label in the key's place, with its own play button, so the time bar, key, hex
-   cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. */
-#app.radar-on :is(#legend, #probe, #dock, #recenter, #asleep, #end-note, #explore) { display: none !important; }
+   cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. The species
+   and season menus step aside too: the replay is one real evening, not that species' season (its hexagons dim, map.ts). */
+#app.radar-on :is(#legend, #probe, #dock, #recenter, #asleep, #end-note, #explore, #top .season) { display: none !important; }
+#app.radar-on #theme-btn { margin-left: auto; }
 .ex-radars { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 10px; }
 .ex-radars p { flex: 1 0 100%; margin: 0; font-size: 12px; color: var(--muted); }
 .ex-radar { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 4px 12px 4px 9px; font: inherit; font-size: 13px; font-weight: 700;

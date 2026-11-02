@@ -138,6 +138,47 @@ def test_surprises_pick_the_biggest_gaps_with_enough_photos():
     assert surprises(rows) == [0, 2, 3]  # 10x on 50 photos is too few to list
 
 
+def test_surprises_leave_out_periodical_cicadas():
+    """A periodical cicada's brood off-year (1% of expected) is not a surprise; the next real shortfall takes its place."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.seen import periodical, periodicals, surprises
+    assert periodical("Magicicada cassini") and periodical("Magicicada septendecim")
+    assert not periodical("Neotibicen tibicen") and not periodical("Danaus plexippus")
+    names = ["Danaus plexippus", "Magicicada cassini", "Neotibicen tibicen"]
+    rows = [[500, 100, 5.0, None], [5, 400, 0.01, None], [100, 400, 0.25, None]]
+    assert surprises(rows) == [0, 1, 2]
+    assert surprises(rows, skip=periodicals(names)) == [0, 2]
+    # The shipped list (seen.py --repick) has none.
+    out = Path(__file__).resolve().parents[2] / "public/atlas"
+    species = json.loads((out / "species.json").read_text())
+    picks = json.loads((out / "seen-2026.json").read_text())["surprises"]
+    assert picks and not [species[i]["name"] for i in picks if periodical(species[i]["name"])]
+
+
+def test_names_fill_in_english_from_the_other_sources():
+    """names.py: iNaturalist's subspecies stands in for GBIF's species, and GBIF's English names are voted on, never a
+    one-word or "species group" name. The shipped list names the Red-spotted Purple."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.names import match_inat, pick_english, tidy
+    found = [{"id": 490118, "name": "Limenitis arthemis arthemis × astyanax", "rank": "infrahybrid", "is_active": True},
+             {"id": 58585, "name": "Limenitis arthemis astyanax", "rank": "subspecies", "is_active": True}]
+    assert match_inat("Limenitis astyanax", found)["id"] == 58585
+    assert match_inat("Limenitis astyanax", found[:1]) is None
+    assert match_inat("Actias luna", [{"id": 1, "name": "Actias luna", "rank": "species"}])["id"] == 1
+    assert tidy("Northern Leaf-Footed Bug") == "Northern Leaf-footed Bug"
+    assert tidy("collared water scavenger beetle") == "Collared Water Scavenger Beetle"
+    assert pick_english([("Wasp", "Vermont"), ("Cranefly", "GRIIS")]) is None
+    assert pick_english([("Aethes angustana species group", "Catalogue of Life")]) is None
+    assert pick_english([("Flower moth", "GRIIS"), ("Kentish Owlet", "Catalogue of Life"), ("Kentish owlet", "Belgium"),
+                         ("Flower moth", "Vermont")]) == "Kentish Owlet"
+    species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
+    purple = next(s for s in species if s["name"] == "Limenitis astyanax")
+    assert purple["common"] == "Red-spotted Purple" and purple["taxon"] == 58585 and purple["family"] == "Nymphalidae"
+    assert sum(not s.get("common") for s in species) <= 129  # no English name in iNaturalist or GBIF (names.py run)
+
+
 
 # spread.py: the time bar's band. Each case is a few runs of a simulated species; a "null" never moves between years,
 # so it should almost never get a band.

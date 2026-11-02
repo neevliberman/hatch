@@ -527,7 +527,8 @@ function start() {
   };
   // The one-file preview has no species files next to it, so it offers luna only.
   if (!__BASEMAP__) speciesPick.button.parentElement!.hidden = true;
-  // On narrow phones the closed menu shows just the species' sketch mark (style.css), so it stays one small square.
+  // The title's sketch mark, by the species' group. On narrow phones the title steps aside and the species button names
+  // the species instead (style.css): a group sketch can't tell one moth from another.
   const markImg = $('mark') as HTMLImageElement;
   let markSeq = 0;
   const showMark = () => {
@@ -536,7 +537,6 @@ function start() {
     void markFor(sketch).then((url) => {
       if (seq !== markSeq) return; // the species or the theme changed meanwhile
       markImg.src = url;
-      speciesPick.button.style.setProperty('--mark', `url("${url}")`);
     });
   };
   showMark();

@@ -15,8 +15,9 @@ export interface TimeSpec {
   initial?: number;
   /** Custom date label, e.g. "Jun 10 · typical year" when the year itself means nothing. */
   label?: (ms: number) => string;
-  /** Live data: the last day of observed weather (later days are forecast), and whether the nightly file looks late. */
-  asOf?: { at: number; stale: boolean };
+  /** Live data: the last day of observed weather (later days are forecast), whether the nightly file looks late, and
+   * whether its season is over (past 30 September: a frozen file is then normal). */
+  asOf?: { at: number; stale: boolean; over?: boolean };
 }
 
 /**
