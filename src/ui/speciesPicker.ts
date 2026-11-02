@@ -1,5 +1,5 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, json, loadIndex, loadOffSchedule, loadSurprises, offNote, outOn, seasonDues, type AtlasSpecies, type Surprise } from '../atlas/index';
+import { atlasKey, json, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
 import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
@@ -8,6 +8,7 @@ import { loadWatch, saveWatch, WATCH_MAX } from './watch';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
 const offCaption = (year: number) => `${year}: furthest off schedule`;
+const quietCaption = (year: number) => `${year}: fewer photos than expected`;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** Where the browse stands: every insect, one order, or one family in it. */
@@ -51,6 +52,7 @@ export function mountSpeciesPicker(
   let all: AtlasSpecies[] | null = null;
   let odd: Surprise[] = [];
   let off: [number, number][] = [];
+  let quiet: Quiet[] = [];
   let path: Path = {};
   let q = '';
   let refocus = false;
@@ -70,12 +72,14 @@ export function mountSpeciesPicker(
     <ul id="sp-list" aria-label="Species"></ul>
     <ul id="sp-odd" class="sp-strip" aria-label="${surpriseYear} surprises" hidden></ul>
     <ul id="sp-off" class="sp-strip" aria-label="${offCaption(surpriseYear)}" hidden></ul>
+    <ul id="sp-quiet" class="sp-strip" aria-label="${quietCaption(surpriseYear)}" hidden></ul>
     <div class="sp-tree" hidden></div>`;
   const input = sheet.querySelector<HTMLInputElement>('#sp-q')!;
   const crumbs = sheet.querySelector<HTMLElement>('.sp-crumbs')!;
   const list = sheet.querySelector<HTMLUListElement>('#sp-list')!;
   const oddStrip = sheet.querySelector<HTMLUListElement>('#sp-odd')!; // the surprises, as a second strip over the tree
   const offStrip = sheet.querySelector<HTMLUListElement>('#sp-off')!; // the most off-schedule, a third strip
+  const quietStrip = sheet.querySelector<HTMLUListElement>('#sp-quiet')!; // the quietest in photos, a fourth
   const treeHost = sheet.querySelector<HTMLElement>('.sp-tree')!;
   const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
 
@@ -234,6 +238,17 @@ export function mountSpeciesPicker(
         return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
       .join('');
+  // The species with the fewest photos against expected: "5 of 336" photos seen of those expected (photos, not abundance).
+  const quietRows = () =>
+    quiet
+      .map(({ i, seen, expected }) => {
+        const s = all?.find((x) => x.i === i);
+        const n = `<span class="sp-n" title="${seen} photos so far, ${expected} expected">${seen} of ${expected}</span>`;
+        return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
+      })
+      .join('');
+  const quietList = () =>
+    quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear)}</li>${quietRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
   const offList = () =>
     off.length && all ? `<li class="sp-sec">${offCaption(surpriseYear)}</li>${offRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
   const surpriseRows = () => (odd.length && all ? `<li class="sp-sec">${surpriseYear} surprises</li>${surprises()}` : '');
@@ -252,6 +267,7 @@ export function mountSpeciesPicker(
     list.classList.toggle('sp-strip', !treeHost.hidden);
     oddStrip.hidden = treeHost.hidden || !odd.length;
     offStrip.hidden = treeHost.hidden || !off.length;
+    quietStrip.hidden = treeHost.hidden || !quiet.length;
     renderWatch();
     if (!all) {
       list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Loading the rest…</li>`;
@@ -268,6 +284,7 @@ export function mountSpeciesPicker(
       list.innerHTML = featuredRows();
       oddStrip.innerHTML = `<li class="sp-lab">${surpriseYear} surprises</li>${surprises()}`;
       offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${offCaption(surpriseYear)}</li>${offRows()}`;
+      quietStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${quietCaption(surpriseYear)}</li>${quietRows()}`;
       treeCrumbs?.();
       tree.shown();
       glow();
@@ -279,7 +296,7 @@ export function mountSpeciesPicker(
     crumbs.innerHTML = steps.join('<span aria-hidden="true"> › </span>');
     if (!path.order) {
       list.innerHTML =
-        `<li class="sp-sec">Featured forecasts</li>${featuredRows()}${surpriseRows()}${offList()}${all.length ? '<li class="sp-sec">Browse</li>' : ''}` +
+        `<li class="sp-sec">Featured forecasts</li>${featuredRows()}${surpriseRows()}${offList()}${quietList()}${all.length ? '<li class="sp-sec">Browse</li>' : ''}` +
         tally(all, 'order').map(([o, n]) => counted(group(ORDER_NAMES[o] ?? o, o, `data-order="${esc(o)}"`), n)).join('');
     } else if (!path.family) {
       const inOrder = all.filter((s) => s.order === path.order);
@@ -313,9 +330,10 @@ export function mountSpeciesPicker(
     // Touch screens: land on the close button instead, so the keyboard doesn't cover the tree until search is tapped.
     (matchMedia('(pointer: fine)').matches ? input : sheet.querySelector<HTMLElement>('.sp-x')!).focus();
     if (!all)
-      void Promise.all([loadIndex(), loadSurprises(surpriseYear), loadOffSchedule(surpriseYear)]).then(([s, u, o]) => {
+      void Promise.all([loadIndex(), loadSurprises(surpriseYear), loadOffSchedule(surpriseYear), loadQuiet(surpriseYear)]).then(([s, u, o, qu]) => {
         odd = u?.list ?? [];
         off = o ?? [];
+        quiet = qu ?? [];
         if (s) all = s;
         if (s) void loadTree();
         else list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Couldn’t load the other insects. Close and try again.</li>`;
@@ -364,7 +382,7 @@ export function mountSpeciesPicker(
     }
     if (e.target === treeHost.querySelector('canvas')) return; // the tree walks its own branches
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    const items = [...sheet.querySelectorAll<HTMLButtonElement>('#sp-watch:not([hidden]) .sp-go, #sp-list button, #sp-odd:not([hidden]) button, #sp-off:not([hidden]) button')];
+    const items = [...sheet.querySelectorAll<HTMLButtonElement>('#sp-watch:not([hidden]) .sp-go, #sp-list button, #sp-odd:not([hidden]) button, #sp-off:not([hidden]) button, #sp-quiet:not([hidden]) button')];
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
     const next = e.key === 'ArrowDown' ? (i < 0 ? 0 : Math.min(items.length - 1, i + 1)) : i <= 0 ? -1 : i - 1;
     e.preventDefault();

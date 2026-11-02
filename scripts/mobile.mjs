@@ -459,7 +459,7 @@ if (existsSync(join(distDir, 'radar'))) {
   // mangled saved value never breaks the page. The smallest phone of each engine, both ways up.
   for (const [phone, engine, pw0, ph0, dpr] of small) {
     for (const orient of ['portrait', 'landscape']) {
-      if (!mine()) continue;
+      if ((process.env.ONLY && process.env.ONLY !== 'watch') || !mine()) continue;
       const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
       const tag = `watch ${phone} ${orient}`;
       const fail = (m) => problems.push(`${tag}: ${m}`);
@@ -516,6 +516,42 @@ if (existsSync(join(distDir, 'radar'))) {
           else if (await page.locator('#sp-watch .sp-go').count()) fail(`with the saved watch list ${bad}, the Watching row is not empty`);
         }
         await page.evaluate(() => localStorage.removeItem('hatch-watch'));
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+      console.log(`${tag}: checked`);
+    }
+  }
+  // The "fewer photos than expected" strip (seen-2026.json), over http: it shows in the species sheet with a photo-only caption,
+  // its chips read "seen of expected", stay on screen, and one opens its species on 2026. ONLY=quiet runs just this.
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    for (const orient of ['portrait', 'landscape']) {
+      if ((process.env.ONLY && process.env.ONLY !== 'quiet') || !mine()) continue;
+      const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
+      const tag = `quiet ${phone} ${orient}`;
+      const fail = (m) => problems.push(`${tag}: ${m}`);
+      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      try {
+        await page.goto(`${origin}/?noauto&today=2027-01-15`);
+        await page.waitForTimeout(1500);
+        await page.locator('#species').click({ timeout: 20000 });
+        const chip = page.locator('#sp-quiet [data-season="2026"]');
+        await chip.first().waitFor({ timeout: 15000 }).catch(() => fail('the species sheet shows no quiet strip'));
+        const cap = (await page.locator('#sp-quiet .sp-lab').textContent()) ?? '';
+        if (!/photos/i.test(cap) || /declin|decreas|fewer insects|abundan/i.test(cap)) fail(`the quiet strip's caption reads "${cap}"`);
+        const notes = await page.locator('#sp-quiet .sp-n').allTextContents();
+        if (!notes.length || notes.some((t) => !/^\d+ of \d+$/.test(t))) fail(`the quiet chips read ${notes.join(' | ')}`);
+        const sb = await page.locator('#sp-quiet').boundingBox();
+        if (!sb || sb.x < 0 || sb.x + sb.width > width + 1 || sb.y + sb.height > height + 1) fail('the quiet strip is off-screen');
+        await page.screenshot({ path: `${out}/quiet-${phone}-${orient}.png` });
+        const key = await chip.first().getAttribute('data-key');
+        await chip.first().click({ timeout: 20000 });
+        await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`the first quiet species (${key}) did not open`));
+        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 }).catch(() => fail('a quiet species did not open on 2026'));
       } catch (e) {
         fail(`stopped: ${e.message.split('\n')[0]}`);
       }
