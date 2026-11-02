@@ -26,6 +26,22 @@ async function nearTown(lng: number, lat: number): Promise<string | undefined> {
   return best;
 }
 
+/** Monarchs people photographed within 50 km, three days either side (iNaturalist, research grade or awaiting ID). */
+const seenCache = new Map<string, Promise<number | null>>();
+function seenNear(lat: number, lng: number, dayMs: number): { n: Promise<number | null>; href: string } {
+  const d = (k: number) => new Date(dayMs + k * 864e5).toISOString().slice(0, 10);
+  const q = `taxon_id=48662&lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}&radius=50&d1=${d(-3)}&d2=${d(3)}&quality_grade=research,needs_id`;
+  let n = seenCache.get(q);
+  if (!n) {
+    n = fetch(`https://api.inaturalist.org/v1/observations?${q}&per_page=0`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (typeof j?.total_results === 'number' ? j.total_results : null))
+      .catch(() => null);
+    seenCache.set(q, n);
+  }
+  return { n, href: `https://www.inaturalist.org/observations?${q}` };
+}
+
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 export const exoEnabled = () => new URLSearchParams(location.search).has('exo');
@@ -57,6 +73,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
   let at = 0;
   let lastKey = '';
   let place: string | undefined;
+  let seen: { n: number | null; href: string } | null = null;
   let opener: HTMLElement | null = null;
 
   /** Hand Exo the day: where, when, and the hourly air, cloud and wind. */
@@ -69,7 +86,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     const hour = nowH >= 0 && nowH < 24 ? nowH : 10;
     const where = `${place ? `Near ${place}` : 'Here'} · ${fmtDate(at)}${day.note === 'Recorded' ? '' : ` · ${day.note.toLowerCase()}`}`;
     frame.contentWindow?.postMessage(
-      { type: 'exo-day', place: where, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom },
+      { type: 'exo-day', place: where, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom, seen: seen?.n ?? null, seenHref: seen?.href },
       location.origin,
     );
   };
@@ -104,6 +121,9 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     }
     day = got;
     place = town;
+    const s = seenNear(lat, lng, got.dayMs);
+    seen = { n: await s.n, href: s.href };
+    if (key !== lastKey) return;
     if (live) noteEl.textContent = '';
     push();
   };
