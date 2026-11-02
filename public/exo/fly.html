@@ -96,14 +96,15 @@ function reset() {
 // ---------- input: absolute finger height steers; keys nudge ----------
 let ptrDown = false, mouseSeen = false;
 const setTarget = y => { bf.target = clamp(y, 56, groundY() - 14); };
-cv.addEventListener('pointerdown', e => { ptrDown = true; cv.setPointerCapture(e.pointerId); setTarget(e.clientY); });
+cv.addEventListener('pointerdown', e => { ptrDown = true; ptrId = e.pointerId; cv.setPointerCapture(e.pointerId); setTarget(e.clientY); });
 cv.addEventListener('pointermove', e => { if (ptrDown || (e.pointerType === 'mouse' && (mouseSeen = true))) setTarget(e.clientY); });
-cv.addEventListener('pointerup', () => { ptrDown = false; });
-cv.addEventListener('pointercancel', () => { ptrDown = false; });
+let ptrId = -1;
+cv.addEventListener('pointerup', e => { if (e.pointerId === ptrId) ptrDown = false; });
+cv.addEventListener('pointercancel', e => { if (e.pointerId === ptrId) ptrDown = false; });
 addEventListener('keydown', e => {
-  if (e.key === 'ArrowUp' || e.key === 'w') { setTarget(bf.target - 60); e.preventDefault(); }
-  else if (e.key === 'ArrowDown' || e.key === 's') { setTarget(bf.target + 60); e.preventDefault(); }
-  else if (e.key === 'r' && run.mode === 'end') reset();
+  if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') { setTarget(bf.target - 60); e.preventDefault(); }
+  else if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') { setTarget(bf.target + 60); e.preventDefault(); }
+  else if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && run.mode === 'end') reset();
 });
 $('cb').addEventListener('click', () => { if (run.mode === 'end') reset(); });
 
@@ -151,7 +152,8 @@ function step(dt) {
   // warmth: sun and thermals heat, shade cools, working muscles make a little heat
   const effortHeat = bf.basking ? 0 : 0.03;
   const aloftNow = 1 - clamp(bf.y / gy, 0, 1);                    // thin air up high is colder
-  const dW = (bf.basking ? 0.14 : 0.085) * (1 - sh) + th * 0.2 - sh * 0.1 - (0.045 + 0.07 * aloftNow) + effortHeat;
+  const shw = bf.basking ? 0 : sh;                                  // a grounded butterfly can always warm up
+  const dW = (bf.basking ? 0.14 : 0.085) * (1 - shw) + th * 0.2 - shw * 0.1 - (bf.basking ? 0.045 : 0.045 + 0.07 * aloftNow) + effortHeat;
   bf.warm = clamp(bf.warm + dW * dt, 0, 1);
   const cap = smooth(0.18, 0.5, bf.warm) * (bf.fuel > 0.02 ? 1 : 0.55);
 
@@ -165,13 +167,12 @@ function step(dt) {
   bf.y += bf.vy * dt;
 
   // ground: land and bask when cold, bounce off when warm
-  bf.basking = false;
   if (bf.y > gy - 10) {
     bf.y = gy - 10; bf.vy = 0;
-    if (cap < 0.62) bf.basking = true; else bf.vy = -90;
-  }
+    if (cap < 0.62) bf.basking = true;
+    else if (!bf.basking || cap > 0.75) { bf.basking = false; bf.vy = -90; }
+  } else bf.basking = false;
   if (bf.y < 56) { bf.y = 56; bf.vy = Math.max(0, bf.vy); }
-  if (bf.basking && cap > 0.75) bf.basking = false;
 
   // fuel: climbing burns it, soaring nearly doesn't, flowers refill
   const soaring = th > 0.3 && cap > 0.7;
@@ -215,7 +216,7 @@ function step(dt) {
 
   if (run.hintT > 0 && (run.hintT -= dt) <= 0) $('hint').classList.remove('on');
 }
-function relay(g, t, p) { run.mode = 'relay'; run.pause = 3; run.gen = g; card({ t, p }); bf.warm = Math.max(bf.warm, 0.55); bf.fuel = Math.max(bf.fuel, 0.6); }
+function relay(g, t, p) { run.mode = 'relay'; run.hintT = 0; $('hint').classList.remove('on'); run.pause = 3; run.gen = g; card({ t, p }); bf.warm = Math.max(bf.warm, 0.55); bf.fuel = Math.max(bf.fuel, 0.6); }
 
 // ---------- drawing helpers: a pen that wobbles a little ----------
 function wob(x0, y0, x1, y1, seedv, amp = 1.3) {
@@ -403,7 +404,8 @@ function frame(now) {
   else { drawSky(run.t); drawClouds(run.t); drawGround(run.t); drawButterfly(run.t); drawSparks(dt); }
 
   const prog = clamp(run.pos / LEN, 0, 1);
-  $('gen').innerHTML = `Gen <b>${run.gen}</b> · ${Math.max(0, Math.round(KM * (1 - prog) / 10) * 10).toLocaleString()} km to go`;
+  const gt = `Gen <b>${run.gen}</b> · ${Math.max(0, Math.round(KM * (1 - prog) / 10) * 10).toLocaleString()} km to go`;
+  if (gt !== run.gt) { run.gt = gt; $('gen').innerHTML = gt; }
   $('fwarm').style.width = Math.round(bf.warm * 100) + '%';
   $('ffuel').style.width = Math.round(bf.fuel * 100) + '%';
   $('bwarm').classList.toggle('low', bf.warm < 0.3);
