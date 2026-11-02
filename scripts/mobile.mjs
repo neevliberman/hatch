@@ -171,6 +171,11 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     await tap('#info-btn');
     await page.waitForTimeout(400);
     await page.locator('#drawer.open').waitFor({ timeout: 8000 }).catch(() => {}); // a busy runner can open it late
+    if (!(await page.locator('#drawer.open').count())) {
+      // The first tap can land before a starved runner has wired the button: try once more, with a longer wait.
+      await tap('#info-btn');
+      await page.locator('#drawer.open').waitFor({ timeout: 25000 }).catch(() => {});
+    }
     if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
     // Let the slide-in finish before measuring, or a slow machine measures it mid-way and taps the drawer itself.
     await page.waitForFunction(() => document.querySelector('#drawer').getAnimations().length === 0, null, { timeout: 3000 }).catch(() => {});
