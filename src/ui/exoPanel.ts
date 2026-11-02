@@ -50,6 +50,28 @@ function seenNear(lat: number, lng: number, dayMs: number): { n: Promise<number 
   return { n, href: `https://www.inaturalist.org/observations?${q}` };
 }
 
+/** When the first monarchs usually reach this place in spring: for each year in Hatch's monarch tracker (2019-2025),
+ * the earliest sighting within 80 km; the middle of those years. Needs at least 3 years with a sighting nearby.
+ * Analogy: the map's arrival front is a tide line; this reads where the tide line usually is on this one beach. */
+let front: Promise<[number, number, number, number][]> | null = null;
+async function usualArrival(lat: number, lng: number): Promise<{ doy: number; years: number } | null> {
+  front ??= fetch(new URL('species/monarch/front.json', document.baseURI).href)
+    .then((r) => (r.ok ? r.json() : { sightings: [] }))
+    .then((j) => ((j.sightings ?? []) as number[][]).map((s) => [s[1], s[2], s[3], s[4]] as [number, number, number, number]))
+    .catch(() => []);
+  const k = Math.cos((lat * Math.PI) / 180);
+  const r2 = (80 / 111) ** 2;
+  const first = new Map<number, number>();
+  for (const [y, doy, la, lo] of await front) {
+    if (((lo - lng) * k) ** 2 + (la - lat) ** 2 > r2) continue;
+    if (!(first.get(y)! <= doy)) first.set(y, doy);
+  }
+  if (first.size < 3) return null;
+  const d = [...first.values()].sort((a, b) => a - b);
+  const m = d.length >> 1;
+  return { doy: d.length % 2 ? d[m]! : Math.round((d[m - 1]! + d[m]!) / 2), years: d.length };
+}
+
 const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 export const exoEnabled = () => new URLSearchParams(location.search).has('exo');
@@ -82,6 +104,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
   let lastKey = '';
   let place: string | undefined;
   let seen: { n: number | null; href: string } | null = null;
+  let arrive: { doy: number; years: number } | null = null;
   let opener: HTMLElement | null = null;
 
   /** Hand Exo the day: where, when, and the hourly air, cloud and wind. */
@@ -94,10 +117,17 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     const hour = nowH >= 0 && nowH < 24 ? nowH : 10;
     const where = `${place ? `Near ${place}` : 'Here'} · ${fmtDate(at)}${day.note === 'Recorded' ? '' : ` · ${day.note.toLowerCase()}`}`;
     frame.contentWindow?.postMessage(
-      { type: 'exo-day', place: where, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom },
+      { type: 'exo-day', place: where, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom, ...arrivalWords() },
       location.origin,
     );
     pushSeen();
+  };
+  /** "Usually here from May 20", and whether this day is well before that (most springs, none here yet). */
+  const arrivalWords = () => {
+    if (!arrive) return {};
+    const y = new Date(at).getUTCFullYear();
+    const doy = Math.round((at - Date.UTC(y, 0, 1)) / 864e5) + 1;
+    return { arrive: fmtDate(Date.UTC(y, 0, arrive.doy)), early: doy < arrive.doy - 7 && doy > 31 };
   };
   /** The sightings count goes on its own, whenever it arrives: the day never waits for iNaturalist. */
   const pushSeen = () => {
@@ -124,7 +154,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     lastKey = key;
     if (!root.classList.contains('live')) noteEl.textContent = `Reading ${fmtDate(at)}'s weather…`;
     const live = root.classList.contains('live');
-    const [got, town] = await Promise.all([weather(lat, lng, at), spot.label ? Promise.resolve(spot.label) : nearTown(lng, lat)]);
+    const [got, town, usual] = await Promise.all([weather(lat, lng, at), spot.label ? Promise.resolve(spot.label) : nearTown(lng, lat), usualArrival(lat, lng)]);
     if (key !== lastKey) return; // the pin or the date moved on
     if (!got) {
       // keep showing the day already open; say so only if there is nothing on screen
@@ -134,6 +164,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     }
     day = got;
     place = town;
+    arrive = usual;
     seen = null;
     if (live) noteEl.textContent = '';
     push();

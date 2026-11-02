@@ -109,7 +109,7 @@ html.embed .cap { right: calc(52px + env(safe-area-inset-right, 0px)); } /* insi
   <div class="common">Monarch · <button id="sex" class="sex" aria-label="Sex: male. Tap for female" title="Switch male / female">male</button> · wingspan 9–10 cm</div>
   <h1>Danaus plexippus</h1>
   <div class="fact" id="fact" aria-live="polite">&nbsp;</div>
-  <div class="sim" style="flex-wrap:wrap;row-gap:0"><span id="therm-t">Thorax</span><span class="therm" aria-hidden="true"><i id="therm-fill"></i><s id="therm-need"></s></span><span id="sim-env" style="flex-basis:100%;font-size:.88em;opacity:.8"></span><a id="seen" hidden target="_blank" rel="noopener noreferrer" style="flex-basis:100%;font-size:.88em;color:inherit;pointer-events:auto"></a></div>
+  <div class="sim" style="flex-wrap:wrap;row-gap:0"><span id="therm-t">Thorax</span><span class="therm" aria-hidden="true"><i id="therm-fill"></i><s id="therm-need"></s></span><span id="sim-env" style="flex-basis:100%;font-size:.88em;opacity:.8"></span><span id="arrive" hidden style="flex-basis:100%;font-size:.88em;opacity:.8"></span><a id="seen" hidden target="_blank" rel="noopener noreferrer" style="flex-basis:100%;font-size:.88em;color:inherit;pointer-events:auto"></a></div>
 </div>
 
 <div class="rail" id="rail">
@@ -2136,6 +2136,9 @@ const REAL = (() => {
     let top = R.rise, el = -1; for (let h = R.rise; h <= R.set; h += .1) { const e = sunAt(h).el; if (e > el) { el = e; top = h; } }
     R.noonAz = sunAt(top).az; R.dev = Math.max(...[R.rise, R.set].map(h => Math.abs(Math.atan2(Math.sin(sunAt(h).az - R.noonAz), Math.cos(sunAt(h).az - R.noonAz)))));
     document.querySelector('.cap .common').firstChild.textContent = m.place + ' · '; document.querySelector('.cap .common').lastChild.textContent = '';
+    /* Hatch's tracker: when the first monarchs usually reach this place, and whether this day is well before that */
+    const ar = document.getElementById('arrive'); ar.hidden = !m.arrive;
+    ar.textContent = m.arrive ? (m.early ? `most springs, none here until ~${m.arrive}` : `first monarchs here usually ~${m.arrive}`) : '';
     const h0 = m.hour != null ? m.hour : 10;
     R.setHour(h0); R.opened = performance.now();
     // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
