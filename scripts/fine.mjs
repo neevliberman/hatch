@@ -81,7 +81,8 @@ const cases = [
 // Each screen case and each species case takes the next number; a shard runs every SHARD-of-th one.
 const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
 let caseNo = 0;
-const mine = () => caseNo++ % shardOf === shardNo - 1;
+// ONLY=look runs just the per-species look cases (a local shortcut).
+const mine = (section = '') => caseNo++ % shardOf === shardNo - 1 && (!process.env.ONLY || process.env.ONLY === section);
 const shots = [
   ['desktop', 1440, 900, false],
   ['mobile', 390, 844, true],
@@ -236,7 +237,7 @@ for (const [name, width, height, mobile] of shots) {
   for (const key of keys) {
     for (const scheme of ['light', 'dark']) {
       for (const [vname, width, height, mobile] of [['desktop', 1440, 900, false], ['phone', 390, 844, true]]) {
-        if (!mine()) continue;
+        if (!mine('look')) continue;
         const tag = `look ${key} ${scheme} ${vname}`;
         const c = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile, colorScheme: scheme, reducedMotion: 'reduce' });
         const page = await c.newPage();
@@ -284,9 +285,18 @@ for (const [name, width, height, mobile] of shots) {
         // Words that do not fit: a control or line of chrome whose text is cut off (ellipsis or hidden overflow), or pushed off the screen.
         const clipped = await page.evaluate(() => {
           const bad = [];
+          // Hidden on purpose for screen readers only (the .sr pattern: a 1 x 1 px clipped box), like the phone's title
+          // while the species button takes its room.
+          const srOnly = (el) => {
+            for (let a = el; a; a = a.parentElement) {
+              const b = a.getBoundingClientRect();
+              if (b.width <= 1 && b.height <= 1 && getComputedStyle(a).overflow === 'hidden') return true;
+            }
+            return false;
+          };
           for (const el of document.querySelectorAll('#top *, #strip *, #bar *, #actions *, #legend *, #probe *')) {
             const r = el.getBoundingClientRect();
-            if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden' || el.closest('[hidden], .sr, select')) continue;
+            if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden' || el.closest('[hidden], .sr, select') || srOnly(el)) continue;
             if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
             const cs = getComputedStyle(el);
             const cut = (cs.overflowX !== 'visible' || cs.textOverflow === 'ellipsis') && el.scrollWidth > el.clientWidth + 1;

@@ -57,6 +57,8 @@ export interface MapHandle {
   deep(on: boolean): void;
   /** After a light/dark switch: drop every layer and draw them again, so none keeps its old colours on the GPU. */
   recolor(): void;
+  /** The ids of the layers being drawn now (for the test scripts). */
+  drawn(): string[];
 }
 
 export interface Padding {
@@ -71,10 +73,6 @@ export interface Padding {
   /** On a phone, the bottom room for the time bar and the key even while the key is folded: where the card docks. */
   dock?: number;
 }
-
-/** How strongly the species' hexagons still show while an overlay (a radar replay) is up: a hint of the map, not a story.
- * Per layer, and a place can hold two (a shore copy, a day blending into the next), so it is kept low. */
-const OVERLAY_DIM = 0.15;
 
 interface Opts {
   container: HTMLDivElement;
@@ -104,7 +102,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     onFirstDraw?.();
-    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {}, deep() {}, recolor() {} };
+    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {}, deep() {}, recolor() {}, drawn: () => [] };
   }
   let deepest = 9.5;
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
@@ -527,6 +525,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         pickable: false, autoHighlight: false, highlightedObjectIndex: null } as never)];
     });
 
+  let drawnLayers: Layer[] = [];
   const refresh = () => {
     const { under, mid } = basemapLayers(zoom);
     // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
@@ -534,10 +533,11 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       .map((l) => (l.props.autoHighlight ? l.clone({ highlightedObjectIndex: hovered?.id === l.id ? hovered.index : -1 }) : l));
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const on = overlay.length > 0;
-    // While an overlay tells its story (a radar replay), the species' forecast is not part of it: its hexagons fade to
-    // OVERLAY_DIM, as the sighting dots stand down, so their peak colours never read as echo or compete with it.
+    // While an overlay tells its story (a radar replay), the species' forecast is not part of it: its hexagons go out of
+    // sight, as the sighting dots stand down, so their colours never read as echo. Kept loaded (not drawn), so closing
+    // the overlay brings them straight back.
     const hexes = dataLayers.filter((l) => isHexes(l.id))
-      .map((l) => (on ? l.clone({ opacity: (l.props.opacity ?? 1) * OVERLAY_DIM, pickable: false, autoHighlight: false }) : l));
+      .map((l) => (on ? l.clone({ visible: false, pickable: false, autoHighlight: false }) : l));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
     // An overlay goes over the woods' tree marks and under the lakes, roads and rivers; its over-water part just after
     // the last layer of water: the lakes, or zoomed in, the shore (lakes drawn again over the state lines, so a coast
@@ -545,12 +545,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     const cut = on ? mid.findIndex((l) => /^(water|roads|rivers)-/.test(l.id)) : 0;
     const at = cut < 0 ? mid.length : cut;
     const dry = mid.reduce((d, l, i) => (/^water-|^(sea|lakes)-top$|^shore-wet$/.test(l.id) ? i + 1 : d), at);
-    deck.setProps({ layers: [...under, ...padLayers(hexes), ...hexes, ...mid.slice(0, at), ...overlay, ...mid.slice(at, dry), ...(on ? overWater : []),
+    deck.setProps({ layers: drawnLayers = [...under, ...padLayers(hexes), ...hexes, ...mid.slice(0, at), ...overlay, ...mid.slice(at, dry), ...(on ? overWater : []),
       ...mid.slice(dry), ...(on ? [] : rest), ...pickedBuilt, ...markerBuilt] });
   };
 
   const handle: MapHandle = {
     refresh,
+    drawn: () => drawnLayers.filter((l) => l.props.visible !== false).map((l) => l.id),
     recolor() {
       resetBasemap();
       markerBuilt = markerLayers();

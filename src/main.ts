@@ -355,7 +355,13 @@ function start() {
     const s = replayTimeSpec(m, mo, d, clock, l.live());
     return l.tracker ? { ...s, asOf: undefined } : s;
   };
-  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? (cur.seasons ? 'Typical' : 'All years') : label(picker.value));
+  // On phones the menu is as wide as its face (style.css, --face-ch), not its longest option, so the species button
+  // beside it has room for the name.
+  const face = () => {
+    const f = picker.value === TYPICAL ? (cur.seasons ? 'Typical' : 'All years') : label(picker.value);
+    picker.style.setProperty('--face-ch', String(f.length));
+    return (picker.parentElement!.dataset.face = f);
+  };
   const fillPicker = () => {
     const keep = picker.value || initialMode;
     const live = cur.live() ? [LIVE] : [];

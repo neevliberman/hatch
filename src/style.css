@@ -568,7 +568,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .date em { margin-left: 0; font-size: 15px; }
   /* Live mode in the pill: the washed ribbon already says "forecast"; the as-of badge rides along, small. */
   .date small.fc { display: none; }
-  .date .asof { margin-left: 6px; padding: 0 5px; font-size: 11px; vertical-align: 1px; color: inherit; }
+  /* Centred in the pill, and on its own line under the date if the smallest phones wrap it ("season over" at 320 px). */
+  .date { text-align: center; }
+  .date .asof { margin-left: 6px; padding: 0 5px; font-size: 11px; vertical-align: middle; color: inherit; }
   .date .asof.stale { color: var(--on-accent); background: var(--warn); border-color: var(--warn); }
 }
 
@@ -592,7 +594,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   #actions { bottom: calc(100% + 6px); }
   #floats { padding-right: calc(var(--gr) + 52px); }
   #recenter { right: calc(var(--gr) + 52px); bottom: calc(100% + 6px); } /* beside the stack: the short map has no room above it */
-  .season select { font-size: 16px; }
+  .season select, .season .pick-btn { font-size: 16px; } /* the species name in the same type as the season beside it */
   #floats { flex-direction: row; align-items: flex-end; padding-bottom: 6px; }
   #floats:has(#probe:not([hidden]):not(.at-pointer)) #legend { display: none; }
   .legend-card { width: auto; max-width: min(640px, 70vw); padding: 5px 10px; }
@@ -787,13 +789,19 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .season.species { flex: none; } /* the label shrinking would cap the select's width (max-width: 100%) */
   .season.species select { width: 72px; padding: 0; background: var(--mark) no-repeat 10px 50% / 28px 28px, var(--chev), var(--panel); }
   .season.species option, .season.species optgroup { color: var(--text); background: var(--panel-solid); }
-  .season.species:has(.pick-btn) { flex: 1 1 0; min-width: 72px; }
-  /* No arrow: the name is the whole button, and a tap on it opens the list. */
-  .season.species .pick-btn { width: 100%; max-width: none; padding: 0 8px; font-size: 13px; line-height: 1.15; background: var(--panel); }
-  .season.species .pick-btn .sp-face { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; }
+  .season.species:has(.pick-btn) { flex: 1 1 0; min-width: 64px; }
+  /* No arrow: the name is the whole button, and a tap on it opens the list. The same type and raised edge as the menu
+     beside it; a line breaks only between words (a hyphenated word is kept whole by speciesPicker.ts). */
+  .season.species .pick-btn { width: 100%; max-width: none; padding: 0 8px; font-size: 16px; line-height: 1.1; background: var(--panel);
+    box-shadow: 0 1px 0 var(--ink-wash), 0 0 0 2px var(--track-faint); }
+  .season.species .pick-btn .sp-face { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    white-space: normal; hyphens: manual; overflow-wrap: normal; word-break: normal; }
+  .sp-face .nb { white-space: nowrap; }
   #app:not(.radar-on) #top:has(.species:not([hidden])) .brand { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
-  /* The season menu's face shows just the season (main.ts sets data-face); the open menu keeps the counts. */
-  .season:not(.species) { position: relative; }
+  /* The season menu's face shows just the season (main.ts sets data-face); the open menu keeps the counts. It keeps its
+     own width; the species button takes what is left. */
+  .season:not(.species) { position: relative; flex: none; width: auto; }
+  .season:not(.species) select { width: calc(var(--face-ch, 9) * 0.55em + 40px); } /* its face, not its longest option */
   .season:not(.species) option { color: var(--text); background: var(--panel-solid); }
   .season:not(.species)::before { content: attr(data-face); position: absolute; inset: 0 26px 0 7px; display: flex; align-items: center;
     font-size: 16px; white-space: nowrap; overflow: hidden; color: var(--text); pointer-events: none; }
@@ -811,9 +819,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 
 /* Radar replay (src/radar/): a specimen label in the key's place, with its own play button, so the time bar, key, hex
    cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. The species
-   and season menus step aside too: the replay is one real evening, not that species' season (its hexagons dim, map.ts). */
+   and season menus step aside too: the replay is one real evening, not that species' season (its hexagons hide, map.ts). */
 #app.radar-on :is(#legend, #probe, #dock, #recenter, #asleep, #end-note, #explore, #top .season) { display: none !important; }
 #app.radar-on #theme-btn { margin-left: auto; }
+#app.radar-on .brand .mark { display: none; } /* a plain title: no species sketch over one real evening */
 .ex-radars { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 10px; }
 .ex-radars p { flex: 1 0 100%; margin: 0; font-size: 12px; color: var(--muted); }
 .ex-radar { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 4px 12px 4px 9px; font: inherit; font-size: 13px; font-weight: 700;

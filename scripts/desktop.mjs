@@ -1090,10 +1090,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && Math.abs(c.lngLat[0] - lng) < 0.5 && Math.abs(c.lngLat[1] - lat) < 0.6;
       }, ev.at, { timeout: 30000 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
       await settled();
-      // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and the map's own colours well outside it.
+      // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and outside it the bare map: the species'
+      // forecast is not part of the replay, so its hexagons are out of sight (map.ts), and only there.
       // The frames arrive and are drawn on their own beat, which can lag the glide on a runner with software GL: look again
       // for up to 10 s before calling the sheet missing.
       const paper = ([r, g, b]) => r > 225 && g > 220 && b > 200;
+      const hexesDrawn = () => page.evaluate(() => window.__hatch.map.drawn().filter((id) => /-(forecast|unseen)-r\d/.test(id)));
       let px;
       for (let tries = 0; tries < 20; tries++) {
         const png = await shotR('1-open');
@@ -1103,11 +1105,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           const g = c.getContext('2d');
           g.drawImage(bmp, 0, 0);
           const k = bmp.width / innerWidth;
-          const at = (lngLat) => {
-            const [x, y] = window.__hatch.map.project(lngLat);
-            return [...g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3)];
-          };
-          // The lightest pixel of a 9 x 9 patch: the hexagon's own colour, past any tree mark or line drawn over it.
+          // The lightest pixel of a 9 x 9 patch: the ground's own colour, past any tree mark or line drawn over it.
           const lightest = (lngLat) => {
             const [x, y] = window.__hatch.map.project(lngLat);
             if (x < 5 || y < 5 || x > innerWidth - 5 || y > innerHeight - 5) return null; // off a phone's screen
@@ -1116,17 +1114,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
             for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > best[0] + best[1] + best[2]) best = [d[i], d[i + 1], d[i + 2]];
             return best;
           };
-          return { sheet: at(sheet), off: at(off), offLight: lightest(off) };
+          return { sheet: lightest(sheet), off: lightest(off) };
         }, [png.toString('base64'), ev.sheet, ev.off]);
-        if (paper(px.sheet) && !paper(px.off)) break;
+        if (px.sheet && paper(px.sheet) && (!px.off || paper(px.off))) break;
         await page.waitForTimeout(500);
       }
-      if (!paper(px.sheet) || paper(px.off)) fail(`no radar sheet at its place (inside ${px.sheet}, outside ${px.off})`);
-      // The species' forecast is not part of the replay: its hexagons outside the sheet dim (map.ts OVERLAY_DIM), so
-      // they stay within a third of the paper's colour instead of the full peak green or orange.
-      if (px.offLight?.some((v, i) => v < 0.68 * px.sheet[i])) fail(`the forecast hexagons do not dim under the replay (outside ${px.offLight}, paper ${px.sheet})`);
+      if (!px.sheet || !paper(px.sheet)) fail(`no radar sheet at its place (${px.sheet})`);
+      if (px.off && !paper(px.off)) fail(`the forecast still colours the map outside the radar sheet (${px.off})`);
+      const under = await hexesDrawn();
+      if (under.length) fail(`forecast hexagons drawn under the replay: ${under.join(', ')}`);
       // Nor is the replay that species' season: the species and season menus step aside while it is up.
       if (await page.locator('#top .season:visible').count()) fail('the species or season menu stays up over the replay');
+      // The title stays, plain: no species sketch beside it.
+      if (!(await page.locator('.brand').isVisible()) || (await page.locator('.brand .mark').isVisible())) fail('over the replay the title is missing or still wears the species sketch');
       const t0 = await page.locator('#radar .rd-time').textContent();
       const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000 })
         .then(() => true, () => false);
@@ -1191,6 +1191,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       }
       if (await page.locator('#dock').isHidden()) fail('the time bar did not come back');
       if (!(await page.locator('#season').isVisible())) fail('the season menu did not come back');
+      if (!(await hexesDrawn()).length) fail('the forecast hexagons did not come back after the replay');
       await urlIs(null);
       if (new URL(page.url()).searchParams.has('radar')) fail(`the link still names the replay after closing: ${page.url()}`);
       await shotR('3-closed');
@@ -1773,13 +1774,15 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000 });
       // [query, the top row's key, or a test of its name]
       for (const [q, want] of [['luna', 'luna'], ['monarch', 'monarch'], ['firefly', 'firefly'], ['cicada', /^[\w' -]* Cicada$/], ['bumble', /Bumble Bee$/],
-        ['red-spotted purple', 'limenitis-astyanax']]) {
+        ['red-spotted purple', 'limenitis-astyanax'], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
         await page.locator('#sp-q').fill(q);
         const top = page.locator('#sp-list .sp-row').first();
         await top.waitFor({ timeout: 10000 }).catch(() => {});
         const [key, name] = await top.evaluate((b) => [b.dataset.key, b.querySelector('.sp-name').firstChild.textContent]).catch(() => [null, null]);
         if (typeof want === 'string' ? key !== want : !want.test(name ?? '')) fail(`searching "${q}" puts "${name}" (${key}) first`);
         if (q === 'red-spotted purple' && name !== 'Red-spotted Purple') fail(`Limenitis astyanax is listed as "${name}"`);
+        // A featured species shows its own label, as on the featured strip.
+        if (q === 'luna' && name !== 'Luna moth') fail(`searching "luna" lists the luna moth as "${name}"`);
       }
       // Enter picks the top row: "luna" opens the luna moth, not a lunate one.
       await page.locator('#sp-q').fill('luna');

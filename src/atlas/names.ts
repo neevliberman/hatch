@@ -36,6 +36,9 @@ export function plural(s: AtlasSpecies): string {
   return `${n}s`;
 }
 
+/** Lower case, accents and apostrophes dropped, for matching: "cassins" finds "Cassin's", "e" finds "é". */
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\u2018\u2019`]/g, '').toLowerCase();
+
 /**
  * Search the species list. Every word must start a word of the common name, Latin name, genus, family or order (or the
  * order's plain name). Best first, by tier:
@@ -48,7 +51,7 @@ export function plural(s: AtlasSpecies): string {
  * `featured` maps a featured species' scientific name to its label ("Actias luna" to "Luna moth").
  */
 export function searchSpecies(all: readonly AtlasSpecies[], text: string, featured: ReadonlyMap<string, string> = new Map(), max = 60): AtlasSpecies[] {
-  const t = text.toLowerCase().trim().replace(/\s+/g, ' ');
+  const t = fold(text).trim().replace(/\s+/g, ' ');
   const words = t.split(' ').filter(Boolean);
   if (!words.length) return [];
   const starts = (h: string, w: string) => h.startsWith(w) || h.includes(` ${w}`) || h.includes(`-${w}`);
@@ -59,12 +62,14 @@ export function searchSpecies(all: readonly AtlasSpecies[], text: string, featur
   };
   const scored: { s: AtlasSpecies; tier: number; feat: number }[] = [];
   for (const s of all) {
-    const label = featured.get(s.name)?.toLowerCase();
-    const names = [(s.common ?? '').toLowerCase(), label ?? ''].filter(Boolean);
-    const hay = `${names.join(' ')} ${s.name} ${s.genus ?? ''} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`.toLowerCase();
+    const f = featured.get(s.name);
+    const label = f === undefined ? undefined : fold(f);
+    const names = [fold(s.common ?? ''), label ?? ''].filter(Boolean);
+    const sci = fold(s.name);
+    const hay = fold(`${names.join(' ')} ${s.name} ${s.genus ?? ''} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`);
     if (!words.every((w) => starts(hay, w))) continue;
     const named = names.some((n) => words.every((w) => starts(n, w)));
-    const tier = names.includes(t) || s.name.toLowerCase() === t ? 4 : names.some(whole) || (named && label !== undefined) ? 3 : named ? 2 : 1;
+    const tier = names.includes(t) || sci === t ? 4 : names.some(whole) || (named && label !== undefined) ? 3 : named ? 2 : 1;
     scored.push({ s, tier, feat: label !== undefined ? 1 : 0 });
   }
   return scored
