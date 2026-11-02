@@ -128,7 +128,11 @@ export function mountFinder(
     if (i >= 0) input.setAttribute('aria-activedescendant', `find-o${i}`), list.children[i]?.scrollIntoView({ block: 'nearest' });
     else input.removeAttribute('aria-activedescendant');
   };
-  const showList = (ps: Place[]) => {
+  /** The suggestions, or with none and `none` set, that one line in their place (not an option: nothing to pick). */
+  const status = Object.assign(document.createElement('p'), { className: 'find-none' });
+  status.setAttribute('role', 'status');
+  list.after(status);
+  const showList = (ps: Place[], none = '') => {
     shown = ps;
     list.replaceChildren(
       ...ps.map((p, i) => {
@@ -137,6 +141,8 @@ export function mountFinder(
         return li;
       }),
     );
+    // No match: said in a live region beside the list (not an option in it), so a screen reader announces it.
+    status.textContent = !ps.length && none ? none : '';
     list.hidden = !ps.length;
     input.setAttribute('aria-expanded', String(!!ps.length));
     setActive(-1);
@@ -183,7 +189,7 @@ export function mountFinder(
     if (!q || !places) return showList([]);
     const ps = await places;
     if (input.value !== typed) return;
-    showList(matches(ps, q).slice(0, 6));
+    showList(matches(ps, q).slice(0, 6), 'No town by that name here.');
   };
   input.addEventListener('input', () => void suggest());
   const pick = async () => {
@@ -196,7 +202,7 @@ export function mountFinder(
     // "Springfield": every Springfield. "Springfield, OH" or a unique name: that one.
     let hits = ps.filter((p) => norm(full(p)) === q || norm(p.name) === q);
     if (!hits.length) hits = matches(ps, q);
-    if (!hits.length) return say(`No town named ${typed.trim()} on this map`, opener);
+    if (!hits.length) return say(`No town named \u201c${typed.trim()}\u201d on this map.`, opener);
     // A place the map forecasts beats one it doesn't (Springfield, Illinois over Springfield, Missouri).
     const inside = hits.filter((p) => p.inside);
     if (inside.length) hits = inside;
