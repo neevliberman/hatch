@@ -29,8 +29,11 @@ export const oneIn = (share: number) => {
 /** The colour scale spans this many powers of ten below the species' top share (a log scale: shares run from 1 in 10
  * to 1 in 10,000, and a straight scale would leave all but the busiest cells blank). Below it, a cell stays paper. */
 const DECADES = 2.5;
-/** A season that slides fewer days than this between years gets no band on the time bar: under one ribbon step. */
+/** A season that slides fewer days than this between years gets no band on the time bar: under one ribbon step
+ * (spread.py's MIN_BAND, which already leaves such species out). */
 const MIN_BAND = 3;
+/** The last year of photos behind the band: the network's training years (spread.py LAST; 2025 is its test year). */
+const BAND_LAST_YEAR = 2024;
 
 /** The dark map's ramp ends: a dim moss, and the lamplit page's own leaf green (#8fd09a). */
 const DIM = [70, 92, 58];
@@ -492,7 +495,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
             ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.`]
             : []),
           ...(mode === TYPICAL && spread && spread >= MIN_BAND
-            ? [`The shade on the time bar: where its peak usually falls, about ${spread} days either side of the usual date in most years (its photos ${FIRST_YEAR}-${ATLAS_YEAR - 1}, year by year, with chance taken out)${(seasonsOf(curve(TYPICAL))?.broods?.length ?? 1) > 1 ? '. One width for every brood, though later broods usually vary more' : ''}.`]
+            ? [`The shade on the time bar: where its peak usually falls, about ${spread} days either side of the usual date in most years (its photos ${FIRST_YEAR}-${BAND_LAST_YEAR}, year by year, with chance taken out)${(seasonsOf(curve(TYPICAL))?.broods?.length ?? 1) > 1 ? '. One width for every brood, though later broods usually vary more' : ''}.`]
             : []),
           ...(warm
             ? [`Spring ${warm > 0 ? '+' : '−'}${Math.abs(warm)} °F: every day’s high and low moved that much, the network rerun. It follows warmth ${follows > 0.66 ? 'closely' : follows > 0.33 ? 'partly' : 'hardly at all'}.`]

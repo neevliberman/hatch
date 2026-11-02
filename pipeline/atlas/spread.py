@@ -1,20 +1,20 @@
 """How much a species' season moves from year to year: public/atlas/spread.bin, the time bar's soft band.
 
-For each year 2015-2025, the photos of that year (the sighting dots, dots.py) are slid against the other years'
-photos pooled (leave one year out) to find the slide that best fits that year's whole season (as seen.py's
-best_shift, so both broods of a two-brood species move together). Each photo's day is first set against its latitude
-(the season reaches the north later, and a year with more photos from the south is not an early year): the slope comes
-from sliding each 2-degree band's photos against all of them, the same whole-season fit, so it never cuts photos off
-by date and a two-brood species' gap doesn't pull it.
+For each year 2015-2024 (the network's training years; 2025, its held-out test year, stays out), the photos of that
+year (the sighting dots, dots.py) are slid against the other years' photos pooled (leave one year out) to find the
+slide that best fits that year's whole season (as seen.py's best_shift, so both broods of a two-brood species move
+together). Each photo's day is first set against its latitude (the season reaches the north later, and a year with
+more photos from the south is not an early year): the slope comes from sliding each 2-degree band's photos against all
+of them, the same whole-season fit, so it never cuts photos off by date and a two-brood species' gap doesn't pull it.
 
-Some of the scatter between years' slides is only chance, and photos come in clumps (a keen observer, a bioblitz
-weekend), so a year of 40 photos from a handful of outings can't pin its slide down. A year counts only with
-MIN_PHOTOS photos on MIN_DAYS different days in MIN_CLUMPS clumps; each year's slide is bootstrapped by clumps
-(photos in one 1-degree square on days at most 3 apart chain together), and that chance part taken out. What is left is the real
-year-to-year spread: only when it clearly exceeds chance (chi-square, 95%) does the species get a band. With 5 to 11
-years, the band is a prediction interval for a new year's peak: t (k - 1 degrees of freedom, 80%) x sd x sqrt(1 + 1/k),
-the sd first corrected for leave-one-out (each slide is measured against the other years, which spreads the slides by
-k / (k - 1)).
+Some of the scatter between years' slides is only chance, and photos come in clumps, so a year of 40 photos from a
+handful of outings, or with a bioblitz weekend in it, can't pin its slide down. A year counts only with MIN_PHOTOS
+photos on MIN_DAYS different days in MIN_CLUMPS clumps. Each year's slide is bootstrapped twice, by outings (photos in
+one 1-degree square on days at most 3 apart chain together) and by map-wide 3-day blocks (an event weekend), and the
+larger variance is that year's noise. A species gets a band only when the years scatter more than their noise allows
+(Cochran's Q, chi-square, 95%). Its width is then estimated apart from that test: the between-year variance tau^2 by
+Paule-Mandel with each year's own noise, and the band is a prediction interval for a new year's peak, t (k - 1
+degrees of freedom, 80%) x tau x sqrt(1 + 1/k), shown only when at least MIN_BAND days.
 
 Analogy: a bus that is due at 8:00. Its timetable is the ribbon; this is how many minutes early or late it runs on
 most mornings, after allowing for the stopwatch being rough on mornings with few riders.
@@ -22,8 +22,8 @@ most mornings, after allowing for the stopwatch being rough on mornings with few
 spread.bin: "SPR1", uint32 species count, uint32 FNV-1a hash of the species names (species.json order, "(other)" left
 out, UTF-16 code units, joined by newlines: the page ignores a file built for another species list), then uint8
 [species.json row]: the band's
-half width in whole days, or 255 for no band (fewer than MIN_YEARS years of MIN_PHOTOS photos on MIN_DAYS days, or a
-spread chance alone could make).
+half width in whole days, or 255 for no band (too few good years, a spread chance alone could make, or under
+MIN_BAND days).
   python3 pipeline/atlas/spread.py [scientific name ...]   # reads public/atlas/dots/ and species.json; no network
 """
 import json
@@ -36,7 +36,9 @@ from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from pipeline.atlas.config import BOX, FIRST_YEAR, LAST_YEAR  # noqa: E402
+from pipeline.atlas.config import BOX, FIRST_YEAR, TEST_YEAR  # noqa: E402
+
+LAST = TEST_YEAR - 1  # the years the network trained on; the held-out test year stays out
 
 OUT = ROOT / "public/atlas"
 MIN_PHOTOS = 40   # photos a year needs before its slide counts
@@ -51,6 +53,8 @@ BLOCK = 3         # ... or, without longitudes, BLOCK-day blocks
 BAND_DEG = 2      # latitude bands for the slope
 COVER = 0.8       # the band holds a new year's peak this often
 ALPHA = 0.05      # the year-to-year spread must beat chance at this level
+MIN_VAR = 0.5     # a year's slide is never known better than this (days^2): slides are whole days
+MIN_BAND = 3      # narrower than this (days either side) is no band (src/layers/atlasLayer.ts MIN_BAND)
 NONE = 255
 DAYS = 366
 
@@ -63,7 +67,7 @@ def fnv(names):
 
 
 def read_dots(i):
-    """(day of year, latitude, year, longitude) of species i's photos 2015-2025 (dots.py's layout)."""
+    """(day of year, latitude, year, longitude) of species i's photos FIRST_YEAR-LAST (dots.py's layout)."""
     b = (OUT / "dots" / f"{i}.bin").read_bytes()
     n = len(b) // 11
     if n == 0:
@@ -74,7 +78,7 @@ def read_dots(i):
     year = np.frombuffer(b, "u1", n, 10 * n).astype(int) + 2000
     leap = (year % 4 == 0) & ((year % 100 != 0) | (year % 400 == 0))
     doy = np.where(leap & (doy >= 60), doy - 1, doy)  # as the page's dots: 1 Mar is day 60 every year
-    k = (year >= FIRST_YEAR) & (year <= LAST_YEAR)
+    k = (year >= FIRST_YEAR) & (year <= LAST)
     return doy[k], lat[k], year[k], lng[k]
 
 
@@ -127,9 +131,33 @@ def clumps(doy, lat, lng):
     return out
 
 
+def boot_var(mine, clump, logpad, rng):
+    """Bootstrap variance of a year's slide, drawing its clumps with replacement, each with all its photos."""
+    per = np.zeros((clump.max() + 1, DAYS))
+    np.add.at(per, (clump, np.clip(np.round(mine).astype(int), 0, DAYS - 1)), 1)
+    m = len(per)
+    draw = rng.multinomial(m, np.full(m, 1 / m), BOOT) @ per
+    return np.var(slides(draw, logpad), ddof=1) * m / (m - 1)  # the bootstrap's n - 1
+
+
+def paule_mandel(x, v):
+    """Between-year variance tau^2 for estimates x with their own noise variances v (Paule-Mandel: the tau^2 at which
+    the weighted scatter about the weighted mean equals its expectation, k - 1), the weights 1 / (v + tau^2)."""
+    def q(t2):
+        w = 1 / (v + t2)
+        return np.sum(w * (x - np.sum(w * x) / w.sum()) ** 2) - (len(x) - 1)
+    if q(0.0) <= 0:
+        return 0.0
+    lo, hi = 0.0, max(1.0, float(np.var(x)) * 4)
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if q(mid) > 0 else (lo, mid)
+    return (lo + hi) / 2
+
+
 def spread(doy, lat, year, rng, lng=None):
-    """(band half width in days or None, per-year slides, sd between years or None, chance sd) for one species.
-    Without longitudes, clumps are by days alone (more cautious)."""
+    """(band half width in days or None, per-year slides, tau (sd between years) or None, typical chance sd) for one
+    species. Without longitudes, clumps are by days alone (more cautious)."""
     def enough(y):
         k = year == y
         return (k.sum() >= MIN_PHOTOS and len(np.unique(doy[k])) >= MIN_DAYS
@@ -145,22 +173,26 @@ def spread(doy, lat, year, rng, lng=None):
         mine = adj[here]
         logpad = density(counts(adj[year != y]))
         out[int(y)] = int(slides(counts(mine), logpad)[0])
-        # Bootstrap by clumps: draw the year's clumps with replacement, each with all its photos.
-        inv = clumps(doy[here], lat[here], None if lng is None else lng[here])
-        ids = np.arange(inv.max() + 1)
-        per = np.zeros((len(ids), DAYS))
-        np.add.at(per, (inv, np.clip(np.round(mine).astype(int), 0, DAYS - 1)), 1)
-        draw = rng.multinomial(len(ids), np.full(len(ids), 1 / len(ids)), BOOT) @ per
-        var.append(np.var(slides(draw, logpad), ddof=1) * len(ids) / (len(ids) - 1))  # the bootstrap's n - 1
-    s = np.array(list(out.values()), float)
-    between = np.var(s, ddof=1) * ((k - 1) / k) ** 2  # leave-one-out spreads each slide by k / (k - 1)
-    chance = float(np.mean(var))
-    # Only a spread chance alone would rarely make: (k - 1) between / chance ~ chi-square(k - 1) if years never moved.
-    if chance > 0 and (k - 1) * between / chance <= stats.chi2.ppf(1 - ALPHA, k - 1):
-        return None, out, None, np.sqrt(chance)
-    sd = np.sqrt(max(0.0, between - chance))
-    half = stats.t.ppf(0.5 + COVER / 2, k - 1) * sd * np.sqrt(1 + 1 / k)
-    return half, out, sd, np.sqrt(chance)
+        # Two kinds of clump, and the noisier answer counts: outings (one square, a few days) and map-wide events
+        # (a bioblitz weekend: every photo in the same BLOCK days, wherever it was taken).
+        local = boot_var(mine, clumps(doy[here], lat[here], None if lng is None else lng[here]), logpad, rng)
+        wide = boot_var(mine, clumps(doy[here], lat[here], None), logpad, rng)
+        var.append(max(local, wide, MIN_VAR))
+    # Each slide is measured against the other years, which spreads the slides by k / (k - 1) about their mean.
+    x = np.array(list(out.values()), float) * (k - 1) / k
+    v = np.array(var)
+    # The gate: Cochran's Q, the weighted scatter, beats what chance alone would make (chi-square, k - 1, 95%).
+    w = 1 / v
+    q = np.sum(w * (x - np.sum(w * x) / w.sum()) ** 2)
+    if q <= stats.chi2.ppf(1 - ALPHA, k - 1):
+        return None, out, None, float(np.sqrt(np.median(v)))
+    # The width, from tau^2 estimated with each year's own noise (not the scatter that passed the gate): a prediction
+    # interval for a new year's peak about the usual one, t (k - 1, 80%) x tau x sqrt(1 + 1/k).
+    t2 = paule_mandel(x, v)
+    half = stats.t.ppf(0.5 + COVER / 2, k - 1) * np.sqrt(t2 * (1 + 1 / k))
+    if half < MIN_BAND:
+        return None, out, float(np.sqrt(t2)), float(np.sqrt(np.median(v)))
+    return half, out, float(np.sqrt(t2)), float(np.sqrt(np.median(v)))
 
 
 def main(show=()):

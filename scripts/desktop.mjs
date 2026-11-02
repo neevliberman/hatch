@@ -1551,12 +1551,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('2026 drew no photos seen'));
         if (await page.locator('#bar .ribbon .range').count()) fail('2026 (expected vs seen) still draws the usual years\' band');
         if (await page.locator('#strip .range-note').isVisible()) fail('2026 still shows the band\'s key line');
-        // A two-brood swallowtail: its shades come in order and never overlap (overlaps merge, never darken).
-        await page.goto(`${origin}/?species=papilio-glaucus&noauto&date=07-01`);
-        await isOn('papilio-glaucus-atlas');
-        await page.locator('#bar .ribbon .range').first().waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('the swallowtail drew no band'));
+        // A two-brood skipper: a shade for each brood, in order, never overlapping (overlaps merge, never darken).
+        await page.goto(`${origin}/?species=lon-zabulon&noauto&date=07-01`);
+        await isOn('lon-zabulon-atlas');
+        await page.locator('#bar .ribbon .range').first().waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('the zabulon skipper drew no band'));
         const sw = (await page.evaluate(() => window.__hatch.current().profile())).range ?? [];
-        if (sw.some((x, i) => i > 0 && x.from <= sw[i - 1].to)) fail(`the swallowtail's shades overlap: ${JSON.stringify(sw)}`);
+        if (sw.length !== 2 || sw[1].from <= sw[0].to) fail(`the zabulon skipper's two broods' shades are ${JSON.stringify(sw)}`);
         await page.goto(`${origin}/?species=forficula-auricularia&noauto&date=07-01`);
         await isOn('forficula-auricularia-atlas');
         await page.waitForTimeout(3000);

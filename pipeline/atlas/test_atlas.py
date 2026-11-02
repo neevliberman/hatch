@@ -223,3 +223,22 @@ def test_spread_reads_latitude_and_is_not_fooled_by_it():
     doy, lat, _, _ = leaning(np.random.default_rng(2))
     assert 3 <= lat_slope(doy, lat) <= 5
     assert _band_rate(leaning)[0] <= 1 / 6
+
+
+def test_spread_sees_through_a_map_wide_event_weekend():
+    def event(r, n=150, frac=0.3):  # each year a bioblitz weekend, at a random date, holds 30% of the photos
+        doy = []
+        for _ in YEARS:
+            ev = r.normal(170, 12)
+            doy.append(np.round(np.where(r.random(n) < frac, ev + r.integers(0, 2, n), r.normal(170, 12, n))))
+        doy = np.concatenate(doy)
+        return doy, r.uniform(37, 48, doy.size), np.repeat(YEARS, n), r.uniform(-97, -81, doy.size)
+    assert _band_rate(event)[0] <= 1 / 6
+
+
+def test_spread_never_bands_identical_years():
+    from pipeline.atlas.spread import spread
+    rng = np.random.default_rng(4)
+    one = np.round(rng.normal(170, 10, 200))  # the very same photos every year: every slide 0, no noise at all
+    doy = np.tile(one, len(YEARS))
+    assert spread(doy, rng.uniform(37, 48, doy.size), np.repeat(YEARS, 200), rng, rng.uniform(-95, -82, doy.size))[0] is None
