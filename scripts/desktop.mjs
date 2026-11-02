@@ -1590,9 +1590,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       ['junonia-coenia', 'Junonia coenia'], ['oncopeltus-fasciatus', 'Oncopeltus fasciatus']];
     const isOn = (p, k) => p.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, k, { timeout: 60000 });
     const pick = async (k, q) => {
-      await page.locator('#species').click();
-      await page.locator('#sp-q').fill(q);
-      await page.locator(`#sp-list [data-key="${k}"]`).first().click();
+      // Software GL can spend 10-25 s on one frame, and a click waits for two: generous timeouts, as elsewhere in the Atlas.
+      await page.locator('#species').click({ timeout: 90000 });
+      await page.locator('#sp-q').fill(q, { timeout: 90000 });
+      await page.locator(`#sp-list [data-key="${k}"]`).first().click({ timeout: 90000 });
       await isOn(page, k);
     };
     // Every cell's colour on the map's day, once the field for that very day has landed (two reads a second apart agree).
@@ -1612,7 +1613,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       return null;
     });
     try {
-      await page.goto(`${origin}/?species=${first}&noauto&date=06-15`);
+      await page.goto(`${origin}/?species=${first}&noauto&date=06-15`, { timeout: 90000 });
       await isOn(page, first);
       await page.evaluate(() => (window.__firstLayer = new WeakRef(window.__hatch.current())));
       for (const [k, q] of rest) await pick(k, q);
@@ -1623,6 +1624,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // Let go means freed: nothing else (a callback's scope, the species shown after it) may still hold it.
       const cdp = await ctx.newCDPSession(page);
       for (let i = 0; i < 3; i++) await cdp.send('HeapProfiler.collectGarbage');
+      await cdp.detach();
       if (await page.evaluate(() => !!window.__firstLayer.deref())) fail(`${first} was let go but something still holds it (never freed)`);
       await pick(first, 'Papilio glaucus');
       if (await page.evaluate(() => window.__hatch.current() === window.__firstLayer.deref())) fail(`${first} came back as the same layer: it was never let go`);
@@ -1631,11 +1633,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       else {
         const lit = back.cells.filter((c) => c[3] > 0).length;
         if (lit < 300) fail(`${first} came back with only ${lit} coloured cells`);
-        const fresh = await ctx.newPage();
-        await fresh.goto(`${origin}/?species=${first}&noauto&date=${back.day}`);
-        await isOn(fresh, first);
-        const ref = await colours(fresh);
-        await fresh.close();
+        // The same page, loaded afresh (a second Atlas page at once would share the one software-GL process and starve both).
+        await page.goto(`${origin}/?species=${first}&noauto&date=${back.day}`, { timeout: 90000 });
+        await isOn(page, first);
+        const ref = await colours(page);
         const differ = ref ? ref.cells.filter((c, i) => c.join() !== back.cells[i]?.join()).length : -1;
         if (!ref || ref.day !== back.day || differ) fail(`${first} reloaded differs from a fresh load on ${back.day} (${differ} cells)`);
         else console.log(`${tag}: ${first} reloaded after ${rest.length} others, ${lit} coloured cells match a fresh load on ${back.day}`);

@@ -486,7 +486,6 @@ function start() {
     const prevId = cur.id;
     cur = next;
     curKey = entry.key;
-    keepLoaded(entry.key);
     speciesPick.show(entry.key, entry.label);
     fillPicker();
     picker.value = mode;
@@ -519,6 +518,7 @@ function start() {
       registry.setActive(prevId, false);
       registry.setActive(cur.id, true);
     });
+    keepLoaded(entry.key); // after the switch, so letting one go never redraws a half-switched view
     if (live && !at) wantDay = dayOf(time.cursor); // its as-of day becomes the day asked for, as in switchMode
     syncUrl();
     goLiveIfWanted();
