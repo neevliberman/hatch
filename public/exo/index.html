@@ -2137,10 +2137,16 @@ const REAL = (() => {
     // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
     document.fonts.ready.then(() => setTimeout(() => parent.postMessage({ type: 'exo-live' }, location.origin), 250));
     // real sightings: how many monarchs people photographed near here that week (iNaturalist) sets the company she keeps
-    const seen = document.getElementById('seen'), n = m.seen;
-    R.others = n == null ? 2 : n === 0 ? 0 : n < 5 ? 1 : 2;
-    seen.hidden = n == null; if (n != null) { seen.textContent = n === 0 ? 'none seen within 50 km that week' : `${n} seen within 50 km that week ↗`; if (m.seenHref && n) seen.href = m.seenHref; else seen.removeAttribute('href'); }
     const lab = document.getElementById('sunlab'); lab.setAttribute('aria-label', 'Time of day: drag the sun'); lab.setAttribute('aria-valuemin', R.rise); lab.setAttribute('aria-valuemax', R.set);
+  });
+  // real sightings: how many monarch sightings people logged near here that week (iNaturalist) sets the company she keeps
+  addEventListener('message', e => {
+    const m = e.data; if (!m || m.type !== 'exo-seen' || e.origin !== location.origin || e.source !== parent) return;
+    const el = document.getElementById('seen'), n = m.n;
+    R.others = n == null ? 2 : n === 0 ? 0 : n < 5 ? 1 : 2;
+    el.hidden = n == null; if (n == null) return;
+    el.textContent = n === 0 ? 'no sightings within 50 km that week' : `${n} sighting${n === 1 ? '' : 's'} within 50 km that week ↗`;
+    if (m.href && n) el.href = m.href; else el.removeAttribute('href');
   });
   addEventListener('keydown', e => { if (e.key === 'Escape') parent.postMessage({ type: 'exo-close' }, location.origin); });
   parent.postMessage({ type: 'exo-ready' }, location.origin);

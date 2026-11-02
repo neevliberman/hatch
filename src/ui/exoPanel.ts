@@ -26,17 +26,25 @@ async function nearTown(lng: number, lat: number): Promise<string | undefined> {
   return best;
 }
 
-/** Monarchs people photographed within 50 km, three days either side (iNaturalist, research grade or awaiting ID). */
+/** Monarch sightings people logged within 50 km over the week around the day (iNaturalist, research grade or awaiting
+ * ID). The week never runs past today; a day still ahead has no count (null), so it never says "none" about the future. */
 const seenCache = new Map<string, Promise<number | null>>();
-function seenNear(lat: number, lng: number, dayMs: number): { n: Promise<number | null>; href: string } {
-  const d = (k: number) => new Date(dayMs + k * 864e5).toISOString().slice(0, 10);
-  const q = `taxon_id=48662&lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}&radius=50&d1=${d(-3)}&d2=${d(3)}&quality_grade=research,needs_id`;
+function seenNear(lat: number, lng: number, dayMs: number): { n: Promise<number | null>; href: string } | null {
+  const today = Date.parse(new Date().toISOString().slice(0, 10));
+  if (dayMs > today) return null;
+  const end = Math.min(dayMs + 3 * 864e5, today);
+  const d = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const q = `taxon_id=48662&lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}&radius=50&d1=${d(end - 6 * 864e5)}&d2=${d(end)}&quality_grade=research,needs_id`;
   let n = seenCache.get(q);
   if (!n) {
-    n = fetch(`https://api.inaturalist.org/v1/observations?${q}&per_page=0`)
+    n = fetch(`https://api.inaturalist.org/v1/observations?${q}&per_page=0`, { signal: AbortSignal.timeout(5000) })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => (typeof j?.total_results === 'number' ? j.total_results : null))
-      .catch(() => null);
+      .catch(() => null)
+      .then((v) => {
+        if (v == null) seenCache.delete(q); // a failed read is tried again next time
+        return v;
+      });
     seenCache.set(q, n);
   }
   return { n, href: `https://www.inaturalist.org/observations?${q}` };
@@ -86,9 +94,14 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     const hour = nowH >= 0 && nowH < 24 ? nowH : 10;
     const where = `${place ? `Near ${place}` : 'Here'} · ${fmtDate(at)}${day.note === 'Recorded' ? '' : ` · ${day.note.toLowerCase()}`}`;
     frame.contentWindow?.postMessage(
-      { type: 'exo-day', place: where, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom, seen: seen?.n ?? null, seenHref: seen?.href },
+      { type: 'exo-day', place: where, lat, lon, utc0, hour, temps: day.temps, cloud: day.cloud, ws: day.wind, wd: day.windFrom },
       location.origin,
     );
+    pushSeen();
+  };
+  /** The sightings count goes on its own, whenever it arrives: the day never waits for iNaturalist. */
+  const pushSeen = () => {
+    if (ready && day) frame.contentWindow?.postMessage({ type: 'exo-seen', n: seen?.n ?? null, href: seen?.href }, location.origin);
   };
 
   addEventListener('message', (e) => {
@@ -121,11 +134,15 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     }
     day = got;
     place = town;
-    const s = seenNear(lat, lng, got.dayMs);
-    seen = { n: await s.n, href: s.href };
-    if (key !== lastKey) return;
+    seen = null;
     if (live) noteEl.textContent = '';
     push();
+    const s = seenNear(lat, lng, got.dayMs);
+    if (!s) return;
+    const n = await s.n;
+    if (key !== lastKey) return;
+    seen = { n, href: s.href };
+    pushSeen();
   };
 
   /** The dive: a paper blot grows from (x, y) to cover the map; closing shrinks it back. */
