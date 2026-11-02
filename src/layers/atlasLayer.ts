@@ -4,7 +4,7 @@ import { DataFilterExtension } from '@deck.gl/extensions';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Due, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
-import { ATLAS_YEAR, atlasKey, Field, SEASON, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
+import { ATLAS_YEAR, atlasKey, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import { animating, ripples } from './motion';
@@ -213,18 +213,15 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     peaks.set(k, best);
     return best;
   };
-  // "Coming out near you": a typical year's expected photos of it at the cell; its season is the days with at least a
-  // twentieth of its best day's (so a spring brood counts, not just the bigger summer one). None where it is hardly
-  // expected even then.
+  // "Coming out near you": a typical year's expected photos of it at the cell, its seasons by the watch list's own rule
+  // (seasonsOf: the runs of days with at least DUE_SHARE of its best day's, so a spring brood counts and the gap before
+  // a second one is counted down). None where it is hardly expected even then.
   const dues = new Map<number, Due | null>();
   const dueHere = (c: number): Due | null => {
     if (dues.has(c)) return dues.get(c)!;
     const shares = sharesHere(c, null);
     const photos = shares.map((x, j) => x * atlas.volume[j]!);
-    const top = Math.max(...photos);
-    const best = photos.indexOf(top);
-    const on = photos.map((p, j) => (p >= top / 20 ? j : -1)).filter((j) => j >= 0);
-    const d = shares[best]! < 1e-4 ? null : { start: SEASON[0] + STEP * on[0]!, peak: SEASON[0] + STEP * best, end: SEASON[0] + STEP * on[on.length - 1]! };
+    const d = shares[photos.indexOf(Math.max(...photos))]! < 1e-4 ? null : seasonsOf(photos);
     dues.set(c, d);
     return d;
   };

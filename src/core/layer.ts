@@ -52,13 +52,18 @@ export interface SpotSegment {
   label: string;
 }
 
-/** A species' coming season at one place, as days of year: its first ones, its peak and its last. `year` names a
- * live forecast's season; without one it is a typical year, good for any year. */
-export interface Due {
+/** One run of a species' season, as days of year: its first ones, its peak and its last. */
+export interface Brood {
   start: number;
   peak: number;
   end: number;
+}
+/** A species' coming season at one place, as days of year: its first ones, its peak and its last. `year` names a
+ * live forecast's season; without one it is a typical year, good for any year. `broods`: its separate runs, in order,
+ * when it has a gap between them (a two-brood species), so a countdown waits for the next one. */
+export interface Due extends Brood {
   year?: number;
+  broods?: readonly Brood[];
 }
 
 /** The explainer's "your spot" card: one place's season, drawn as a strip with today marked. */

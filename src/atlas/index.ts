@@ -1,7 +1,7 @@
 /**
  * The Atlas's species list, on its own so the species picker can load it without the network (src/atlas/atlas.ts).
  */
-import type { Due } from '../core/layer';
+import type { Brood, Due } from '../core/layer';
 
 /** One output of the network: a species (or, last, every other insect). */
 export interface AtlasSpecies {
@@ -43,27 +43,45 @@ function loadSeasons(): Promise<Uint8Array | null> {
     .then((b) => (b ? new Uint8Array(b) : ((seasons = null), null)));
   return seasons;
 }
+/** A day counts as in a species' season when its expected photos are at least this share of its best day's, so a
+ * smaller spring brood counts, not just the bigger summer one. One rule for the map's "Coming out near you" line
+ * (atlasLayer's dueHere) and the watch list's chips (seasonDues). */
+export const DUE_SHARE = 1 / 20;
 /**
- * Each species' typical season as days of year (first day at a quarter of its best, its peak, its last: the bar the
- * tree's glow uses), Midwest-wide, from season.bin. The function returns null for a species with no curve; the promise
- * resolves null when the file is missing.
+ * A species' seasons from its curve sampled every STEP days from SEASON[0] (any scale): each run of steps at or above
+ * DUE_SHARE of the curve's top (longer than one step, unless it holds the top), with that run's own peak, in order.
+ * The outer span (first start, last end, the top's peak) carries the runs as `broods`, so a countdown waits for the
+ * next brood, not the next spring. Null when the curve is empty.
+ */
+export function seasonsOf(curve: ArrayLike<number>): Due | null {
+  let pk = 0;
+  for (let k = 1; k < curve.length; k++) if (curve[k]! > curve[pk]!) pk = k;
+  if (!(curve[pk]! > 0)) return null;
+  const lim = curve[pk]! * DUE_SHARE;
+  const day = (k: number) => SEASON[0] + k * STEP;
+  const broods: Brood[] = [];
+  for (let k = 0; k < curve.length; k++) {
+    if (curve[k]! < lim) continue;
+    let e = k, top = k;
+    while (e + 1 < curve.length && curve[e + 1]! >= lim) if (curve[++e]! > curve[top]!) top = e;
+    // A lone step over the line away from the peak is a blip in the curve (a few stray photos), not a brood.
+    if (e > k || (k <= pk && pk <= e)) broods.push({ start: day(k), peak: day(top), end: day(e) });
+    k = e;
+  }
+  return { start: broods[0]!.start, peak: day(pk), end: broods[broods.length - 1]!.end, broods };
+}
+/** Species i's typical-year curve in season.bin (STEPS bytes), or null when out of range. */
+const typical = (b: Uint8Array, i: number) => (i >= 0 && i < b.length / (2 * STEPS) ? b.subarray(i * 2 * STEPS, i * 2 * STEPS + STEPS) : null);
+/**
+ * Each species' typical season, Midwest-wide, from season.bin's typical curves (seasonsOf: the same rule as the map's
+ * own line). The function returns null for a species with no curve; the promise resolves null when the file is missing.
  */
 export async function seasonDues(): Promise<((i: number) => Due | null) | null> {
   const b = await loadSeasons();
   if (!b) return null;
-  const n = b.length / (2 * STEPS);
   return (i) => {
-    if (!(i >= 0 && i < n)) return null;
-    const at = i * 2 * STEPS;
-    let pk = 0;
-    for (let k = 1; k < STEPS; k++) if (b[at + k]! > b[at + pk]!) pk = k;
-    if (!b[at + pk]) return null;
-    const lim = b[at + pk]! / 4;
-    let s = pk, e = pk;
-    while (s > 0 && b[at + s - 1]! >= lim) s--;
-    while (e < STEPS - 1 && b[at + e + 1]! >= lim) e++;
-    const day = (k: number) => SEASON[0] + k * STEP;
-    return { start: day(s), peak: day(pk), end: day(e) };
+    const c = typical(b, i);
+    return c ? seasonsOf(c) : null;
   };
 }
 /**

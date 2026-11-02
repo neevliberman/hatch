@@ -492,7 +492,7 @@ if (existsSync(join(distDir, 'radar'))) {
         const sb = await star.boundingBox();
         if (!sb || sb.width < 24 || sb.height < 24 || sb.x < 0 || sb.x + sb.width > width + 1) fail('the watch star is too small or off-screen');
         await tapW('.sp-star');
-        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Stop watching /.test((await star.getAttribute('aria-label')) ?? '')) fail('tapping the star did not watch the species');
+        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Watch /.test((await star.getAttribute('aria-label')) ?? '')) fail('tapping the star did not watch the species, or its label stopped reading "Watch ..." (aria-pressed carries the state)');
         if ((await stored()) !== '["luna"]') fail(`the watch list saved as ${await stored()}`);
         const chip = page.locator('#sp-watch .sp-go');
         if ((await chip.count()) !== 1) fail('the Watching row shows no chip for the watched species');

@@ -1,7 +1,6 @@
 import type { SpeciesEntry } from '../species';
 import { atlasKey, json, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
-import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
 import { dueShort } from './near';
 import { loadWatch, saveWatch, WATCH_MAX } from './watch';
@@ -44,8 +43,8 @@ export function mountSpeciesPicker(
   onPick: (key: string, season?: string) => void,
   /** The map's day (its day of year, whether it is ATLAS_YEAR's own season, and its words), for the tree's glow. */
   day?: () => { doy: number; year: boolean; label: string },
-  /** The watch list's clock (the page's, so ?today= moves it) and, for a species with a saved place, its season there. */
-  watching?: { now: () => number; due: (key: string) => Due | null },
+  /** The watch list's clock (the page's, so ?today= moves it). */
+  watching?: { now: () => number },
 ): SpeciesPicker {
   const bySci = new Map(featured.filter((e) => e.sci).map((e) => [e.sci!, e.key] as const));
   const keyOf = (s: AtlasSpecies) => bySci.get(s.name) ?? atlasKey(s.name);
@@ -90,14 +89,15 @@ export function mountSpeciesPicker(
   const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
 
   // The watch list: species starred from the sheet's head, kept in this browser (src/ui/watch.ts). Each shows as a chip
-  // with the same one-line countdown as "Coming out near you" (src/ui/near.ts), from the saved place when it is the
-  // species on the map, else from the Atlas's typical Midwest season (season.bin, fetched only if something is watched).
+  // with the same one-line countdown as "Coming out near you" (src/ui/near.ts), always from the Atlas's typical Midwest
+  // season (season.bin, fetched only if something is watched), so a chip reads the same whichever species is on the map;
+  // the line under the map speaks for the saved place.
   const star = sheet.querySelector<HTMLButtonElement>('.sp-star')!;
   const watchStrip = sheet.querySelector<HTMLUListElement>('#sp-watch')!;
   const watchNote = sheet.querySelector<HTMLElement>('#sp-wnote')!;
-  let watched = loadWatch();
+  let watched = loadWatch() ?? [];
   let currentLabel = button.querySelector('.sp-face')?.textContent ?? '';
-  let curves: ((i: number) => Due | null) | null = null;
+  let curves: Awaited<ReturnType<typeof seasonDues>> = null;
   let curvesTried = false;
   const labelOf = (key: string): string | null => {
     const f = featured.find((e) => e.key === key);
@@ -106,9 +106,9 @@ export function mountSpeciesPicker(
     return s ? nameOf(s) : key === currentKey ? currentLabel : null;
   };
   const setStar = () => {
-    const on = watched.includes(currentKey);
-    const text = `${on ? 'Stop watching' : 'Watch'} ${currentLabel}`;
-    star.setAttribute('aria-pressed', String(on));
+    // A toggle: the label names the action and stays put, aria-pressed says whether it is on.
+    const text = `Watch ${currentLabel}`;
+    star.setAttribute('aria-pressed', String(watched.includes(currentKey)));
     star.setAttribute('aria-label', text);
     star.title = text;
   };
@@ -121,17 +121,18 @@ export function mountSpeciesPicker(
     const chips = watched.map((k) => {
       const name = labelOf(k);
       if (name === null) return ''; // the Atlas list is not in yet
-      const here = watching?.due(k) ?? null;
-      const i = here || !curves ? -1 : indexOfKey(k);
-      const due = here ?? (i >= 0 ? curves!(i) : null);
+      const i = curves ? indexOfKey(k) : -1;
+      const due = i >= 0 ? curves!(all![i]!.i) : null;
       const when = due ? dueShort(due, now) : '';
-      const title = due ? (here ? 'Season at your saved place' : 'Typical season across the Midwest') : '';
+      const title = due ? 'Typical season across the Midwest' : '';
       return `<li class="sp-chip"><button type="button" class="sp-go" data-key="${esc(k)}"${title ? ` title="${title}"` : ''}><b>${esc(name)}</b><span>${when}</span></button><button type="button" class="sp-wx" data-unwatch="${esc(k)}" aria-label="Stop watching ${esc(name)}">&times;</button></li>`;
     });
     watchStrip.hidden = !chips.some(Boolean) || !!q.trim();
-    const had = (document.activeElement as HTMLElement | null)?.closest('#sp-watch') ? (document.activeElement as HTMLElement).dataset.key : undefined;
+    // An async re-render must not drop keyboard focus, whether it was on a chip or on its cross.
+    const el = document.activeElement as HTMLElement | null;
+    const had = el?.closest('#sp-watch') ? (el.dataset.key ? `.sp-go[data-key="${el.dataset.key}"]` : el.dataset.unwatch ? `.sp-wx[data-unwatch="${el.dataset.unwatch}"]` : '') : '';
     watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${chips.join('')}`;
-    if (had) watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${had}"]`)?.focus(); // an async re-render must not drop keyboard focus
+    if (had) watchStrip.querySelector<HTMLElement>(had)?.focus();
     setStar();
     // The typical-season curves are only fetched once something is watched that no saved place speaks for.
     if (all && !curves && !curvesTried && watched.length) {
@@ -144,7 +145,7 @@ export function mountSpeciesPicker(
   };
   const toggleWatch = () => {
     watchNote.hidden = true;
-    watched = loadWatch(); // another tab may have changed it
+    watched = loadWatch() ?? watched; // another tab may have changed it; blocked storage keeps this visit's list
     if (watched.includes(currentKey)) watched = watched.filter((k) => k !== currentKey);
     else if (watched.length >= WATCH_MAX) {
       watchNote.textContent = `Watch list is full (${WATCH_MAX}). Remove one first.`;
@@ -385,7 +386,7 @@ export function mountSpeciesPicker(
     if (b.dataset.unwatch) {
       const chip = b.closest('li');
       const next = (chip?.nextElementSibling ?? chip?.previousElementSibling)?.querySelector<HTMLElement>('.sp-go');
-      watched = loadWatch().filter((k) => k !== b.dataset.unwatch);
+      watched = (loadWatch() ?? watched).filter((k) => k !== b.dataset.unwatch);
       saveWatch(watched);
       renderWatch();
       (next ? watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${next.dataset.key}"]`) : star)?.focus();

@@ -1299,11 +1299,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // Keyboard operable: focus the star and press Enter.
         await star.focus();
         await page.keyboard.press('Enter');
-        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Stop watching /.test((await star.getAttribute('aria-label')) ?? '')) fail(`${k}: Enter on the star did not watch it`);
+        // A toggle button: aria-pressed carries the state, the label stays "Watch ..." (never "Stop watching": a double negative when pressed).
+        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Watch /.test((await star.getAttribute('aria-label')) ?? '')) fail(`${k}: Enter on the star did not watch it, or its label stopped reading "Watch ..."`);
         await page.keyboard.press('Escape');
       }
       if ((await stored()) !== JSON.stringify([...three].reverse())) fail(`the watch list saved as ${await stored()}`);
-      // Back on a different species, the sheet lists all three with a countdown each.
+      // Back on a different species, the sheet lists all three with a countdown each. A saved place too: its season
+      // speaks in the line under the map, never in a chip, so a chip doesn't jump when its species comes on screen.
+      await page.evaluate(() => localStorage.setItem('hatch-place', JSON.stringify({ name: 'Chicago, IL', lat: 41.88, lng: -87.63 })));
       await go('papilio-glaucus');
       await open();
       await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 3, null, { timeout: 10000 })
@@ -1325,11 +1328,20 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(500);
       await shotW('2-picker-dark');
       await page.evaluate(() => document.getElementById('theme-btn').click());
-      // A chip opens its species.
+      // Keyboard focus on a chip's cross survives a re-render of the row (the search box's input event redraws it).
+      await page.locator('#sp-watch [data-unwatch="papilio-glaucus"]').focus();
+      await page.evaluate(() => document.getElementById('sp-q').dispatchEvent(new Event('input')));
+      if ((await page.evaluate(() => document.activeElement?.dataset.unwatch)) !== 'papilio-glaucus') fail('a re-render of the Watching row dropped focus from a chip\'s cross');
+      // A chip opens its species, and its countdown reads the same once that species is the one on the map.
+      const before = await page.locator('#sp-watch [data-key="papilio-polyxenes"] span').textContent();
       await page.locator('#sp-watch [data-key="papilio-polyxenes"]').click();
       await page.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { timeout: 30000 }).catch(() => fail('a Watching chip did not open its species'));
       // A cross removes one, and the store follows.
       await open();
+      await page.waitForFunction(() => /^out /.test(document.querySelector('#sp-watch [data-key="papilio-polyxenes"] span')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {});
+      const after = await page.locator('#sp-watch [data-key="papilio-polyxenes"] span').textContent();
+      if (after !== before) fail(`a chip's countdown jumped from "${before}" to "${after}" when its species came on screen`);
+      await page.evaluate(() => localStorage.removeItem('hatch-place'));
       await page.locator('#sp-watch [data-unwatch="poecilocapsus-lineatus"]').click();
       if ((await chips().count()) !== 2) fail('the chip\'s cross did not remove it');
       if ((await stored()) !== JSON.stringify(['papilio-polyxenes', 'papilio-glaucus'])) fail(`after a cross the watch list saved as ${await stored()}`);
@@ -1363,6 +1375,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await blocked.locator('#species').click();
       await blocked.locator('.sp-star').click();
       if ((await blocked.locator('.sp-star').getAttribute('aria-pressed')) !== 'true') fail('with storage blocked the star does not work for the visit');
+      // A second species starred in the same visit joins the first instead of replacing it (a failed read is not an empty list).
+      await blocked.locator('#sp-q').fill('papilio polyxenes');
+      await blocked.waitForFunction(() => /match/.test(document.querySelector('.sp-crumbs')?.textContent ?? ''), null, { timeout: 15000 });
+      await blocked.locator('#sp-q').press('Enter');
+      await blocked.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { timeout: 30000 }).catch(() => fail('with storage blocked a searched species did not open'));
+      await blocked.locator('#species').click();
+      await blocked.locator('.sp-star').click();
+      await blocked.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 2, null, { timeout: 10000 })
+        .catch(async () => fail(`with storage blocked, starring a second species left ${await blocked.locator('#sp-watch .sp-go').count()} chips, not 2`));
+      // And a cross removes only its own (the search box still holds the last search, which hides the row: clear it).
+      await blocked.locator('#sp-q').fill('');
+      await blocked.locator('#sp-watch [data-unwatch="papilio-polyxenes"]').click();
+      if ((await blocked.locator('#sp-watch .sp-go').count()) !== 1) fail('with storage blocked, a cross did not leave the other species watched');
       if (!(await blocked.locator('#map').isVisible())) fail('with storage blocked the map is gone');
       await blocked.close();
     } catch (e) {
