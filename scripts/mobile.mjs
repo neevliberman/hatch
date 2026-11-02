@@ -613,7 +613,15 @@ if (existsSync(join(distDir, 'radar'))) {
       const key = await page.locator('#strip .range-note').boundingBox();
       if (!key) fail('the band has no key line');
       else if (key.x < 0 || key.x + key.width > 391 || key.y + key.height > 845) fail('the band\'s key line is off-screen');
-      await page.waitForTimeout(1500);
+      // The swatch, "Shade:" and its first word stay on one line (a swatch left alone at a line's end reads as litter).
+      const sw = await page.locator('#strip .range-note .range-key').boundingBox();
+      const lead = await page.evaluate(() => {
+        const r = document.createRange();
+        r.selectNodeContents(document.querySelector('#strip .range-note .nw'));
+        const ys = [...r.getClientRects()].map((x) => x.top + x.height / 2);
+        return Math.max(...ys) - Math.min(...ys);
+      });
+      if (!sw || !(lead < 8)) fail('the band\'s swatch is split from "Shade:"');
       await page.screenshot({ path: `${out}/band-phone-${scheme}.png` });
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);

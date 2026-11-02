@@ -429,6 +429,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .ribbon stop { stop-color: var(--text); stop-opacity: 0.06; }
 .ribbon stop:nth-child(2), .ribbon stop:nth-child(3) { stop-opacity: 0.2; }
 .ribbon .range-edge { fill: none; stroke: var(--muted); stroke-width: 1; }
+.range-note .nw { white-space: nowrap; }
 .range-key { display: inline-block; width: 14px; height: 9px; margin-right: 4px; vertical-align: -1px; border-bottom: 1px solid var(--muted);
   background: color-mix(in srgb, var(--text) 20%, transparent); }
 /* Sightings of a wave the forecast leaves out, in its dots' colour: seen, not forecast. */
