@@ -2106,6 +2106,8 @@ const REAL = (() => {
     document.querySelector('.cap .common').textContent = m.place;
     const h0 = m.hour != null ? m.hour : 10;
     R.setHour(h0);
+    // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
+    document.fonts.ready.then(() => setTimeout(() => parent.postMessage({ type: 'exo-live' }, location.origin), 250));
     const lab = document.getElementById('sunlab'); lab.setAttribute('aria-label', 'Time of day: drag the sun'); lab.setAttribute('aria-valuemin', R.rise); lab.setAttribute('aria-valuemax', R.set);
   });
   parent.postMessage({ type: 'exo-ready' }, location.origin);

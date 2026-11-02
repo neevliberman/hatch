@@ -922,12 +922,12 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #exo.open { clip-path: circle(150% at var(--ox, 50%) var(--oy, 50%)); }
 #exo.shut { transition-duration: .4s; }
 #exo[hidden] { display: none; }
-#exo iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; transition: opacity .35s .35s; }
-#exo.open iframe { opacity: 1; }
+#exo iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; transition: opacity .4s; }
+#exo.open.live iframe { opacity: 1; } /* only once Exo shows this place's day */
 .exo-x { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); width: 40px; height: 40px;
   padding: 0; border: 0; border-radius: 50%; background: none; color: #141414; font: 400 30px/1 Georgia, serif; cursor: pointer; }
 .exo-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; font-size: 13px; color: #5c5c58; pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { #exo, #exo iframe { transition: none; } #exo { clip-path: none; } #exo iframe { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #exo, #exo iframe { transition: none; } #exo { clip-path: none; } }
 /* Chorus (src/ui/chorusPanel.ts): the singing insects at a pinned place, synthesised from song traits. */
 .ch-open { position: absolute; top: 2px; right: 36px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
 .ch-open:hover { color: var(--text); background: var(--track-faint); }

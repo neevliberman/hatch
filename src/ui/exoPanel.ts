@@ -57,9 +57,13 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
   };
 
   addEventListener('message', (e) => {
-    if (e.origin === location.origin && e.source === frame.contentWindow && e.data?.type === 'exo-ready') {
+    if (e.origin !== location.origin || e.source !== frame.contentWindow) return;
+    if (e.data?.type === 'exo-ready') {
       ready = true;
       push();
+    } else if (e.data?.type === 'exo-live') {
+      root.classList.add('live'); // Exo shows this place's day: fade it in
+      noteEl.textContent = '';
     }
   });
 
@@ -73,7 +77,7 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
     const got = await weather(lat, lng, at);
     if (key !== lastKey) return; // the pin or the date moved on
     day = got;
-    noteEl.textContent = got ? '' : 'No weather came back for this place and day.';
+    if (!got) noteEl.textContent = 'No weather came back for this place and day.';
     push();
   };
 
@@ -86,14 +90,14 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
   const close = () => {
     const done = () => {
       root.hidden = true;
-      root.classList.remove('shut');
+      root.classList.remove('shut', 'live');
       frame.src = 'about:blank'; // unloads Exo, which stops its WebGL loop
       ready = false;
       lastKey = '';
       if (opener?.isConnected) opener.focus();
     };
     if (reduce.matches) return done();
-    root.classList.remove('open');
+    root.classList.remove('open', 'live');
     root.classList.add('shut');
     setTimeout(done, 420);
   };
