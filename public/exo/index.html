@@ -1069,6 +1069,7 @@ function leafWash(node, dir, len, wid, droop, r, G) {
     [-1.4, 1.4].forEach(k => { const p = node.clone().add(shift).addScaledVector(dir, len * t).addScaledVector(side, k / 1.4 * half(t)); p.y -= droop * t * t + .015; G.pos.push(p.x, p.y, p.z); G.st.push(k, t); });
     if (i) { const a = base + (i - 1) * 2; G.idx.push(a, a + 1, a + 3, a, a + 3, a + 2); } }
 }
+let UMBEL = null; /* the milkweed head; REAL recolours it for the season */
 function buildGarden() {
   const S = [], stalk = []; for (let i = 0; i <= 30; i++) { const y = 2.6 - i / 30 * 20.6; stalk.push([.12 * Math.sin(i * .4), y, 0]); }
   S.push({ pts: stalk, w: .8 }, { pts: stalk.map(([x, y, z]) => [x + .22, y, z]), w: .6 });
@@ -1090,7 +1091,7 @@ function buildGarden() {
   }
   // common milkweed: a dusty pink-mauve umbel, one loose wash over the whole head and a dab on each floret
   florets.push({ p: [.15, 3.75, .1], s: 2.2, seed: .37, a: .32 }, { p: [-.4, 3.5, -.2], s: 1.4, seed: .81, a: .3 });
-  const umbel = blots(florets, [.88, .62, .70], [.70, .47, .62], .55, .8); umbel.renderOrder = -4; garden.add(umbel);
+  const umbel = blots(florets, [.88, .62, .70], [.70, .47, .62], .55, .8); umbel.renderOrder = -4; garden.add(umbel); UMBEL = umbel;
   for (let i = 0; i < 120; i++) { const a = R() * 6.3, rr = 3 + R() * 14, x = Math.cos(a) * rr, z = Math.sin(a) * rr, h = .4 + R() * 1.1, lean = R() - .5;
     S.push({ pts: [[x, -18, z], [x + lean * .3, -18 + h * .6, z], [x + lean * .7, -18 + h, z]], w: .4, d: i % 3 > 0, os: .2 }); }
   garden.add(part(S, 901, matPlant));
@@ -1969,7 +1970,7 @@ function frame(now) {
     L.tib.rotation.z = smooth(-1.7, -2.5, legBlend) + .3 * tw;
     L.tar.rotation.z = smooth(.85, -.5, legBlend) - .2 * tw;
   });
-  const sipK = updateProboscis(dt, playing && fl.mode === 'perch' && fl.at === 'flower' && !night && !hot && fl.t > 1);
+  const sipK = updateProboscis(dt, playing && fl.mode === 'perch' && fl.at === 'flower' && !night && !hot && fl.t > 1 && !(REAL && REAL.day && !REAL.bloom));
 
   motionArt(flying, now);
   // --- heat --- (energy budget: HB, hbStep)
@@ -2141,6 +2142,10 @@ const REAL = (() => {
     ar.textContent = m.season === 'away' ? `monarchs from here are in Mexico now${m.arrive ? `, back ~${m.arrive}` : ''}` : m.season === 'leaving' ? 'monarchs here are fattening up to fly to Mexico'
       : m.arrive ? (m.early ? `most springs, none here until ~${m.arrive}` : `first monarchs here usually ~${m.arrive}`) : '';
     ar.hidden = !ar.textContent; R.away = m.season === 'away';
+    /* common milkweed through a Midwest summer: green buds until mid June, pink bloom to early August, then faded and going to seed */
+    const doy = Math.floor((m.utc0 - Date.UTC(new Date(m.utc0).getUTCFullYear(), 0, 1)) / 864e5) + 1;
+    R.bloom = doy >= 166 && doy < 218;
+    if (UMBEL) { const u = UMBEL.material.uniforms, st = doy < 166 ? [[.62, .74, .52], [.45, .58, .40]] : R.bloom ? [[.88, .62, .70], [.70, .47, .62]] : [[.78, .70, .62], [.60, .52, .46]]; u.pigA.value.setRGB(...st[0]); u.pigB.value.setRGB(...st[1]); }
     const h0 = m.hour != null ? m.hour : 10;
     R.setHour(h0); R.opened = performance.now();
     // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
