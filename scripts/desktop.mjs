@@ -598,6 +598,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           await shotL('4-scorecard');
         }
         await page.keyboard.press('Escape');
+        // Back out to the whole Midwest first. Zoomed in, each species switch redraws the fine hexagons, and on software GL
+        // (CI) one frame can take 10-25 s; a click waits for two frames, so the picker's rows timed out at 30 s.
+        await page.evaluate(() => window.__hatch.map.fit(window.__hatch.padding()));
+        await page.waitForFunction(() => window.__hatch.luna.res() <= 4, null, { timeout: 60000 }).catch(() => fail('live mode stayed on the fine hexagons after zooming out'));
         // The firefly has a part in the served file: picking it from live mode stays live, and its menu offers live.
         // The beetle has none: it lands on all years, its menu has no live option, and says why at the top.
         if (await page.locator('#species').isVisible()) {
