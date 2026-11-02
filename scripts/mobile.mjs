@@ -646,6 +646,71 @@ if (existsSync(join(distDir, 'radar'))) {
     await ctx.close();
     console.log(`${tag}: checked`);
   }
+  // The header names the species on the map (a group sketch showed every moth as the luna), still in one row: the
+  // featured luna, then a long Atlas name picked from search, whole in at most two lines; nothing covered, off-screen or
+  // scrolling sideways. A radar replay hides both menus (it is one evening, not a species' season) and × brings them
+  // back. The smallest phone of each engine, both ways up. ONLY=header runs just this.
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    for (const orient of ['portrait', 'landscape']) {
+      if ((process.env.ONLY && process.env.ONLY !== 'header') || !mine()) continue;
+      const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
+      const tag = `header ${phone} ${orient}`;
+      const fail = (m) => problems.push(`${tag}: ${m}`);
+      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      // The face's text, whether it shows whole (no clamped line) in at most two lines, and whether the header is one row.
+      const face = () => page.evaluate(() => {
+        const f = document.querySelector('#species .sp-face');
+        const r = f.getBoundingClientRect();
+        const lines = Math.round(r.height / parseFloat(getComputedStyle(f).lineHeight));
+        const row = [...document.querySelectorAll('#top > :not(.brand):not(#explore):not(.sr)')].filter((el) => el.getBoundingClientRect().width > 0)
+          .map((el) => el.getBoundingClientRect()).every((b, _, all) => Math.abs(b.top + b.height / 2 - all[0].top - all[0].height / 2) < 6);
+        const top = document.getElementById('top').getBoundingClientRect();
+        const bf = parseFloat(getComputedStyle(f.parentElement).fontSize), sf = parseFloat(getComputedStyle(document.getElementById('season')).fontSize);
+        return { text: f.textContent, header: top.bottom, sameType: bf === sf, shown: r.width > 0 && getComputedStyle(f).visibility !== 'hidden' && getComputedStyle(f.parentElement).color !== 'rgba(0, 0, 0, 0)',
+          whole: f.scrollHeight <= f.clientHeight + 1 && f.scrollWidth <= f.clientWidth + 1, lines, row };
+      });
+      try {
+        await page.goto(`${origin}/?noauto&today=2027-01-15`);
+        await page.waitForTimeout(1500);
+        for (const [want, pick] of [['Luna moth', null], ['Lunate Zale Moth', ['lunate zale', 'zale-lunata']], ['Red-spotted Admiral', ['red-spotted admiral', 'limenitis-arthemis']]]) {
+          if (pick) {
+            await page.locator('#species').click({ timeout: 60000 });
+            await page.locator('#sp-q').fill(pick[0], { timeout: 60000 });
+            await page.locator(`#sp-list [data-key="${pick[1]}"]`).first().click({ timeout: 60000 });
+            await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, pick[1], { timeout: 60000 });
+            await page.waitForTimeout(500);
+          }
+          const f = await face();
+          if (f.text !== want) fail(`the species button reads "${f.text}", not "${want}"`);
+          if (!f.shown) fail(`the species button does not show "${want}"`);
+          if (!f.whole || f.lines > 2) fail(`"${want}" does not fit the species button whole in two lines (${f.lines} lines)`);
+          if (!f.row) fail(`with "${want}" the header is not one row`);
+          if (f.header > 54.5) fail(`with "${want}" the header is ${Math.round(f.header)} px tall, over 54`);
+          if (!f.sameType) fail('the species name is not set in the season menu\'s type size');
+          if (want === 'Luna moth' && f.lines !== 1) fail(`"Luna moth" wraps onto ${f.lines} lines`);
+          const a = await page.evaluate(audit);
+          a.bad.forEach((m) => fail(`with "${want}", ${m}`));
+          if (a.overflowX) fail(`with "${want}" the page scrolls sideways`);
+          await page.screenshot({ path: `${out}/header-${phone}-${orient}-${want.replace(/\W+/g, '-')}.png` });
+        }
+        await page.goto(`${origin}/?radar=karx-2014-07-20&noauto&today=2027-01-15`);
+        await page.waitForSelector('#radar', { timeout: 30000 });
+        if (await page.locator('#top .season:visible').count()) fail('the species or season menu stays up over a radar replay');
+        if (!(await page.locator('.brand').isVisible()) || (await page.locator('.brand .mark').isVisible())) fail('over a radar replay the title is missing or still wears the species sketch');
+        if (!(await page.locator('#theme-btn').isVisible()) || !(await page.locator('#info-btn').isVisible())) fail('a radar replay hid the theme or About button');
+        await page.locator('#radar .rd-x').click({ timeout: 30000 });
+        await page.locator('#species').waitFor({ state: 'visible', timeout: 30000 }).catch(() => fail('closing the replay did not bring the species menu back'));
+        if (!(await page.locator('#season').isVisible())) fail('closing the replay did not bring the season menu back');
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+      console.log(`${tag}: checked`);
+    }
+  }
   server.close();
 } else problems.push(`radar replays not checked: no ${join(distDir, 'radar')} (run npm run build first)`);
 for (const b of Object.values(browsers)) await b.close();

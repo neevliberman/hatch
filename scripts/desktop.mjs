@@ -167,12 +167,36 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
 
   // First visit: the season plays itself up to 10 June, the map comes first and the About button glows; i opens the
   // drawer (and any click lands the opening on 10 June) and Escape closes it.
+  // Timed in the page, by a poll that starts before the app does: a check run from here waits on animation frames,
+  // which a software-drawn 2560x1440 map on a busy machine holds back for seconds, so it timed out after the date had
+  // long since moved. The page notes when the date first reads April or May (the opening's first day) and when the
+  // season then moves on from it by itself, both against its own clock.
+  await page.addInitScript(() => {
+    let first = null;
+    const look = () => {
+      const t = document.getElementById('t-date')?.textContent ?? '';
+      const at = window.__hatch?.time?.cursor;
+      if (first === null && at != null && /^(Apr|May)/.test(t)) {
+        first = at;
+        window.__autoplayAt = performance.now();
+      }
+      if (first != null && at > first) return void (window.__autoplayMovedAt = performance.now());
+      setTimeout(look, 25);
+    };
+    look();
+  });
   await page.goto(file);
-  const opened = page.waitForFunction(() => /^(Apr|May)/.test(document.getElementById('t-date')?.textContent ?? ''), null, { timeout: 8000 })
-    .then(() => true, () => false);
-  await page.waitForTimeout(2500);
+  // The same budget as before, on the page's clock: the opening's first day shows within 8 s of the page loading. The
+  // wait here is longer and polls on a timer, so a starved page is judged by its own clock, not by when it got to answer.
+  const noted = (key) => page.waitForFunction((k) => window[k] != null, key, { timeout: 30000, polling: 100 }).then(() => true, () => false);
+  const budget = (await noted('__autoplayAt'))
+    ? await page.evaluate(() => window.__autoplayAt - performance.getEntriesByType('navigation')[0].loadEventEnd) : null;
+  // And then it really plays: the season moves on from that first day before anything is touched (it plays to 10 June
+  // in about 4 s once the map's first frame is up).
+  const moved = budget != null && (await noted('__autoplayMovedAt'));
   await shot('1-first-visit');
-  if (!(await opened)) fail('the season did not play itself on first visit');
+  if (budget == null || budget > 8000) fail(`the season did not play itself on first visit (its first day showed ${budget == null ? 'never' : `${Math.round(budget)} ms after load`})`);
+  else if (!moved) fail('the season did not play itself on first visit (it showed its first day but never moved on)');
   // Opened from disk there is nothing to fetch, so no live option (and no request: the external-request check above).
   if (await page.locator('#season option[value=live]').count()) fail('the one-file build offers live mode');
   if (await drawerOpen(page)) fail('the drawer covers the map on first visit');
@@ -578,6 +602,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const stale = (await badge.getAttribute('class')).includes('stale');
       // Amber only when the nightly run is overdue; a frozen or rebuilt file shows its age without it.
       if (stale !== (label === 'late file')) fail(stale ? 'fresh data marked stale' : 'a late file is not marked stale');
+      // Past 30 September the nightly runs have stopped for the year: it says the season is over, never an age that
+      // reads as a broken feed. In season it says how fresh the data is.
+      const said = (await badge.textContent()) ?? '';
+      if (label === 'off-season pick') {
+        if (said !== 'season over') fail(`off-season the badge reads "${said}", not "season over"`);
+        if (!/season ended Sep 30/.test((await badge.getAttribute('title')) ?? '')) fail(`off-season the badge's title reads "${await badge.getAttribute('title')}"`);
+      } else if (query.includes(inSeason) && /season over|days old/.test(said)) fail(`in season the badge reads "${said}"`);
       // The address bar follows the view on a throttle; a software-GL page can take seconds per frame, so wait for it.
       await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 10000 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
@@ -1100,10 +1131,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && Math.abs(c.lngLat[0] - lng) < 0.5 && Math.abs(c.lngLat[1] - lat) < 0.6;
       }, ev.at, { timeout: 30000 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
       await settled();
-      // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and the map's own colours well outside it.
+      // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and outside it the bare map: the species'
+      // forecast is not part of the replay, so its hexagons are out of sight (map.ts), and only there.
       // The frames arrive and are drawn on their own beat, which can lag the glide on a runner with software GL: look again
       // for up to 10 s before calling the sheet missing.
       const paper = ([r, g, b]) => r > 225 && g > 220 && b > 200;
+      const hexesDrawn = () => page.evaluate(() => window.__hatch.map.drawn().filter((id) => /-(forecast|unseen)-r\d/.test(id)));
       let px;
       for (let tries = 0; tries < 20; tries++) {
         const png = await shotR('1-open');
@@ -1113,16 +1146,28 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           const g = c.getContext('2d');
           g.drawImage(bmp, 0, 0);
           const k = bmp.width / innerWidth;
-          const at = (lngLat) => {
+          // The lightest pixel of a 9 x 9 patch: the ground's own colour, past any tree mark or line drawn over it.
+          const lightest = (lngLat) => {
             const [x, y] = window.__hatch.map.project(lngLat);
-            return [...g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3)];
+            if (x < 5 || y < 5 || x > innerWidth - 5 || y > innerHeight - 5) return null; // off a phone's screen
+            const d = g.getImageData(Math.round(x * k) - 4, Math.round(y * k) - 4, 9, 9).data;
+            let best = [0, 0, 0];
+            for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > best[0] + best[1] + best[2]) best = [d[i], d[i + 1], d[i + 2]];
+            return best;
           };
-          return { sheet: at(sheet), off: at(off) };
+          return { sheet: lightest(sheet), off: lightest(off) };
         }, [png.toString('base64'), ev.sheet, ev.off]);
-        if (paper(px.sheet) && !paper(px.off)) break;
+        if (px.sheet && paper(px.sheet) && (!px.off || paper(px.off))) break;
         await page.waitForTimeout(500);
       }
-      if (!paper(px.sheet) || paper(px.off)) fail(`no radar sheet at its place (inside ${px.sheet}, outside ${px.off})`);
+      if (!px.sheet || !paper(px.sheet)) fail(`no radar sheet at its place (${px.sheet})`);
+      if (px.off && !paper(px.off)) fail(`the forecast still colours the map outside the radar sheet (${px.off})`);
+      const under = await hexesDrawn();
+      if (under.length) fail(`forecast hexagons drawn under the replay: ${under.join(', ')}`);
+      // Nor is the replay that species' season: the species and season menus step aside while it is up.
+      if (await page.locator('#top .season:visible').count()) fail('the species or season menu stays up over the replay');
+      // The title stays, plain: no species sketch beside it.
+      if (!(await page.locator('.brand').isVisible()) || (await page.locator('.brand .mark').isVisible())) fail('over the replay the title is missing or still wears the species sketch');
       const t0 = await page.locator('#radar .rd-time').textContent();
       const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000 })
         .then(() => true, () => false);
@@ -1186,6 +1231,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           .catch(async () => fail(`closing it again did not bring the Midwest back: ${JSON.stringify(await view())}`));
       }
       if (await page.locator('#dock').isHidden()) fail('the time bar did not come back');
+      if (!(await page.locator('#season').isVisible())) fail('the season menu did not come back');
+      if (!(await hexesDrawn()).length) fail('the forecast hexagons did not come back after the replay');
       await urlIs(null);
       if (new URL(page.url()).searchParams.has('radar')) fail(`the link still names the replay after closing: ${page.url()}`);
       await shotR('3-closed');
@@ -1750,6 +1797,45 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // Species search (searchSpecies, src/atlas/names.ts): an exact or whole-word match on the common name, or a featured
+  // species, comes first ("luna" is the luna moth, not the Lunate Zale Moth; "cicada" a cicada, not the Cicada-killer;
+  // "bumble" a bumble bee, not the Bumble Flower Beetle), and Enter picks that top row. A species iNaturalist keeps as a
+  // subspecies has its English name (names.py: the Red-spotted Purple). ONLY=search runs just this.
+  const searchUnit = async (browser) => {
+    const tag = 'search';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    await ctx.route(PHOTOS, (r) => r.abort());
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      await page.locator('#species').click({ timeout: 60000 });
+      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000 });
+      // [query, the top row's key, or a test of its name]
+      for (const [q, want] of [['luna', 'luna'], ['monarch', 'monarch'], ['firefly', 'firefly'], ['cicada', /^[\w' -]* Cicada$/], ['bumble', /Bumble Bee$/],
+        ['red-spotted purple', 'limenitis-astyanax'], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
+        await page.locator('#sp-q').fill(q);
+        const top = page.locator('#sp-list .sp-row').first();
+        await top.waitFor({ timeout: 10000 }).catch(() => {});
+        const [key, name] = await top.evaluate((b) => [b.dataset.key, b.querySelector('.sp-name').firstChild.textContent]).catch(() => [null, null]);
+        if (typeof want === 'string' ? key !== want : !want.test(name ?? '')) fail(`searching "${q}" puts "${name}" (${key}) first`);
+        if (q === 'red-spotted purple' && name !== 'Red-spotted Purple') fail(`Limenitis astyanax is listed as "${name}"`);
+        // A featured species shows its own label, as on the featured strip.
+        if (q === 'luna' && name !== 'Luna moth') fail(`searching "luna" lists the luna moth as "${name}"`);
+      }
+      // Enter picks the top row: "luna" opens the luna moth, not a lunate one.
+      await page.locator('#sp-q').fill('luna');
+      await page.locator('#sp-q').press('Enter');
+      await page.waitForFunction(() => /^luna/.test(window.__hatch.current().id), null, { timeout: 30000 })
+        .catch(async () => fail(`Enter on "luna" opened ${await page.evaluate(() => window.__hatch.current().id)}`));
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Small feedback (ideas "UI 4"): the species sheet, the town box, a phone's hex card, the short notes, the held time
   // thumb, the watch star and the species button each move a little, and under reduced motion none of them moves at
   // all (no transition or animation longer than 0). Without reduced motion each does move, so the check can't pass
@@ -1825,20 +1911,25 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await check('town box', '#finder');
       await page.locator('#find-q').press('Escape');
       const r = await page.locator('#t-range').boundingBox();
+      // Is the slider marked held (or let go), within a moment? A finger's touchcancel (and a touchstart with no touch
+      // listener to wait for) is not cancelable, so CDP answers once it is sent, not once the page has handled it: a check
+      // read straight after can beat the pointer event on a busy machine. The app must still get there, just not instantly.
+      const heldIs = (want) => page.waitForFunction((w) => document.querySelector('#t-range').classList.contains('held') === w, want, { timeout: 2000 })
+        .then(() => true, () => false);
       await page.mouse.move(r.x + 4, r.y + r.height / 2);
       await page.mouse.down();
-      if (!(await page.evaluate(() => document.querySelector('#t-range').classList.contains('held')))) fail('a held time slider is not marked held');
+      if (!(await heldIs(true))) fail('a held time slider is not marked held');
       await check('held time thumb', '#t-range', '::-webkit-slider-thumb');
       await page.mouse.up();
-      if (await page.evaluate(() => document.querySelector('#t-range').classList.contains('held'))) fail('a released time slider stays held');
+      if (!(await heldIs(false))) fail('a released time slider stays held');
       if (phone) {
         // A finger that turns into a page scroll (the slider pans vertically) is cancelled, not lifted: that lets go too.
         const cdp = await ctx.newCDPSession(page);
         const at = [{ x: r.x + 4, y: r.y + r.height / 2 }];
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at });
-        if (!(await page.evaluate(() => document.querySelector('#t-range').classList.contains('held')))) fail('a finger on the time slider does not mark it held');
+        if (!(await heldIs(true))) fail('a finger on the time slider does not mark it held');
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-        if (await page.evaluate(() => document.querySelector('#t-range').classList.contains('held'))) fail('a cancelled touch leaves the time slider held');
+        if (!(await heldIs(false))) fail('a cancelled touch leaves the time slider held');
       }
       if (!reduce) for (const [what, d] of seen) if (!(d > 0 && d <= 0.24)) fail(`${what} moves for ${d * 1000} ms, not 1-240 ms`);
     } catch (e) {
@@ -1853,7 +1944,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
@@ -1861,6 +1952,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));
   if (process.env.ONLY === 'motion') units.splice(0, units.length, ...motionCases.map((c) => (b) => motionUnit(c, b)));
   if (process.env.ONLY === 'evict') units.splice(0, units.length, evictUnit);
+  if (process.env.ONLY === 'search') units.splice(0, units.length, searchUnit);
+  if (process.env.ONLY === 'big') units.splice(0, units.length, screenFor('chromium', 2560, 1440)); // the largest screen, first visit included
+  if (process.env.ONLY === 'live') units.splice(0, units.length, ...cases.map((c) => (b) => liveUnit(c, b)));
+  if (process.env.ONLY === 'radar') units.splice(0, units.length, radarUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);

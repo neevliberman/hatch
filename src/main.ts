@@ -355,7 +355,13 @@ function start() {
     const s = replayTimeSpec(m, mo, d, clock, l.live());
     return l.tracker ? { ...s, asOf: undefined } : s;
   };
-  const face = () => (picker.parentElement!.dataset.face = picker.value === TYPICAL ? (cur.seasons ? 'Typical' : 'All years') : label(picker.value));
+  // On phones the menu is as wide as its face (style.css, --face-ch), not its longest option, so the species button
+  // beside it has room for the name.
+  const face = () => {
+    const f = picker.value === TYPICAL ? (cur.seasons ? 'Typical' : 'All years') : label(picker.value);
+    picker.style.setProperty('--face-ch', String(f.length));
+    return (picker.parentElement!.dataset.face = f);
+  };
   const fillPicker = () => {
     const keep = picker.value || initialMode;
     const live = cur.live() ? [LIVE] : [];
@@ -527,7 +533,8 @@ function start() {
   };
   // The one-file preview has no species files next to it, so it offers luna only.
   if (!__BASEMAP__) speciesPick.button.parentElement!.hidden = true;
-  // On narrow phones the closed menu shows just the species' sketch mark (style.css), so it stays one small square.
+  // The title's sketch mark, by the species' group. On narrow phones the title steps aside and the species button names
+  // the species instead (style.css): a group sketch can't tell one moth from another.
   const markImg = $('mark') as HTMLImageElement;
   let markSeq = 0;
   const showMark = () => {
@@ -536,7 +543,6 @@ function start() {
     void markFor(sketch).then((url) => {
       if (seq !== markSeq) return; // the species or the theme changed meanwhile
       markImg.src = url;
-      speciesPick.button.style.setProperty('--mark', `url("${url}")`);
     });
   };
   showMark();

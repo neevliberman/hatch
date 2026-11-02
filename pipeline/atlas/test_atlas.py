@@ -138,6 +138,63 @@ def test_surprises_pick_the_biggest_gaps_with_enough_photos():
     assert surprises(rows) == [0, 2, 3]  # 10x on 50 photos is too few to list
 
 
+def test_surprises_leave_out_periodical_cicadas():
+    """A periodical cicada's brood off-year (1% of expected) is not a surprise; the next real shortfall takes its place."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.seen import periodical, periodicals, surprises
+    assert periodical("Magicicada cassini") and periodical("Magicicada septendecim")
+    assert not periodical("Neotibicen tibicen") and not periodical("Danaus plexippus")
+    names = ["Danaus plexippus", "Magicicada cassini", "Neotibicen tibicen"]
+    rows = [[500, 100, 5.0, None], [5, 400, 0.01, None], [100, 400, 0.25, None]]
+    assert surprises(rows) == [0, 1, 2]
+    assert surprises(rows, skip=periodicals(names)) == [0, 2]
+    # The shipped list (seen.py --repick) has none.
+    out = Path(__file__).resolve().parents[2] / "public/atlas"
+    species = json.loads((out / "species.json").read_text())
+    picks = json.loads((out / "seen-2026.json").read_text())["surprises"]
+    assert picks and not [species[i]["name"] for i in picks if periodical(species[i]["name"])]
+
+
+def test_names_fill_in_english_from_the_other_sources():
+    """names.py: iNaturalist's subspecies stands in for GBIF's species; a GBIF name needs North American backing (an
+    authority, or two regional checklists) and must say something of its own: not the Latin name or its genus, not the
+    family's or genus's name, not one word or a "species group". The shipped list names the Red-spotted Purple and none
+    of the names the first run let through."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.names import match_inat, pick_english, plausible, singular, tidy, usable
+    found = [{"id": 490118, "name": "Limenitis arthemis arthemis × astyanax", "rank": "infrahybrid", "is_active": True},
+             {"id": 58585, "name": "Limenitis arthemis astyanax", "rank": "subspecies", "is_active": True}]
+    assert match_inat("Limenitis astyanax", found)["id"] == 58585
+    assert match_inat("Limenitis astyanax", found[:1]) is None
+    assert match_inat("Actias luna", [{"id": 1, "name": "Actias luna", "rank": "species"}])["id"] == 1
+    assert tidy("Northern Leaf-Footed Bug") == "Northern Leaf-footed Bug"
+    assert singular("Pleasing Fungus Beetles") == "pleasing fungus beetle" and singular("Flower Flies") == "flower fly"
+    # Says something of its own.
+    assert not plausible("Valgus Hemipterus", "Valgus hemipterus") and not plausible("Gerdana Moth", "Gerdana caritella")
+    assert not plausible("Pleasing Fungus Beetle", "Megalodacne heros", ["Pleasing Fungus Beetles", None])
+    assert not plausible("Flower moth", "Scythris sinensis", ["Flower Moths"])
+    assert not plausible("Wasp", "Leucospis affinis") and not plausible("Aethes angustana species group", "Aethes angustana")
+    assert plausible("Golden-eyed Lacewing", "Chrysopa oculata", ["Green Lacewings", "Common Green Lacewings"])
+    # Backed in North America.
+    vt, mv, col = ("Checklist of Vermont Species", None), ("Martha's Vineyard species checklist", None), ("Catalogue of Life", None)
+    assert not usable([vt]) and not usable([col, ("Catalogue of the Lepidoptera of Belgium", None)]) and not usable([col, vt])
+    assert usable([vt, mv]) and usable([("Coreoidea Species File", None)])
+    vt3 = lambda n: (n, vt[0], None)  # noqa: E731
+    assert pick_english([vt3("Hunchback Bee Fly"), vt3("Hunchbacked Bee Fly")], "Lepidophora lutea") is None
+    assert pick_english([("Kentish Owlet", "Catalogue of Life", None), ("Kentish owlet", "Catalogue of the Lepidoptera of Belgium", None),
+                         ("Flower moth", "Global Register of Introduced and Invasive Species - United States (Contiguous)", "US"),
+                         ("Kentish owlet", vt[0], None), ("Flower moth", vt[0], None)], "Scythris sinensis", ["Flower Moths"]) is None
+    assert pick_english([("Golden-eyed Lacewing", *vt), ("Golden-eyed Lacewing", *mv)], "Chrysopa oculata") == "Golden-eyed Lacewing"
+    species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
+    purple = next(s for s in species if s["name"] == "Limenitis astyanax")
+    assert purple["common"] == "Red-spotted Purple" and purple["taxon"] == 58585 and purple["family"] == "Nymphalidae"
+    bad = {"Pleasing Fungus Beetle", "Hunchback Bee Fly", "Gerdana Moth", "Kentish Owlet", "Valgus Hemipterus"}
+    assert not [s["common"] for s in species if s.get("common") in bad]
+    assert sum(not s.get("common") for s in species) <= 138  # no backed English name in iNaturalist or GBIF (names.py run)
+
+
 
 # spread.py: the time bar's band. Each case is a few runs of a simulated species; a "null" never moves between years,
 # so it should almost never get a band.

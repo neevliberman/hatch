@@ -1,6 +1,6 @@
 import type { SpeciesEntry } from '../species';
 import { atlasKey, json, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
-import { nameOf, ORDER_NAMES } from '../atlas/names';
+import { nameOf, ORDER_NAMES, searchSpecies } from '../atlas/names';
 import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
 import { dueShort } from './near';
@@ -19,7 +19,7 @@ type Path = { order?: string; family?: string };
 export interface SpeciesPicker {
   /** Show the species on screen in the header button. */
   show(key: string, label: string): void;
-  /** The header button, for its sketch mark (--mark) and for hiding it. */
+  /** The header button, for hiding it. */
   readonly button: HTMLButtonElement;
   set disabled(on: boolean);
   /** Pick a random insect from the whole Atlas; resolves once it is chosen. */
@@ -203,10 +203,12 @@ export function mountSpeciesPicker(
     render();
   };
 
+  // A featured species goes by its own label ("Luna moth", not "North American Luna Moth"), as on the featured strip.
+  const featuredLabels = new Map(featured.filter((e) => e.sci).map((e) => [e.sci!, e.label] as const));
   const row = (s: AtlasSpecies) =>
     `<li><button type="button" class="sp-row" data-key="${esc(keyOf(s))}">${s.photo
       ? `<img src="${esc(s.photo)}" alt="" width="36" height="36" loading="lazy" referrerpolicy="no-referrer">`
-      : '<i class="sp-blank"></i>'}<span class="sp-name">${esc(nameOf(s))}${s.common ? `<i>${esc(s.name)}</i>` : ''}</span></button></li>`;
+      : '<i class="sp-blank"></i>'}<span class="sp-name">${esc(featuredLabels.get(s.name) ?? nameOf(s))}${s.common ? `<i>${esc(s.name)}</i>` : ''}</span></button></li>`;
   const group = (label: string, sub: string, data: string) =>
     `<li><button type="button" class="sp-group" ${data}><span class="sp-name">${esc(label)}${sub ? `<i>${esc(sub)}</i>` : ''}</span><span class="sp-n"></span></button></li>`;
   const counted = (html: string, n: number) => html.replace('<span class="sp-n"></span>', `<span class="sp-n">${n.toLocaleString()}</span>`);
@@ -216,24 +218,8 @@ export function mountSpeciesPicker(
     return [...m].sort((a, b) => b[1] - a[1]);
   };
 
-  // Search: every word must start a word of the name, Latin name, family or order; best match first, then most seen.
-  const search = (text: string) => {
-    const words = text.toLowerCase().split(/\s+/).filter(Boolean);
-    const hay = (s: AtlasSpecies) => `${s.common ?? ''} ${s.name} ${s.genus ?? ''} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`.toLowerCase();
-    const starts = (h: string, w: string) => h.startsWith(w) || h.includes(` ${w}`) || h.includes(`-${w}`);
-    const score = (s: AtlasSpecies) => {
-      const h = hay(s);
-      if (!words.every((w) => starts(h, w))) return -1;
-      const n = nameOf(s).toLowerCase();
-      return (n.startsWith(text.toLowerCase()) ? 2 : 0) + (starts(n, words[0]!) ? 1 : 0);
-    };
-    return all!
-      .map((s) => ({ s, k: score(s) }))
-      .filter((x) => x.k >= 0)
-      .sort((a, b) => b.k - a.k || b.s.n - a.s.n)
-      .slice(0, 60)
-      .map((x) => x.s);
-  };
+  // Search (searchSpecies): an exact or whole-word match on the common name, or a featured species, first.
+  const search = (text: string) => searchSpecies(all!, text, featuredLabels);
 
   // The hand-built species, there at once (the one-file build has no Atlas list at all); photos once the list is in.
   // The year's surprises: photos well over or under what the network expected, or a season well off (seen.py).
@@ -471,7 +457,14 @@ export function mountSpeciesPicker(
       setStar();
       const i = indexOfKey(key);
       tree?.mark(i >= 0 ? i : null);
-      button.querySelector('.sp-face')!.textContent = label;
+      // A hyphenated word ("Red-spotted") stays whole when a phone's button wraps the name: lines break between words.
+      button.querySelector('.sp-face')!.replaceChildren(...label.split(/( )/).map((w) => {
+        if (!w.includes('-')) return w;
+        const s = document.createElement('span');
+        s.className = 'nb';
+        s.textContent = w;
+        return s;
+      }));
       button.setAttribute('aria-label', `Species: ${label}. Change species`);
     },
     set disabled(on: boolean) {

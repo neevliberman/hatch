@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from pipeline.atlas import data as D  # noqa: E402
 from pipeline.atlas import model as M  # noqa: E402
+from pipeline.atlas import names as N  # noqa: E402
 from pipeline.atlas.config import BOX, DATA, FIRST_YEAR  # noqa: E402
 
 OUT = ROOT / "public/atlas"
@@ -162,6 +163,7 @@ def main():
         rows.append({"i": i, "name": s, "common": common, "order": t.get("ord"), "family": t.get("family"),
                      "genus": t.get("genus"), "n": int(n.get(s, 0)), "taxon": int(t["taxon"]) if t.get("taxon") else None,
                      "photo": photo, "credit": credit, "peak": float(f"{top[i]:.4g}"), "test": test.get(s)})
+    N.fill(rows)  # names.py: an English name for those iNaturalist's preferred name leaves without one
     rows.append({"i": len(sp), "name": "(other)", "common": "Other insects", "peak": float(f"{top[-1]:.4g}")})
     (OUT / "species.json").write_text(json.dumps(rows, separators=(",", ":"), ensure_ascii=False))
     print(f"{len(sp)} species, {flat.size:,} weights ({flat.nbytes / 1e6:.1f} MB), {len(cells)} cells")

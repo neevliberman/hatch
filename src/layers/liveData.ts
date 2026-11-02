@@ -79,7 +79,9 @@ export const liveAvailable = () => typeof location !== 'undefined' && /^https?:$
 export const inSeason = (live: Pick<Live, 'season'>, now: number) =>
   now >= Date.UTC(live.season, 2, 1) && now < Date.UTC(live.season, 8, 30) + DAY;
 
-/** The nightly run looks late: older than stale_after_hours, during the season. */
+/** The season's nightly runs are over (past 30 September): the file is frozen on purpose, not late. */
+export const seasonOver = (live: Pick<Live, 'season'>, now: number) => now >= Date.UTC(live.season, 8, 30) + DAY;
+
 /** The nightly run looks late (older than stale_after_hours), or runs but its observed weather stopped advancing
  * (as_of more than 3 days back), during the season. A file rebuilt after the fact is never stale. */
 export const isStale = (live: Live, now: number) =>
