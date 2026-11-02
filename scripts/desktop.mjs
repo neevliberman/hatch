@@ -1661,8 +1661,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     console.log(`${tag}: checked`);
   };
   // Empty and failed states (ideas "UI 5"): each says what happened and offers its one next step, and that step works.
-  // The picker's no-match search and its "Clear search", its failed list and "Try again", the town box's no-match line,
-  // a tap on paper with no forecast, and My area without location permission ("Find a town"). Desktop and phone.
+  // The picker's no-match line (the box's × clears it), its failed list and "Try again", the town box's no-match line,
+  // and My area without location permission ("Find a town"). Desktop and phone.
   // ONLY=empty runs just this.
   const emptyUnit = async ([w, h, phone], browser) => {
     const tag = `empty ${phone ? 'phone' : 'desktop'}`;
@@ -1684,51 +1684,45 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const retry = page.locator('#sp-list [data-retry]');
       await retry.waitFor({ timeout: 15000 }).catch(() => fail('a failed species list offers no "Try again"'));
       if (!/Couldn.t load/.test((await page.locator('#sp-list').innerText()) ?? '')) fail('a failed species list does not say so');
+      const tall = async (loc, what) => {
+        const bb = await loc.boundingBox();
+        if (phone && (!bb || bb.height < 44)) fail(`${what} is ${bb ? Math.round(bb.height) : 0} px tall on a touch screen, under 44`);
+      };
+      await tall(retry, '"Try again"');
       await shotE('1-list-failed');
       block = false;
       await retry.click();
+      if (!(await page.evaluate(() => document.activeElement?.id === 'sp-q'))) fail('after "Try again" focus did not go to the search box');
       await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5 && !document.querySelector('[data-retry]'), null, { timeout: 20000 })
         .catch(() => fail('"Try again" did not load the species list'));
       // Nothing watched: the strip says how to start.
       await page.locator('#sp-watch .sp-none').waitFor({ timeout: 15000 }).catch(() => fail('the empty watch list says nothing'));
-      // A search with no match: says so, offers "Clear search", which empties the box and brings the browse back.
+      // A search with no match: one line says so (no separate count line), and the box's own × clears it.
       await page.locator('#sp-q').fill('zzqxv');
-      const clear = page.locator('#sp-list [data-clear]');
-      await clear.waitFor({ timeout: 10000 }).catch(() => fail('a search with no match offers no "Clear search"'));
-      if (!/No matches/.test((await page.locator('.sp-crumbs').innerText()) ?? '')) fail('a search with no match does not say "No matches"');
-      const cb = await clear.boundingBox();
-      if (!cb || cb.height < 24) fail(`"Clear search" is ${cb ? Math.round(cb.height) : 0} px tall`);
+      const none = page.locator('#sp-list .sp-none');
+      await none.waitFor({ timeout: 10000 }).catch(() => fail('a search with no match says nothing'));
+      if ((await none.textContent()) !== 'No matches. Try the Latin name.') fail(`a search with no match says "${await none.textContent()}"`);
+      if (await page.evaluate(() => [...document.querySelector('.sp-crumbs').children].some((c) => !c.classList.contains('sr') && c.textContent.trim()))) fail('a search with no match still shows a separate count line');
       await shotE('2-no-match');
-      await clear.click();
-      if ((await page.locator('#sp-q').inputValue()) !== '') fail('"Clear search" left the search box filled');
-      if (!(await page.evaluate(() => document.activeElement?.id === 'sp-q'))) fail('"Clear search" did not hand focus back to the search box');
-      if (await clear.count()) fail('"Clear search" left the no-match line');
-      if (!(await page.locator('#sp-list .sp-row').count())) fail('"Clear search" did not bring the species back');
+      // The search box's × (a type="search" box's own clear button): the browser's, so emptied as a click on it would.
+      await page.locator('#sp-q').fill('');
+      if (await none.count()) fail('clearing the search left the no-match line');
+      if (!(await page.locator('#sp-list .sp-row').count())) fail('clearing the search did not bring the species back');
       await page.keyboard.press('Escape');
       // The town box: a name with no match says so as it is typed.
       await page.locator('#find').click();
       await page.locator('#find-q').fill('Zzyzx');
-      await page.locator('#find-list .find-none').waitFor({ timeout: 10000 }).catch(() => fail('the town box says nothing for a name with no match'));
+      await page.waitForFunction(() => document.querySelector('#finder .find-none[role="status"]')?.textContent === 'No town by that name here.', null, { timeout: 10000 })
+        .catch(() => fail('the town box says nothing (in a live region) for a name with no match'));
       await shotE('3-no-town');
       await page.locator('#find-q').press('Escape');
-      // A tap on paper with no forecast (Lake Michigan) says so.
-      const lake = await page.evaluate(() => {
-        const xy = window.__hatch.map.project([-87.0, 43.6]);
-        const r = document.getElementById('map').getBoundingClientRect();
-        return xy && [xy[0] + r.left, xy[1] + r.top];
-      });
-      if (lake) {
-        await page.mouse.click(lake[0], lake[1]);
-        await page.waitForFunction(() => /No forecast here/.test(document.getElementById('action-msg').textContent), null, { timeout: 5000 })
-          .catch(async () => fail(`a tap on the lake says "${await msg()}"`));
-        if (await page.locator('#probe').isVisible()) fail('a tap on the lake shows a card');
-      }
       // My area with location off: says so, and "Find a town" opens the town box.
       await page.locator('#locate').click();
       const act = page.locator('#action-msg .msg-act');
       await act.waitFor({ timeout: 10000 }).catch(async () => fail(`My area without permission offers no next step ("${await msg()}")`));
       if (!/Location is off/.test(await msg())) fail(`My area without permission says "${await msg()}"`);
       if ((await act.textContent()) !== 'Find a town') fail(`My area without permission offers "${await act.textContent()}"`);
+      await tall(act, '"Find a town"');
       await shotE('4-location-off');
       await act.click();
       if (!(await page.locator('#finder').isVisible())) fail('"Find a town" did not open the town box');

@@ -129,6 +129,9 @@ export function mountFinder(
     else input.removeAttribute('aria-activedescendant');
   };
   /** The suggestions, or with none and `none` set, that one line in their place (not an option: nothing to pick). */
+  const status = Object.assign(document.createElement('p'), { className: 'find-none' });
+  status.setAttribute('role', 'status');
+  list.after(status);
   const showList = (ps: Place[], none = '') => {
     shown = ps;
     list.replaceChildren(
@@ -138,12 +141,9 @@ export function mountFinder(
         return li;
       }),
     );
-    if (!ps.length && none) {
-      const li = Object.assign(document.createElement('li'), { className: 'find-none', role: 'option', textContent: none });
-      li.setAttribute('aria-disabled', 'true');
-      list.append(li);
-    }
-    list.hidden = !ps.length && !none;
+    // No match: said in a live region beside the list (not an option in it), so a screen reader announces it.
+    status.textContent = !ps.length && none ? none : '';
+    list.hidden = !ps.length;
     input.setAttribute('aria-expanded', String(!!ps.length));
     setActive(-1);
   };

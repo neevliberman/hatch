@@ -488,7 +488,9 @@ if (existsSync(join(distDir, 'radar'))) {
         await tapW('#species');
         const star = page.locator('.sp-star');
         if ((await star.getAttribute('aria-pressed')) !== 'false' || !/^Watch /.test((await star.getAttribute('aria-label')) ?? '')) fail('the watch star does not start off, labelled "Watch ..."');
-        if (await page.locator('#sp-watch').isVisible()) fail('the Watching row shows with nothing watched');
+        // Nothing watched: no chips, just the one line on what the star does (once the tree is in).
+        if (await page.locator('#sp-watch .sp-go').count()) fail('the Watching row shows chips with nothing watched');
+        await page.locator('#sp-watch .sp-none').waitFor({ timeout: 15000 }).catch(() => fail('with nothing watched, the Watching row does not say how to add one'));
         const sb = await star.boundingBox();
         if (!sb || sb.width < 24 || sb.height < 24 || sb.x < 0 || sb.x + sb.width > width + 1) fail('the watch star is too small or off-screen');
         await tapW('.sp-star');

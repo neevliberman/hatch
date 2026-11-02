@@ -139,7 +139,7 @@ export function mountSpeciesPicker(
     // An async re-render must not drop keyboard focus, whether it was on a chip or on its cross.
     const el = document.activeElement as HTMLElement | null;
     const had = el?.closest('#sp-watch') ? (el.dataset.key ? `.sp-go[data-key="${el.dataset.key}"]` : el.dataset.unwatch ? `.sp-wx[data-unwatch="${el.dataset.unwatch}"]` : '') : '';
-    watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${none ? '<li class="sp-none">None yet. Tap ☆ to watch this insect.</li>' : chips.join('')}`;
+    watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${none ? '<li class="sp-none">Tap ☆ to watch.</li>' : chips.join('')}`;
     if (had) watchStrip.querySelector<HTMLElement>(had)?.focus();
     setStar();
     // The typical-season curves are only fetched once something is watched that no saved place speaks for.
@@ -316,10 +316,9 @@ export function mountSpeciesPicker(
     }
     if (q.trim()) {
       const hits = search(q.trim());
-      crumbs.innerHTML = `<span>${hits.length ? hits.length === 1 ? '1 match' : `${hits.length === 60 ? 'Top 60' : hits.length} matches` : 'No matches'}</span>`;
-      list.innerHTML = hits.length
-        ? hits.map(row).join('')
-        : '<li class="sp-note sp-none">Try fewer letters, or the Latin name. <button type="button" class="sp-act" data-clear>Clear search</button></li>';
+      // No hits: one line in the list (the box's own × clears it), announced through the crumbs' live region.
+      crumbs.innerHTML = hits.length ? `<span>${hits.length === 1 ? '1 match' : `${hits.length === 60 ? 'Top 60' : hits.length} matches`}</span>` : '<span class="sr">No matches</span>';
+      list.innerHTML = hits.length ? hits.map(row).join('') : '<li class="sp-note sp-none">No matches. Try the Latin name.</li>';
       return;
     }
     if (tree) {
@@ -407,12 +406,9 @@ export function mountSpeciesPicker(
       saveWatch(watched);
       renderWatch();
       (next ? watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${next.dataset.key}"]`) : star)?.focus();
-    } else if (b.dataset.clear !== undefined) {
-      input.value = q = '';
-      render();
-      input.focus();
     } else if (b.dataset.retry !== undefined) {
       render(); // "Loading the rest…" while it asks again
+      input.focus(); // the button has gone with the redraw
       loadAll();
     } else if (b.dataset.key) pick(b.dataset.key, b.dataset.season);
     else if (b.dataset.order) (path = { order: b.dataset.order }), render(), list.scrollTo?.(0, 0);

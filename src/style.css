@@ -286,7 +286,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #find-list li { padding: 6px 8px; border-radius: var(--radius); cursor: pointer; }
 #find-list li:hover, #find-list li[aria-selected="true"] { background: var(--track-faint); box-shadow: inset 2px 0 var(--accent); }
 #find-list small { color: var(--muted); font-size: 12px; }
-#find-list li.find-none { color: var(--muted); cursor: default; background: none; box-shadow: none; }
+#finder .find-none { margin: 0 0 4px; padding: 0 8px; font-size: 14px; color: var(--muted); }
+#finder .find-none:empty { margin: 0; } /* kept rendered: a live region that appears and fills at once may go unannounced */
 /* With a mouse the hex card is a tooltip beside the pointer (placed from main.ts); it only takes clicks once pinned. */
 /* One width, hovered or pinned, so pinning never re-wraps the title or shifts the card. */
 #probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: min(310px, calc(100vw - 16px)); max-width: none;
@@ -841,6 +842,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #sp-q:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .sp-x { flex: none; }
 .sp-crumbs { padding: 2px 12px 4px; font-size: 12.5px; color: var(--muted); }
+.sp-crumbs:has(> .sr:only-child) { padding: 0; } /* no matches: the list's line says it */
 .sp-crumbs button { border: 0; background: none; padding: 4px 0; font: inherit; color: var(--moon); font-weight: 600; cursor: pointer; min-height: 28px; }
 #sp-list { list-style: none; margin: 0; padding: 0 4px 6px; overflow-y: auto; overscroll-behavior: contain; }
 .sp-sec { padding: 8px 8px 2px; font: 600 16px/1.2 var(--font-note); color: var(--accent); }
@@ -850,6 +852,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   text-decoration: underline; text-decoration-color: var(--label-rule); text-underline-offset: 3px; cursor: pointer; white-space: nowrap; }
 .sp-act:hover, .msg-act:hover { text-decoration-color: currentColor; }
 .sp-act:focus-visible, .msg-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+/* A fingertip gets a 44 px target; negative margins keep the line its height. */
+@media (pointer: coarse) { .sp-act, .msg-act { min-height: 44px; margin-block: -8px; } }
 .sp-strip .sp-none { align-self: center; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .sp-row, .sp-group { display: flex; gap: 10px; align-items: center; width: 100%; min-height: 44px; padding: 4px 8px; border: 0; border-radius: var(--radius);
   background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }

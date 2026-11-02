@@ -276,7 +276,6 @@ function start() {
     },
     onProbe: (h, clicked) => {
       if (radar) return;
-      const wasPinned = pinned;
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
         // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
@@ -289,9 +288,6 @@ function start() {
         colourKey.autoFold(); // the reader has found the map: fold the key to a chip on small screens
       } else if (!pinned) hit = h;
       updateProbe();
-      // A tap that shows nothing (the lakes, beyond the states) says why, unless it was a tap to let a card go. A
-      // tracker's map has no hexagons to read, so a tap off its dots stays quiet.
-      if (clicked && !wasPinned && probeEl.hidden && !cur.tracker) say('No forecast here. Try a hexagon.');
     },
   });
 
@@ -474,7 +470,7 @@ function start() {
       picker.value = TYPICAL;
       $('season-name').textContent = modeLabel(TYPICAL);
       // Said only once the nightly file is in: before that, its live forecast may still be on its way.
-      if (liveFile) say(`No live forecast for ${next.words.plural} yet.`);
+      if (liveFile) say(`No live forecast for ${next.words.plural}.`);
     }
     hit = null;
     pinned = false;
@@ -666,13 +662,14 @@ function start() {
   // A status line beside the button it answers (above it in the time bar, to its left in a phone's button stack), or
   // under the header when no button asked.
   // `act`: the one next step, as a small button after the words ("Try again", "Find a town").
-  const say = (text: string, from?: Element | null, act?: { label: string; run: () => void }) => {
+  const say = (text: string, from?: Element | null, act?: { label: string; run: () => void; focus?: HTMLElement }) => {
     msg.textContent = text;
     if (act) {
       const b = Object.assign(document.createElement('button'), { type: 'button', className: 'msg-act', textContent: act.label });
       b.addEventListener('click', () => {
         clearTimeout(msgTimer);
         msg.textContent = '';
+        act.focus?.focus(); // the button it sat in has gone: focus goes back where the step began
         act.run();
       });
       msg.append(' ', b);
@@ -692,7 +689,9 @@ function start() {
       msg.style.top = `${Math.round(Math.max(8, y))}px`;
     } else msg.style.left = msg.style.top = '';
     clearTimeout(msgTimer);
-    msgTimer = window.setTimeout(() => (msg.textContent = ''), act ? 12000 : 6000); // a button needs time to be reached
+    // A button needs time to be reached; while keyboard focus is on it the message waits.
+    const hide = () => (msgTimer = window.setTimeout(() => (msg.contains(document.activeElement) ? hide() : (msg.textContent = '')), act ? 12000 : 6000));
+    hide();
   };
 
   $('share').addEventListener('click', async () => {
@@ -837,7 +836,7 @@ function start() {
         done(),
         err.code === err.PERMISSION_DENIED
           ? say(`Location is off for this site.${orTap}`, btn, findInstead)
-          : say('Couldn\u2019t get your location.', btn, { label: 'Try again', run: () => btn.click() })
+          : say('Couldn\u2019t get your location.', btn, { label: 'Try again', run: () => btn.click(), focus: btn })
       ),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     );
