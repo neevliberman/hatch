@@ -8,6 +8,13 @@ export interface Day {
   /** °C, one per hour of the local day. */
   temps: (number | null)[];
   cloud: (number | null)[];
+  /** Wind at 10 m, m/s, and the direction it blows from (degrees), one per hour. */
+  wind: (number | null)[];
+  windFrom: (number | null)[];
+  /** The place's offset from UTC, seconds: local hour h of the day is UTC midnight + h hours − offset. */
+  utcOffset: number;
+  /** UTC midnight of the day the numbers are for (a far-future map date borrows a past year). */
+  dayMs: number;
   note: string;
 }
 
@@ -32,10 +39,10 @@ export function weather(lat: number, lng: number, ms: number): Promise<Day | nul
   const key = `${lat.toFixed(2)},${lng.toFixed(2)},${r.date}`;
   let p = cache.get(key);
   if (!p) {
-    const url = `${r.api}?latitude=${lat.toFixed(2)}&longitude=${lng.toFixed(2)}&hourly=temperature_2m,cloud_cover&start_date=${r.date}&end_date=${r.date}&timezone=auto`;
+    const url = `${r.api}?latitude=${lat.toFixed(2)}&longitude=${lng.toFixed(2)}&hourly=temperature_2m,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&start_date=${r.date}&end_date=${r.date}&timezone=auto`;
     p = fetch(url)
       .then((x) => (x.ok ? x.json() : null))
-      .then((j) => (j?.hourly ? { temps: j.hourly.temperature_2m, cloud: j.hourly.cloud_cover, note: r.note } : null))
+      .then((j) => (j?.hourly ? { temps: j.hourly.temperature_2m, cloud: j.hourly.cloud_cover, wind: j.hourly.wind_speed_10m ?? [], windFrom: j.hourly.wind_direction_10m ?? [], utcOffset: j.utc_offset_seconds ?? 0, dayMs: Date.parse(r.date), note: r.note } : null))
       .catch(() => null)
       .then((d) => {
         if (!d) cache.delete(key); // a failed read (a 429, offline) is tried again next time

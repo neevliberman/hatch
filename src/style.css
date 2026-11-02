@@ -912,23 +912,22 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   :focus-visible { outline: 2px solid Highlight !important; outline-offset: 2px; } /* box-shadow rings are dropped in this mode */
 }
 
-/* Exo in the map (?exo, src/ui/exoPanel.ts): a monarch that lives the pinned place's temperature. */
+/* Exo in the map (?exo, src/ui/exoPanel.ts): a dive from the pinned card into a sketched monarch's real day there. */
 .exo-open { margin-top: 6px; padding: 4px 10px; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel-solid);
   color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
-.exo-open:focus-visible, .exo-x:focus-visible, #exo-play:focus-visible, #exo-hour:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#exo { position: fixed; z-index: 30; left: 12px; top: calc(64px + env(safe-area-inset-top)); width: 320px; display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto; height: 330px; background: var(--grain) var(--panel-solid);
-  border: 1px solid var(--label-rule); border-radius: 3px; box-shadow: var(--label), var(--shadow); }
+.exo-open:focus-visible, .exo-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* the paper blot grows from the button (--ox, --oy) to cover the page, then Exo fades in on it */
+#exo { position: fixed; inset: 0; z-index: 60; background: #f7f7f4; clip-path: circle(0 at var(--ox, 50%) var(--oy, 50%));
+  transition: clip-path .55s cubic-bezier(.6, 0, .3, 1); }
+#exo.open { clip-path: circle(150% at var(--ox, 50%) var(--oy, 50%)); }
+#exo.shut { transition-duration: .4s; }
 #exo[hidden] { display: none; }
-.exo-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 4px 4px 12px; font-size: 13px; font-weight: 700; color: var(--moon); }
-.exo-x { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
-#exo iframe { width: 100%; height: 100%; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel-solid); }
-.exo-bar { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; padding: 6px 12px 0; }
-.exo-bar output { grid-column: 1 / -1; font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; }
-#exo-hour { width: 100%; accent-color: var(--accent); }
-#exo-play { width: 32px; height: 28px; padding: 0; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); font-size: 11px; cursor: pointer; }
-.exo-note { padding: 2px 12px 8px; font-size: 11px; color: var(--muted); }
-@media (max-width: 600px) { #exo { left: 8px; width: calc(100vw - 80px); height: 34vh; top: calc(64px + env(safe-area-inset-top)); } }
+#exo iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; transition: opacity .35s .35s; }
+#exo.open iframe { opacity: 1; }
+.exo-x { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); width: 40px; height: 40px;
+  padding: 0; border: 0; border-radius: 50%; background: none; color: #141414; font: 400 30px/1 Georgia, serif; cursor: pointer; }
+.exo-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; font-size: 13px; color: #5c5c58; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { #exo, #exo iframe { transition: none; } #exo { clip-path: none; } #exo iframe { opacity: 1; } }
 /* Chorus (src/ui/chorusPanel.ts): the singing insects at a pinned place, synthesised from song traits. */
 .ch-open { position: absolute; top: 2px; right: 36px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
 .ch-open:hover { color: var(--text); background: var(--track-faint); }
