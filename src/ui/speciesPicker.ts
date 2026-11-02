@@ -8,7 +8,7 @@ import { loadWatch, saveWatch, WATCH_MAX } from './watch';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
 const offCaption = (year: number) => `${year}: furthest off schedule`;
-const quietCaption = (year: number) => `${year}: fewer photos than expected`;
+const quietCaption = (year: number) => `${year}: fewer photos`;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** Where the browse stands: every insect, one order, or one family in it. */

@@ -138,10 +138,11 @@ export const QUIET_BELOW = 0.6;
 /** A quiet species: its index and the photos it had (of those expected). */
 export type Quiet = { i: number; seen: number; expected: number };
 /** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and under QUIET_BELOW. */
+// Near zero (under 5% of expected) is almost always a periodical brood's off-year or a data gap, not a quiet year.
 export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10): Quiet[] {
   const out: Quiet[] = [];
   rows.forEach((r, i) => {
-    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
+    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
   });
   return out.sort((a, b) => a.seen / a.expected - b.seen / b.expected || b.expected - a.expected || a.i - b.i).slice(0, n);
 }
