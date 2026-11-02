@@ -1299,7 +1299,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(1500);
       await open();
       if ((await star.getAttribute('aria-pressed')) !== 'false') fail('the star starts on');
-      if (await page.locator('#sp-watch').isVisible()) fail('the Watching row shows with nothing watched');
+      // Nothing watched: no chips, just the one line on what the star does (once the tree is in).
+      if (await chips().count()) fail('the Watching row shows chips with nothing watched');
+      await page.locator('#sp-watch .sp-none').waitFor({ timeout: 15000 }).catch(() => fail('with nothing watched, the Watching row does not say how to add one'));
       await page.keyboard.press('Escape');
       // Three species, one after another, each from its own page (the list is the only thing that carries over).
       const three = ['papilio-glaucus', 'papilio-polyxenes', 'poecilocapsus-lineatus'];
@@ -1658,15 +1660,96 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // Empty and failed states (ideas "UI 5"): each says what happened and offers its one next step, and that step works.
+  // The picker's no-match search and its "Clear search", its failed list and "Try again", the town box's no-match line,
+  // a tap on paper with no forecast, and My area without location permission ("Find a town"). Desktop and phone.
+  // ONLY=empty runs just this.
+  const emptyUnit = async ([w, h, phone], browser) => {
+    const tag = `empty ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource|ERR_FAILED/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const shotE = (step) => page.screenshot({ path: `${out}/empty-${phone ? 'phone' : 'desktop'}-${step}.png`, timeout: 60000 })
+      .catch((e) => console.log(`empty-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
+    const msg = () => page.locator('#action-msg').innerText();
+    try {
+      // The species list fails once, then loads.
+      let block = true;
+      await page.route('**/atlas/species.json', (r) => (block ? r.abort() : r.continue()));
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      await page.waitForTimeout(1500);
+      await page.locator('#species').click();
+      const retry = page.locator('#sp-list [data-retry]');
+      await retry.waitFor({ timeout: 15000 }).catch(() => fail('a failed species list offers no "Try again"'));
+      if (!/Couldn.t load/.test((await page.locator('#sp-list').innerText()) ?? '')) fail('a failed species list does not say so');
+      await shotE('1-list-failed');
+      block = false;
+      await retry.click();
+      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5 && !document.querySelector('[data-retry]'), null, { timeout: 20000 })
+        .catch(() => fail('"Try again" did not load the species list'));
+      // Nothing watched: the strip says how to start.
+      await page.locator('#sp-watch .sp-none').waitFor({ timeout: 15000 }).catch(() => fail('the empty watch list says nothing'));
+      // A search with no match: says so, offers "Clear search", which empties the box and brings the browse back.
+      await page.locator('#sp-q').fill('zzqxv');
+      const clear = page.locator('#sp-list [data-clear]');
+      await clear.waitFor({ timeout: 10000 }).catch(() => fail('a search with no match offers no "Clear search"'));
+      if (!/No matches/.test((await page.locator('.sp-crumbs').innerText()) ?? '')) fail('a search with no match does not say "No matches"');
+      const cb = await clear.boundingBox();
+      if (!cb || cb.height < 24) fail(`"Clear search" is ${cb ? Math.round(cb.height) : 0} px tall`);
+      await shotE('2-no-match');
+      await clear.click();
+      if ((await page.locator('#sp-q').inputValue()) !== '') fail('"Clear search" left the search box filled');
+      if (!(await page.evaluate(() => document.activeElement?.id === 'sp-q'))) fail('"Clear search" did not hand focus back to the search box');
+      if (await clear.count()) fail('"Clear search" left the no-match line');
+      if (!(await page.locator('#sp-list .sp-row').count())) fail('"Clear search" did not bring the species back');
+      await page.keyboard.press('Escape');
+      // The town box: a name with no match says so as it is typed.
+      await page.locator('#find').click();
+      await page.locator('#find-q').fill('Zzyzx');
+      await page.locator('#find-list .find-none').waitFor({ timeout: 10000 }).catch(() => fail('the town box says nothing for a name with no match'));
+      await shotE('3-no-town');
+      await page.locator('#find-q').press('Escape');
+      // A tap on paper with no forecast (Lake Michigan) says so.
+      const lake = await page.evaluate(() => {
+        const xy = window.__hatch.map.project([-87.0, 43.6]);
+        const r = document.getElementById('map').getBoundingClientRect();
+        return xy && [xy[0] + r.left, xy[1] + r.top];
+      });
+      if (lake) {
+        await page.mouse.click(lake[0], lake[1]);
+        await page.waitForFunction(() => /No forecast here/.test(document.getElementById('action-msg').textContent), null, { timeout: 5000 })
+          .catch(async () => fail(`a tap on the lake says "${await msg()}"`));
+        if (await page.locator('#probe').isVisible()) fail('a tap on the lake shows a card');
+      }
+      // My area with location off: says so, and "Find a town" opens the town box.
+      await page.locator('#locate').click();
+      const act = page.locator('#action-msg .msg-act');
+      await act.waitFor({ timeout: 10000 }).catch(async () => fail(`My area without permission offers no next step ("${await msg()}")`));
+      if (!/Location is off/.test(await msg())) fail(`My area without permission says "${await msg()}"`);
+      if ((await act.textContent()) !== 'Find a town') fail(`My area without permission offers "${await act.textContent()}"`);
+      await shotE('4-location-off');
+      await act.click();
+      if (!(await page.locator('#finder').isVisible())) fail('"Find a town" did not open the town box');
+      if (await act.count()) fail('the message stayed after its button was used');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
+  if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
+  if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));
   if (process.env.ONLY === 'evict') units.splice(0, units.length, evictUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section

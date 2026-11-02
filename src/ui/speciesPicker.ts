@@ -133,11 +133,13 @@ export function mountSpeciesPicker(
       const title = due ? (here ? 'Season at your saved place' : 'Typical season across the Midwest') : '';
       return `<li class="sp-chip"><button type="button" class="sp-go" data-key="${esc(k)}"${title ? ` title="${title}"` : ''}><b>${esc(name)}</b><span>${when}</span></button><button type="button" class="sp-wx" data-unwatch="${esc(k)}" aria-label="Stop watching ${esc(name)}">&times;</button></li>`;
     });
-    watchStrip.hidden = !chips.some(Boolean) || !!q.trim();
+    // Nothing watched yet: one line on what the star does, while the tree shows (not over search results or a list still loading).
+    const none = !watched.length && !!tree;
+    watchStrip.hidden = (!chips.some(Boolean) && !none) || !!q.trim();
     // An async re-render must not drop keyboard focus, whether it was on a chip or on its cross.
     const el = document.activeElement as HTMLElement | null;
     const had = el?.closest('#sp-watch') ? (el.dataset.key ? `.sp-go[data-key="${el.dataset.key}"]` : el.dataset.unwatch ? `.sp-wx[data-unwatch="${el.dataset.unwatch}"]` : '') : '';
-    watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${chips.join('')}`;
+    watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${none ? '<li class="sp-none">None yet. Tap ☆ to watch this insect.</li>' : chips.join('')}`;
     if (had) watchStrip.querySelector<HTMLElement>(had)?.focus();
     setStar();
     // The typical-season curves are only fetched once something is watched that no saved place speaks for.
@@ -315,7 +317,9 @@ export function mountSpeciesPicker(
     if (q.trim()) {
       const hits = search(q.trim());
       crumbs.innerHTML = `<span>${hits.length ? hits.length === 1 ? '1 match' : `${hits.length === 60 ? 'Top 60' : hits.length} matches` : 'No matches'}</span>`;
-      list.innerHTML = hits.map(row).join('');
+      list.innerHTML = hits.length
+        ? hits.map(row).join('')
+        : '<li class="sp-note sp-none">Try fewer letters, or the Latin name. <button type="button" class="sp-act" data-clear>Clear search</button></li>';
       return;
     }
     if (tree) {
@@ -368,16 +372,23 @@ export function mountSpeciesPicker(
     render();
     // Touch screens: land on the close button instead, so the keyboard doesn't cover the tree until search is tapped.
     (matchMedia('(pointer: fine)').matches ? input : sheet.querySelector<HTMLElement>('.sp-x')!).focus();
-    if (!all)
-      void Promise.all([loadIndex(), loadSurprises(surpriseYear), loadOffSchedule(surpriseYear), loadQuiet(surpriseYear)]).then(([s, u, o, qu]) => {
-        odd = u?.list ?? [];
-        off = o ?? [];
-        quiet = qu ?? [];
-        if (s) all = s;
-        if (s) void loadTree();
-        else list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Couldn’t load the other insects. Close and try again.</li>`;
-        if (s) render();
-      });
+    loadAll();
+  };
+  /** The Atlas's list and its strips, on first open (and again from "Try again" after a failed load). */
+  let fetching = false;
+  const loadAll = () => {
+    if (all || fetching) return;
+    fetching = true;
+    void Promise.all([loadIndex(), loadSurprises(surpriseYear), loadOffSchedule(surpriseYear), loadQuiet(surpriseYear)]).then(([s, u, o, qu]) => {
+      fetching = false;
+      odd = u?.list ?? [];
+      off = o ?? [];
+      quiet = qu ?? [];
+      if (s) all = s;
+      if (s) void loadTree();
+      else list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note sp-none">Couldn’t load the other insects. <button type="button" class="sp-act" data-retry>Try again</button></li>`;
+      if (s) render();
+    });
   };
   button.addEventListener('click', () => open(sheet.hidden));
   sheet.querySelector('.sp-x')!.addEventListener('click', () => (open(false), button.focus()));
@@ -396,6 +407,13 @@ export function mountSpeciesPicker(
       saveWatch(watched);
       renderWatch();
       (next ? watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${next.dataset.key}"]`) : star)?.focus();
+    } else if (b.dataset.clear !== undefined) {
+      input.value = q = '';
+      render();
+      input.focus();
+    } else if (b.dataset.retry !== undefined) {
+      render(); // "Loading the rest…" while it asks again
+      loadAll();
     } else if (b.dataset.key) pick(b.dataset.key, b.dataset.season);
     else if (b.dataset.order) (path = { order: b.dataset.order }), render(), list.scrollTo?.(0, 0);
     else if (b.dataset.family) (path = { ...path, family: b.dataset.family }), render(), list.scrollTo?.(0, 0);

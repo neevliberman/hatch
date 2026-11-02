@@ -276,6 +276,7 @@ function start() {
     },
     onProbe: (h, clicked) => {
       if (radar) return;
+      const wasPinned = pinned;
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
         // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
@@ -288,6 +289,9 @@ function start() {
         colourKey.autoFold(); // the reader has found the map: fold the key to a chip on small screens
       } else if (!pinned) hit = h;
       updateProbe();
+      // A tap that shows nothing (the lakes, beyond the states) says why, unless it was a tap to let a card go. A
+      // tracker's map has no hexagons to read, so a tap off its dots stays quiet.
+      if (clicked && !wasPinned && probeEl.hidden && !cur.tracker) say('No forecast here. Try a hexagon.');
     },
   });
 
@@ -452,7 +456,7 @@ function start() {
       const layer = await pending;
       speciesPick.disabled = loading.size > 0; // still waiting on another species' load
       if (ticket !== asking) return; // a newer pick won
-      if (!layer) return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map. Try again later.`);
+      if (!layer) return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map.`, null, { label: 'Try again', run: () => void setSpecies(want, wish) });
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
@@ -469,6 +473,8 @@ function start() {
     if (!next.live() && picker.value === LIVE) {
       picker.value = TYPICAL;
       $('season-name').textContent = modeLabel(TYPICAL);
+      // Said only once the nightly file is in: before that, its live forecast may still be on its way.
+      if (liveFile) say(`No live forecast for ${next.words.plural} yet.`);
     }
     hit = null;
     pinned = false;
@@ -659,8 +665,18 @@ function start() {
   let msgTimer = 0;
   // A status line beside the button it answers (above it in the time bar, to its left in a phone's button stack), or
   // under the header when no button asked.
-  const say = (text: string, from?: Element | null) => {
+  // `act`: the one next step, as a small button after the words ("Try again", "Find a town").
+  const say = (text: string, from?: Element | null, act?: { label: string; run: () => void }) => {
     msg.textContent = text;
+    if (act) {
+      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'msg-act', textContent: act.label });
+      b.addEventListener('click', () => {
+        clearTimeout(msgTimer);
+        msg.textContent = '';
+        act.run();
+      });
+      msg.append(' ', b);
+    }
     msg.classList.toggle('at', !!from);
     const b = from?.getBoundingClientRect();
     if (b?.width) {
@@ -676,7 +692,7 @@ function start() {
       msg.style.top = `${Math.round(Math.max(8, y))}px`;
     } else msg.style.left = msg.style.top = '';
     clearTimeout(msgTimer);
-    msgTimer = window.setTimeout(() => (msg.textContent = ''), 6000);
+    msgTimer = window.setTimeout(() => (msg.textContent = ''), act ? 12000 : 6000); // a button needs time to be reached
   };
 
   $('share').addEventListener('click', async () => {
@@ -790,8 +806,11 @@ function start() {
 
   // "My area": one location fix (kept rounded in this browser for the line above, never sent anywhere), then the
   // forecast card for that hex, pinned.
+  // Without a fix, the next step is a town by name (or, in the one-file build with no town names, a tap on the map).
+  const findInstead = __BASEMAP__ ? { label: 'Find a town', run: () => $('find').click() } : undefined;
+  const orTap = __BASEMAP__ ? '' : ' Tap the map instead.';
   $('locate').addEventListener('click', () => {
-    if (!navigator.geolocation) return say('Location is not available in this browser', $('locate'));
+    if (!navigator.geolocation) return say(`This browser can\u2019t share a location.${orTap}`, $('locate'), findInstead);
     const btn = $<HTMLButtonElement>('locate');
     btn.disabled = true;
     btn.setAttribute('aria-busy', 'true');
@@ -806,7 +825,7 @@ function start() {
         const at = showPlace(coords.latitude, coords.longitude, 'you');
         if (!at) {
           map.setMarker(null);
-          say('Outside Hatch\u2019s 7 states (IL, IN, IA, MI, MN, OH, WI)', btn);
+          say(`You\u2019re outside the 7 states (IL, IN, IA, MI, MN, OH, WI).${orTap}`, btn, findInstead);
           return;
         }
         map.setMarker([coords.longitude, coords.latitude]);
@@ -816,12 +835,9 @@ function start() {
       },
       (err) => (
         done(),
-        say(
-          err.code === err.PERMISSION_DENIED
-            ? `Location is off for this site. ${__BASEMAP__ ? 'Find a town' : 'Tap the map'} instead.`
-            : `Could not get your location. ${__BASEMAP__ ? 'Find a town' : 'Tap the map'} instead.`,
-          btn,
-        )
+        err.code === err.PERMISSION_DENIED
+          ? say(`Location is off for this site.${orTap}`, btn, findInstead)
+          : say('Couldn\u2019t get your location.', btn, { label: 'Try again', run: () => btn.click() })
       ),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     );
@@ -1036,7 +1052,7 @@ function start() {
         else map.fit(padding(), true);
         syncUrl();
       }
-      return say('Couldn\u2019t load the radar replay. Try again later.');
+      return say('Couldn\u2019t load the radar replay.', null, { label: 'Try again', run: () => void openRadar(id) });
     }
     msg.textContent = '';
     radar = opened;
