@@ -52,12 +52,6 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
     }
   };
   let leave = () => {};
-  // Three stand-alone monarch pieces (public/exo): not in the one-file build, which has no files beside it.
-  const toysHtml = () => {
-    const base = import.meta.env.BASE_URL;
-    const link = (page: string, text: string) => `<li><a href="${base}exo/${page}.html" target="_blank" rel="noopener noreferrer">${text}<span class="sr"> (opens in a new tab)</span></a></li>`;
-    return `<details class="cav credits" data-key="toys"><summary>Monarch toys</summary><ul>${link('window', 'Her day, right now')}${link('fly', 'Fly one to Mexico')}${link('thread', 'Watch one grow up')}</ul></details>`;
-  };
   const render = () => {
     leave();
     const layers = registry.activeLayers();
@@ -96,7 +90,6 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
           : '<p class="muted">No layers on.</p>'
       }
       ${layers.length ? warmthHtml() : ''}
-      ${layers.length && __BASEMAP__ ? toysHtml() : ''}
       ${credits.length ? `<details class="cav credits" data-key="credits"><summary>Credits</summary><ul>${credits.map((c) => `<li>${credit(c)}</li>`).join('')}</ul></details>` : ''}</div>`;
     drawer.querySelector('#drawer-close')!.addEventListener('click', () => toggle(false));
     // The grip is also a button, for a mouse or a keyboard on a narrow window: it swaps the two stops.
