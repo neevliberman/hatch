@@ -53,12 +53,16 @@ function seenNear(lat: number, lng: number, dayMs: number): { n: Promise<number 
 /** When the first monarchs usually reach this place in spring: for each year in Hatch's monarch tracker (2019-2025),
  * the earliest sighting within 80 km; the middle of those years. Needs at least 3 years with a sighting nearby.
  * Analogy: the map's arrival front is a tide line; this reads where the tide line usually is on this one beach. */
+const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const noLeap = (y: number, doy: number) => (isLeap(y) && doy >= 60 ? doy - 1 : doy);
 let front: Promise<[number, number, number, number][]> | null = null;
 async function usualArrival(lat: number, lng: number): Promise<{ doy: number; years: number } | null> {
+  // rows are [id, year, doy, lat, lng, flags]; unconfirmed rows (flag 4) never set a first date; day of year is
+  // counted as in a non-leap year, so every year lines up; a failed read is tried again next time
   front ??= fetch(new URL('species/monarch/front.json', document.baseURI).href)
-    .then((r) => (r.ok ? r.json() : { sightings: [] }))
-    .then((j) => ((j.sightings ?? []) as number[][]).map((s) => [s[1], s[2], s[3], s[4]] as [number, number, number, number]))
-    .catch(() => []);
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .then((j) => ((j.sightings ?? []) as number[][]).filter((s) => !(s[5]! & 4)).map((s) => [s[1]!, noLeap(s[1]!, s[2]!), s[3]!, s[4]!] as [number, number, number, number]))
+    .catch(() => ((front = null), []));
   const k = Math.cos((lat * Math.PI) / 180);
   const r2 = (80 / 111) ** 2;
   const first = new Map<number, number>();
@@ -126,8 +130,8 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
   const arrivalWords = () => {
     if (!arrive) return {};
     const y = new Date(at).getUTCFullYear();
-    const doy = Math.round((at - Date.UTC(y, 0, 1)) / 864e5) + 1;
-    return { arrive: fmtDate(Date.UTC(y, 0, arrive.doy)), early: doy < arrive.doy - 7 && doy > 31 };
+    const doy = noLeap(y, Math.floor((at - Date.UTC(y, 0, 1)) / 864e5) + 1);
+    return { arrive: fmtDate(Date.UTC(2025, 0, arrive.doy)), early: doy < arrive.doy - 7 && doy > 31 };
   };
   /** The sightings count goes on its own, whenever it arrives: the day never waits for iNaturalist. */
   const pushSeen = () => {
