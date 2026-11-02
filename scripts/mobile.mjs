@@ -22,6 +22,21 @@ mkdirSync(out, { recursive: true });
 const file = pathToFileURL(resolve(process.env.DIST ?? 'dist-single/index.html')).href;
 const engines = (process.env.ENGINES ?? 'chromium,webkit').split(',');
 
+// The UI 4 rise-ins (style.css) translate the species sheet, the town box, a docked hex card and the short notes by a
+// few px for up to 180 ms. Every section but ONLY=motion turns just those off, so a place or overlap it measures is
+// never a mid-animation one. (Not reduced motion as a whole: that would also stop the camera glides, playback and
+// radar replays these sections test.)
+const STILL_UI = '#species-sheet, #finder, #probe, #action-msg { animation: none !important; }';
+const settledContext = async (browser, opts) => {
+  const ctx = await browser.newContext(opts);
+  await ctx.addInitScript((css) => {
+    const add = () => document.head.append(Object.assign(document.createElement('style'), { textContent: css }));
+    if (document.head) add();
+    else document.addEventListener('DOMContentLoaded', add);
+  }, STILL_UI);
+  return ctx;
+};
+
 // [name, engine, width, height, pixel ratio]; each runs portrait and landscape.
 const phones = [
   ['iphone-se', 'webkit', 375, 667, 2],
@@ -92,7 +107,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
     const tag = `${phone} ${orient}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browsers[engine].newContext({
+    const ctx = await settledContext(browsers[engine], {
       viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true,
       geolocation: { latitude: 41.88, longitude: -87.63 }, permissions: ['geolocation'],
     });
@@ -388,7 +403,7 @@ if (existsSync(join(distDir, 'radar'))) {
         const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
         const tag = `radar ${id} ${phone} ${orient}`;
         const fail = (m) => problems.push(`${tag}: ${m}`);
-        const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+        const ctx = await settledContext(browsers[engine], { viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
         const page = await ctx.newPage();
         page.on('console', (m) => m.type() === 'error' && fail(`console error: ${m.text()}`));
         page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -463,7 +478,7 @@ if (existsSync(join(distDir, 'radar'))) {
       const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
       const tag = `watch ${phone} ${orient}`;
       const fail = (m) => problems.push(`${tag}: ${m}`);
-      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const ctx = await settledContext(browsers[engine], { viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
       const page = await ctx.newPage();
       page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
       page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -533,7 +548,7 @@ if (existsSync(join(distDir, 'radar'))) {
       const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
       const tag = `quiet ${phone} ${orient}`;
       const fail = (m) => problems.push(`${tag}: ${m}`);
-      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const ctx = await settledContext(browsers[engine], { viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
       const page = await ctx.newPage();
       page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
       page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -570,7 +585,7 @@ if (existsSync(join(distDir, 'radar'))) {
       const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
       const tag = `twins ${phone} ${orient}`;
       const fail = (m) => problems.push(`${tag}: ${m}`);
-      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const ctx = await settledContext(browsers[engine], { viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
       const page = await ctx.newPage();
       page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
       page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
@@ -604,7 +619,7 @@ if (existsSync(join(distDir, 'radar'))) {
     if ((process.env.ONLY && process.env.ONLY !== 'band') || !browsers.chromium || !mine()) continue;
     const tag = `band phone ${scheme}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
-    const ctx = await browsers.chromium.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, colorScheme: scheme });
+    const ctx = await settledContext(browsers.chromium, { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, colorScheme: scheme });
     const page = await ctx.newPage();
     page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));

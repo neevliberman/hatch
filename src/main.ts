@@ -668,6 +668,14 @@ function start() {
   // A status line beside the button it answers (above it in the time bar, to its left in a phone's button stack), or
   // under the header when no button asked.
   // `act`: the one next step, as a small button after the words ("Try again", "Find a town").
+  /** An element's box in the viewport as laid out, leaving out any `translate` it is drawn with. */
+  const laidOut = (el: HTMLElement) => {
+    const p = el.offsetParent;
+    const r = p?.getBoundingClientRect();
+    const left = (r?.left ?? 0) + (p?.clientLeft ?? 0) + el.offsetLeft;
+    const top = (r?.top ?? 0) + (p?.clientTop ?? 0) + el.offsetTop;
+    return { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight };
+  };
   const say = (text: string, from?: Element | null, act?: { label: string; run: () => void; focus?: HTMLElement }) => {
     msg.textContent = text;
     if (act) {
@@ -683,13 +691,15 @@ function start() {
     msg.classList.toggle('at', !!from);
     const b = from?.getBoundingClientRect();
     if (b?.width) {
-      const { width: w, height: h } = msg.getBoundingClientRect();
+      // Laid-out sizes and places, not drawn ones: the note and a docked card may be mid rise-in (style.css), translated a few px.
+      const w = msg.offsetWidth;
+      const h = msg.offsetHeight;
       const column = getComputedStyle(from!.parentElement!).flexDirection === 'column';
       const x = column ? b.left - 8 - w : b.right - w;
       // In the time bar it clears the bar's own text line too, sitting just over the paper.
       let y = column ? b.top + (b.height - h) / 2 : Math.min(b.top, from!.closest('#dock')?.getBoundingClientRect().top ?? b.top) - 6 - h;
       // A card docked in that corner keeps its lines readable: the message goes above it.
-      const c = probeEl.hidden ? null : probeEl.getBoundingClientRect();
+      const c = probeEl.hidden ? null : probeEl.classList.contains('at-pointer') ? probeEl.getBoundingClientRect() : laidOut(probeEl);
       if (c && !column && x < c.right && x + w > c.left && y < c.bottom && y + h > c.top) y = c.top - 6 - h;
       msg.style.left = `${Math.round(Math.max(8, x))}px`;
       msg.style.top = `${Math.round(Math.max(8, y))}px`;

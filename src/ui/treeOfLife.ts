@@ -742,7 +742,7 @@ export function mountTree(
       if (grown) return draw();
       grown = true;
       if (reducedMotion()) return draw();
-      const t0 = performance.now();
+      let t0 = 0;
       const step = () => {
         grow = Math.min(1, (performance.now() - t0) / 700);
         grow = 1 - Math.pow(1 - grow, 2);
@@ -750,7 +750,10 @@ export function mountTree(
         if (grow < 1) requestAnimationFrame(step);
       };
       grow = 0;
-      step();
+      draw();
+      // One motion at a time: the branches wait for the sheet's own drop-in (style.css) to finish.
+      const sheetIn = host.closest('[role="dialog"]')?.getAnimations().map((a) => a.finished.catch(() => {})) ?? [];
+      void Promise.all(sheetIn).then(() => ((t0 = performance.now()), step()));
     },
     glow(o, day) {
       out = o;
