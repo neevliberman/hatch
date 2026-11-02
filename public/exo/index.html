@@ -2138,7 +2138,9 @@ const REAL = (() => {
     document.querySelector('.cap .common').firstChild.textContent = m.place + ' · '; document.querySelector('.cap .common').lastChild.textContent = '';
     /* Hatch's tracker: when the first monarchs usually reach this place, and whether this day is well before that */
     const ar = document.getElementById('arrive'); ar.hidden = !m.arrive;
-    ar.textContent = m.arrive ? (m.early ? `most springs, none here until ~${m.arrive}` : `first monarchs here usually ~${m.arrive}`) : '';
+    ar.textContent = m.season === 'away' ? `monarchs from here are in Mexico now${m.arrive ? `, back ~${m.arrive}` : ''}` : m.season === 'leaving' ? 'monarchs here are fattening up to fly to Mexico'
+      : m.arrive ? (m.early ? `most springs, none here until ~${m.arrive}` : `first monarchs here usually ~${m.arrive}`) : '';
+    ar.hidden = !ar.textContent; R.away = m.season === 'away';
     const h0 = m.hour != null ? m.hour : 10;
     R.setHour(h0); R.opened = performance.now();
     // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
@@ -2150,7 +2152,7 @@ const REAL = (() => {
   addEventListener('message', e => {
     const m = e.data; if (!m || m.type !== 'exo-seen' || e.origin !== location.origin || e.source !== parent) return;
     const el = document.getElementById('seen'), n = m.n;
-    R.others = n == null ? 2 : n === 0 ? 0 : n < 5 ? 1 : 2;
+    R.others = R.away ? 0 : n == null ? 2 : n === 0 ? 0 : n < 5 ? 1 : 2;
     el.hidden = n == null; if (n == null) return;
     el.textContent = n === 0 ? 'no sightings within 50 km that week' : `${n} sighting${n === 1 ? '' : 's'} within 50 km that week ↗`;
     if (m.href && n) el.href = m.href; else el.removeAttribute('href');

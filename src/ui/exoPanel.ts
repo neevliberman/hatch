@@ -128,10 +128,14 @@ export function mountExo(probeEl: HTMLElement): ExoPanel {
   };
   /** "Usually here from May 20", and whether this day is well before that (most springs, none here yet). */
   const arrivalWords = () => {
-    if (!arrive) return {};
     const y = new Date(at).getUTCFullYear();
     const doy = noLeap(y, Math.floor((at - Date.UTC(y, 0, 1)) / 864e5) + 1);
-    return { arrive: fmtDate(Date.UTC(2025, 0, arrive.doy)), early: doy < arrive.doy - 7 && doy > 31 };
+    // Midwest monarchs spend Nov-Mar in Mexico's fir forests and leave in Sep-Oct (Sep 1 = day 244, Nov 1 = day 305).
+    // Before spring's usual arrival (or April, where no arrival date is known) none are back yet.
+    const back = arrive ? arrive.doy - 21 : 91;
+    const season = doy >= 305 || doy < back ? 'away' : doy >= 244 ? 'leaving' : null;
+    if (!arrive) return { season };
+    return { season, arrive: fmtDate(Date.UTC(2025, 0, arrive.doy)), early: doy < arrive.doy - 7 && doy > 31 };
   };
   /** The sightings count goes on its own, whenever it arrives: the day never waits for iNaturalist. */
   const pushSeen = () => {
