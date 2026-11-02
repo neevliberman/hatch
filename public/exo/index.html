@@ -66,10 +66,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 .day, #view, #cloud, #veins, #flip { display: none !important; }
 .cap { right: calc(150px + env(safe-area-inset-right, 0px)); }
 html.embed .cap { right: calc(52px + env(safe-area-inset-right, 0px)); } /* inside Hatch only the close button sits top right */
-/* on a wide screen the caption reads at a desk distance: everything a little larger */
-@media (min-width: 1000px) { .cap { font-size: 1.2rem; } .cap h1 { font-size: 1.9rem; } .cap .common { font-size: .8rem; } .cap .fact { font-size: 1.6rem; } .cap .sim { font-size: 1.2rem; } #sunlab { font-size: 1.5rem; } }
-/* the ⋯ menu keeps a small paper backing so it reads over leaves */
-#more > button { background: color-mix(in srgb, var(--paper) 80%, transparent); border-radius: 50%; width: 40px; height: 40px; padding: 0; }
 .cap h1 { font-size: 1.5rem; }
 .cap .common { letter-spacing: .06em; font-size: .66rem; }
 .cap .fact { font: 600 1.35rem/1.15 var(--hand); max-width: 26ch; }
@@ -98,6 +94,10 @@ html.embed .cap { right: calc(52px + env(safe-area-inset-right, 0px)); } /* insi
 .rail { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .toast { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); font: 600 1.05rem/1 var(--hand); }
 @media (prefers-reduced-motion: reduce) { .toast, .therm i { transition: none; } }
+/* on a wide screen the caption reads at a desk distance: everything a little larger */
+@media (min-width: 1000px) { .cap { font-size: 1.2rem; } .cap h1 { font-size: 1.9rem; } .cap .common { font-size: .8rem; } .cap .fact { font-size: 1.6rem; } .cap .sim { font-size: 1.2rem; } #sunlab { font-size: 1.5rem; } }
+/* the ⋯ menu keeps a small paper backing so it reads over leaves */
+#more > button { background: color-mix(in srgb, var(--paper) 80%, transparent); border-radius: 50%; width: 40px; height: 40px; padding: 0; }
 </style>
 
 <canvas id="stage" aria-label="Sketched monarch on milkweed. Drag to orbit."></canvas>
