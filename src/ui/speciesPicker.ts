@@ -1,6 +1,7 @@
 import type { SpeciesEntry } from '../species';
 import { atlasKey, json, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
+import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
 import { dueShort } from './near';
 import { loadWatch, saveWatch, WATCH_MAX } from './watch';
@@ -46,7 +47,9 @@ export function mountSpeciesPicker(
   /** The map's day (its day of year, whether it is ATLAS_YEAR's own season, and its words), for the tree's glow. */
   day?: () => { doy: number; year: boolean; label: string },
   /** The watch list's clock (the page's, so ?today= moves it). */
-  watching?: { now: () => number },
+  /** The watch list's clock (the page's, so ?today= moves it) and, for the species on screen with a saved place, its
+   * season there (the same Due as the line under the map, so the two always agree). */
+  watching?: { now: () => number; due: (key: string) => Due | null },
 ): SpeciesPicker {
   const bySci = new Map(featured.filter((e) => e.sci).map((e) => [e.sci!, e.key] as const));
   const keyOf = (s: AtlasSpecies) => bySci.get(s.name) ?? atlasKey(s.name);
@@ -91,9 +94,9 @@ export function mountSpeciesPicker(
   const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
 
   // The watch list: species starred from the sheet's head, kept in this browser (src/ui/watch.ts). Each shows as a chip
-  // with the same one-line countdown as "Coming out near you" (src/ui/near.ts), always from the Atlas's typical Midwest
-  // season (season.bin, fetched only if something is watched), so a chip reads the same whichever species is on the map;
-  // the line under the map speaks for the saved place.
+  // with the same one-line countdown as "Coming out near you" (src/ui/near.ts): for the species on the map with a saved
+  // place, that place's season (exactly the line's); else the Atlas's typical Midwest season (season.bin, fetched only if
+  // something is watched). Both come from one rule (seasonsOf), so the two differ only by place.
   const star = sheet.querySelector<HTMLButtonElement>('.sp-star')!;
   const watchStrip = sheet.querySelector<HTMLUListElement>('#sp-watch')!;
   const watchNote = sheet.querySelector<HTMLElement>('#sp-wnote')!;
@@ -123,10 +126,11 @@ export function mountSpeciesPicker(
     const chips = watched.map((k) => {
       const name = labelOf(k);
       if (name === null) return ''; // the Atlas list is not in yet
-      const i = curves ? indexOfKey(k) : -1;
-      const due = i >= 0 ? curves!(all![i]!.i) : null;
+      const here = watching?.due(k) ?? null;
+      const i = here || !curves ? -1 : indexOfKey(k);
+      const due = here ?? (i >= 0 ? curves!(all![i]!.i) : null);
       const when = due ? dueShort(due, now) : '';
-      const title = due ? 'Typical season across the Midwest' : '';
+      const title = due ? (here ? 'Season at your saved place' : 'Typical season across the Midwest') : '';
       return `<li class="sp-chip"><button type="button" class="sp-go" data-key="${esc(k)}"${title ? ` title="${title}"` : ''}><b>${esc(name)}</b><span>${when}</span></button><button type="button" class="sp-wx" data-unwatch="${esc(k)}" aria-label="Stop watching ${esc(name)}">&times;</button></li>`;
     });
     watchStrip.hidden = !chips.some(Boolean) || !!q.trim();

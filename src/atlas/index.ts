@@ -47,26 +47,44 @@ function loadSeasons(): Promise<Uint8Array | null> {
  * smaller spring brood counts, not just the bigger summer one. One rule for the map's "Coming out near you" line
  * (atlasLayer's dueHere) and the watch list's chips (seasonDues). */
 export const DUE_SHARE = 1 / 20;
+/** Runs of a season this close (steps below the line between them, 8 days) are one brood with a dip, not two. */
+const BROOD_GAP = 2;
+/** A run must hold at least this share of the season's photos to be a brood of its own: less is a stray tail. */
+const BROOD_MASS = 0.12;
 /**
- * A species' seasons from its curve sampled every STEP days from SEASON[0] (any scale): each run of steps at or above
- * DUE_SHARE of the curve's top (longer than one step, unless it holds the top), with that run's own peak, in order.
- * The outer span (first start, last end, the top's peak) carries the runs as `broods`, so a countdown waits for the
- * next brood, not the next spring. Null when the curve is empty.
+ * A species' seasons from its curve sampled every STEP days from SEASON[0] (any scale): the runs of steps at or above
+ * DUE_SHARE of the curve's top, runs at most BROOD_GAP steps apart merged into one, and runs holding under BROOD_MASS
+ * of the curve's photos left out (the top's own run always stays). Each brood's peak is its own top. The outer span
+ * (first start, last end, the top's peak) carries them as `broods`, so a countdown waits for the next brood, not the
+ * next spring. Null when the curve is empty.
  */
 export function seasonsOf(curve: ArrayLike<number>): Due | null {
-  let pk = 0;
-  for (let k = 1; k < curve.length; k++) if (curve[k]! > curve[pk]!) pk = k;
+  let pk = 0, total = 0;
+  for (let k = 0; k < curve.length; k++) {
+    total += curve[k]!;
+    if (curve[k]! > curve[pk]!) pk = k;
+  }
   if (!(curve[pk]! > 0)) return null;
   const lim = curve[pk]! * DUE_SHARE;
-  const day = (k: number) => SEASON[0] + k * STEP;
-  const broods: Brood[] = [];
+  const runs: [number, number][] = [];
   for (let k = 0; k < curve.length; k++) {
     if (curve[k]! < lim) continue;
-    let e = k, top = k;
-    while (e + 1 < curve.length && curve[e + 1]! >= lim) if (curve[++e]! > curve[top]!) top = e;
-    // A lone step over the line away from the peak is a blip in the curve (a few stray photos), not a brood.
-    if (e > k || (k <= pk && pk <= e)) broods.push({ start: day(k), peak: day(top), end: day(e) });
+    let e = k;
+    while (e + 1 < curve.length && curve[e + 1]! >= lim) e++;
+    const last = runs[runs.length - 1];
+    if (last && k - last[1] - 1 <= BROOD_GAP) last[1] = e;
+    else runs.push([k, e]);
     k = e;
+  }
+  const day = (k: number) => SEASON[0] + k * STEP;
+  const broods: Brood[] = [];
+  for (const [a, e] of runs) {
+    let top = a, mass = 0;
+    for (let k = a; k <= e; k++) {
+      mass += curve[k]!;
+      if (curve[k]! > curve[top]!) top = k;
+    }
+    if (mass >= total * BROOD_MASS || (a <= pk && pk <= e)) broods.push({ start: day(a), peak: day(top), end: day(e) });
   }
   return { start: broods[0]!.start, peak: day(pk), end: broods[broods.length - 1]!.end, broods };
 }
@@ -230,15 +248,16 @@ export function pickQuiet(rows: readonly (readonly [number, number, number | nul
   });
   return out.sort((a, b) => a.seen / a.expected - b.seen / b.expected || b.expected - a.expected || a.i - b.i).slice(0, n);
 }
-/** The year's quietest species for the species picker, from seen-YEAR.json, leaving out those whose typical season
- * (season.bin) peaks within QUIET_LATE_DAYS of its last day. Null when missing; without season.bin none are left out. */
+/** The year's quietest species for the species picker, from seen-YEAR.json, leaving out those with a typical brood
+ * (season.bin, seasonsOf) peaking within QUIET_LATE_DAYS of its last day. Null when missing; without season.bin none
+ * are left out. */
 export function loadQuiet(year: number, n = 10): Promise<Quiet[] | null> {
   return Promise.all([seenFile(year), loadSeasons()]).then(([f, b]) => {
     if (!f) return null;
     const late = (i: number) => {
       const c = b && typical(b, i);
       const d = c && seasonsOf(c);
-      return !!d && d.peak > f.last_day - QUIET_LATE_DAYS;
+      return !!d && d.broods!.some((r) => r.peak > f.last_day - QUIET_LATE_DAYS); // any brood, not just the biggest
     };
     return pickQuiet(f.species, n, late);
   });

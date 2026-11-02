@@ -395,8 +395,9 @@ function start() {
     const label = new Date(time.cursor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
     return { doy: dayOfYear(time.cursor), year: picker.value === String(ATLAS_YEAR), label };
   }, {
-    // The watch list's clock; its countdowns are each species' typical Midwest season, whichever is on screen.
+    // The watch list's clock, and for the species on screen the saved place's season: the very Due the line under the map shows.
     now: () => clock,
+    due: (k) => (k === curKey ? homeDue() : null),
   });
   let asking = 0;
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
