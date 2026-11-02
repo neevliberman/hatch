@@ -1733,17 +1733,105 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // Small feedback (ideas "UI 4"): the species sheet, the town box, a phone's hex card, the short notes, the held time
+  // thumb, the watch star and the species button each move a little, and under reduced motion none of them moves at
+  // all (no transition or animation longer than 0). Without reduced motion each does move, so the check can't pass
+  // by finding nothing. Desktop and phone. ONLY=motion runs just this.
+  const motionUnit = async ([w, h, phone, reduce], browser) => {
+    const tag = `motion ${phone ? 'phone' : 'desktop'}${reduce ? ' reduced' : ''}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+      reducedMotion: reduce ? 'reduce' : 'no-preference' });
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    // The longest transition or animation on an element (or its pseudo-element), in seconds.
+    const longest = (sel, pseudo) => page.evaluate(([sel, pseudo]) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const max = (s) => Math.max(0, ...(s || '0s').split(',').map(parseFloat));
+      if (!pseudo) {
+        const c = getComputedStyle(el);
+        return Math.max(max(c.transitionDuration), c.animationName === 'none' ? 0 : max(c.animationDuration));
+      }
+      // A slider's thumb has no computed style of its own to read: take the longest from the rules for it that apply now
+      // (their media conditions match and the element matches the part before the pseudo-element).
+      let d = 0;
+      const walk = (rules, on) => {
+        for (const r of rules) {
+          if (r instanceof CSSMediaRule) walk(r.cssRules, on && matchMedia(r.conditionText).matches);
+          else if (on && r instanceof CSSStyleRule) {
+            for (const part of r.selectorText.split(',')) {
+              const [base, pe] = part.trim().split(/(?=::)/);
+              if (pe !== pseudo || !el.matches(base)) continue;
+              d = Math.max(d, max(r.style.transitionDuration), r.style.animationName && r.style.animationName !== 'none' ? max(r.style.animationDuration) : 0);
+            }
+          }
+        }
+      };
+      for (const sh of document.styleSheets) walk(sh.cssRules, true);
+      return d;
+    }, [sel, pseudo ?? null]);
+    const seen = [];
+    const check = async (what, sel, pseudo) => {
+      const d = await longest(sel, pseudo);
+      if (d === null) return fail(`${what} (${sel}) is not on the page`);
+      seen.push([what, d]);
+      if (reduce && d > 0) fail(`${what} still moves under reduced motion (${d * 1000} ms)`);
+    };
+    try {
+      await page.goto(`${origin}/?noauto`);
+      await page.waitForTimeout(3000);
+      const tap = (loc) => (phone ? loc.tap() : loc.click());
+      await check('species button', '#species');
+      await tap(page.locator('#species'));
+      await page.locator('#species-sheet').waitFor();
+      await check('species sheet', '#species-sheet');
+      await check('watch star', '.sp-star path');
+      await tap(page.locator('.sp-star'));
+      await check('watch star (on)', '.sp-star path');
+      await page.keyboard.press('Escape');
+      if (!(await page.locator('#species-sheet').isHidden())) await tap(page.locator('#species-sheet .sp-x'));
+      if (phone) {
+        await page.touchscreen.tap(180, 390);
+        await page.locator('#probe').waitFor({ timeout: 10000 }).catch(() => fail('a tapped hex showed no card'));
+        await check('hex card', '#probe');
+        await tap(page.locator('#probe .probe-close'));
+      }
+      await tap(page.locator('#share'));
+      await page.waitForFunction(() => document.querySelector('#action-msg')?.textContent, null, { timeout: 10000 }).catch(() => fail('Share said nothing'));
+      await check('note', '#action-msg');
+      await tap(page.locator('#find'));
+      await page.locator('#finder').waitFor();
+      await check('town box', '#finder');
+      await page.locator('#find-q').press('Escape');
+      const r = await page.locator('#t-range').boundingBox();
+      await page.mouse.move(r.x + 4, r.y + r.height / 2);
+      await page.mouse.down();
+      if (!(await page.evaluate(() => document.querySelector('#t-range').classList.contains('held')))) fail('a held time slider is not marked held');
+      await check('held time thumb', '#t-range', '::-webkit-slider-thumb');
+      await page.mouse.up();
+      if (await page.evaluate(() => document.querySelector('#t-range').classList.contains('held'))) fail('a released time slider stays held');
+      if (!reduce) for (const [what, d] of seen) if (!(d > 0 && d <= 0.24)) fail(`${what} moves for ${d * 1000} ms, not 1-240 ms`);
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked ${seen.length} elements`);
+  };
+  const motionCases = [[1280, 800, false, true], [390, 844, true, true], [1280, 800, false, false], [390, 844, true, false]];
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));
+  if (process.env.ONLY === 'motion') units.splice(0, units.length, ...motionCases.map((c) => (b) => motionUnit(c, b)));
   if (process.env.ONLY === 'evict') units.splice(0, units.length, evictUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
