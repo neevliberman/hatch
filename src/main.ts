@@ -394,6 +394,10 @@ function start() {
     // The map's day, for the tree's "out now" glow (ATLAS_YEAR's own season when the map shows it, else a typical year).
     const label = new Date(time.cursor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
     return { doy: dayOfYear(time.cursor), year: picker.value === String(ATLAS_YEAR), label };
+  }, {
+    // The watch list's countdown: the saved place's season for the species on screen (the only one loaded), else its own typical one.
+    now: () => clock,
+    due: (k) => (k === curKey ? homeDue() : null),
   });
   let asking = 0;
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
@@ -740,10 +744,12 @@ function start() {
   // "Coming out near you": the last place found (My area or Find), kept in this browser, gets one line under the map
   // for the species on screen, from today. Tapping it brings the place back; the cross forgets it.
   let home = loadPlace();
+  /** The species on screen's season at the remembered place. A lakeshore town's own hexagon can be water: the nearest land one within two rings speaks for it, as on the map. */
+  const homeDue = (): Due | null =>
+    home && cur.due ? [[home.lng, home.lat] as [number, number], ...nearby(home.lat, home.lng, 2).map((h) => h.lngLat)].reduce<Due | null>((got, at) => got ?? cur.due!(at, clock), null) : null;
   showNear = () => {
     const now = clock;
-    // A lakeshore town's own hexagon can be water: the nearest land one within two rings speaks for it, as on the map.
-    const d = home && cur.due ? [[home.lng, home.lat] as [number, number], ...nearby(home.lat, home.lng, 2).map((h) => h.lngLat)].reduce<Due | null>((got, at) => got ?? cur.due!(at, now), null) : null;
+    const d = homeDue();
     $('near').hidden = !d;
     $('countdown').classList.toggle('by-near', !!d);
     if (d) $('near-go').textContent = nearLine(home!.name, cur.words.shareName, d, now);
