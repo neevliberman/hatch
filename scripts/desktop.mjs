@@ -167,12 +167,36 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
 
   // First visit: the season plays itself up to 10 June, the map comes first and the About button glows; i opens the
   // drawer (and any click lands the opening on 10 June) and Escape closes it.
+  // Timed in the page, by a poll that starts before the app does: a check run from here waits on animation frames,
+  // which a software-drawn 2560x1440 map on a busy machine holds back for seconds, so it timed out after the date had
+  // long since moved. The page notes when the date first reads April or May (the opening's first day) and when the
+  // season then moves on from it by itself, both against its own clock.
+  await page.addInitScript(() => {
+    let first = null;
+    const look = () => {
+      const t = document.getElementById('t-date')?.textContent ?? '';
+      const at = window.__hatch?.time?.cursor;
+      if (first === null && at != null && /^(Apr|May)/.test(t)) {
+        first = at;
+        window.__autoplayAt = performance.now();
+      }
+      if (first != null && at > first) return void (window.__autoplayMovedAt = performance.now());
+      setTimeout(look, 25);
+    };
+    look();
+  });
   await page.goto(file);
-  const opened = page.waitForFunction(() => /^(Apr|May)/.test(document.getElementById('t-date')?.textContent ?? ''), null, { timeout: 8000 })
-    .then(() => true, () => false);
-  await page.waitForTimeout(2500);
+  // The same budget as before, on the page's clock: the opening's first day shows within 8 s of the page loading. The
+  // wait here is longer and polls on a timer, so a starved page is judged by its own clock, not by when it got to answer.
+  const noted = (key) => page.waitForFunction((k) => window[k] != null, key, { timeout: 30000, polling: 100 }).then(() => true, () => false);
+  const budget = (await noted('__autoplayAt'))
+    ? await page.evaluate(() => window.__autoplayAt - performance.getEntriesByType('navigation')[0].loadEventEnd) : null;
+  // And then it really plays: the season moves on from that first day before anything is touched (it plays to 10 June
+  // in about 4 s once the map's first frame is up).
+  const moved = budget != null && (await noted('__autoplayMovedAt'));
   await shot('1-first-visit');
-  if (!(await opened)) fail('the season did not play itself on first visit');
+  if (budget == null || budget > 8000) fail(`the season did not play itself on first visit (its first day showed ${budget == null ? 'never' : `${Math.round(budget)} ms after load`})`);
+  else if (!moved) fail('the season did not play itself on first visit (it showed its first day but never moved on)');
   // Opened from disk there is nothing to fetch, so no live option (and no request: the external-request check above).
   if (await page.locator('#season option[value=live]').count()) fail('the one-file build offers live mode');
   if (await drawerOpen(page)) fail('the drawer covers the map on first visit');
@@ -1929,6 +1953,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   if (process.env.ONLY === 'motion') units.splice(0, units.length, ...motionCases.map((c) => (b) => motionUnit(c, b)));
   if (process.env.ONLY === 'evict') units.splice(0, units.length, evictUnit);
   if (process.env.ONLY === 'search') units.splice(0, units.length, searchUnit);
+  if (process.env.ONLY === 'big') units.splice(0, units.length, screenFor('chromium', 2560, 1440)); // the largest screen, first visit included
   if (process.env.ONLY === 'live') units.splice(0, units.length, ...cases.map((c) => (b) => liveUnit(c, b)));
   if (process.env.ONLY === 'radar') units.splice(0, units.length, radarUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
