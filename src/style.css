@@ -857,7 +857,8 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sp-strip .sp-row { width: auto; min-height: 40px; padding: 3px 12px 3px 3px; border: 1px solid var(--line); border-radius: 22px; gap: 8px; }
 .sp-strip .sp-row img, .sp-strip .sp-blank { width: 32px; height: 32px; border-radius: 50%; }
 .sp-strip .sp-name i { display: none; }
-#sp-odd { list-style: none; margin: -4px 0 0; align-items: center; }
+#sp-twins, #sp-odd { list-style: none; margin: -4px 0 0; align-items: center; }
+#sp-twins[hidden] { display: none; }
 #sp-odd[hidden] { display: none; }
 #sp-off { list-style: none; margin: -4px 0 0; align-items: center; }
 #sp-off[hidden] { display: none; }

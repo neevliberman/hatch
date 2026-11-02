@@ -1,5 +1,5 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, json, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
+import { atlasKey, json, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES } from '../atlas/names';
 import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
@@ -70,6 +70,7 @@ export function mountSpeciesPicker(
     <p id="sp-wnote" class="sp-fine" role="status" hidden></p>
     <nav class="sp-crumbs" aria-label="Tree of life" aria-live="polite"></nav>
     <ul id="sp-list" aria-label="Species"></ul>
+    <ul id="sp-twins" class="sp-strip" aria-label="Flies with" hidden></ul>
     <ul id="sp-odd" class="sp-strip" aria-label="${surpriseYear} surprises" hidden></ul>
     <ul id="sp-off" class="sp-strip" aria-label="${offCaption(surpriseYear)}" hidden></ul>
     <ul id="sp-quiet" class="sp-strip" aria-label="${quietCaption(surpriseYear)}" hidden></ul>
@@ -80,6 +81,11 @@ export function mountSpeciesPicker(
   const oddStrip = sheet.querySelector<HTMLUListElement>('#sp-odd')!; // the surprises, as a second strip over the tree
   const offStrip = sheet.querySelector<HTMLUListElement>('#sp-off')!; // the most off-schedule, a third strip
   const quietStrip = sheet.querySelector<HTMLUListElement>('#sp-quiet')!; // the quietest in photos, a fourth
+  // "Flies with": the species whose typical Midwest season best matches the one on the map (pickTwins, season.bin),
+  // worked out in the browser when the sheet opens on a new species.
+  const twinStrip = sheet.querySelector<HTMLUListElement>('#sp-twins')!;
+  let twins: number[] = [];
+  let twinsFor = '';
   const treeHost = sheet.querySelector<HTMLElement>('.sp-tree')!;
   const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
 
@@ -247,6 +253,29 @@ export function mountSpeciesPicker(
         return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
       .join('');
+  const twinRows = () =>
+    twins
+      .map((i) => {
+        const s = all?.find((x) => x.i === i);
+        return s ? row(s) : '';
+      })
+      .join('');
+  const twinList = () => (twins.length && all ? `<li class="sp-sec">Flies with</li>${twinRows()}` : '');
+  // The current species' twins, once per species: a re-render when they arrive.
+  const findTwins = () => {
+    const k = currentKey;
+    if (!all || twinsFor === k) return;
+    twinsFor = k;
+    twins = [];
+    const i = indexOfKey(k);
+    if (i < 0) return;
+    void loadTwins(all, all[i]!.i).then((t) => {
+      if (twinsFor !== k) return;
+      if (!t) return void (twinsFor = ''); // a failed fetch tries again next time
+      twins = t;
+      if (!sheet.hidden) render();
+    });
+  };
   const quietList = () =>
     quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear)}</li>${quietRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
   const offList = () =>
@@ -268,12 +297,14 @@ export function mountSpeciesPicker(
     oddStrip.hidden = treeHost.hidden || !odd.length;
     offStrip.hidden = treeHost.hidden || !off.length;
     quietStrip.hidden = treeHost.hidden || !quiet.length;
+    twinStrip.hidden = treeHost.hidden || !twins.length;
     renderWatch();
     if (!all) {
       list.innerHTML = `<li class="sp-sec">Featured forecasts</li>${featuredRows()}<li class="sp-note">Loading the rest…</li>`;
       crumbs.innerHTML = '';
       return;
     }
+    findTwins();
     if (q.trim()) {
       const hits = search(q.trim());
       crumbs.innerHTML = `<span>${hits.length ? hits.length === 1 ? '1 match' : `${hits.length === 60 ? 'Top 60' : hits.length} matches` : 'No matches'}</span>`;
@@ -282,6 +313,7 @@ export function mountSpeciesPicker(
     }
     if (tree) {
       list.innerHTML = featuredRows();
+      twinStrip.innerHTML = `<li class="sp-lab" title="Typical season across the Midwest">Flies with</li>${twinRows()}`;
       oddStrip.innerHTML = `<li class="sp-lab">${surpriseYear} surprises</li>${surprises()}`;
       offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${offCaption(surpriseYear)}</li>${offRows()}`;
       quietStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${quietCaption(surpriseYear)}</li>${quietRows()}`;
@@ -296,7 +328,7 @@ export function mountSpeciesPicker(
     crumbs.innerHTML = steps.join('<span aria-hidden="true"> › </span>');
     if (!path.order) {
       list.innerHTML =
-        `<li class="sp-sec">Featured forecasts</li>${featuredRows()}${surpriseRows()}${offList()}${quietList()}${all.length ? '<li class="sp-sec">Browse</li>' : ''}` +
+        `<li class="sp-sec">Featured forecasts</li>${featuredRows()}${twinList()}${surpriseRows()}${offList()}${quietList()}${all.length ? '<li class="sp-sec">Browse</li>' : ''}` +
         tally(all, 'order').map(([o, n]) => counted(group(ORDER_NAMES[o] ?? o, o, `data-order="${esc(o)}"`), n)).join('');
     } else if (!path.family) {
       const inOrder = all.filter((s) => s.order === path.order);
@@ -382,7 +414,7 @@ export function mountSpeciesPicker(
     }
     if (e.target === treeHost.querySelector('canvas')) return; // the tree walks its own branches
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    const items = [...sheet.querySelectorAll<HTMLButtonElement>('#sp-watch:not([hidden]) .sp-go, #sp-list button, #sp-odd:not([hidden]) button, #sp-off:not([hidden]) button, #sp-quiet:not([hidden]) button')];
+    const items = [...sheet.querySelectorAll<HTMLButtonElement>('#sp-watch:not([hidden]) .sp-go, #sp-list button, #sp-twins:not([hidden]) button, #sp-odd:not([hidden]) button, #sp-off:not([hidden]) button, #sp-quiet:not([hidden]) button')];
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
     const next = e.key === 'ArrowDown' ? (i < 0 ? 0 : Math.min(items.length - 1, i + 1)) : i <= 0 ? -1 : i - 1;
     e.preventDefault();

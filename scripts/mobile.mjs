@@ -559,6 +559,38 @@ if (existsSync(join(distDir, 'radar'))) {
       console.log(`${tag}: checked`);
     }
   }
+  // The "Flies with" strip (pickTwins over season.bin), over http: three chips that never list the species on the map,
+  // on screen, and one opens its species. ONLY=twins runs just this.
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    for (const orient of ['portrait', 'landscape']) {
+      if ((process.env.ONLY && process.env.ONLY !== 'twins') || !mine()) continue;
+      const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
+      const tag = `twins ${phone} ${orient}`;
+      const fail = (m) => problems.push(`${tag}: ${m}`);
+      const ctx = await browsers[engine].newContext({ viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      try {
+        await page.goto(`${origin}/?noauto&today=2027-01-15`);
+        await page.waitForTimeout(1500);
+        await page.locator('#species').click({ timeout: 20000 });
+        const chip = page.locator('#sp-twins [data-key]');
+        await chip.first().waitFor({ timeout: 15000 }).catch(() => fail('the species sheet shows no "Flies with" strip'));
+        const keys = await chip.evaluateAll((els) => els.map((e) => e.dataset.key));
+        if (keys.length !== 3 || keys.includes('luna')) fail(`the luna moth's "Flies with" chips are ${keys.join(', ')}`);
+        const sb = await page.locator('#sp-twins').boundingBox();
+        if (!sb || sb.x < 0 || sb.x + sb.width > width + 1 || sb.y + sb.height > height + 1) fail('the "Flies with" strip is off-screen');
+        await page.screenshot({ path: `${out}/twins-${phone}-${orient}.png` });
+        await chip.first().click({ timeout: 20000 });
+        await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, keys[0], { timeout: 30000 }).catch(() => fail(`the first twin (${keys[0]}) did not open`));
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+      console.log(`${tag}: checked`);
+    }
+  }
   server.close();
 } else problems.push(`radar replays not checked: no ${join(distDir, 'radar')} (run npm run build first)`);
 for (const b of Object.values(browsers)) await b.close();

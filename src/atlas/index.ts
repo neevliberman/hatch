@@ -85,6 +85,51 @@ export async function outOn(doy: number, year: boolean): Promise<Float32Array | 
   });
 }
 
+/** Training records a species needs before its season curve is trusted as a "flies with" match. */
+export const TWIN_MIN_RECORDS = 500;
+/**
+ * The species whose typical Midwest season (season.bin's typical curves, as seasonDues) best matches species `i`'s: overlap
+ * of the two peak-scaled curves (sum of the smaller over sum of the larger, so timing, width and a second brood all count),
+ * plus a small nudge (0.03 per tenfold records) toward species people actually photograph. Leaves out the species' own
+ * genus and keeps one per genus, so near-twin congeners don't fill the row. Best first; empty for a species with no curve.
+ */
+export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i' | 'name' | 'genus' | 'n'>[], i: number, n = 3): number[] {
+  const rows = b.length / (2 * STEPS);
+  if (!(i >= 0 && i < rows)) return [];
+  const at = (j: number) => j * 2 * STEPS;
+  const a = at(i);
+  if (!b.subarray(a, a + STEPS).some((v) => v > 0)) return [];
+  const genus = (s: Pick<AtlasSpecies, 'name' | 'genus'>) => s.genus ?? s.name.split(' ')[0]!;
+  const self = species.find((s) => s.i === i);
+  const scored: [number, number, string][] = [];
+  for (const s of species) {
+    if (s.i === i || s.n < TWIN_MIN_RECORDS || !(s.i >= 0 && s.i < rows)) continue;
+    const c = at(s.i);
+    let lo = 0, hi = 0;
+    for (let k = 0; k < STEPS; k++) {
+      const x = b[a + k]!, y = b[c + k]!;
+      lo += Math.min(x, y);
+      hi += Math.max(x, y);
+    }
+    if (lo) scored.push([s.i, lo / hi + 0.03 * Math.log10(s.n), genus(s)]);
+  }
+  scored.sort((p, q) => q[1] - p[1] || p[0] - q[0]);
+  const seen = new Set(self ? [genus(self)] : []);
+  const out: number[] = [];
+  for (const [j, , g] of scored) {
+    if (seen.has(g)) continue;
+    seen.add(g);
+    out.push(j);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+/** pickTwins over season.bin, fetched once; null when the file is missing. */
+export async function loadTwins(species: readonly AtlasSpecies[], i: number, n = 3): Promise<number[] | null> {
+  const b = await loadSeasons();
+  return b ? pickTwins(b, species, i, n) : null;
+}
+
 /** The ?species= key for a species: its scientific name, lower case, hyphens ("papilio-glaucus"). */
 export const atlasKey = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
 
