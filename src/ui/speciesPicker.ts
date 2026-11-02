@@ -8,7 +8,9 @@ import { loadWatch, saveWatch, WATCH_MAX } from './watch';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
 const offCaption = (year: number) => `${year}: furthest off schedule`;
-const quietCaption = (year: number) => `${year}: fewer photos`;
+const quietCaption = (year: number) => `${year}: fewer photos so far`;
+// The seen counts are research-grade photos only: a hard-to-name insect's photos can wait months for identifications.
+const QUIET_NOTE = 'Photo-based: counts identified iNaturalist photos, not insects. Hard-to-identify species are still gaining IDs.';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** Where the browse stands: every insect, one order, or one family in it. */
@@ -44,7 +46,9 @@ export function mountSpeciesPicker(
   onPick: (key: string, season?: string) => void,
   /** The map's day (its day of year, whether it is ATLAS_YEAR's own season, and its words), for the tree's glow. */
   day?: () => { doy: number; year: boolean; label: string },
-  /** The watch list's clock (the page's, so ?today= moves it) and, for a species with a saved place, its season there. */
+  /** The watch list's clock (the page's, so ?today= moves it). */
+  /** The watch list's clock (the page's, so ?today= moves it) and, for the species on screen with a saved place, its
+   * season there (the same Due as the line under the map, so the two always agree). */
   watching?: { now: () => number; due: (key: string) => Due | null },
 ): SpeciesPicker {
   const bySci = new Map(featured.filter((e) => e.sci).map((e) => [e.sci!, e.key] as const));
@@ -90,14 +94,15 @@ export function mountSpeciesPicker(
   const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
 
   // The watch list: species starred from the sheet's head, kept in this browser (src/ui/watch.ts). Each shows as a chip
-  // with the same one-line countdown as "Coming out near you" (src/ui/near.ts), from the saved place when it is the
-  // species on the map, else from the Atlas's typical Midwest season (season.bin, fetched only if something is watched).
+  // with the same one-line countdown as "Coming out near you" (src/ui/near.ts): for the species on the map with a saved
+  // place, that place's season (exactly the line's); else the Atlas's typical Midwest season (season.bin, fetched only if
+  // something is watched). Both come from one rule (seasonsOf), so the two differ only by place.
   const star = sheet.querySelector<HTMLButtonElement>('.sp-star')!;
   const watchStrip = sheet.querySelector<HTMLUListElement>('#sp-watch')!;
   const watchNote = sheet.querySelector<HTMLElement>('#sp-wnote')!;
-  let watched = loadWatch();
+  let watched = loadWatch() ?? [];
   let currentLabel = button.querySelector('.sp-face')?.textContent ?? '';
-  let curves: ((i: number) => Due | null) | null = null;
+  let curves: Awaited<ReturnType<typeof seasonDues>> = null;
   let curvesTried = false;
   const labelOf = (key: string): string | null => {
     const f = featured.find((e) => e.key === key);
@@ -106,9 +111,9 @@ export function mountSpeciesPicker(
     return s ? nameOf(s) : key === currentKey ? currentLabel : null;
   };
   const setStar = () => {
-    const on = watched.includes(currentKey);
-    const text = `${on ? 'Stop watching' : 'Watch'} ${currentLabel}`;
-    star.setAttribute('aria-pressed', String(on));
+    // A toggle: the label names the action and stays put, aria-pressed says whether it is on.
+    const text = `Watch ${currentLabel}`;
+    star.setAttribute('aria-pressed', String(watched.includes(currentKey)));
     star.setAttribute('aria-label', text);
     star.title = text;
   };
@@ -123,15 +128,17 @@ export function mountSpeciesPicker(
       if (name === null) return ''; // the Atlas list is not in yet
       const here = watching?.due(k) ?? null;
       const i = here || !curves ? -1 : indexOfKey(k);
-      const due = here ?? (i >= 0 ? curves!(i) : null);
+      const due = here ?? (i >= 0 ? curves!(all![i]!.i) : null);
       const when = due ? dueShort(due, now) : '';
       const title = due ? (here ? 'Season at your saved place' : 'Typical season across the Midwest') : '';
       return `<li class="sp-chip"><button type="button" class="sp-go" data-key="${esc(k)}"${title ? ` title="${title}"` : ''}><b>${esc(name)}</b><span>${when}</span></button><button type="button" class="sp-wx" data-unwatch="${esc(k)}" aria-label="Stop watching ${esc(name)}">&times;</button></li>`;
     });
     watchStrip.hidden = !chips.some(Boolean) || !!q.trim();
-    const had = (document.activeElement as HTMLElement | null)?.closest('#sp-watch') ? (document.activeElement as HTMLElement).dataset.key : undefined;
+    // An async re-render must not drop keyboard focus, whether it was on a chip or on its cross.
+    const el = document.activeElement as HTMLElement | null;
+    const had = el?.closest('#sp-watch') ? (el.dataset.key ? `.sp-go[data-key="${el.dataset.key}"]` : el.dataset.unwatch ? `.sp-wx[data-unwatch="${el.dataset.unwatch}"]` : '') : '';
     watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${chips.join('')}`;
-    if (had) watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${had}"]`)?.focus(); // an async re-render must not drop keyboard focus
+    if (had) watchStrip.querySelector<HTMLElement>(had)?.focus();
     setStar();
     // The typical-season curves are only fetched once something is watched that no saved place speaks for.
     if (all && !curves && !curvesTried && watched.length) {
@@ -144,7 +151,7 @@ export function mountSpeciesPicker(
   };
   const toggleWatch = () => {
     watchNote.hidden = true;
-    watched = loadWatch(); // another tab may have changed it
+    watched = loadWatch() ?? watched; // another tab may have changed it; blocked storage keeps this visit's list
     if (watched.includes(currentKey)) watched = watched.filter((k) => k !== currentKey);
     else if (watched.length >= WATCH_MAX) {
       watchNote.textContent = `Watch list is full (${WATCH_MAX}). Remove one first.`;
@@ -249,7 +256,7 @@ export function mountSpeciesPicker(
     quiet
       .map(({ i, seen, expected }) => {
         const s = all?.find((x) => x.i === i);
-        const n = `<span class="sp-n" title="${seen} photos so far, ${expected} expected">${seen} of ${expected}</span>`;
+        const n = `<span class="sp-n" title="${seen} identified photos so far, ${expected} expected">${seen} of ${expected}</span>`;
         return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
       .join('');
@@ -277,7 +284,7 @@ export function mountSpeciesPicker(
     });
   };
   const quietList = () =>
-    quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear)}</li>${quietRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
+    quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear)}</li>${quietRows()}<li class="sp-note sp-fine">${QUIET_NOTE}</li>` : '';
   const offList = () =>
     off.length && all ? `<li class="sp-sec">${offCaption(surpriseYear)}</li>${offRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
   const surpriseRows = () => (odd.length && all ? `<li class="sp-sec">${surpriseYear} surprises</li>${surprises()}` : '');
@@ -316,7 +323,7 @@ export function mountSpeciesPicker(
       twinStrip.innerHTML = `<li class="sp-lab" title="Typical season across the Midwest">Flies with</li>${twinRows()}`;
       oddStrip.innerHTML = `<li class="sp-lab">${surpriseYear} surprises</li>${surprises()}`;
       offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${offCaption(surpriseYear)}</li>${offRows()}`;
-      quietStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${quietCaption(surpriseYear)}</li>${quietRows()}`;
+      quietStrip.innerHTML = `<li class="sp-lab" title="${QUIET_NOTE}">${quietCaption(surpriseYear)}</li>${quietRows()}`;
       treeCrumbs?.();
       tree.shown();
       glow();
@@ -385,7 +392,7 @@ export function mountSpeciesPicker(
     if (b.dataset.unwatch) {
       const chip = b.closest('li');
       const next = (chip?.nextElementSibling ?? chip?.previousElementSibling)?.querySelector<HTMLElement>('.sp-go');
-      watched = loadWatch().filter((k) => k !== b.dataset.unwatch);
+      watched = (loadWatch() ?? watched).filter((k) => k !== b.dataset.unwatch);
       saveWatch(watched);
       renderWatch();
       (next ? watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${next.dataset.key}"]`) : star)?.focus();

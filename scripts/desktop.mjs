@@ -1299,11 +1299,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // Keyboard operable: focus the star and press Enter.
         await star.focus();
         await page.keyboard.press('Enter');
-        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Stop watching /.test((await star.getAttribute('aria-label')) ?? '')) fail(`${k}: Enter on the star did not watch it`);
+        // A toggle button: aria-pressed carries the state, the label stays "Watch ..." (never "Stop watching": a double negative when pressed).
+        if ((await star.getAttribute('aria-pressed')) !== 'true' || !/^Watch /.test((await star.getAttribute('aria-label')) ?? '')) fail(`${k}: Enter on the star did not watch it, or its label stopped reading "Watch ..."`);
         await page.keyboard.press('Escape');
       }
       if ((await stored()) !== JSON.stringify([...three].reverse())) fail(`the watch list saved as ${await stored()}`);
-      // Back on a different species, the sheet lists all three with a countdown each.
+      // Back on a different species, the sheet lists all three with a countdown each. A saved place too: the chip of the
+      // species on screen counts down to the very season the line under the map names.
+      await page.evaluate(() => localStorage.setItem('hatch-place', JSON.stringify({ name: 'Chicago, IL', lat: 41.88, lng: -87.63 })));
       await go('papilio-glaucus');
       await open();
       await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 3, null, { timeout: 10000 })
@@ -1325,11 +1328,22 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(500);
       await shotW('2-picker-dark');
       await page.evaluate(() => document.getElementById('theme-btn').click());
-      // A chip opens its species.
+      // Keyboard focus on a chip's cross survives a re-render of the row (the search box's input event redraws it).
+      await page.locator('#sp-watch [data-unwatch="papilio-glaucus"]').focus();
+      await page.evaluate(() => document.getElementById('sp-q').dispatchEvent(new Event('input')));
+      if ((await page.evaluate(() => document.activeElement?.dataset.unwatch)) !== 'papilio-glaucus') fail('a re-render of the Watching row dropped focus from a chip\'s cross');
+      // A chip opens its species; with a saved place, that chip and the line under the map then say the same.
       await page.locator('#sp-watch [data-key="papilio-polyxenes"]').click();
       await page.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { timeout: 30000 }).catch(() => fail('a Watching chip did not open its species'));
-      // A cross removes one, and the store follows.
+      await page.locator('#near').waitFor({ state: 'visible', timeout: 30000 }).catch(() => fail('the saved place\'s line did not show'));
       await open();
+      const chipSays = (await page.locator('#sp-watch [data-key="papilio-polyxenes"] span').textContent()) ?? '';
+      const chipTitle = await page.locator('#sp-watch [data-key="papilio-polyxenes"]').getAttribute('title');
+      const lineSays = (await page.locator('#near-go').textContent()) ?? '';
+      const agree = chipSays === 'out now' ? / out now/.test(lineSays) : lineSays.includes(` ${chipSays.replace(/^out /, '')} (`);
+      if (!agree || chipTitle !== 'Season at your saved place') fail(`the on-screen species' chip ("${chipSays}", ${chipTitle}) and the line under the map ("${lineSays}") disagree`);
+      // A cross removes one, and the store follows.
+      await page.evaluate(() => localStorage.removeItem('hatch-place'));
       await page.locator('#sp-watch [data-unwatch="poecilocapsus-lineatus"]').click();
       if ((await chips().count()) !== 2) fail('the chip\'s cross did not remove it');
       if ((await stored()) !== JSON.stringify(['papilio-polyxenes', 'papilio-glaucus'])) fail(`after a cross the watch list saved as ${await stored()}`);
@@ -1363,6 +1377,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await blocked.locator('#species').click();
       await blocked.locator('.sp-star').click();
       if ((await blocked.locator('.sp-star').getAttribute('aria-pressed')) !== 'true') fail('with storage blocked the star does not work for the visit');
+      // A second species starred in the same visit joins the first instead of replacing it (a failed read is not an empty list).
+      await blocked.locator('#sp-q').fill('papilio polyxenes');
+      await blocked.waitForFunction(() => /match/.test(document.querySelector('.sp-crumbs')?.textContent ?? ''), null, { timeout: 15000 });
+      await blocked.locator('#sp-q').press('Enter');
+      await blocked.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { timeout: 30000 }).catch(() => fail('with storage blocked a searched species did not open'));
+      await blocked.locator('#species').click();
+      await blocked.locator('.sp-star').click();
+      await blocked.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 2, null, { timeout: 10000 })
+        .catch(async () => fail(`with storage blocked, starring a second species left ${await blocked.locator('#sp-watch .sp-go').count()} chips, not 2`));
+      // And a cross removes only its own (the search box still holds the last search, which hides the row: clear it).
+      await blocked.locator('#sp-q').fill('');
+      await blocked.locator('#sp-watch [data-unwatch="papilio-polyxenes"]').click();
+      if ((await blocked.locator('#sp-watch .sp-go').count()) !== 1) fail('with storage blocked, a cross did not leave the other species watched');
       if (!(await blocked.locator('#map').isVisible())) fail('with storage blocked the map is gone');
       await blocked.close();
     } catch (e) {
@@ -1392,6 +1419,23 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (!/photos/i.test(cap) || /declin|decreas|fewer insects|abundan/i.test(cap)) fail(`the quiet strip's caption reads "${cap}"`);
       const notes = await page.locator('#sp-quiet .sp-n').allTextContents();
       if (!notes.length || notes.some((t) => !/^\d+ of \d+$/.test(t) || +t.split(' of ')[0] >= 0.6 * +t.split(' of ')[1])) fail(`the quiet chips read ${notes.join(' | ')}`);
+      // Identifications lag: no chip may be a species whose typical season peaks in the six weeks before the file's
+      // last day (QUIET_LATE_DAYS), whose photos are still waiting for IDs.
+      const late = await page.evaluate(async (keys) => {
+        const [bin, seen, sp] = await Promise.all([fetch('atlas/season.bin').then((r) => r.arrayBuffer()), fetch('atlas/seen-2026.json').then((r) => r.json()), fetch('atlas/species.json').then((r) => r.json())]);
+        const b = new Uint8Array(bin), steps = 62;
+        const key = (n) => n.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+        return keys.filter((k) => {
+          const i = sp.findIndex((s) => key(s.name) === k);
+          if (i < 0) return false;
+          let pk = 0;
+          for (let j = 1; j < steps; j++) if (b[i * 2 * steps + j] > b[i * 2 * steps + pk]) pk = j;
+          return 60 + 4 * pk > seen.last_day - 42;
+        });
+      }, await chip.evaluateAll((els) => els.map((e) => e.dataset.key)));
+      if (late.length) fail(`the quiet strip lists species whose season peaks too late for their IDs to be in: ${late.join(', ')}`);
+      const tip = (await page.locator('#sp-quiet .sp-lab').getAttribute('title')) ?? '';
+      if (!/identif/i.test(tip)) fail(`the quiet strip's tooltip doesn't say identifications are still coming in: "${tip}"`);
       const sb = await page.locator('#sp-quiet').boundingBox();
       const sh = await page.locator('#species-sheet').boundingBox();
       if (!sb || !sh || sb.x < sh.x - 1 || sb.x + sb.width > sh.x + sh.width + 1 || sb.y + sb.height > sh.y + sh.height + 1) fail('the quiet strip spills out of the species sheet');
@@ -1444,16 +1488,47 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // seasonsOf (src/atlas/index.ts), the one season rule for the watch chips and the line under the map, on synthetic
+  // curves (no browser): a noisy shoulder dip and a stray tail stay one season; a real gap makes two broods, and the
+  // countdown in the gap waits for the second one (src/ui/near.ts).
+  const seasonsUnit = async () => {
+    const fail = (m) => problems.push(`seasons: ${m}`);
+    try {
+      const { outputFiles } = require('esbuild').buildSync({
+        stdin: { contents: "export { seasonsOf } from './src/atlas/index'; export { dueShort } from './src/ui/near';", resolveDir: resolve('.'), loader: 'ts' },
+        bundle: true, write: false, format: 'esm', platform: 'node', define: { 'import.meta.env.BASE_URL': '"/"' }, logLevel: 'silent',
+      });
+      const { seasonsOf, dueShort } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`);
+      const bell = (k, c, w, h) => h * Math.exp(-(((k - c) / w) ** 2));
+      // One season (steps 8-40) whose rising shoulder dips under the line for two steps, plus a two-step stray tail.
+      const noisy = Array.from({ length: 62 }, (_, k) => (k === 11 || k === 12 ? 2 : bell(k, 26, 8, 255) + (k >= 8 && k <= 40 ? 14 : 0)) + (k === 50 || k === 51 ? 16 + k - 50 : 0));
+      const one = seasonsOf(noisy);
+      if (one?.broods?.length !== 1) fail(`a noisy single season split into ${one?.broods?.length} broods: ${JSON.stringify(one?.broods)}`);
+      // Two broods 40 days apart: spring (peak step 12) and a bigger summer one (peak step 36).
+      const two = seasonsOf(Array.from({ length: 62 }, (_, k) => bell(k, 12, 3, 120) + bell(k, 36, 4, 255)));
+      if (two?.broods?.length !== 2) fail(`a two-brood curve gave ${two?.broods?.length} broods: ${JSON.stringify(two?.broods)}`);
+      else {
+        const gap = Math.round((two.broods[0].end + two.broods[1].start) / 2);
+        const want = two.broods[1].start - gap;
+        const said = dueShort(two, Date.UTC(2026, 0, gap));
+        if (said !== `out in ${want} days`) fail(`between broods (day ${gap}) the countdown reads "${said}", not "out in ${want} days"`);
+        if (dueShort(two, Date.UTC(2026, 0, two.broods[0].peak)) !== 'out now') fail('in the spring brood the countdown does not read "out now"');
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    console.log('seasons: checked');
+  };
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
-  if (process.env.ONLY === 'watch') units.splice(0, units.length, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
+  if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
   server.close();
 } else {

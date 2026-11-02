@@ -395,7 +395,7 @@ function start() {
     const label = new Date(time.cursor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
     return { doy: dayOfYear(time.cursor), year: picker.value === String(ATLAS_YEAR), label };
   }, {
-    // The watch list's countdown: the saved place's season for the species on screen (the only one loaded), else its own typical one.
+    // The watch list's clock, and for the species on screen the saved place's season: the very Due the line under the map shows.
     now: () => clock,
     due: (k) => (k === curKey ? homeDue() : null),
   });

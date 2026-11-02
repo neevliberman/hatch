@@ -51,14 +51,18 @@ export function dueShort(due: Due, now: number): string {
   return w.on ? 'out now' : `out in ${plural(w.days)}`;
 }
 
-/** Where a season stands today: in it (with its peak, if still ahead), or the start of the next one and the days to wait. */
+/** Where a season stands today: in one of its broods (with that brood's peak, if still ahead), or the start of the next
+ * brood and the days to wait (after the last, next year's first). */
 function when(due: Due, now: number) {
   const y = new Date(now).getUTCFullYear();
   const at = (year: number, doy: number) => Date.UTC(year, 0, Math.round(doy));
   const doy = dayOfYear(now);
   const later = due.year !== undefined && due.year > y; // a season already over this year, counted to next year's
-  if (!later && doy >= due.start && doy <= due.end) return { on: true as const, peak: doy < due.peak - 3 ? at(y, due.peak) : null };
-  const next = at(later ? due.year! : doy < due.start ? y : y + 1, due.start);
+  const broods = due.broods?.length ? due.broods : [due];
+  const on = later ? undefined : broods.find((b) => doy >= b.start && doy <= b.end);
+  if (on) return { on: true as const, peak: doy < on.peak - 3 ? at(y, on.peak) : null };
+  const ahead = later ? undefined : broods.find((b) => doy < b.start);
+  const next = ahead ? at(y, ahead.start) : at(later ? due.year! : y + 1, broods[0]!.start);
   return { on: false as const, next, days: Math.max(1, Math.ceil((next - now) / DAY)) };
 }
 const plural = (days: number) => `${days} day${days === 1 ? '' : 's'}`;

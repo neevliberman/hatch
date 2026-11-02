@@ -1,7 +1,7 @@
 /**
  * The Atlas's species list, on its own so the species picker can load it without the network (src/atlas/atlas.ts).
  */
-import type { Due } from '../core/layer';
+import type { Brood, Due } from '../core/layer';
 
 /** One output of the network: a species (or, last, every other insect). */
 export interface AtlasSpecies {
@@ -43,27 +43,63 @@ function loadSeasons(): Promise<Uint8Array | null> {
     .then((b) => (b ? new Uint8Array(b) : ((seasons = null), null)));
   return seasons;
 }
+/** A day counts as in a species' season when its expected photos are at least this share of its best day's, so a
+ * smaller spring brood counts, not just the bigger summer one. One rule for the map's "Coming out near you" line
+ * (atlasLayer's dueHere) and the watch list's chips (seasonDues). */
+export const DUE_SHARE = 1 / 20;
+/** Runs of a season this close (steps below the line between them, 8 days) are one brood with a dip, not two. */
+const BROOD_GAP = 2;
+/** A run must hold at least this share of the season's photos to be a brood of its own: less is a stray tail. */
+const BROOD_MASS = 0.12;
 /**
- * Each species' typical season as days of year (first day at a quarter of its best, its peak, its last: the bar the
- * tree's glow uses), Midwest-wide, from season.bin. The function returns null for a species with no curve; the promise
- * resolves null when the file is missing.
+ * A species' seasons from its curve sampled every STEP days from SEASON[0] (any scale): the runs of steps at or above
+ * DUE_SHARE of the curve's top, runs at most BROOD_GAP steps apart merged into one, and runs holding under BROOD_MASS
+ * of the curve's photos left out (the top's own run always stays). Each brood's peak is its own top. The outer span
+ * (first start, last end, the top's peak) carries them as `broods`, so a countdown waits for the next brood, not the
+ * next spring. Null when the curve is empty.
+ */
+export function seasonsOf(curve: ArrayLike<number>): Due | null {
+  let pk = 0, total = 0;
+  for (let k = 0; k < curve.length; k++) {
+    total += curve[k]!;
+    if (curve[k]! > curve[pk]!) pk = k;
+  }
+  if (!(curve[pk]! > 0)) return null;
+  const lim = curve[pk]! * DUE_SHARE;
+  const runs: [number, number][] = [];
+  for (let k = 0; k < curve.length; k++) {
+    if (curve[k]! < lim) continue;
+    let e = k;
+    while (e + 1 < curve.length && curve[e + 1]! >= lim) e++;
+    const last = runs[runs.length - 1];
+    if (last && k - last[1] - 1 <= BROOD_GAP) last[1] = e;
+    else runs.push([k, e]);
+    k = e;
+  }
+  const day = (k: number) => SEASON[0] + k * STEP;
+  const broods: Brood[] = [];
+  for (const [a, e] of runs) {
+    let top = a, mass = 0;
+    for (let k = a; k <= e; k++) {
+      mass += curve[k]!;
+      if (curve[k]! > curve[top]!) top = k;
+    }
+    if (mass >= total * BROOD_MASS || (a <= pk && pk <= e)) broods.push({ start: day(a), peak: day(top), end: day(e) });
+  }
+  return { start: broods[0]!.start, peak: day(pk), end: broods[broods.length - 1]!.end, broods };
+}
+/** Species i's typical-year curve in season.bin (STEPS bytes), or null when out of range. */
+const typical = (b: Uint8Array, i: number) => (i >= 0 && i < b.length / (2 * STEPS) ? b.subarray(i * 2 * STEPS, i * 2 * STEPS + STEPS) : null);
+/**
+ * Each species' typical season, Midwest-wide, from season.bin's typical curves (seasonsOf: the same rule as the map's
+ * own line). The function returns null for a species with no curve; the promise resolves null when the file is missing.
  */
 export async function seasonDues(): Promise<((i: number) => Due | null) | null> {
   const b = await loadSeasons();
   if (!b) return null;
-  const n = b.length / (2 * STEPS);
   return (i) => {
-    if (!(i >= 0 && i < n)) return null;
-    const at = i * 2 * STEPS;
-    let pk = 0;
-    for (let k = 1; k < STEPS; k++) if (b[at + k]! > b[at + pk]!) pk = k;
-    if (!b[at + pk]) return null;
-    const lim = b[at + pk]! / 4;
-    let s = pk, e = pk;
-    while (s > 0 && b[at + s - 1]! >= lim) s--;
-    while (e < STEPS - 1 && b[at + e + 1]! >= lim) e++;
-    const day = (k: number) => SEASON[0] + k * STEP;
-    return { start: day(s), peak: day(pk), end: day(e) };
+    const c = typical(b, i);
+    return c ? seasonsOf(c) : null;
   };
 }
 /**
@@ -181,31 +217,50 @@ export function pickOffSchedule(rows: readonly (readonly [number, number, number
   return out.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0] - b[0]).slice(0, n);
 }
 type SeenRows = [number, number, number | null, number | null][];
-let rowing: Promise<SeenRows | null> | null = null;
-/** The year's rows of seen-YEAR.json ([seen, expected, ratio, days] per species), fetched once for the off-schedule and quiet strips; null when missing. */
-const seenRows = (year: number): Promise<SeenRows | null> =>
-  (rowing ??= json<{ species: SeenRows }>(`seen-${year}.json`).then((f) => f?.species ?? ((rowing = null), null)));
+type SeenFile = { last_day: number; species: SeenRows };
+let seenFiling: Promise<SeenFile | null> | null = null;
+/** seen-YEAR.json, fetched once for the off-schedule and quiet strips; null when missing. */
+const seenFile = (year: number): Promise<SeenFile | null> =>
+  (seenFiling ??= json<SeenFile>(`seen-${year}.json`).then((f) => (f?.species ? f : ((seenFiling = null), null))));
 /** The year's most off-schedule species for the species picker, from seen-YEAR.json. Null when missing. */
 export function loadOffSchedule(year: number, n = 10): Promise<OffSchedule | null> {
-  return seenRows(year).then((r) => (r ? pickOffSchedule(r, n) : null));
+  return seenFile(year).then((f) => (f ? pickOffSchedule(f.species, n) : null));
 }
 /** Photos a species needs expected before a shortfall is worth ranking, and how far below expected counts as quiet. */
 export const QUIET_MIN_EXPECTED = 100;
 export const QUIET_BELOW = 0.6;
+/**
+ * The seen counts are research-grade iNaturalist photos only, and a photo takes weeks to months to reach that: a species
+ * whose typical season peaks this close to the file's last day has had too little time for its identifications, and
+ * reads quiet when it is only waiting (2026: species peaking in the last six weeks ran a median 0.83 of expected and were
+ * twice as often under QUIET_BELOW as those peaking earlier). Those are left out of the quiet strip.
+ */
+export const QUIET_LATE_DAYS = 42;
 /** A quiet species: its index and the photos it had (of those expected). */
 export type Quiet = { i: number; seen: number; expected: number };
-/** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and under QUIET_BELOW. */
+/** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and
+ * under QUIET_BELOW, and not `late` (a species whose identifications are still coming in). */
 // Near zero (under 5% of expected) is almost always a periodical brood's off-year or a data gap, not a quiet year.
-export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10): Quiet[] {
+export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, late: (i: number) => boolean = () => false): Quiet[] {
   const out: Quiet[] = [];
   rows.forEach((r, i) => {
-    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
+    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05 && !late(i)) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
   });
   return out.sort((a, b) => a.seen / a.expected - b.seen / b.expected || b.expected - a.expected || a.i - b.i).slice(0, n);
 }
-/** The year's quietest species for the species picker, from seen-YEAR.json. Null when missing. */
+/** The year's quietest species for the species picker, from seen-YEAR.json, leaving out those with a typical brood
+ * (season.bin, seasonsOf) peaking within QUIET_LATE_DAYS of its last day. Null when missing; without season.bin none
+ * are left out. */
 export function loadQuiet(year: number, n = 10): Promise<Quiet[] | null> {
-  return seenRows(year).then((r) => (r ? pickQuiet(r, n) : null));
+  return Promise.all([seenFile(year), loadSeasons()]).then(([f, b]) => {
+    if (!f) return null;
+    const late = (i: number) => {
+      const c = b && typical(b, i);
+      const d = c && seasonsOf(c);
+      return !!d && d.broods!.some((r) => r.peak > f.last_day - QUIET_LATE_DAYS); // any brood, not just the biggest
+    };
+    return pickQuiet(f.species, n, late);
+  });
 }
 /** "9 d early" / "4 d late". */
 export const offNote = (days: number) => `${Math.abs(days)} d ${days > 0 ? 'early' : 'late'}`;
