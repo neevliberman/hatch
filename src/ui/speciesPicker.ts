@@ -119,7 +119,9 @@ export function mountSpeciesPicker(
       return `<li class="sp-chip"><button type="button" class="sp-go" data-key="${esc(k)}"${title ? ` title="${title}"` : ''}><b>${esc(name)}</b><span>${when}</span></button><button type="button" class="sp-wx" data-unwatch="${esc(k)}" aria-label="Stop watching ${esc(name)}">&times;</button></li>`;
     });
     watchStrip.hidden = !chips.some(Boolean) || !!q.trim();
+    const had = (document.activeElement as HTMLElement | null)?.closest('#sp-watch') ? (document.activeElement as HTMLElement).dataset.key : undefined;
     watchStrip.innerHTML = `<li class="sp-lab">Watching</li>${chips.join('')}`;
+    if (had) watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${had}"]`)?.focus(); // an async re-render must not drop keyboard focus
     setStar();
     // The typical-season curves are only fetched once something is watched that no saved place speaks for.
     if (all && !curves && !curvesTried && watched.length) {
@@ -132,6 +134,7 @@ export function mountSpeciesPicker(
   };
   const toggleWatch = () => {
     watchNote.hidden = true;
+    watched = loadWatch(); // another tab may have changed it
     if (watched.includes(currentKey)) watched = watched.filter((k) => k !== currentKey);
     else if (watched.length >= WATCH_MAX) {
       watchNote.textContent = `Watch list is full (${WATCH_MAX}). Remove one first.`;
@@ -332,7 +335,7 @@ export function mountSpeciesPicker(
     if (b.dataset.unwatch) {
       const chip = b.closest('li');
       const next = (chip?.nextElementSibling ?? chip?.previousElementSibling)?.querySelector<HTMLElement>('.sp-go');
-      watched = watched.filter((k) => k !== b.dataset.unwatch);
+      watched = loadWatch().filter((k) => k !== b.dataset.unwatch);
       saveWatch(watched);
       renderWatch();
       (next ? watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${next.dataset.key}"]`) : star)?.focus();
