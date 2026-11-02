@@ -406,7 +406,16 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
   await page.reload();
   await page.waitForTimeout(1500);
   await page.mouse.move(2, 200);
-  const f = await midwest(page, await page.screenshot());
+  // The fresh load can still be drawing its first frames on a slow CI runner (a 54% x 20% sliver seen in webkit):
+  // the same wait as above, shots until two in a row agree.
+  let f = await midwest(page, await page.screenshot());
+  for (let i = 0; i < 6; i++) {
+    await page.waitForTimeout(700);
+    const again = await midwest(page, await page.screenshot());
+    const still = Math.abs(again.w - f.w) < 0.02 && Math.abs(again.h - f.h) < 0.02;
+    f = again;
+    if (still) break;
+  }
   if (Math.abs(r.h - f.h) > 0.08 || Math.abs(r.w - f.w) > 0.08)
     fail(`after a resize the Midwest is ${Math.round(r.w * 100)}% x ${Math.round(r.h * 100)}%, a fresh load shows ${Math.round(f.w * 100)}% x ${Math.round(f.h * 100)}%`);
 
