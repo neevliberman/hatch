@@ -1418,10 +1418,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const sb = await page.locator('#sp-twins').boundingBox();
       const sh = await page.locator('#species-sheet').boundingBox();
       if (!sb || !sh || sb.x < sh.x - 1 || sb.x + sb.width > sh.x + sh.width + 1 || sb.y + sb.height > sh.y + sh.height + 1) fail('the "Flies with" strip spills out of the species sheet');
+      await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
       await page.screenshot({ path: `${out}/twins-${phone ? 'phone' : 'desktop'}.png`, timeout: 60000 }).catch(() => {});
       const key = keys[0];
       await chip.first().click();
-      await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`the first twin (${key}) did not open`));
+      await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), key, { timeout: 30000 }).catch(() => fail(`the first twin (${key}) did not open`));
       await page.waitForTimeout(500);
       await page.locator('#species').click();
       await page.waitForFunction((k) => {

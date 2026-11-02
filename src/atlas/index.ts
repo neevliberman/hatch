@@ -87,31 +87,43 @@ export async function outOn(doy: number, year: boolean): Promise<Float32Array | 
 
 /** Training records a species needs before its season curve is trusted as a "flies with" match. */
 export const TWIN_MIN_RECORDS = 500;
+/** The tie-breaker toward often-photographed species, per tenfold records (about 0.02 across the whole list). */
+const TWIN_NUDGE = 0.01;
 /**
  * The species whose typical Midwest season (season.bin's typical curves, as seasonDues) best matches species `i`'s: overlap
  * of the two peak-scaled curves (sum of the smaller over sum of the larger, so timing, width and a second brood all count),
- * plus a small nudge (0.03 per tenfold records) toward species people actually photograph. Leaves out the species' own
+ * plus a tie-breaker (TWIN_NUDGE) toward species people actually photograph. Leaves out the species' own
  * genus and keeps one per genus, so near-twin congeners don't fill the row. Best first; empty for a species with no curve.
  */
 export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i' | 'name' | 'genus' | 'n'>[], i: number, n = 3): number[] {
   const rows = b.length / (2 * STEPS);
   if (!(i >= 0 && i < rows)) return [];
   const at = (j: number) => j * 2 * STEPS;
+  // season.bin scales each species by its top over both halves (typical and ATLAS_YEAR), so the typical half can peak
+  // below 255: each typical curve is rescaled to its own top first.
+  const top = (j: number) => {
+    let m = 0;
+    for (let k = 0; k < STEPS; k++) m = Math.max(m, b[at(j) + k]!);
+    return m;
+  };
   const a = at(i);
-  if (!b.subarray(a, a + STEPS).some((v) => v > 0)) return [];
+  const ta = top(i);
+  if (!ta) return [];
   const genus = (s: Pick<AtlasSpecies, 'name' | 'genus'>) => s.genus ?? s.name.split(' ')[0]!;
   const self = species.find((s) => s.i === i);
   const scored: [number, number, string][] = [];
   for (const s of species) {
     if (s.i === i || s.n < TWIN_MIN_RECORDS || !(s.i >= 0 && s.i < rows)) continue;
     const c = at(s.i);
+    const tc = top(s.i);
+    if (!tc) continue;
     let lo = 0, hi = 0;
     for (let k = 0; k < STEPS; k++) {
-      const x = b[a + k]!, y = b[c + k]!;
+      const x = b[a + k]! / ta, y = b[c + k]! / tc;
       lo += Math.min(x, y);
       hi += Math.max(x, y);
     }
-    if (lo) scored.push([s.i, lo / hi + 0.03 * Math.log10(s.n), genus(s)]);
+    if (lo) scored.push([s.i, lo / hi + TWIN_NUDGE * Math.log10(s.n), genus(s)]);
   }
   scored.sort((p, q) => q[1] - p[1] || p[0] - q[0]);
   const seen = new Set(self ? [genus(self)] : []);

@@ -291,6 +291,7 @@ export function mountSpeciesPicker(
       })
       .join('');
   const render = () => {
+    findTwins(); // first: a new species clears the last one's twins before the strip's visibility is set
     treeHost.hidden = !tree || !!q.trim();
     sheet.classList.toggle('sp-has-tree', !treeHost.hidden);
     list.classList.toggle('sp-strip', !treeHost.hidden);
@@ -304,7 +305,6 @@ export function mountSpeciesPicker(
       crumbs.innerHTML = '';
       return;
     }
-    findTwins();
     if (q.trim()) {
       const hits = search(q.trim());
       crumbs.innerHTML = `<span>${hits.length ? hits.length === 1 ? '1 match' : `${hits.length === 60 ? 'Top 60' : hits.length} matches` : 'No matches'}</span>`;

@@ -545,6 +545,7 @@ if (existsSync(join(distDir, 'radar'))) {
         if (!/photos/i.test(cap) || /declin|decreas|fewer insects|abundan/i.test(cap)) fail(`the quiet strip's caption reads "${cap}"`);
         const notes = await page.locator('#sp-quiet .sp-n').allTextContents();
         if (!notes.length || notes.some((t) => !/^\d+ of \d+$/.test(t))) fail(`the quiet chips read ${notes.join(' | ')}`);
+        await page.locator('#sp-quiet').scrollIntoViewIfNeeded(); // on a short screen the sheet scrolls to it
         const sb = await page.locator('#sp-quiet').boundingBox();
         if (!sb || sb.x < 0 || sb.x + sb.width > width + 1 || sb.y + sb.height > height + 1) fail('the quiet strip is off-screen');
         await page.screenshot({ path: `${out}/quiet-${phone}-${orient}.png` });
@@ -581,9 +582,13 @@ if (existsSync(join(distDir, 'radar'))) {
         if (keys.length !== 3 || keys.includes('luna')) fail(`the luna moth's "Flies with" chips are ${keys.join(', ')}`);
         const sb = await page.locator('#sp-twins').boundingBox();
         if (!sb || sb.x < 0 || sb.x + sb.width > width + 1 || sb.y + sb.height > height + 1) fail('the "Flies with" strip is off-screen');
+        // A short screen (phone on its side): the strips may push the tree, but it keeps a usable 160px (the sheet scrolls).
+        const th = (await page.locator('.sp-tree').boundingBox())?.height ?? 0;
+        if (th < 159) fail(`the tree of life is squeezed to ${Math.round(th)}px`);
+        await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
         await page.screenshot({ path: `${out}/twins-${phone}-${orient}.png` });
         await chip.first().click({ timeout: 20000 });
-        await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, keys[0], { timeout: 30000 }).catch(() => fail(`the first twin (${keys[0]}) did not open`));
+        await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), keys[0], { timeout: 30000 }).catch(() => fail(`the first twin (${keys[0]}) did not open`));
       } catch (e) {
         fail(`stopped: ${e.message.split('\n')[0]}`);
       }
