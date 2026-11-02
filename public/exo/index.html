@@ -65,6 +65,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 /* ---------- "touch the world" controls: the sun and clouds live in the scene (drag them); a hand-lettered menu ---------- */
 .day, #view, #cloud, #veins, #flip { display: none !important; }
 .cap { right: calc(150px + env(safe-area-inset-right, 0px)); }
+html.embed .cap { right: calc(52px + env(safe-area-inset-right, 0px)); } /* inside Hatch only the close button sits top right */
 .cap h1 { font-size: 1.5rem; }
 .cap .common { letter-spacing: .06em; font-size: .66rem; }
 .cap .fact { font: 600 1.35rem/1.15 var(--hand); max-width: 26ch; }
@@ -104,7 +105,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
   <div class="common">Monarch · <button id="sex" class="sex" aria-label="Sex: male. Tap for female" title="Switch male / female">male</button> · wingspan 9–10 cm</div>
   <h1>Danaus plexippus</h1>
   <div class="fact" id="fact" aria-live="polite">&nbsp;</div>
-  <div class="sim" style="flex-wrap:wrap;row-gap:0"><span id="therm-t">Thorax</span><span class="therm" aria-hidden="true"><i id="therm-fill"></i><s id="therm-need"></s></span><span id="sim-env" style="flex-basis:100%;font-size:.88em;opacity:.8"></span></div>
+  <div class="sim" style="flex-wrap:wrap;row-gap:0"><span id="therm-t">Thorax</span><span class="therm" aria-hidden="true"><i id="therm-fill"></i><s id="therm-need"></s></span><span id="sim-env" style="flex-basis:100%;font-size:.88em;opacity:.8"></span><a id="seen" hidden target="_blank" rel="noopener noreferrer" style="flex-basis:100%;font-size:.88em;color:inherit;pointer-events:auto"></a></div>
 </div>
 
 <div class="rail" id="rail">
@@ -1532,7 +1533,7 @@ function flockTick(dt) {
     const x = Math.cos(m.a) * rr, z = Math.sin(m.a) * rr, y = m.y + .8 * Math.sin(m.a * 1.7) - .1 * Math.cos(m.ph) * m.flapW - (1 - m.flapW) * .3;
     m.c.position.set(x, y, z);
     // the others fly only when the day lets one fly (warm air or sun), and never sweep right past the lens
-    m.c.visible = (taS >= 17 || (taS >= 13 && sunCover < .5 && sunDir.y > .25)) && m.c.position.distanceTo(camera.position) > camera.position.distanceTo(bug.position) + 1.5; // only behind the hero
+    m.c.visible = (!REAL || !REAL.day || FLOCK.b.indexOf(m) < REAL.others) && (taS >= 17 || (taS >= 13 && sunCover < .5 && sunDir.y > .25)) && m.c.position.distanceTo(camera.position) > camera.position.distanceTo(bug.position) + 1.5; // only behind the hero
     const dx = -Math.sin(m.a) * Math.sign(m.w), dz = Math.cos(m.a) * Math.sign(m.w);
     m.c.rotation.set(-.12 + .15 * m.flapW, Math.atan2(dx, dz), -.35 * Math.sign(m.w), 'YXZ');
     ['fore', 'hind'].forEach(w => {
@@ -2056,7 +2057,7 @@ const AZ_SIGN = -1; // morning on the left, as if facing the noon sun
 const REAL = (() => {
   if (!new URLSearchParams(location.search).has('embed')) return null;
   document.documentElement.classList.add('embed');
-  const rad = Math.PI / 180, R = { day: null, hr: 12, rise: 6, set: 18, lastCloud: 0, noonAz: Math.PI, dev: 1 };
+  const rad = Math.PI / 180, R = { others: 2, day: null, hr: 12, rise: 6, set: 18, lastCloud: 0, noonAz: Math.PI, dev: 1 };
   // sun position (low-precision almanac, ~0.5°): elevation and azimuth (from north, clockwise), radians
   const solar = (lat, lon, ms) => {
     const d = ms / 864e5 - 10957.5, g = (357.529 + .98560028 * d) * rad, q = 280.459 + .98564736 * d;
@@ -2135,7 +2136,17 @@ const REAL = (() => {
     R.setHour(h0); R.opened = performance.now();
     // tell Hatch the page now shows this day (fonts in, a few frames drawn), so it never flashes the default garden
     document.fonts.ready.then(() => setTimeout(() => parent.postMessage({ type: 'exo-live' }, location.origin), 250));
+    // real sightings: how many monarchs people photographed near here that week (iNaturalist) sets the company she keeps
     const lab = document.getElementById('sunlab'); lab.setAttribute('aria-label', 'Time of day: drag the sun'); lab.setAttribute('aria-valuemin', R.rise); lab.setAttribute('aria-valuemax', R.set);
+  });
+  // real sightings: how many monarch sightings people logged near here that week (iNaturalist) sets the company she keeps
+  addEventListener('message', e => {
+    const m = e.data; if (!m || m.type !== 'exo-seen' || e.origin !== location.origin || e.source !== parent) return;
+    const el = document.getElementById('seen'), n = m.n;
+    R.others = n == null ? 2 : n === 0 ? 0 : n < 5 ? 1 : 2;
+    el.hidden = n == null; if (n == null) return;
+    el.textContent = n === 0 ? 'no sightings within 50 km that week' : `${n} sighting${n === 1 ? '' : 's'} within 50 km that week ↗`;
+    if (m.href && n) el.href = m.href; else el.removeAttribute('href');
   });
   addEventListener('keydown', e => { if (e.key === 'Escape') parent.postMessage({ type: 'exo-close' }, location.origin); });
   parent.postMessage({ type: 'exo-ready' }, location.origin);
