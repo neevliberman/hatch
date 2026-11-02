@@ -1887,20 +1887,25 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await check('town box', '#finder');
       await page.locator('#find-q').press('Escape');
       const r = await page.locator('#t-range').boundingBox();
+      // Is the slider marked held (or let go), within a moment? A finger's touchcancel (and a touchstart with no touch
+      // listener to wait for) is not cancelable, so CDP answers once it is sent, not once the page has handled it: a check
+      // read straight after can beat the pointer event on a busy machine. The app must still get there, just not instantly.
+      const heldIs = (want) => page.waitForFunction((w) => document.querySelector('#t-range').classList.contains('held') === w, want, { timeout: 2000 })
+        .then(() => true, () => false);
       await page.mouse.move(r.x + 4, r.y + r.height / 2);
       await page.mouse.down();
-      if (!(await page.evaluate(() => document.querySelector('#t-range').classList.contains('held')))) fail('a held time slider is not marked held');
+      if (!(await heldIs(true))) fail('a held time slider is not marked held');
       await check('held time thumb', '#t-range', '::-webkit-slider-thumb');
       await page.mouse.up();
-      if (await page.evaluate(() => document.querySelector('#t-range').classList.contains('held'))) fail('a released time slider stays held');
+      if (!(await heldIs(false))) fail('a released time slider stays held');
       if (phone) {
         // A finger that turns into a page scroll (the slider pans vertically) is cancelled, not lifted: that lets go too.
         const cdp = await ctx.newCDPSession(page);
         const at = [{ x: r.x + 4, y: r.y + r.height / 2 }];
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at });
-        if (!(await page.evaluate(() => document.querySelector('#t-range').classList.contains('held')))) fail('a finger on the time slider does not mark it held');
+        if (!(await heldIs(true))) fail('a finger on the time slider does not mark it held');
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-        if (await page.evaluate(() => document.querySelector('#t-range').classList.contains('held'))) fail('a cancelled touch leaves the time slider held');
+        if (!(await heldIs(false))) fail('a cancelled touch leaves the time slider held');
       }
       if (!reduce) for (const [what, d] of seen) if (!(d > 0 && d <= 0.24)) fail(`${what} moves for ${d * 1000} ms, not 1-240 ms`);
     } catch (e) {
