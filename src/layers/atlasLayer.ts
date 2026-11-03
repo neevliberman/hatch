@@ -208,8 +208,6 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     }
     return r;
   };
-  // The species' best day at a cell: the most photos of it expected (its share times the day's usual photos), from a
-  // season's worth of days in one pass on the graphics card.
   /** Its share at a cell every STEP days from SEASON[0] (on the graphics card in one pass; else the plain network). */
   const sharesHere = (c: number, on: ((day: number) => Float32Array) | null): number[] => {
     const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
@@ -221,27 +219,47 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     const ahead = on ? Float32Array.from(days, (d) => on(d)[c]!) : null;
     return [...atlas.gpu.run(places, Float32Array.from(days), ahead, [sp.i])[0]!].map(Math.exp);
   };
-  const peaks = new Map<string, number>();
-  const peakHere = (c: number): number | null => {
-    const k = `${c}|${drawn()}`;
-    if (peaks.has(k)) return peaks.get(k)!;
-    if (!atlas.gpu) return null;
-    const photos = sharesHere(c, run().on).map((x, j) => x * atlas.volume[j]!);
-    const best = SEASON[0] + STEP * photos.indexOf(Math.max(...photos));
-    peaks.set(k, best);
-    return best;
-  };
-  // "Coming out near you": a typical year's expected photos of it at the cell, its seasons by the watch list's own rule
-  // (seasonsOf: the runs of days with at least DUE_SHARE of its best day's, so a spring brood counts and the gap before
-  // a second one is counted down). None where it is hardly expected even then.
-  const dues = new Map<number, Due | null>();
-  const dueHere = (c: number): Due | null => {
-    if (dues.has(c)) return dues.get(c)!;
-    const shares = sharesHere(c, null);
+  // Its season at a cell, for one run (a typical year, 2026, warmed): the expected photos of it (its share times the
+  // day's usual photos), and its broods by the watch list's own rule (seasonsOf: the runs of days with at least
+  // DUE_SHARE of its best day's, so a spring brood counts and the gap before a second one is counted down). The card's
+  // sparkline and "Coming out near you" both read this, so they never give two dates for one thing. No season where it
+  // is hardly expected even on its best day.
+  const seasons = new Map<string, { photos: number[]; due: Due } | null>();
+  const seasonHere = (c: number, r: Run) => {
+    const k = `${c}|${r.key}`;
+    if (seasons.has(k)) return seasons.get(k)!;
+    const shares = sharesHere(c, r.on);
     const photos = shares.map((x, j) => x * atlas.volume[j]!);
-    const d = shares[photos.indexOf(Math.max(...photos))]! < 1e-4 ? null : seasonsOf(photos);
-    dues.set(c, d);
-    return d;
+    const due = shares[photos.indexOf(Math.max(...photos))]! < 1e-4 ? null : seasonsOf(photos);
+    const got = due ? { photos, due } : null;
+    if (seasons.size > 400) seasons.clear();
+    seasons.set(k, got);
+    return got;
+  };
+  // Without a graphics card a cell's season takes the plain network a few hundred ms, and a drag across "Warm the
+  // spring" makes a run per notch: until the slider has rested SETTLE_MS, a cell keeps the season last worked out for
+  // it (card and line alike), and the one for where it came to rest follows.
+  const SETTLE_MS = 400;
+  let warmedAt = -Infinity;
+  let settle: ReturnType<typeof setTimeout> | undefined;
+  const latest = new Map<number, { photos: number[]; due: Due } | null>();
+  const seasonNow = (c: number) => {
+    const r = run();
+    if (!atlas.gpu && !seasons.has(`${c}|${r.key}`) && latest.has(c) && performance.now() - warmedAt < SETTLE_MS) {
+      clearTimeout(settle);
+      settle = setTimeout(onData, SETTLE_MS);
+      return latest.get(c)!;
+    }
+    const got = seasonHere(c, r);
+    if (latest.size > 400) latest.clear();
+    latest.set(c, got);
+    return got;
+  };
+  /** "Coming out near you": the season the card shows (the season on screen, warmed or not), so the line under the
+   * map and the card's season line give the same days. */
+  const dueHere = (c: number): Due | null => {
+    const d = seasonNow(c)?.due;
+    return d ? (run().mode === TYPICAL ? d : { ...d, year: ATLAS_YEAR }) : null;
   };
   const shareAt = (c: number, doy: number) => field().get(doy)?.[c] ?? ranked(c, doy).find((r) => r.i === sp.i)!.s;
 
@@ -259,6 +277,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     },
     setWarmth(degF) {
       warm = degF;
+      warmedAt = performance.now();
       ensure(mode, warm);
     },
     warmthNote() {
@@ -443,7 +462,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       ];
     },
 
-    probe(lngLat, t, picked): ProbeCard | null {
+    probe(lngLat, t, picked, pinned): ProbeCard | null {
       if (picked && (picked.layerId === `${key}-glow` || picked.layerId === `${key}-dots`)) {
         const x = picked.object as Dot;
         return {
@@ -456,7 +475,9 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       if (c === null) return null;
       const doy = dayOfYear(t);
       const s = shareAt(c, doy);
-      const best = peakHere(c);
+      // Its season here: one pass on the graphics card; the plain network takes a few hundred ms a cell, so without one
+      // only a pinned card (or a cell already worked out) gets it, not every hexagon a pointer sweeps over.
+      const here = atlas.gpu || pinned || latest.has(c) ? seasonNow(c) : null;
       const others = ranked(c, doy)
         .filter((r) => r.i !== sp.i && r.i !== other)
         .slice(0, 4)
@@ -467,8 +488,8 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return {
         title: s > 1e-4 ? `${name}: ${oneIn(s)} insect photos` : `${name}: hardly expected`,
         swatch: css(color(s)),
+        ...(here ? { season: { curve: here.photos, from: SEASON[0], step: STEP, broods: here.due.broods ?? [here.due], year: yearOf(), today: doy, rough: sp.n < 300 } } : {}),
         lines: [
-          ...(best === null ? [] : [`Best here: around ${fmt(yearOf(), best)}`]),
           ...(mode !== TYPICAL && year ? [`Across the map in ${ATLAS_YEAR}: ${yearWords(year)}`] : []),
         ],
         others: { title: 'Also out here', list: others },

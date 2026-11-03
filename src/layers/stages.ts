@@ -1,4 +1,5 @@
 import { palette } from '../theme';
+import type { PlaceSeason } from '../core/layer';
 
 // The five forecast stages every species layer shares, and the helpers built on them. Nothing here knows which
 // species it is drawing: a layer hands in its own forecast (q = days the share out reaches 5/25/50/75/95%).
@@ -24,6 +25,24 @@ export function dueOf(q: Q | undefined, year?: number) {
   const [q05, q25, q50, q75, q95] = q ?? [];
   if (q05 == null || q75 == null) return null;
   return { start: q05, peak: q50 ?? (q25 != null ? (q25 + q75) / 2 : q75), end: q95 ?? q75 + 14, year };
+}
+
+/** A cell's forecast as the card's sparkline (ui/sparkline.ts): the same first, peak and last days as dueOf, so the
+ * card and "Coming out near you" agree, under a smooth hump that rises to the 25% day and falls by the 75% day (a
+ * forecast of quantiles has no curve of its own). */
+export function qSeason(q: Q | undefined, year: number, today: number, window?: [number, number]): PlaceSeason | null {
+  const d = dueOf(q);
+  if (!d) return null;
+  const [, q25, , q75] = q!;
+  // Half a normal curve each side of the peak, its quartile where the forecast's is (0.674 standard deviations out).
+  const left = Math.max(2, d.peak - (q25 ?? d.start)) / 0.674;
+  const right = Math.max(2, (q75 ?? d.end) - d.peak) / 0.674;
+  const from = Math.floor(d.start - 20);
+  const curve = Array.from({ length: Math.ceil(d.end + 20) - from + 1 }, (_, k) => {
+    const z = (from + k - d.peak) / (from + k < d.peak ? left : right);
+    return Math.exp(-0.5 * z * z);
+  });
+  return { curve, from, step: 1, broods: [{ start: d.start, peak: d.peak, end: d.end }], year, today, ...(window ? { window } : {}) };
 }
 
 /** How many hexagons are at each stage on day `doy`. */

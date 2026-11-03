@@ -10,7 +10,8 @@
 // port in Chromium, desktop and phone, and fails if the season menu lacks it, picking it errors, the hex card has no
 // "Peak likely", hexes go finer when zoomed, the default or stale rules break, or a missing file does anything visible.
 // Also over http: the radar replays (load nothing until opened from About, then play at La Crosse, the Quad Cities or on Lake Erie and
-// close cleanly).
+// close cleanly), and My area's card: one sparkline of the season there, whose dates are the only ones it and the line
+// under the map give (ONLY=near).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -548,7 +549,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     let liveFetched = false;
     page.on('request', (r) => /\/live\/latest\.json/.test(r.url()) && (liveFetched = true));
-    const shotL = (step) => page.screenshot({ path: `${out}/live-${label.replace(/\W+/g, '-')}-${step}.png` });
+    // A screenshot waits for a frame, and a software-GL frame can take 10-25 s on a busy runner (rerun timed out at 30 s).
+    const shotL = (step) => page.screenshot({ path: `${out}/live-${label.replace(/\W+/g, '-')}-${step}.png`, timeout: 60000 });
     try {
       await page.goto(origin + '/' + query);
       await page.waitForTimeout(1500);
@@ -1649,6 +1651,90 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     console.log(`${tag}: checked`);
   };
+  // "When is it out near me?": My area pins the card on Chicago (15 January, so the line under the map counts down to
+  // the coming season). The card's one-line sparkline of the season here draws, one line high, and the card and that
+  // line give one set of dates: every date either states is the sparkline's first, last or best day, and the countdown
+  // names its first. A two-brood skipper shows both best days, in a typical year and in 2026 warmed 3 °F (the line
+  // follows the card's season and warmth); the luna moth (no Atlas) has the same line, also zoomed in to its small
+  // hexagons. While the card is pinned the time bar's Midwest "peak" note steps aside. Desktop and phone. Waits poll on
+  // a timer (a software-GL frame can take 10-25 s). ONLY=near runs just this.
+  const nearUnit = async ([w, h, phone], browser) => {
+    const tag = `near ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, {
+      viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+      geolocation: { latitude: 41.88, longitude: -87.63 }, permissions: ['geolocation'],
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const DATE = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[ \u00A0]\d{1,2}\b/g;
+    const norm = (d) => d.replace('\u00A0', ' ');
+    const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 120000, polling: 500 }).then(() => true, () => false);
+    // The card and the line under the map, read together, and checked against each other.
+    const check = async (what, peaks) => {
+      // The line under the map follows the card on its next refresh: wait for both to be drawn.
+      if (!(await poll(() => document.querySelector('#probe:not([hidden]) .probe-season svg polyline') && !document.getElementById('near').hidden))) {
+        return fail(`${what}: no card with a season line, or no line under the map (card: ${JSON.stringify(await page.locator('#probe').innerText().catch(() => ''))})`);
+      }
+      // Both read one season, so they agree as soon as both are drawn; give a refresh after a late run a moment.
+      await poll(() => {
+        const first = document.querySelector('#probe .probe-season > span:not(.sr)')?.textContent;
+        return first && document.getElementById('near-go').textContent.endsWith(`(${first})`);
+      });
+      const got = await page.evaluate(() => {
+        const row = document.querySelector('#probe .probe-season');
+        const svg = row.querySelector('svg').getBoundingClientRect();
+        const line = parseFloat(getComputedStyle(row).lineHeight) || parseFloat(getComputedStyle(row).fontSize) * 1.4;
+        const card = document.getElementById('probe').cloneNode(true);
+        card.querySelectorAll('.sr, .probe-more').forEach((e) => e.remove());
+        const peak = document.querySelector('#bar .wave.peak-note');
+        return {
+          row: [...row.children].filter((e) => !e.classList.contains('sr') && e.tagName !== 'svg').map((e) => e.textContent.replace(/^to /, '')),
+          svg: [svg.width, svg.height], height: row.getBoundingClientRect().height, line, over: row.scrollWidth - row.clientWidth,
+          dots: row.querySelectorAll('.ps-peak').length, card: card.textContent, near: document.getElementById('near-go').textContent,
+          peakNote: peak && !peak.hidden && getComputedStyle(peak).visibility !== 'hidden' ? peak.textContent : null,
+        };
+      });
+      const [first, end, best = ''] = got.row;
+      const bests = best.match(DATE) ?? [];
+      const set = new Set([first, end, ...bests].map(norm));
+      if (!(got.svg[0] >= 40 && got.svg[1] >= 12)) fail(`${what}: the sparkline is ${got.svg.map(Math.round).join('x')} px`);
+      if (got.height > Math.max(24, got.line * 1.5)) fail(`${what}: the season line is ${Math.round(got.height)} px high, more than one line`);
+      if (got.over > 1) fail(`${what}: the season line overflows the card by ${got.over} px`);
+      if (got.dots !== bests.length || (peaks && bests.length !== peaks)) fail(`${what}: ${got.dots} best-day dots and "${best}", not ${peaks ?? 'one per'} best day`);
+      if (/Best here|First moths|Busiest \w|Peak likely/.test(got.card)) fail(`${what}: the card still has a separate dates line: ${got.card}`);
+      const bad = [...got.card.matchAll(DATE), ...got.near.matchAll(DATE)].map((m) => norm(m[0])).filter((d) => !set.has(d));
+      if (bad.length) fail(`${what}: the card or the line under the map gives ${bad.join(', ')}, not one of the season line's ${[...set].join(', ')}`);
+      const due = /\((\w+[ \u00A0]\d+)\)$/.exec(got.near)?.[1];
+      if (!due || norm(due) !== norm(first)) fail(`${what}: the line under the map ("${got.near}") counts down to ${due}, the card's season starts ${first}`);
+      if (got.peakNote) fail(`${what}: the time bar still notes "${got.peakNote}" beside the pinned card's own best days`);
+      await page.screenshot({ path: `${out}/near-${phone ? 'phone' : 'desktop'}-${what.replace(/\W+/g, '-')}.png`, timeout: 60000 }).catch(() => {});
+    };
+    const open = async (query, id, ready) => {
+      await page.goto(`${origin}/?${query}&noauto&today=2027-01-15`);
+      await poll((k) => window.__hatch?.current().id === k, id);
+      if (ready && !(await poll(ready))) fail(`${query}: never ready`);
+      await page.locator('#locate').click();
+    };
+    try {
+      await open('species=lon-zabulon&date=07-01', 'lon-zabulon-atlas');
+      await check('zabulon skipper', 2);
+      // Another season and warmth: the line counts down to the card's 2026 dates, warmed, not a typical year's.
+      await open('species=lon-zabulon&year=2026&warm=3&date=07-01', 'lon-zabulon-atlas', () => !!window.__hatch.current().warmthNote?.());
+      await check('zabulon 2026 warmed', null);
+      await open('date=05-20', 'luna-replay');
+      await check('luna moth', 1);
+      // Zoomed in to the small hexagons: the card reads its small hexagon, and so does the line.
+      await page.evaluate(() => window.__hatch.map.focus([-87.63, 41.88], 8, window.__hatch.padding(), false));
+      if (!(await poll(() => window.__hatch.current().res() > 4 && window.__hatch.current().fineCurrent?.() && /Small hexagon/.test(document.getElementById('probe').textContent))))
+        fail('luna zoomed in: the card never moved to a small hexagon');
+      else await check('luna zoomed in', 1);
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Memory: only the last ATLAS_KEPT (src/main.ts) Atlas species stay loaded. Flips through more than that from the
   // picker, comes back to the first, and checks it was let go and loaded again: it draws, and its map's colours are
   // the very ones a fresh page draws for it. ONLY=evict runs just this.
@@ -1944,9 +2030,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), ...watchCases.map((c) => (b) => nearUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
+  if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));

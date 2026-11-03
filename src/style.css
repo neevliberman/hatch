@@ -378,6 +378,24 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .probe-cell { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
 .probe-title { font-weight: 700; color: var(--moon); }
 .probe-title .sw { margin-right: 6px; vertical-align: -2px; width: 16px; height: 14px; }
+/* The season here (ui/sparkline.ts): first day, a one-line sparkline, last day, best day. The time bar's ink line and
+   wash, a leaf-green dot on each best day, and the map's day as the slider's amber line. */
+.probe-season { display: flex; align-items: center; gap: 4px; white-space: nowrap; } /* no taller than a line of text */
+/* Phones wide enough for "May 16 ⌒⌒ Sep 9 · best May 28, Aug 12" at 14px; the smallest keep 13px to stay on one line. */
+@media (max-width: 700px) and (min-width: 385px) { .probe-season { font-size: 14px; } }
+/* While a card's season line speaks for its place, the time bar's Midwest-wide peak note steps aside. */
+#app.place-card .wave.peak-note { visibility: hidden; }
+.probe-season svg { flex: 1 1 0; min-width: 52px; max-width: 140px; height: 1.15em; display: block; overflow: visible; }
+.probe-season path, .probe-season polyline { vector-effect: non-scaling-stroke; fill: none; }
+.ps-area { fill: var(--ink-wash); }
+.ps-window { fill: color-mix(in srgb, var(--text) 9%, transparent); } /* a faint likely window behind "best ~" */
+.ps-line { stroke: var(--text); stroke-width: 1.3; stroke-linejoin: round; }
+.ps-line.rough { stroke: var(--muted); stroke-width: 1.1; } /* few records: a lighter line */
+.ps-peak { stroke: var(--moon); stroke-width: 6; stroke-linecap: round; }
+.ps-now { stroke: var(--sun); stroke-width: 2; } /* the slider handle's amber, behind the line */
+.ps-now.off { stroke-dasharray: 2 2; } /* the map's day lies beyond this end of the season */
+.ps-best { min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* never wider than the card */
+.ps-best::before { content: "\00B7"; margin-right: 4px; color: var(--muted); }
 .probe-more { margin-top: 4px; }
 .probe-more summary { cursor: pointer; color: var(--moon); font-weight: 600; min-height: 32px; padding-top: 6px; box-sizing: border-box; display: list-item; }
 .probe-more p { margin: 4px 0 0; }

@@ -60,7 +60,7 @@ function ribbon(p: SeasonProfile): string {
     `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>` +
     `<rect class="frame" width="1000" height="28" vector-effect="non-scaling-stroke"/></svg>` +
     p.notes
-      .map((k) => `<span class="wave" data-full="${k.text}" data-short="${k.text.split(' ')[0]}" style="left:${((k.at / (n - 1)) * 100).toFixed(2)}%">${k.text}</span>`)
+      .map((k) => `<span class="wave${/^peak /.test(k.text) ? ' peak-note' : ''}" data-full="${k.text}" data-short="${k.text.split(' ')[0]}" style="left:${((k.at / (n - 1)) * 100).toFixed(2)}%">${k.text}</span>`)
       .join('');
 }
 

@@ -2,6 +2,7 @@ import type { HatchLayer, ProbeCard } from '../core/layer';
 import type { ProbeHit } from '../map/map';
 import type { LayerRegistry } from '../core/registry';
 import { CROSS } from './icons';
+import { seasonLine } from './sparkline';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -109,7 +110,7 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
     ? registry
         .activeLayers()
         .filter((l: HatchLayer) => l.probe)
-        .map((l) => l.probe!(hit.lngLat, t, hit.picked))
+        .map((l) => l.probe!(hit.lngLat, t, hit.picked, pinned))
         .filter((c): c is ProbeCard => c !== null)
     : [];
   if (!cards.length) {
@@ -129,7 +130,7 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
     cards
     .map(
       (card) =>
-        `<div class="probe-card"><div class="probe-title">${card.swatch ? `<i class="sw hex" aria-hidden="true" style="--c:${esc(card.swatch)}"></i>` : ''}${esc(card.title)}</div>${card.lines
+        `<div class="probe-card"><div class="probe-title">${card.swatch ? `<i class="sw hex" aria-hidden="true" style="--c:${esc(card.swatch)}"></i>` : ''}${esc(card.title)}</div>${card.season ? seasonLine(card.season) : ''}${card.lines
           .map((x) => `<div>${esc(x)}</div>`)
           .join('')}${
           card.more?.length

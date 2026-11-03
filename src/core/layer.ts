@@ -28,6 +28,27 @@ export interface ProbeCard {
   /** Other species to switch to (the Atlas's "also out here"): each a thumbnail, a name and a short note; `key` is its
    * ?species= value. */
   others?: { title: string; list: { key: string; label: string; note: string; img?: string }[] };
+  /** The season at this place, drawn as a one-line sparkline with its first, best and last days (ui/sparkline.ts). */
+  season?: PlaceSeason;
+}
+
+/** A place's season for the card's sparkline. One set of numbers: the "Coming out near you" line counts down to the
+ * same broods. */
+export interface PlaceSeason {
+  /** Its expected numbers (any scale), `step` days apart from day of year `from`. */
+  curve: readonly number[];
+  from: number;
+  step: number;
+  /** Its runs (one, or one per brood), each first, best and last day of year. */
+  broods: readonly Brood[];
+  /** The calendar its days of year are dates in. */
+  year: number;
+  /** The map's day, marked when it falls on the line. */
+  today: number;
+  /** A best day known only as a likely window (a replayed or live year): "best ~Jun 2", the window shaded faintly. */
+  window?: readonly [number, number];
+  /** Few records behind it: a lighter line. */
+  rough?: boolean;
 }
 
 export interface LegendSpec {
@@ -210,8 +231,9 @@ export interface HatchLayer {
    * usual date's, and whether this is a first try (an untuned recipe borrowed from another species). */
   record?(): { days: number; calendar: number; firstTry: boolean };
   legend(): LegendSpec;
-  /** "What's here" for hover/tap. `picked` is the data object under the pointer, if it belongs to this layer. */
-  probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }): ProbeCard | null;
+  /** "What's here" for hover/tap. `picked` is the data object under the pointer, if it belongs to this layer; `pinned`:
+   * a card that stays (a hover card may leave out what is slow to work out). */
+  probe?(lngLat: [number, number], t: number, picked?: { layerId: string; object: unknown }, pinned?: boolean): ProbeCard | null;
   /** Visual About panel; see Explainer. */
   explainer?(): Explainer;
   /** Points on the map at time t that place names must not cover (the sighting dots). Return the same array while

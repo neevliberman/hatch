@@ -15,7 +15,7 @@ import { APPROXIMATE, modelChecks, replayData, TYPICAL, windowCheck, type Mode, 
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, liveNotice, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
-import { dueOf, isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
+import { dueOf, qSeason, isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
 
 type RGBA = [number, number, number, number];
@@ -295,8 +295,8 @@ export function createOneGenerationLayer(
     const lean = finer && i !== undefined && q[2] != null && L.median[i]?.[2] != null ? q[2] - L.median[i]![2]! : 0;
     const lo = i === undefined || L.lo[i]?.[2] == null ? null : L.lo[i]![2]! + lean;
     const hi = i === undefined || L.hi[i]?.[2] == null ? null : L.hi[i]![2]! + lean;
-    if (lo != null && hi != null) lines.push(lo === hi ? `Busiest day likely ${f(lo)}.` : `Busiest day likely ${f(lo)} to ${f(hi)}.`);
-    else if (q[2] != null) lines.push(`Busiest day likely about ${f(q[2])}.`);
+    // The season line says "best ~Jun 2"; the window behind the "~" waits under More.
+    if (lo != null && hi != null) more.push(lo === hi ? `Busiest day likely ${f(lo)}.` : `Busiest day likely ${f(lo)} to ${f(hi)}.`);
     const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
     if (vs) lines.push(vs);
     if (!seen) lines.push('No sightings nearby to check against.');
@@ -309,7 +309,10 @@ export function createOneGenerationLayer(
     more.push(`Real weather to ${asOf}, then forecast.`);
     if (finer) more.push('Small hexagons: the forecast for the larger one, shifted by this spot\u2019s usual warmth.');
     const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar(one, key, y, lo, hi) : undefined;
-    return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
+    // The sparkline gives the first and last days; the peak's likely window above is its best day.
+    const season = qSeason(q, y, doy, lo != null && hi != null ? [lo, hi] : undefined) ?? undefined;
+    // The day is the time bar's (and the season line's amber mark), so the title names only the stage.
+    return { title: `${one}: ${label}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), season, lines, more, calendar };
   };
 
   const isDot = (id: string) => id === `${key}-glow` || id === `${key}-dots`;
@@ -332,14 +335,11 @@ export function createOneGenerationLayer(
     res: () => shownRes,
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
     // This year's live forecast where it covers the place and its season isn't over, else the typical year.
-    due(lngLat, now) {
-      const i = cellIndex.get(latLngToCell(lngLat[1], lngLat[0], GRID_RES));
-      if (i === undefined) return null;
-      const q = live && live.season === new Date(now).getUTCFullYear() ? live.median[i] : null;
-      const on = dueOf(q, live?.season);
-      if (!on) return dueOf(data.forecast[TYPICAL]![i]);
-      // This year's live season is over: count down to next year's typical one.
-      return dayOfYear(now) <= on.end ? on : dueOf(data.forecast[TYPICAL]![i], on.year! + 1);
+    // The very forecast the card shows for the place (the season on screen, the hexagon at the zoom on screen), so the
+    // line under the map and the card's season line give the same days.
+    due(lngLat) {
+      const at = lookup(lngLat);
+      return at ? dueOf(at.q, mode === TYPICAL ? undefined : yearOf()) : null;
     },
     busy: (t) => isBusy(forecast(), dayOfYear(t)),
     endNote: cfg.endNote,
@@ -506,7 +506,7 @@ export function createOneGenerationLayer(
       const at = lookup(lngLat);
       if (!at) return null;
       if (isLive()) return liveProbe(at.parent, at.q, at.seen, doy, at.cell !== at.parent);
-      const [q05, q25, q50, q75] = at.q;
+      const q50 = at.q[2];
       // Same shape as the luna card: one answer up front, the detail behind "More".
       const stage = stageAt(at.q, doy);
       const label = stage === 'over' ? 'over' : STAGE_LABEL[stage]; // one wave a year, so plain "over"
@@ -514,18 +514,16 @@ export function createOneGenerationLayer(
       const more: string[] = [];
       const pk = data.interval?.peak;
       const likely = !!(pk && q50 != null && mode !== TYPICAL);
-      if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      // In date order: the first ones, then the busiest stretch.
-      else if (q25 != null && q75 != null)
-        lines.push(`${q05 != null ? `First ${plural} about ${fmtDoy(year, q05)}. ` : ''}Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      // The season here is the sparkline (first, best, last); a replayed year's likely window for the peak stands in
+      // for its best day.
+      if (likely) more.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      const season = qSeason(at.q, year, doy, likely ? [q50! + pk![0], q50! + pk![1]] : undefined);
       if (mode !== TYPICAL) {
         const pi = cellIndex.get(at.parent);
         const vs = vsNormalLine(pi === undefined ? null : forecast()[pi]?.[2], typicalPeak(data.forecast, pi));
         if (vs) lines.push(vs);
       }
       if (!at.seen) lines.push('No sightings nearby to check against.');
-      if (likely && q05 != null && q25 != null && q75 != null)
-        more.push(`First ${plural} about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {
@@ -545,7 +543,7 @@ export function createOneGenerationLayer(
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
       if (shownRes > GRID_RES) more.push('Small hexagon: uses its own local temperatures. Accuracy is only checked for whole strips.');
-      return { title: `${one}: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
+      return { title: `${one}: ${label}`, swatch: css(STAGE_COLOR[stage]), ...(season ? { season } : {}), lines, more };
     },
 
     caveats(): CaveatCard {
