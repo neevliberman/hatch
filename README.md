@@ -169,7 +169,7 @@ docs/             engineering notes and README media
 ## Data and credits
 
 - **Sightings:** [iNaturalist](https://www.inaturalist.org/taxa/47916-Actias-luna) observers. Only CC0, CC BY and CC BY-NC records are shown or redistributed, so the app's data carries those observers' licenses (non-commercial terms apply). The model also learned from the dates and places of other confirmed records, which are not shipped. Photos are linked, never copied, and every shown record keeps its observation id.
-- **Atlas sightings:** [GBIF](https://www.gbif.org/) downloads of iNaturalist research-grade insect records; tree of life from [Open Tree of Life](https://opentreeoflife.github.io/); wind for Night from the [Open-Meteo](https://open-meteo.com/) ERA5 archive.
+- **Atlas sightings:** [GBIF](https://www.gbif.org/) downloads of iNaturalist research-grade insect records; tree of life from [Open Tree of Life](https://opentreeoflife.github.io/), its group names from [iNaturalist](https://www.inaturalist.org/); wind for Night from the [Open-Meteo](https://open-meteo.com/) ERA5 archive.
 - **Temperatures:** [Daymet](https://daymet.ornl.gov/) v4 daily 1 km data, Thornton et al., ORNL DAAC.
 - **State outlines, town names and populations:** US Census Bureau (outlines via [us-atlas](https://github.com/topojson/us-atlas)). Public domain.
 - **Lakes, rivers, highways, national parks and the land beyond the US:** [Natural Earth](https://www.naturalearthdata.com/). Public domain.

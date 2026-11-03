@@ -1046,9 +1046,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .tol-go { flex: none; height: 44px; padding: 0 14px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--on-accent);
   font: inherit; font-weight: 700; cursor: pointer; }
 .tol-go:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-.tol-src { position: absolute; top: 6px; right: 8px; margin: 0; padding: 1px 6px; font-size: 11.5px; color: var(--muted); background: var(--panel-solid);
+.tol-src { position: absolute; top: 6px; right: 8px; margin: 0; padding: 1px 6px; text-align: right; font-size: 11.5px; color: var(--muted); background: var(--panel-solid);
   border-radius: 9px; }
 .tol-src a { color: inherit; }
+.tol-src span { display: block; white-space: nowrap; }
 .tol-out { position: absolute; top: 6px; left: 8px; margin: 0; padding: 1px 6px; font-size: 11.5px; color: var(--text); background: var(--panel-solid);
   border-radius: 9px; }
 .tol-out::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--tol-glow);
@@ -1056,8 +1057,11 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .tol-live { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 700px) { #species-sheet.sp-has-tree { width: auto; height: calc(100dvh - 60px - env(safe-area-inset-bottom)); } }
 /* A phone (or a phone on its side): once the tree is touched, the strips over it fold away so it gets the sheet
-   (speciesPicker.ts roomy); "All insects" or the next open brings them back. */
-@media (max-width: 700px), (max-height: 500px) { #species-sheet.sp-tree-only > .sp-strip, #species-sheet.sp-tree-only > #sp-wnote { display: none; } }
+   (speciesPicker.ts roomy); the whole tree again or the next open brings them back. Touch screens only: a short desktop
+   window keeps them. */
+@media (max-width: 700px) and (pointer: coarse), (max-height: 500px) and (pointer: coarse) { #species-sheet.sp-tree-only > .sp-strip { display: none; } }
+/* A crumb trail scrolled to its end fades in at the left, so the cut reads as a scroll. */
+.sp-has-tree .sp-crumbs.sp-cut { mask-image: linear-gradient(to right, transparent, #000 28px); -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); }
 
 /* Windows high contrast: keep panel edges and the on state visible when colors are overridden. */
 @media (forced-colors: active) {

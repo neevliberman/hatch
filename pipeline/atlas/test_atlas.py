@@ -115,11 +115,14 @@ def test_tree_group_names_are_short_plain_english():
     from pipeline.atlas.build_tree import LONGEST, group_name
     assert group_name("Ground Beetles", "Carabidae") == "Ground beetles"
     assert group_name("Typical Cicadas", "Cicadidae") == "Cicadas"
-    assert group_name("Common Tiger Beetles", "Cicindela") == "Common tiger beetles"
+    assert group_name("Common Tiger Beetles", "Cicindela") == "Tiger beetles"
+    assert group_name("Brush-footed Butterflies", "Nymphalidae") == "Brush-footed butterflies"
+    assert group_name("Clouded Yellows", "Colias") == "Sulphurs" and group_name("Midgets", "Elaphria") is None
     assert group_name("Olethreutes Moths", "Olethreutes") is None
     assert group_name("House Flies and Allies", "Muscidae") is None
     assert group_name("Whites, Yellows, and Sulphurs", "Pieridae") is None
-    assert group_name("Gossamer-winged Butterflies", "Lycaenidae") is None
+    assert group_name("Ants, Bees, Wasps, and Sawflies", "Hymenoptera") is None
+    assert group_name("North American Spur-throated Grasshoppers", "Melanoplus") is None  # over LONGEST
     assert group_name(None, "Acleris") is None
     data = json.loads((Path(__file__).resolve().parents[2] / "public" / "atlas" / "tree.json").read_text())
     labels = set()

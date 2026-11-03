@@ -1522,8 +1522,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   };
   // The tree of life's group names and taps (src/ui/treeOfLife.ts): a group picked on the wheel goes by its English
   // name (tree.json "c", build_tree.py) with the Latin one on its crumb's tooltip and its card; a second tap on the
-  // picked group zooms into it; on a phone the strips over the tree fold away once it is touched, and "All insects"
-  // brings them back (on a desktop they stay). Desktop and phone; ONLY=tree runs just this, in every engine ENGINES names.
+  // picked group zooms into it, and so does Enter (said in the live region); a quick double tap on the picked group
+  // zooms into it once, not into whatever is under the finger mid-flight. On a phone the strips over the tree fold away
+  // once it is touched, the wheel fills the room, and the whole tree brings them back; on a desktop they stay.
+  // Desktop and phone; ONLY=tree runs just this, in every engine ENGINES names.
   const treeUnit = async ([w, h, phone], browser) => {
     const tag = `tree ${phone ? 'phone' : 'desktop'} ${browser.browserType().name()}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
@@ -1535,49 +1537,95 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const tap = (x, y) => (phone ? page.touchscreen.tap(x, y) : page.mouse.click(x, y));
     const scale = () => page.locator('.tol-canvas').evaluate((c) => Number(c.dataset.scale));
     const strips = () => page.locator('#sp-list').isVisible();
+    const card = () => page.locator('.tol-card:not([hidden]) b').textContent({ timeout: 10000 }).catch(() => null);
+    const zoomedFrom = (s0, what) => page.waitForFunction((s) => Number(document.querySelector('.tol-canvas').dataset.scale) > s * 1.5, s0, { timeout: 5000, polling: 250 })
+      .then(() => true, () => (fail(`${what} did not zoom in`), false));
+    const settle = () => page.waitForTimeout(800); // a flight takes 520 ms
     try {
       await page.goto(`${origin}/?noauto&today=2027-01-15`);
       await page.locator('#species').click({ timeout: 60000 });
       await page.waitForFunction(() => Number(document.querySelector('.tol-canvas')?.dataset.branches) > 1500, null, { timeout: 30000, polling: 300 })
         .catch(() => fail('the tree of life never drew'));
       const names = await page.evaluate(async () => (await (await fetch('atlas/tree.json')).json()).c ?? {});
-      if (Object.keys(names).length < 100) fail(`tree.json names only ${Object.keys(names).length} groups`);
-      const box = await page.locator('.tol-canvas').boundingBox();
-      // Tap round the wheel until a family with an English name is picked (the card offers "Zoom in").
-      const [cx, cy, rad] = [box.x + box.width / 2, box.y + box.height / 2, Math.min(box.width, box.height) * 0.3];
-      let at = null;
-      let picked = null;
-      for (let k = 0; k < 36 && !at; k++) {
-        const p = [cx + Math.cos((k / 36) * Math.PI * 2) * rad, cy + Math.sin((k / 36) * Math.PI * 2) * rad];
-        await tap(...p);
-        await page.waitForTimeout(400); // past the double-tap window, so each is a single tap
-        if (k === 0 && phone && (await strips())) fail('touching the tree left the strips over it');
-        const card = await page.evaluate(() => ({ go: document.querySelector('.tol-go')?.textContent, b: document.querySelector('.tol-card:not([hidden]) b')?.textContent, sub: document.querySelector('.tol-card span')?.textContent }));
-        const latin = Object.keys(names).find((l) => names[l] === card.b);
-        if (card.go === 'Zoom in' && latin) (at = p), (picked = { ...card, latin });
-      }
-      if (!at) throw new Error('no tap on the wheel picked a group with an English name');
-      if (!picked.sub.includes(picked.latin)) fail(`the card for ${picked.b} does not give its Latin name (${picked.sub})`);
-      const last = page.locator('.sp-crumbs button').last();
-      if ((await last.textContent()) !== picked.b || (await last.getAttribute('title')) !== picked.latin)
-        fail(`the last crumb reads "${await last.textContent()}" (title "${await last.getAttribute('title')}"), not ${picked.b} (${picked.latin})`);
-      if (/idae$/.test(await page.locator('.sp-crumbs').textContent())) fail('a crumb still reads in Latin where an English name exists');
-      // One more tap on the picked group zooms in.
-      const s0 = await scale();
-      await tap(...at);
-      await page.waitForFunction((s) => Number(document.querySelector('.tol-canvas').dataset.scale) > s * 1.5, s0, { timeout: 5000, polling: 250 })
-        .catch(() => fail(`a second tap on ${picked.b} did not zoom in`));
-      if ((await page.locator('.tol-card b').textContent()) !== picked.b) fail(`the second tap moved the pick off ${picked.b}`);
-      await page.screenshot({ path: `${out}/tree-${phone ? 'phone' : 'desktop'}-${browser.browserType().name()}.png`, timeout: 60000 }).catch(() => {});
-      // Phone: the strips are folded and the tree has their room; "All insects" brings them back. Desktop: they never fold.
-      const th = (await page.locator('.sp-tree').boundingBox())?.height ?? 0;
-      if (phone) {
-        if (await strips()) fail('the strips are still over the tree after it was touched');
-        if (th < h * 0.65) fail(`with its strips folded the tree has only ${Math.round(th)} px of ${h}`);
+      if (Object.keys(names).length < 150) fail(`tree.json names only ${Object.keys(names).length} groups`);
+      /** Touch the tree's empty edge (on a phone that folds the strips), then tap round the wheel until a group with an
+       * English name is picked (its card offers "Zoom in"): where, and what. Each try starts from nothing picked (a tap
+       * on the edge), so it never taps the picked group a second time. */
+      const pickGroup = async () => {
+        let box = await page.locator('.tol-canvas').boundingBox();
+        const edge = () => tap(box.x + 8, box.y + box.height / 2).then(() => page.waitForTimeout(400));
+        await edge();
+        await settle();
+        box = await page.locator('.tol-canvas').boundingBox();
+        const [cx, cy, rad] = [box.x + box.width / 2, box.y + box.height / 2, Math.min(box.width, box.height) * 0.3];
+        for (let k = 0; k < 36; k++) {
+          const p = [cx + Math.cos((k / 36) * Math.PI * 2) * rad, cy + Math.sin((k / 36) * Math.PI * 2) * rad];
+          if (k) await edge();
+          await tap(...p);
+          await page.waitForTimeout(400); // past the double-tap window, so each is a single tap
+          const c = await page.evaluate(() => ({ go: document.querySelector('.tol-go')?.textContent, b: document.querySelector('.tol-card:not([hidden]) b')?.textContent, sub: document.querySelector('.tol-card span')?.textContent }));
+          const latin = Object.keys(names).find((l) => names[l] === c.b);
+          if (c.go === 'Zoom in' && latin) return { at: p, ...c, latin };
+        }
+        throw new Error('no tap on the wheel picked a group with an English name');
+      };
+      const toWhole = async () => {
         await page.locator('.sp-crumbs button').first().click();
-        await page.waitForFunction(() => !!document.querySelector('#sp-list')?.offsetParent, null, { timeout: 5000, polling: 250 })
-          .catch(() => fail('"All insects" did not bring the strips back'));
+        await settle();
+      };
+      let g = await pickGroup();
+      if (!g.sub.includes(g.latin) || / in /.test(g.sub)) fail(`the card for ${g.b} reads "${g.sub}", not its count and Latin name`);
+      const last = page.locator('.sp-crumbs button').last();
+      if ((await last.textContent()) !== g.b || (await last.getAttribute('title')) !== g.latin)
+        fail(`the last crumb reads "${await last.textContent()}" (title "${await last.getAttribute('title')}"), not ${g.b} (${g.latin})`);
+      if (/idae$/.test(await page.locator('.sp-crumbs').textContent())) fail('a crumb still reads in Latin where an English name exists');
+      if (!/iNaturalist/.test(await page.locator('.tol-src').textContent())) fail('the tree does not credit iNaturalist for its names');
+      // Phone: the strips are folded and the whole wheel fills their room. Desktop: they never fold.
+      const tb = await page.locator('.sp-tree').boundingBox();
+      if (phone) {
+        if (await strips()) fail('touching the tree left the strips over it');
+        if (tb.height < h * 0.65) fail(`with its strips folded the tree has only ${Math.round(tb.height)} px of ${h}`);
+        const whole = await scale();
+        if (whole * 1000 < Math.min(tb.width, tb.height) * 0.38) fail(`with its strips folded the whole wheel is only ${Math.round(whole * 2000)} px across`);
       } else if (!(await strips())) fail('on a desktop the strips folded away');
+      // A second tap on the picked group zooms into it.
+      let s0 = await scale();
+      await page.waitForTimeout(700); // well clear of the pick's own tap: software GL can hold an event back
+      await tap(...g.at);
+      if (await zoomedFrom(s0, `a second tap on ${g.b}`) && (await card()) !== g.b) fail(`the second tap moved the pick off ${g.b}`);
+      await settle();
+      await page.screenshot({ path: `${out}/tree-${phone ? 'phone' : 'desktop'}-${browser.browserType().name()}.png`, timeout: 60000 }).catch(() => {});
+      // The whole tree again: on a phone the strips come back.
+      await toWhole();
+      if (phone && !(await strips())) fail('the whole tree did not bring the strips back');
+      // Enter on the picked group zooms in, and the live region says so.
+      if (!phone) {
+        g = await pickGroup();
+        s0 = await scale();
+        await page.locator('.tol-canvas').focus();
+        await page.keyboard.press('Enter');
+        await zoomedFrom(s0, `Enter on ${g.b}`);
+        if ((await page.locator('.tol-live').textContent()) !== `Zoomed to ${g.b}`) fail(`after Enter the live region reads "${await page.locator('.tol-live').textContent()}"`);
+        await toWhole();
+      }
+      // A quick double tap on the picked group zooms into that group, once.
+      g = await pickGroup();
+      s0 = await scale();
+      // Sent from inside the page (a driven tap can lag half a second in software GL): the first tap zooms into the
+      // picked group, the second lands on the first frame the view has moved, mid-flight.
+      await page.waitForTimeout(700);
+      await page.evaluate(([[x, y], type]) => new Promise((done) => {
+        const cv = document.querySelector('.tol-canvas');
+        const tap = () => ['pointerdown', 'pointerup'].forEach((t) => cv.dispatchEvent(new PointerEvent(t, { pointerId: 9, pointerType: type, isPrimary: true, bubbles: true, clientX: x, clientY: y })));
+        const s0 = Number(cv.dataset.scale);
+        tap();
+        let frames = 0;
+        const next = () => (Number(cv.dataset.scale) > s0 * 1.02 || ++frames > 120 ? (tap(), done()) : requestAnimationFrame(next));
+        requestAnimationFrame(next);
+      }), [g.at.map(Math.round), phone ? 'touch' : 'mouse']);
+      await zoomedFrom(s0, `a double tap on ${g.b}`);
+      await settle();
+      if ((await card()) !== g.b) fail(`a double tap on the picked ${g.b} went on to ${await card()}`);
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }

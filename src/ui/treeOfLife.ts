@@ -166,7 +166,8 @@ export function mountTree(
     <div class="tol-card" hidden><img alt="" width="44" height="44" referrerpolicy="no-referrer" hidden><div class="tol-t"><b></b><span></span></div>
       <button type="button" class="tol-go"></button></div>
     <p class="tol-out" hidden></p>
-    <p class="tol-src">Branching: <a href="https://tree.opentreeoflife.org" target="_blank" rel="noopener">Open Tree of Life</a>, no dates</p>
+    <p class="tol-src"><span>Branching: <a href="https://tree.opentreeoflife.org" target="_blank" rel="noopener">Open Tree of Life</a>,</span>
+      <span>no dates · names: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a></span></p>
     <p class="tol-live" aria-live="polite"></p>`;
   const cv = host.querySelector<HTMLCanvasElement>('canvas')!;
   const ctx = cv.getContext('2d')!;
@@ -181,7 +182,6 @@ export function mountTree(
   const maxS = (64 * slots) / (Math.PI * 2 * R);
   let W = 0;
   let H = 0;
-  let edgeTop = 0; // the canvas's top on screen at the last size() or touch (the sheet may have scrolled between)
   let dpr = 1;
   let sel: TNode | null = null;
   let current: TNode | null = null;
@@ -256,19 +256,16 @@ export function mountTree(
     if (!r.width || !r.height) return;
     const first = !W;
     dpr = Math.min(2, window.devicePixelRatio || 1);
-    // A resize (a phone turned, the window dragged) keeps the same part of the tree in the middle. A change of height
-    // alone (the phone sheet's strips folding away or back) leaves the tree where it is on screen.
-    if (r.width === W) view.ty += edgeTop - r.top;
-    else {
-      view.tx += (r.width - W) / 2;
-      view.ty += (r.height - H) / 2;
-    }
-    edgeTop = r.top;
+    // A resize (a phone turned, the window dragged, the phone sheet's strips folding away or back) keeps the same part
+    // of the tree in the middle; the whole wheel stays the whole wheel, as big as the new room allows.
+    const whole = !first && Math.abs(view.s / wholeScale() - 1) < 0.01 && Math.abs(view.tx - W / 2) < 2 && Math.abs(view.ty - H / 2) < 2;
+    view.tx += (r.width - W) / 2;
+    view.ty += (r.height - H) / 2;
     W = r.width;
     H = r.height;
     cv.width = Math.round(W * dpr);
     cv.height = Math.round(H * dpr);
-    if (first) fitAll();
+    if (first || whole) fitAll();
     else view.min = wholeScale() * 0.8;
     clamp();
     draw();
@@ -496,14 +493,16 @@ export function mountTree(
 
   // Flying the view
   let flight = 0;
+  let flying = false; // a flight is under way (a touch stops it)
   const fly = (to: { s: number; tx: number; ty: number; rot?: number }, ms = 520) => {
     const turn = to.rot === undefined ? 0 : Math.atan2(Math.sin(to.rot - view.rot), Math.cos(to.rot - view.rot));
     const from = { ...view };
     const t0 = performance.now();
     const id = ++flight;
     if (reducedMotion()) ms = 0;
+    flying = true;
     const step = () => {
-      if (id !== flight) return;
+      if (id !== flight) return void (flying = false);
       const k = ms ? Math.min(1, (performance.now() - t0) / ms) : 1;
       const e = 1 - Math.pow(1 - k, 3);
       view.s = from.s + (to.s - from.s) * e;
@@ -512,6 +511,7 @@ export function mountTree(
       view.rot = from.rot + turn * e;
       draw();
       if (k < 1) requestAnimationFrame(step);
+      else flying = false;
     };
     step();
   };
@@ -564,7 +564,6 @@ export function mountTree(
     } else {
       const tip = isTip(n);
       const s = tip ? species[n.sp]! : null;
-      const up = n.parent ? named(n.parent) : null;
       card.hidden = false;
       const img = card.querySelector('img')!;
       img.hidden = !s?.photo;
@@ -575,19 +574,24 @@ export function mountTree(
       card.querySelector('b')!.textContent = tip ? nameOf(s!) : n.label ? n.name : `${n.n} related species`;
       const sub = tip
         ? `${s!.name}${grafted.has(n.sp) ? ' · placed by its genus' : ''}`
-        : `${n.n.toLocaleString()} species${n.name !== n.label ? ` · ${n.label}` : ''}${up && up !== root ? ` · in ${up.name}` : ''}`;
+        : `${n.n.toLocaleString()} species${n.name !== n.label ? ` · ${n.label}` : ''}`; // the crumbs say what it is in
       card.querySelector('span')!.textContent = sub;
       card.querySelector('button')!.textContent = tip ? 'Show on map' : 'Zoom in';
       live.textContent = `${card.querySelector('b')!.textContent}, ${sub}`;
     }
-    if (zoom && n) fit(n);
+    if (zoom && n) zoomTo(n);
     draw();
+  };
+  /** Fly to a branch and say so (the card says what it is). */
+  const zoomTo = (n: TNode) => {
+    fit(n);
+    if (n !== root && !isTip(n)) live.textContent = `Zoomed to ${n.name}`;
   };
   const go = (n: TNode) => select(n, true);
   card.querySelector('button')!.addEventListener('click', () => {
     if (!sel) return;
     if (isTip(sel)) onPick(sel.sp);
-    else fit(sel);
+    else zoomTo(sel);
   });
 
   /** The tip or branch nearest a screen point, if one is close enough to mean it. */
@@ -609,9 +613,11 @@ export function mountTree(
     }
     let best: TNode | null = null;
     let bd = 24;
+    // A tap near the group picked leans to it, so a second tap a hair off still means it (and zooms in).
+    const lean = sel && !isTip(sel) ? sel : null;
     for (const n of nodes) {
       const [x, y] = isTip(n) && gapPx > 18 ? xy(n, 1 + (Math.min(22, gapPx * 0.42) + 5) / (R * view.s)) : xy(n);
-      const d = Math.hypot(x - px, y - py);
+      const d = Math.hypot(x - px, y - py) - (lean && inside(n, lean) ? 8 : 0);
       if (d < bd) (bd = d), (best = n);
     }
     // A tap near a tiny unnamed fork in a crowded view means the group it belongs to.
@@ -622,9 +628,9 @@ export function mountTree(
 
   // Touch, mouse and wheel
   const ptr = new Map<number, [number, number]>();
-  let press: { x: number; y: number; t: number; moved: number } | null = null;
+  let press: { x: number; y: number; t: number; moved: number; flying: boolean } | null = null;
   let pinch: { d: number; s: number; c: [number, number]; ang: number } | null = null;
-  let lastTap = { t: 0, x: 0, y: 0 };
+  let lastTap = { t: 0, x: 0, y: 0, zoomed: false };
   const at = (e: PointerEvent | WheelEvent): [number, number] => {
     const r = cv.getBoundingClientRect();
     return [e.clientX - r.left, e.clientY - r.top];
@@ -638,10 +644,15 @@ export function mountTree(
     clamp();
   };
   cv.addEventListener('pointerdown', (e) => {
-    cv.setPointerCapture(e.pointerId);
+    try {
+      cv.setPointerCapture(e.pointerId);
+    } catch {
+      // a pointer the browser no longer tracks: nothing to capture
+    }
     ptr.set(e.pointerId, at(e));
+    const wasFlying = flying;
     flight++; // a touch stops any flight
-    if (ptr.size === 1) press = { x: at(e)[0], y: at(e)[1], t: performance.now(), moved: 0 };
+    if (ptr.size === 1) press = { x: at(e)[0], y: at(e)[1], t: e.timeStamp, moved: 0, flying: wasFlying };
     if (ptr.size === 2) {
       const [a, b] = [...ptr.values()] as [[number, number], [number, number]];
       pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: view.s, c: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], ang: Math.atan2(b[1] - a[1], b[0] - a[0]) };
@@ -679,25 +690,33 @@ export function mountTree(
   const release = (e: PointerEvent) => {
     ptr.delete(e.pointerId);
     if (ptr.size < 2) pinch = null;
-    if (e.type === 'pointerup' && press && press.moved < 10 && performance.now() - press.t < 500 && !ptr.size) {
-      const now = performance.now();
-      const dbl = now - lastTap.t < 320 && Math.hypot(press.x - lastTap.x, press.y - lastTap.y) < 30;
-      lastTap = { t: dbl ? 0 : now, x: press.x, y: press.y };
+    // Timed by when the finger moved, not when the page got round to it (a busy page can hold a tap back).
+    if (e.type === 'pointerup' && press && press.moved < 10 && e.timeStamp - press.t < 500 && !ptr.size) {
+      const now = e.timeStamp;
+      const near = Math.hypot(press.x - lastTap.x, press.y - lastTap.y) < 30;
+      const dbl = now - lastTap.t >= 0 && now - lastTap.t < 320 && near;
+      // The tap before zoomed into the group picked, and this one lands on the same spot while that zoom is still
+      // flying (or as a double tap): it only finishes the flight, never hit-tests the tree mid-flight.
+      const finish = lastTap.zoomed && near && (dbl || press.flying);
+      lastTap = { t: dbl ? 0 : now, x: press.x, y: press.y, zoomed: false };
       const n = hit(press.x, press.y);
-      if (dbl) {
+      if (finish) {
+        if (sel) fit(sel); // the flight this touch stopped
+      } else if (dbl) {
         // Double tap: into the branch tapped, or twice as close.
         if (n && !isTip(n)) select(n, true);
         else fly({ ...zoomed([press.x, press.y], 2) });
+        lastTap.zoomed = !!n && !isTip(n);
       } else {
         // A tap picks a group; a tap on the group picked zooms into it. Where its branches are too crowded to tell apart,
         // a tap anywhere inside it counts.
         const again = !!n && !!sel && !isTip(sel) && (n === sel || (tipGap() < 6 && inside(n, sel)));
         select(again ? sel : n, again);
+        lastTap.zoomed = again;
       }
     }
     if (!ptr.size) {
       if (press && e.type === 'pointerup') {
-        edgeTop = cv.getBoundingClientRect().top;
         touched?.();
       }
       press = null;
@@ -741,7 +760,7 @@ export function mountTree(
       next = sibs[(i + (e.key === 'ArrowRight' ? 1 : -1) + sibs.length) % sibs.length];
     } else if (e.key === 'Enter' || e.key === ' ') {
       if (sel && isTip(sel)) onPick(sel.sp);
-      else if (sel) fit(sel);
+      else if (sel) zoomTo(sel);
     } else if (e.key === '+' || e.key === '=') fly(zoomed([W / 2, H / 2], 1.6));
     else if (e.key === '-') fly(zoomed([W / 2, H / 2], 1 / 1.6));
     else return;

@@ -32,7 +32,12 @@ INAT = 'https://api.inaturalist.org/v1/taxa/'
 UA = {'User-Agent': 'hatch-atlas (github.com/neevliberman/hatch)'}
 # iNaturalist's answers, kept between runs (notebooks/data is not in git): delete it to ask again.
 CACHE = ROOT / 'notebooks' / 'data' / 'atlas' / 'tree_inat.json'
-LONGEST = 22  # characters: a longer name crowds the wheel and the breadcrumb, so the group keeps its Latin one
+LONGEST = 26  # characters: a longer name crowds the wheel and the breadcrumb, so the group keeps its Latin one
+# iNaturalist names that read oddly to a Midwest reader, by Latin name: a better one, or None to keep the Latin.
+OVERRIDE = {
+    'Colias': 'Sulphurs',  # iNaturalist's "Clouded Yellows" is the British name
+    'Elaphria': None,  # "Midgets"
+}
 # Words that keep their capital in sentence case ("American cockroaches").
 PROPER = {'american', 'asian', 'european', 'oriental', 'japanese', 'chinese', 'mexican', 'new', 'world'}
 
@@ -45,40 +50,47 @@ def post(path, body):
 
 
 def inat_get(url):
-    """JSON results from iNaturalist: five tries, then a second's rest (it asks for about one call a second)."""
+    """JSON results from iNaturalist: five tries (none after a refusal other than "too many"), then a second's rest
+    (it asks for about one call a second)."""
     for attempt in range(5):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
                 out = json.load(r)['results']
             time.sleep(1)
             return out
+        except urllib.error.HTTPError as e:
+            if attempt == 4 or (400 <= e.code < 500 and e.code != 429):
+                raise
         except Exception:
             if attempt == 4:
                 raise
-            time.sleep(2 ** attempt * 2)
+        time.sleep(2 ** attempt * 2)
 
 
 def inat(ids, by_name=()):
     """The ranks, names and English names of each taxon's ancestors (taxa by id, 30 a call), and each (rank, name) in
     `by_name` looked up by name, cached in CACHE."""
     cache = json.loads(CACHE.read_text()) if CACHE.exists() else {}
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
     todo = [i for i in dict.fromkeys(ids) if str(i) not in cache]
     for k in range(0, len(todo), 30):
         for t in inat_get(INAT + ','.join(map(str, todo[k:k + 30])) + '?locale=en&per_page=30'):
             cache[str(t['id'])] = [[a['rank'], a['name'], a.get('preferred_common_name')] for a in t.get('ancestors', [])]
+        CACHE.write_text(json.dumps(cache))  # after each call: a run cut short keeps what it got
     for rank, latin in by_name:
         if f'{rank}:{latin}' not in cache:
             res = inat_get(INAT[:-1] + '?' + urllib.parse.urlencode({'q': latin, 'rank': rank, 'locale': 'en', 'per_page': 5}))
             hit = next((t for t in res if t['name'] == latin and t['rank'] == rank), None)
             cache[f'{rank}:{latin}'] = [[rank, latin, hit.get('preferred_common_name')]] if hit else []
-    CACHE.parent.mkdir(parents=True, exist_ok=True)
-    CACHE.write_text(json.dumps(cache))
+            CACHE.write_text(json.dumps(cache))
     return cache
 
 
 def group_name(name, latin):
     """A group's English name, short and in sentence case ("Ground Beetles" -> "Ground beetles"), or None: missing,
-    the Latin name again ("Bombus Bees"), a catch-all ("... and Allies"), a list ("Bees, Wasps"), or longer than LONGEST."""
+    the Latin name again ("Bombus Bees"), a catch-all ("... and Allies"), a list ("Bees, Wasps"), or longer than LONGEST. OVERRIDE has the last word."""
+    if latin in OVERRIDE:
+        return OVERRIDE[latin]
     if not name:
         return None
     name = ' '.join(name.split())
@@ -88,8 +100,9 @@ def group_name(name, latin):
         return None
     if latin.lower() in low or low in latin.lower():
         return None
-    # "Typical cicadas", "True weevils": the qualifier only tells them from their relatives on iNaturalist's lists.
-    if len(words) > 1 and words[0].lower() in ('typical', 'true'):
+    # "Typical cicadas", "True weevils", "Common swallowtails": the qualifier only tells them from their relatives on
+    # iNaturalist's lists.
+    if len(words) > 1 and words[0].lower() in ('typical', 'true', 'common'):
         words = words[1:]
         words[0] = words[0][:1].upper() + words[0][1:]
     return ' '.join([words[0]] + [w if w.lower() in PROPER else w.lower() for w in words[1:]])
@@ -128,6 +141,17 @@ def common_names(tree, species):
     return out
 
 
+def common_names_or_old(tree, species):
+    """common_names, or (iNaturalist down or refusing) the names tree.json already has, with a warning: an outage
+    never fails the tree."""
+    try:
+        return common_names(tree, species)
+    except Exception as e:
+        old = json.load(open(OUT)).get('c', {}) if OUT.exists() else {}
+        print(f'WARNING: no group names from iNaturalist ({e}); keeping the {len(old)} tree.json has', file=sys.stderr)
+        return old
+
+
 def write(tree, grafted, names):
     json.dump({'src': 'Open Tree of Life synthetic tree', 'g': grafted, 'c': names, 't': tree}, open(OUT, 'w'), separators=(',', ':'))
 
@@ -162,7 +186,7 @@ def main():
     species = json.load(open(SPECIES))
     if '--names' in sys.argv:
         old = json.load(open(OUT))
-        write(old['t'], old['g'], common_names(old['t'], species))
+        write(old['t'], old['g'], common_names_or_old(old['t'], species))
         print(f'{OUT.stat().st_size / 1024:.1f} KB')
         return
     names = [s['name'] for s in species]
@@ -256,7 +280,7 @@ def main():
             name(c, parent_label)
 
     name(tree, {})
-    write(tree, grafted, common_names(tree, species))
+    write(tree, grafted, common_names_or_old(tree, species))
     print(f'{len(placed)} species placed, {len(grafted)} grafted, {OUT.stat().st_size / 1024:.0f} KB')
 
 
