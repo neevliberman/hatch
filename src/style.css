@@ -1055,6 +1055,9 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   box-shadow: 0 0 6px var(--tol-glow); vertical-align: 0; }
 .tol-live { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 700px) { #species-sheet.sp-has-tree { width: auto; height: calc(100dvh - 60px - env(safe-area-inset-bottom)); } }
+/* A phone (or a phone on its side): once the tree is touched, the strips over it fold away so it gets the sheet
+   (speciesPicker.ts roomy); "All insects" or the next open brings them back. */
+@media (max-width: 700px), (max-height: 500px) { #species-sheet.sp-tree-only > .sp-strip, #species-sheet.sp-tree-only > #sp-wnote { display: none; } }
 
 /* Windows high contrast: keep panel edges and the on state visible when colors are overridden. */
 @media (forced-colors: active) {

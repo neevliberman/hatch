@@ -15,7 +15,8 @@
 // chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track).
 // And an early or late chip: opens where its slid 2026 season peaks, with the slide as a bracket on the time bar and
 // plain words on the card (ONLY=earlylate). And Share's link reopening the pinned card (ONLY=sharepin). And a radar
-// replay's map on the Giant Mayfly, then × putting back the view under it (ONLY=radarmayfly).
+// replay's map on the Giant Mayfly, then × putting back the view under it (ONLY=radarmayfly). And the tree of life's English
+// group names, its second tap zooming in, and its strips folding away on a phone (ONLY=tree).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -1519,6 +1520,70 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // The tree of life's group names and taps (src/ui/treeOfLife.ts): a group picked on the wheel goes by its English
+  // name (tree.json "c", build_tree.py) with the Latin one on its crumb's tooltip and its card; a second tap on the
+  // picked group zooms into it; on a phone the strips over the tree fold away once it is touched, and "All insects"
+  // brings them back (on a desktop they stay). Desktop and phone; ONLY=tree runs just this, in every engine ENGINES names.
+  const treeUnit = async ([w, h, phone], browser) => {
+    const tag = `tree ${phone ? 'phone' : 'desktop'} ${browser.browserType().name()}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    await ctx.route(PHOTOS, (r) => r.abort());
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const tap = (x, y) => (phone ? page.touchscreen.tap(x, y) : page.mouse.click(x, y));
+    const scale = () => page.locator('.tol-canvas').evaluate((c) => Number(c.dataset.scale));
+    const strips = () => page.locator('#sp-list').isVisible();
+    try {
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      await page.locator('#species').click({ timeout: 60000 });
+      await page.waitForFunction(() => Number(document.querySelector('.tol-canvas')?.dataset.branches) > 1500, null, { timeout: 30000, polling: 300 })
+        .catch(() => fail('the tree of life never drew'));
+      const names = await page.evaluate(async () => (await (await fetch('atlas/tree.json')).json()).c ?? {});
+      if (Object.keys(names).length < 100) fail(`tree.json names only ${Object.keys(names).length} groups`);
+      const box = await page.locator('.tol-canvas').boundingBox();
+      // Tap round the wheel until a family with an English name is picked (the card offers "Zoom in").
+      const [cx, cy, rad] = [box.x + box.width / 2, box.y + box.height / 2, Math.min(box.width, box.height) * 0.3];
+      let at = null;
+      let picked = null;
+      for (let k = 0; k < 36 && !at; k++) {
+        const p = [cx + Math.cos((k / 36) * Math.PI * 2) * rad, cy + Math.sin((k / 36) * Math.PI * 2) * rad];
+        await tap(...p);
+        await page.waitForTimeout(400); // past the double-tap window, so each is a single tap
+        if (k === 0 && phone && (await strips())) fail('touching the tree left the strips over it');
+        const card = await page.evaluate(() => ({ go: document.querySelector('.tol-go')?.textContent, b: document.querySelector('.tol-card:not([hidden]) b')?.textContent, sub: document.querySelector('.tol-card span')?.textContent }));
+        const latin = Object.keys(names).find((l) => names[l] === card.b);
+        if (card.go === 'Zoom in' && latin) (at = p), (picked = { ...card, latin });
+      }
+      if (!at) throw new Error('no tap on the wheel picked a group with an English name');
+      if (!picked.sub.includes(picked.latin)) fail(`the card for ${picked.b} does not give its Latin name (${picked.sub})`);
+      const last = page.locator('.sp-crumbs button').last();
+      if ((await last.textContent()) !== picked.b || (await last.getAttribute('title')) !== picked.latin)
+        fail(`the last crumb reads "${await last.textContent()}" (title "${await last.getAttribute('title')}"), not ${picked.b} (${picked.latin})`);
+      if (/idae$/.test(await page.locator('.sp-crumbs').textContent())) fail('a crumb still reads in Latin where an English name exists');
+      // One more tap on the picked group zooms in.
+      const s0 = await scale();
+      await tap(...at);
+      await page.waitForFunction((s) => Number(document.querySelector('.tol-canvas').dataset.scale) > s * 1.5, s0, { timeout: 5000, polling: 250 })
+        .catch(() => fail(`a second tap on ${picked.b} did not zoom in`));
+      if ((await page.locator('.tol-card b').textContent()) !== picked.b) fail(`the second tap moved the pick off ${picked.b}`);
+      await page.screenshot({ path: `${out}/tree-${phone ? 'phone' : 'desktop'}-${browser.browserType().name()}.png`, timeout: 60000 }).catch(() => {});
+      // Phone: the strips are folded and the tree has their room; "All insects" brings them back. Desktop: they never fold.
+      const th = (await page.locator('.sp-tree').boundingBox())?.height ?? 0;
+      if (phone) {
+        if (await strips()) fail('the strips are still over the tree after it was touched');
+        if (th < h * 0.65) fail(`with its strips folded the tree has only ${Math.round(th)} px of ${h}`);
+        await page.locator('.sp-crumbs button').first().click();
+        await page.waitForFunction(() => !!document.querySelector('#sp-list')?.offsetParent, null, { timeout: 5000, polling: 250 })
+          .catch(() => fail('"All insects" did not bring the strips back'));
+      } else if (!(await strips())) fail('on a desktop the strips folded away');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // The "Flies with" strip (pickTwins over season.bin): three chips, never the species on the map, it fits the sheet, and
   // a chip opens that species, whose own strip then leaves it out. Desktop and phone. ONLY=twins runs just this.
   const twinsUnit = async ([w, h, phone], browser) => {
@@ -2625,13 +2690,14 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     ...speciesCases.map((c) => W(`species ${c[0]}`, 85, (b) => speciesUnit(c, b))),
     ...per([[1366, 768, false], [390, 844, true]], 'find', 75, findUnit), W('atlas', 240, atlasUnit), W('search', 15, searchUnit), W('seasons', 10, seasonsUnit),
     ...per(watchCases, 'watch', [420, 455], watchUnit), ...per(watchCases, 'empty', 25, emptyUnit), ...per(watchCases, 'quiet', 30, quietUnit),
-    ...per(watchCases, 'twins', 30, twinsUnit), W('band', 160, (b) => bandUnit([1280, 800, false], b)), W('this year', 80, thisYearUnit),
+    ...per(watchCases, 'twins', 30, twinsUnit), ...per(watchCases, 'tree', 25, treeUnit), W('band', 160, (b) => bandUnit([1280, 800, false], b)), W('this year', 80, thisYearUnit),
     ...per(watchCases, 'near', 145, nearUnit), ...per(watchCases, 'out', 80, outUnit), ...per(watchCases, 'track', [165, 200], trackUnit),
     ...per(watchCases, 'early/late', 150, earlyLateUnit), ...per(sharePinCases, 'share pin', [360, 240], sharePinUnit), W('evict', 125, evictUnit),
     ...motionCases.map((c) => W(`motion ${c[2] ? 'phone' : 'desktop'}${c[3] ? ' reduced' : ''}`, c[2] ? 35 : 15, (b) => motionUnit(c, b))),
     ...cases.map((c) => W(`live ${c[0]}`, liveCost[c[0]] ?? 60, (b) => liveUnit(c, b))), W('no WebGL', 15, noWebglUnit),
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => W(`screen ${s.join(' ')}`, 90, (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined))),
     W('radar mayfly', 75, radarMayflyUnit));
+  if (process.env.ONLY === 'tree') units.splice(0, units.length, ...Object.values(browsers).flatMap((b) => watchCases.map((c) => () => treeUnit(c, b))));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));

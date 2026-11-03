@@ -107,6 +107,34 @@ def test_tree_holds_every_species_once_and_names_whole_groups():
     check(tree)
 
 
+def test_tree_group_names_are_short_plain_english():
+    """build_tree.py's group names: iNaturalist's, in sentence case, never the Latin again, a catch-all or too long; and
+    tree.json names only groups it has."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.build_tree import LONGEST, group_name
+    assert group_name("Ground Beetles", "Carabidae") == "Ground beetles"
+    assert group_name("Typical Cicadas", "Cicadidae") == "Cicadas"
+    assert group_name("Common Tiger Beetles", "Cicindela") == "Common tiger beetles"
+    assert group_name("Olethreutes Moths", "Olethreutes") is None
+    assert group_name("House Flies and Allies", "Muscidae") is None
+    assert group_name("Whites, Yellows, and Sulphurs", "Pieridae") is None
+    assert group_name("Gossamer-winged Butterflies", "Lycaenidae") is None
+    assert group_name(None, "Acleris") is None
+    data = json.loads((Path(__file__).resolve().parents[2] / "public" / "atlas" / "tree.json").read_text())
+    labels = set()
+
+    def walk(n):
+        if not isinstance(n, int):
+            labels.add(n[0])
+            for c in n[2:]:
+                walk(c)
+
+    walk(data["t"])
+    assert set(data["c"]) <= labels
+    assert all(0 < len(v) <= LONGEST and v[0].isupper() for v in data["c"].values())
+
+
 def test_warm_table_moves_spring_the_right_way():
     """warm.bin (warm.py): 3 °F cooler runs every cell behind its typical spring, 3 °F warmer ahead, by days not weeks."""
     import json

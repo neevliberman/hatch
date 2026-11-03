@@ -617,6 +617,63 @@ if (existsSync(join(distDir, 'radar'))) {
       console.log(`${tag}: checked`);
     }
   }
+  // The tree of life on a phone (src/ui/treeOfLife.ts): a tap picks a group, shown by its English name with its Latin
+  // one on the card; the strips over the tree fold away once it is touched, so the tree gets the sheet; a second tap
+  // on the picked group zooms in; "All insects" brings the strips back. ONLY=tree runs just this.
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    for (const orient of ['portrait', 'landscape']) {
+      if ((process.env.ONLY && process.env.ONLY !== 'tree') || !mine()) continue;
+      const [width, height] = orient === 'portrait' ? [pw0, ph0] : [ph0, pw0];
+      const tag = `tree ${phone} ${orient}`;
+      const fail = (m) => problems.push(`${tag}: ${m}`);
+      const ctx = await settledContext(browsers[engine], { viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      await ctx.route(/^https:\/\/(inaturalist-open-data\.s3\.amazonaws\.com|static\.inaturalist\.org)\//, (r) => r.abort());
+      page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+      page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+      const scale = () => page.locator('.tol-canvas').evaluate((c) => Number(c.dataset.scale));
+      try {
+        await page.goto(`${origin}/?noauto&today=2027-01-15`);
+        await page.locator('#species').click({ timeout: 60000 });
+        await page.waitForFunction(() => Number(document.querySelector('.tol-canvas')?.dataset.branches) > 1500, null, { timeout: 30000, polling: 300 })
+          .catch(() => fail('the tree of life never drew'));
+        const names = await page.evaluate(async () => (await (await fetch('atlas/tree.json')).json()).c ?? {});
+        await page.locator('.sp-tree').scrollIntoViewIfNeeded(); // on its side the sheet scrolls to the tree
+        const box = await page.locator('.tol-canvas').boundingBox();
+        const [cx, cy, rad] = [box.x + box.width / 2, box.y + box.height / 2, Math.min(box.width, box.height) * 0.3];
+        let at = null;
+        let picked = null;
+        for (let k = 0; k < 36 && !at; k++) {
+          const p = [cx + Math.cos((k / 36) * Math.PI * 2) * rad, cy + Math.sin((k / 36) * Math.PI * 2) * rad];
+          await page.touchscreen.tap(...p);
+          await page.waitForTimeout(400); // past the double-tap window
+          const card = await page.evaluate(() => ({ go: document.querySelector('.tol-go')?.textContent, b: document.querySelector('.tol-card:not([hidden]) b')?.textContent, sub: document.querySelector('.tol-card span')?.textContent }));
+          const latin = Object.keys(names).find((l) => names[l] === card.b);
+          if (card.go === 'Zoom in' && latin) (at = p), (picked = { ...card, latin });
+        }
+        if (!at) throw new Error('no tap on the wheel picked a group with an English name');
+        if (!picked.sub.includes(picked.latin)) fail(`the card for ${picked.b} does not give its Latin name (${picked.sub})`);
+        if ((await page.locator('.sp-crumbs button').last().textContent()) !== picked.b) fail(`the last crumb is not ${picked.b}`);
+        if (await page.locator('#sp-list').isVisible()) fail('touching the tree left the strips over it');
+        const s0 = await scale();
+        await page.touchscreen.tap(...at);
+        await page.waitForFunction((s) => Number(document.querySelector('.tol-canvas').dataset.scale) > s * 1.5, s0, { timeout: 5000, polling: 250 })
+          .catch(async () => fail(`a second tap on ${picked.b} did not zoom in (it picked ${await page.locator('.tol-card b').textContent()})`));
+        // The tree has the sheet below the crumbs, wholly on screen.
+        const tb = await page.locator('.sp-tree').boundingBox();
+        const cb = await page.locator('.sp-crumbs').boundingBox();
+        if (!tb || !cb || tb.y - (cb.y + cb.height) > 2 || tb.y + tb.height > height + 1) fail(`with its strips folded the tree sits at ${JSON.stringify(tb)}`);
+        await page.screenshot({ path: `${out}/tree-${phone}-${orient}.png` });
+        await page.locator('.sp-crumbs button').first().click();
+        await page.waitForFunction(() => !!document.querySelector('#sp-list')?.offsetParent, null, { timeout: 5000, polling: 250 })
+          .catch(() => fail('"All insects" did not bring the strips back'));
+      } catch (e) {
+        fail(`stopped: ${e.message.split('\n')[0]}`);
+      }
+      await ctx.close();
+      console.log(`${tag}: checked`);
+    }
+  }
   // The usual years' band on the time bar (spread.py), on a 390 x 844 phone in Chrome's engine, light and dark: drawn
   // in a typical year with its key line, which stays on screen. ONLY=band runs just this.
   for (const scheme of ['light', 'dark']) {

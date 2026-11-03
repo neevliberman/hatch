@@ -172,6 +172,9 @@ export function mountSpeciesPicker(
     refocus = true; // the button is disabled while the species loads, which drops focus: hand it back after
     onPick(key, season);
   };
+  /** On a phone, once the tree is touched the strips above it fold away and the tree takes their room (style.css);
+   * they come back with the whole tree ("All insects") or the next time the sheet opens. */
+  const roomy = (on: boolean) => sheet.classList.toggle('sp-tree-only', on);
   /** The tree, once: its data and code load on first open, after the species list. */
   const loadTree = async () => {
     if (treeTried || !all) return;
@@ -186,13 +189,18 @@ export function mountSpeciesPicker(
             if (i) crumbs.insertAdjacentHTML('beforeend', '<span aria-hidden="true"> › </span>');
             const b = document.createElement('button');
             b.type = 'button';
-            b.textContent = n.parent ? (n.rank === 'o' ? (ORDER_NAMES[n.label] ?? n.label) : n.label) : 'All insects';
-            b.addEventListener('click', () => go(n));
+            b.textContent = n.parent ? n.name : 'All insects';
+            if (n.name !== n.label) b.title = n.label; // the Latin name, for anyone who wants it
+            b.addEventListener('click', () => {
+              if (!n.parent) roomy(false); // back to the whole tree: the strips come back too
+              go(n);
+            });
             crumbs.append(b);
           });
+          crumbs.scrollLeft = crumbs.scrollWidth; // a long trail shows its end: where the tree is now
         };
         if (!q.trim()) treeCrumbs();
-      });
+      }, () => roomy(true));
     } catch (e) {
       // tree.json and species.json out of step (a stale cache): the plain list stays.
       console.warn('tree of life', e);
@@ -357,6 +365,7 @@ export function mountSpeciesPicker(
     button.setAttribute('aria-expanded', String(on));
     if (!on) return;
     watchNote.hidden = true;
+    roomy(false);
     render();
     // Touch screens: land on the close button instead, so the keyboard doesn't cover the tree until search is tapped.
     (matchMedia('(pointer: fine)').matches ? input : sheet.querySelector<HTMLElement>('.sp-x')!).focus();

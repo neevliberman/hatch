@@ -10,7 +10,8 @@ import { nameOf, ORDER_NAMES } from '../atlas/names';
  * Layout. Each species gets a slot on the rim (in the tree's own leaf order, with a small gap between orders) and a
  * branch sits at the middle of its children's slots, `1 - (height / tallest)^0.7` of the way out, so tips line up
  * on the rim and the many shallow splits near the tips get room. Branches get thicker with the species they carry.
- * Zooming in brings in family and genus names, then each species' iNaturalist photo and name round the rim.
+ * Zooming in brings in family and genus names, then each species' iNaturalist photo and name round the rim. A group goes
+ * by its English name where iNaturalist has a short one ("Ground beetles"), else its Latin one.
  */
 
 /** tree.json: [label, rank, ...children]; a leaf is the species' index in species.json. */
@@ -19,12 +20,16 @@ export interface TreeData {
   src: string;
   /** Species the tree lacks, placed beside their nearest relative in the species list. */
   g: number[];
+  /** English names of families and genera, by Latin name ("Carabidae": "Ground beetles"); orders use ORDER_NAMES. */
+  c?: Record<string, string>;
   t: Raw;
 }
 
 export interface TNode {
   /** Order, family or genus name; '' for a branch that is none of those exactly; the species' name on a tip. */
   label: string;
+  /** The group's English name, where it has one ("Ground beetles"), else its Latin label. */
+  name: string;
   rank: '' | 'o' | 'f' | 'g' | 's';
   kids: TNode[];
   parent: TNode | null;
@@ -79,12 +84,13 @@ export function buildTree(data: TreeData, species: AtlasSpecies[]): { root: TNod
     const base = { kids: [] as TNode[], parent, a: 0, a0: 0, a1: 0, r: 0 };
     if (typeof raw === 'number') {
       const s = species[raw]!;
-      const tip: TNode = { ...base, label: nameOf(s), rank: 's', sp: raw, n: 1, h: 0, lo: tips.length, hi: tips.length, order: s.order ?? genusOrder.get(s.name.split(' ')[0]!) ?? null };
+      const tip: TNode = { ...base, label: nameOf(s), name: nameOf(s), rank: 's', sp: raw, n: 1, h: 0, lo: tips.length, hi: tips.length, order: s.order ?? genusOrder.get(s.name.split(' ')[0]!) ?? null };
       tips.push(tip);
       return tip;
     }
     const [label, rank, ...rest] = raw;
-    const node: TNode = { ...base, label, rank: rank as TNode['rank'], sp: -1, n: 0, h: 0, lo: tips.length, hi: 0, order: null };
+    const name = (rank === 'o' ? ORDER_NAMES[label] : data.c?.[label]) ?? label;
+    const node: TNode = { ...base, label, name, rank: rank as TNode['rank'], sp: -1, n: 0, h: 0, lo: tips.length, hi: 0, order: null };
     for (const c of rest) {
       const k = make(c, node);
       node.kids.push(k);
@@ -128,7 +134,6 @@ export const named = (n: TNode): TNode => {
   return m;
 };
 const inside = (n: TNode, of: TNode) => n.lo >= of.lo && n.hi <= of.hi;
-const plainName = (n: TNode) => (n.rank === 'o' ? (ORDER_NAMES[n.label] ?? n.label) : n.label);
 
 /**
  * Mount the tree in `host` (an empty element that sets its own size). `onPick` gets a species index when the reader
@@ -140,6 +145,8 @@ export function mountTree(
   species: AtlasSpecies[],
   onPick: (sp: number) => void,
   crumbs: (path: TNode[], go: (n: TNode) => void) => void,
+  /** A touch, click or drag on the tree has ended (the phone sheet then gives the tree its strips' room). */
+  touched?: () => void,
 ): TreeOfLife {
   const { root, tips, slots } = buildTree(data, species);
   /** Pixels between neighbouring tips on the rim at the current zoom. */
@@ -155,7 +162,7 @@ export function mountTree(
     .sort((a, b) => 'ofg'.indexOf(a.rank) - 'ofg'.indexOf(b.rank) || b.n - a.n);
 
   host.innerHTML = `<canvas class="tol-canvas" tabindex="0" role="application"
-      aria-label="Tree of life. Drag or pinch to explore; arrow keys walk the branches, Enter opens, plus and minus zoom."></canvas>
+      aria-label="Tree of life. Drag or pinch to explore; tap a group twice to zoom in. Arrow keys walk the branches, Enter opens, plus and minus zoom."></canvas>
     <div class="tol-card" hidden><img alt="" width="44" height="44" referrerpolicy="no-referrer" hidden><div class="tol-t"><b></b><span></span></div>
       <button type="button" class="tol-go"></button></div>
     <p class="tol-out" hidden></p>
@@ -174,6 +181,7 @@ export function mountTree(
   const maxS = (64 * slots) / (Math.PI * 2 * R);
   let W = 0;
   let H = 0;
+  let edgeTop = 0; // the canvas's top on screen at the last size() or touch (the sheet may have scrolled between)
   let dpr = 1;
   let sel: TNode | null = null;
   let current: TNode | null = null;
@@ -248,9 +256,14 @@ export function mountTree(
     if (!r.width || !r.height) return;
     const first = !W;
     dpr = Math.min(2, window.devicePixelRatio || 1);
-    // A resize (a phone turned, the window dragged) keeps the same part of the tree in the middle.
-    view.tx += (r.width - W) / 2;
-    view.ty += (r.height - H) / 2;
+    // A resize (a phone turned, the window dragged) keeps the same part of the tree in the middle. A change of height
+    // alone (the phone sheet's strips folding away or back) leaves the tree where it is on screen.
+    if (r.width === W) view.ty += edgeTop - r.top;
+    else {
+      view.tx += (r.width - W) / 2;
+      view.ty += (r.height - H) / 2;
+    }
+    edgeTop = r.top;
     W = r.width;
     H = r.height;
     cv.width = Math.round(W * dpr);
@@ -306,6 +319,7 @@ export function mountTree(
     }
     ctx.globalAlpha = 1;
     cv.dataset.branches = String(strokes); // for the page tests: the canvas itself can't be read once a photo is on it
+    cv.dataset.scale = view.s.toFixed(4);
     if (reach < 1) return;
 
     // In season on the map's day: a glow just outside each such tip, brighter nearer its best day. Round the whole
@@ -456,7 +470,7 @@ export function mountTree(
       if (overview && (n.rank !== 'o' || arc < 46)) continue;
       if (!overview && arc < ({ o: 40, f: 54, g: 70 } as Record<string, number>)[n.rank]!) continue;
       if (arc > Math.max(W, H) * 4) continue;
-      const text = overview ? plainName(n) : n.label;
+      const text = n.name;
       // In the whole-wheel view an order's name sits inside its own arm; closer in, each name sits on its branch.
       const mid = (a0 + a1) / 2 + view.rot;
       const [x, y] = overview
@@ -558,10 +572,10 @@ export function mountTree(
         img.src = s.photo;
         img.title = s.credit ?? '';
       }
-      card.querySelector('b')!.textContent = tip ? nameOf(s!) : n.label ? plainName(n) : `${n.n} related species`;
+      card.querySelector('b')!.textContent = tip ? nameOf(s!) : n.label ? n.name : `${n.n} related species`;
       const sub = tip
         ? `${s!.name}${grafted.has(n.sp) ? ' · placed by its genus' : ''}`
-        : `${n.n.toLocaleString()} species${n.rank === 'o' ? ` · ${n.label}` : ''}${up && up !== root ? ` · in ${plainName(up)}` : ''}`;
+        : `${n.n.toLocaleString()} species${n.name !== n.label ? ` · ${n.label}` : ''}${up && up !== root ? ` · in ${up.name}` : ''}`;
       card.querySelector('span')!.textContent = sub;
       card.querySelector('button')!.textContent = tip ? 'Show on map' : 'Zoom in';
       live.textContent = `${card.querySelector('b')!.textContent}, ${sub}`;
@@ -674,9 +688,20 @@ export function mountTree(
         // Double tap: into the branch tapped, or twice as close.
         if (n && !isTip(n)) select(n, true);
         else fly({ ...zoomed([press.x, press.y], 2) });
-      } else select(n);
+      } else {
+        // A tap picks a group; a tap on the group picked zooms into it. Where its branches are too crowded to tell apart,
+        // a tap anywhere inside it counts.
+        const again = !!n && !!sel && !isTip(sel) && (n === sel || (tipGap() < 6 && inside(n, sel)));
+        select(again ? sel : n, again);
+      }
     }
-    if (!ptr.size) press = null;
+    if (!ptr.size) {
+      if (press && e.type === 'pointerup') {
+        edgeTop = cv.getBoundingClientRect().top;
+        touched?.();
+      }
+      press = null;
+    }
   };
   const zoomed = (c: [number, number], k: number) => {
     const ns = Math.min(maxS, Math.max(view.min, view.s * k));
