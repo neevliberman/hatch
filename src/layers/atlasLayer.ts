@@ -4,7 +4,7 @@ import { DataFilterExtension } from '@deck.gl/extensions';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import { OTHERS_MAX, type CaveatCard, type Due, type LegendSpec, type OtherSpecies, type OthersList, type ProbeCard, type SeasonProfile, type SpeciesWords } from '../core/layer';
-import { curveOf, groupOf, OUT_GROUPS, outNow, placeSeasons, type PlaceSeasons } from '../atlas/outNow';
+import { groupOf, OUT_CHIPS, OUT_GROUPS, outNow, placeCache, placeSeasons, type OutNow, type PlaceSeasons } from '../atlas/outNow';
 import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
@@ -215,86 +215,76 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     return v;
   };
 
-  // "Out here now" (atlas/outNow.ts): every species' season at a cell for one run, so the pinned card can list the
-  // ones near their own best day here. One pass of the network over the season's 62 days: the network works out every
-  // species at once anyway (its last layer scores them all before the softmax), so this costs what the card's own
-  // season line did (sharesHere), which then reads its numbers from here. On the graphics card or, without one, the
-  // plain network (a few hundred ms), and only for a pinned card. Kept per cell and run; each day's list is kept too.
-  const everyone = new Map<string, PlaceSeasons>();
-  const allHere = (c: number, r: Run): PlaceSeasons => {
-    const k = `${c}|${r.key}`;
-    const have = everyone.get(k);
-    if (have) return have;
-    const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
-    const days = Array.from({ length: n }, (_, j) => SEASON[0] + STEP * j);
-    const S = atlas.net.nOut;
-    let ls: Float32Array | null = null;
-    if (atlas.gpu && !atlas.gpu.lost) {
-      const P = atlas.net.placeDim;
-      const places = new Float32Array(n * P);
-      for (let j = 0; j < n; j++) places.set(atlas.places.subarray(c * P, (c + 1) * P), j * P);
-      try {
-        ls = atlas.gpu.all(places, Float32Array.from(days), r.on ? Float32Array.from(days, (d) => r.on!(d)[c]!) : null);
-        if (atlas.gpu.lost) ls = null;
-      } catch {
-        ls = null; // the plain network instead
+  // Every species' season at a cell for one run (atlas/outNow.ts): one pass of the network over the season's 62 days.
+  // The network works out every species at once anyway (its last layer scores them all before the softmax), so this
+  // costs what this species' own season alone would; the card's season line reads its column, and the pinned card's
+  // "Out here now" ranks them all. On the graphics card, else the plain network (a few hundred ms). Shared by every
+  // Atlas species (it doesn't depend on the one shown), the last few cells and runs kept.
+  const cpuOnly = () => !atlas.gpu || atlas.gpu.lost;
+  const allHere = (c: number, r: Run): PlaceSeasons =>
+    placeCache(atlas, `${c}|${r.key}`, () => {
+      const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
+      const days = Array.from({ length: n }, (_, j) => SEASON[0] + STEP * j);
+      const S = atlas.net.nOut;
+      let ls: Float32Array | null = null;
+      if (atlas.gpu && !atlas.gpu.lost) {
+        const P = atlas.net.placeDim;
+        const places = new Float32Array(n * P);
+        for (let j = 0; j < n; j++) places.set(atlas.places.subarray(c * P, (c + 1) * P), j * P);
+        try {
+          ls = atlas.gpu.all(places, Float32Array.from(days), r.on ? Float32Array.from(days, (d) => r.on!(d)[c]!) : null);
+          if (atlas.gpu.lost) ls = null;
+        } catch {
+          ls = null; // the plain network instead
+        }
       }
-    }
-    if (!ls) {
-      ls = new Float32Array(n * S);
-      for (let j = 0; j < n; j++) ls.set(atlas.net.logShares(atlas.cells[c]!, days[j]!, r.on ? r.on(days[j]!)[c]! : 0), j * S);
-    }
-    if (everyone.size >= 6) everyone.delete(everyone.keys().next().value!);
-    const got = placeSeasons(ls, atlas.volume, S);
-    everyone.set(k, got);
-    return got;
-  };
-  /** The card's list on a day: the best OTHERS_MAX of all, and of each chip (the card narrows it without asking again). */
-  const lists = new Map<string, OthersList>();
-  const lastList = new Map<number, OthersList>();
+      if (!ls) {
+        ls = new Float32Array(n * S);
+        for (let j = 0; j < n; j++) ls.set(atlas.net.logShares(atlas.cells[c]!, days[j]!, r.on ? r.on(days[j]!)[c]! : 0), j * S);
+      }
+      return placeSeasons(ls, atlas.volume, S, SEASON[0], STEP);
+    });
+  /** The pinned card's "Out here now" on a day (only species indices and shares are kept; rows are made as drawn): the
+   * best OTHERS_MAX of all, and of each chip, so the card narrows it without asking again. */
+  const ranks = new Map<string, OutNow>();
+  const lastRank = new Map<number, OutNow>();
   const othersHere = (c: number, doy: number): OthersList => {
-    const title = 'Out here now';
     const r = run();
     const k = `${c}|${r.key}|${doy}`;
-    const have = lists.get(k);
-    if (have) return have;
-    // Without a graphics card, while "Warm the spring" is being dragged: the list last worked out here stands in (as
-    // the season line's does, seasonNow) until the slider rests.
-    if (!atlas.gpu && !everyone.has(`${c}|${r.key}`) && performance.now() - warmedAt < SETTLE_MS) {
-      clearTimeout(settle);
-      settle = setTimeout(onData, SETTLE_MS);
-      return lastList.get(c) ?? { title, list: [], pending: true };
+    let got = ranks.get(k);
+    if (!got) {
+      // Without a graphics card, while "Warm the spring" is being dragged: the list last worked out here stands in (as
+      // the season line's does, seasonNow) until the slider rests.
+      if (cpuOnly() && performance.now() - warmedAt < SETTLE_MS) {
+        clearTimeout(settle);
+        settle = setTimeout(onData, SETTLE_MS);
+        got = lastRank.get(c);
+        if (!got) return { title: 'Out here now', list: [], pending: true };
+      } else {
+        got = outNow(allHere(c, r), atlas.volume, doy, SEASON[0], STEP, (i) => i === sp.i || i === other);
+        if (ranks.size > 50) ranks.delete(ranks.keys().next().value!);
+        ranks.set(k, got);
+        if (lastRank.size > 50) lastRank.delete(lastRank.keys().next().value!);
+        lastRank.set(c, got);
+      }
     }
-    const ps = allHere(c, r);
     const per = new Map<string | null, number>();
     const list: OtherSpecies[] = [];
-    for (const x of outNow(ps, atlas.volume, doy, SEASON[0], STEP, (i) => i === sp.i || i === other)) {
-      const o = atlas.species[x.i]!;
+    for (let j = 0; j < got.i.length; j++) {
+      const o = atlas.species[got.i[j]!]!;
       const g = groupOf(o);
       const m = per.get(g) ?? 0;
       if (list.length >= OTHERS_MAX && (g === null || m >= OTHERS_MAX)) continue;
       per.set(g, m + 1);
-      list.push({ key: atlasKey(o.name), label: nameOf(o), note: oneIn(x.share), img: o.photo ?? undefined, group: g, curve: curveOf(ps, atlas.volume, x.i) });
+      list.push({ key: atlasKey(o.name), label: nameOf(o), note: oneIn(got.share[j]!), img: o.photo ?? undefined, group: g });
     }
-    // The rows' small lines run from SEASON[0] every other step (curveOf): 31 points over 240 days.
-    const span = ((ps.ls.length / ps.S - 1) & ~1) * STEP;
-    const got = { title, list, groups: OUT_GROUPS.filter((g) => per.has(g)), today: Math.max(0, Math.min(1, (doy - SEASON[0]) / span)) };
-    if (lists.size > 100) lists.clear();
-    lists.set(k, got);
-    if (lastList.size > 100) lastList.clear();
-    lastList.set(c, got);
-    return got;
-  };
-  /** Its share at a cell every STEP days from SEASON[0] (on the graphics card in one pass; else the plain network). */
-  const sharesHere = (c: number, on: ((day: number) => Float32Array) | null): number[] => {
-    const n = Math.floor((SEASON[1] - SEASON[0]) / STEP) + 1;
-    const days = Array.from({ length: n }, (_, j) => SEASON[0] + STEP * j);
-    if (!atlas.gpu) return days.map((d) => Math.exp(atlas.net.logShares(atlas.cells[c]!, d, on ? on(d)[c]! : 0)[sp.i]!));
-    const P = atlas.net.placeDim;
-    const places = new Float32Array(n * P);
-    for (let j = 0; j < n; j++) places.set(atlas.places.subarray(c * P, (c + 1) * P), j * P);
-    const ahead = on ? Float32Array.from(days, (d) => on(d)[c]!) : null;
-    return [...atlas.gpu.run(places, Float32Array.from(days), ahead, [sp.i])[0]!].map(Math.exp);
+    // The chips: the groups with the most species here, in their usual order.
+    const top = [...per].filter((e): e is [string, number] => e[0] !== null).sort((p, q) => q[1] - p[1]).slice(0, OUT_CHIPS).map((e) => e[0]);
+    return {
+      title: got.fallback ? 'Also out here' : 'Out here now',
+      list,
+      groups: OUT_GROUPS.filter((g) => top.includes(g)),
+    };
   };
   // Its season at a cell, for one run (a typical year, 2026, warmed): the expected photos of it (its share times the
   // day's usual photos), and its broods by the watch list's own rule (seasonsOf: the runs of days with at least
@@ -305,9 +295,9 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const seasonHere = (c: number, r: Run) => {
     const k = `${c}|${r.key}`;
     if (seasons.has(k)) return seasons.get(k)!;
-    // A pinned card has every species' season here already (allHere): its own is a column of that.
-    const all = everyone.get(k);
-    const shares = all ? Array.from({ length: all.ls.length / all.S }, (_, j) => Math.exp(all.ls[j * all.S + sp.i]!)) : sharesHere(c, r.on);
+    // Its column of every species' season here (shared with the list and with the other species' cards).
+    const all = allHere(c, r);
+    const shares = Array.from({ length: all.ls.length / all.S }, (_, j) => Math.exp(all.ls[j * all.S + sp.i]!));
     const photos = shares.map((x, j) => x * atlas.volume[j]!);
     const due = shares[photos.indexOf(Math.max(...photos))]! < 1e-4 ? null : seasonsOf(photos);
     const got = due ? { photos, due } : null;
@@ -324,7 +314,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const latest = new Map<number, { photos: number[]; due: Due } | null>();
   const seasonNow = (c: number) => {
     const r = run();
-    if (!atlas.gpu && !seasons.has(`${c}|${r.key}`) && latest.has(c) && performance.now() - warmedAt < SETTLE_MS) {
+    if (cpuOnly() && !seasons.has(`${c}|${r.key}`) && latest.has(c) && performance.now() - warmedAt < SETTLE_MS) {
       clearTimeout(settle);
       settle = setTimeout(onData, SETTLE_MS);
       return latest.get(c)!;
@@ -555,10 +545,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       const doy = dayOfYear(t);
       const s = shareAt(c, doy);
       // Its season here: one pass on the graphics card; the plain network takes a few hundred ms a cell, so without one
-      // only a pinned card (or a cell already worked out) gets it, not every hexagon a pointer sweeps over.
-      // A pinned card's list first: it works out every species' season here, its own among them.
+      // only a pinned card (or a cell already worked out) gets it, not every hexagon a pointer sweeps over. Both read
+      // the one pass over every species here (allHere), so a hovered cell pinned next isn't worked out again.
       const others = pinned ? othersHere(c, doy) : null;
-      const here = atlas.gpu || pinned || latest.has(c) ? seasonNow(c) : null;
+      const here = !cpuOnly() || pinned || latest.has(c) ? seasonNow(c) : null;
       return {
         title: s > 1e-4 ? `${name}: ${oneIn(s)} insect photos` : `${name}: hardly expected`,
         swatch: css(color(s)),

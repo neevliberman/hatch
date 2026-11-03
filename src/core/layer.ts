@@ -32,7 +32,8 @@ export interface ProbeCard {
   season?: PlaceSeason;
 }
 
-/** The card's list of other species: this many rows until it is opened out, then up to OTHERS_MAX (it scrolls). */
+/** The card's list of other species: this many rows until it is opened out (two on a phone), then up to OTHERS_MAX
+ * (it scrolls). */
 export const OTHERS_FEW = 3;
 export const OTHERS_MAX = 20;
 /** The card's list of other species here (ui/panels.ts draws it). */
@@ -41,10 +42,8 @@ export interface OthersList {
   list: OtherSpecies[];
   /** Chips to narrow the list (each a `group` some of the list has), in order; none: no chips. */
   groups?: readonly string[];
-  /** Still being worked out (the plain network, a second or so): the card keeps the list's room meanwhile. */
+  /** Still being worked out (the plain network, while "Warm the spring" is dragged): the card keeps the list's room. */
   pending?: boolean;
-  /** Where the map's day falls along each row's `curve` (0-1). */
-  today?: number;
 }
 export interface OtherSpecies {
   key: string;
@@ -53,8 +52,6 @@ export interface OtherSpecies {
   img?: string;
   /** Its chip (OthersList.groups). */
   group?: string | null;
-  /** Its season here, evenly spaced and scaled to its best (0-1): a small line beside its name. */
-  curve?: readonly number[];
 }
 
 /** A place's season for the card's sparkline. One set of numbers: the "Coming out near you" line counts down to the

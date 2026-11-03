@@ -30,6 +30,22 @@ window.check = (meta, b64, cells) => {
     }
     out[name] = { ms, worst };
   }
+  // all(): every species, one place over a season of days (the card's "Out here now"), against net.ts row by row.
+  const n = 62;
+  const season = new Float32Array(n * P);
+  for (let j = 0; j < n; j++) season.set(places.subarray(0, P), j * P);
+  const days = Float32Array.from({ length: n }, (_, j) => 60 + 4 * j);
+  for (const [name, a] of [['all typical', null], ['all ahead', days.map((_, j) => (j % 9) - 4)]]) {
+    const t0 = performance.now();
+    const got = gpu.all(season, days, a);
+    const ms = performance.now() - t0;
+    let worst = 0;
+    for (const j of [0, 25, 61]) {
+      const ref = net.logShares(cells[0], days[j], a ? a[j] : 0);
+      for (let s = 0; s < net.nOut; s++) if (ref[s] > -15) worst = Math.max(worst, Math.abs(ref[s] - got[j * net.nOut + s]));
+    }
+    out[name] = { ms, worst };
+  }
   return out;
 };`;
 const js = buildSync({ stdin: { contents: entry, resolveDir: process.cwd(), loader: 'ts' }, bundle: true, write: false, format: 'iife' }).outputFiles[0].text;

@@ -110,20 +110,6 @@ let outOpen = false;
 /** The last list drawn, so a chip or the opener redraws it without asking the layer again. */
 let outLast: OthersList | null = null;
 
-/** A row's small season line: its season here, Mar to Oct, scaled to its best, with the map's day as the slider's
- * amber tick. Every row shares one scale of days, so the ticks line up down the list. */
-const W = 30;
-const H = 10;
-function spark(curve: readonly number[], today: number | undefined): string {
-  const n = curve.length - 1;
-  if (n < 1) return '';
-  const r1 = (v: number) => Math.round(v * 10) / 10;
-  const pts = curve.map((v, k) => `${r1((k / n) * W)},${r1(H - 0.5 - v * (H - 1.5))}`).join(' ');
-  const now = today === undefined ? '' : `<path class="po-now" d="M${r1(today * W)} 0V${H}"/>`;
-  return `<svg class="po-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" focusable="false">` +
-    `<polygon class="po-area" points="0,${H - 0.5} ${pts} ${W},${H - 0.5}"/>${now}<polyline class="po-line" points="${pts}"/></svg>`;
-}
-
 /** "Out here now": a row of chips to narrow it, then the first few species (or up to OTHERS_MAX, opened out), each
  * a tap away from the map. While it is worked out, its room is kept. */
 function othersHtml(o: OthersList): string {
@@ -132,22 +118,33 @@ function othersHtml(o: OthersList): string {
   const g = outGroup !== null && groups.includes(outGroup) ? outGroup : null;
   const all = g === null ? o.list : o.list.filter((x) => x.group === g);
   const shown = all.slice(0, outOpen ? OTHERS_MAX : OTHERS_FEW);
-  const extra = Math.min(all.length, OTHERS_MAX) - OTHERS_FEW;
   const chip = (v: string | null, label: string) =>
     `<button type="button" class="po-chip" data-group="${esc(v ?? '')}" aria-pressed="${g === v}">${esc(label)}</button>`;
   const chips = groups.length > 1 ? `<div class="po-chips" role="group" aria-label="Show only">${chip(null, 'All')}${groups.map((x) => chip(x, x)).join('')}</div>` : '';
-  const more = extra > 0 && !o.pending
-    ? `<button type="button" class="po-more" aria-expanded="${outOpen}" aria-label="${outOpen ? 'Show fewer' : `Show ${extra} more`}">${outOpen ? 'Fewer' : `+${extra}`}</button>`
+  // A phone shows two rows closed (style.css), a wider screen three: anything past two can be opened out.
+  const more = all.length > 2 && !o.pending
+    ? `<button type="button" class="po-more" aria-expanded="${outOpen}" aria-controls="po-list">${outOpen ? 'Less' : 'More'}<span aria-hidden="true"> ${outOpen ? '&#9652;' : '&#9662;'}</span></button>`
     : '';
   const rows = o.pending
-    ? `<ul class="po-list po-wait" aria-busy="true">${'<li><i></i></li>'.repeat(OTHERS_FEW)}</ul>`
-    : `<ul class="po-list${outOpen ? ' open' : ''}">${shown
+    ? `<ul class="po-list po-wait" id="po-list" aria-busy="true">${'<li><i></i></li>'.repeat(OTHERS_FEW)}</ul>`
+    : `<ul class="po-list${outOpen ? ' open' : ''}" id="po-list">${shown
         .map(
           (x) =>
-            `<li data-group="${esc(x.group ?? '')}"><button type="button" data-species="${esc(x.key)}">${x.img ? `<img src="${esc(x.img)}" alt="" width="28" height="28" loading="lazy" referrerpolicy="no-referrer">` : '<i class="po-blank"></i>'}<span class="po-name">${esc(x.label)}</span>${x.curve ? spark(x.curve, o.today) : ''}<span class="po-note">${esc(x.note)}</span></button></li>`,
+            `<li data-group="${esc(x.group ?? '')}"><button type="button" data-species="${esc(x.key)}">${x.img ? `<img src="${esc(x.img)}" alt="" width="28" height="28" loading="lazy" referrerpolicy="no-referrer">` : '<i class="po-blank"></i>'}<span class="po-name">${esc(x.label)}</span><span class="po-note">${esc(x.note)}</span></button></li>`,
         )
         .join('')}</ul>`;
-  return `<div class="probe-others"><div class="po-head"><span class="po-title">${esc(o.title)}</span>${chips}${more}</div>${rows}</div>`;
+  return `<div class="probe-others${outOpen ? ' open' : ''}"><div class="po-head"><span class="po-title">${esc(o.title)}</span>${chips}${more}</div>${rows}</div>`;
+}
+
+/** A way back to the same control after the card is redrawn: by what it is (a species, a chip, the opener), not by
+ * where it was, since the list's rows come and go. */
+function keyOf(el: Element | null): string | null {
+  if (!(el instanceof HTMLElement)) return null;
+  if (el.dataset.species) return `[data-species="${CSS.escape(el.dataset.species)}"]`;
+  if (el.classList.contains('po-chip')) return `.po-chip[data-group="${CSS.escape(el.dataset.group ?? '')}"]`;
+  for (const c of ['po-more', 'probe-close', 'probe-link']) if (el.classList.contains(c)) return `.${c}`;
+  if (el.tagName === 'SUMMARY') return 'summary';
+  return null;
 }
 
 /** A chip or the opener: redraw just the list, from the one last drawn. */
@@ -158,14 +155,14 @@ function onOthers(root: HTMLElement, e: Event): void {
   if (!b || !box || !outLast) return;
   if (b.classList.contains('po-more')) outOpen = !outOpen;
   else outGroup = b.dataset.group || null;
-  const sel = b.classList.contains('po-more') ? '.po-more' : `.po-chip[data-group="${CSS.escape(b.dataset.group ?? '')}"]`;
+  const sel = keyOf(b);
   const left = box.querySelector('.po-chips')?.scrollLeft ?? 0;
   box.outerHTML = othersHtml(outLast);
   const fresh = root.querySelector('.probe-others');
   const chips = fresh?.querySelector('.po-chips');
   if (chips) chips.scrollLeft = left;
-  // Keep focus where it was (a keyboard user's chip or opener), the opener on whichever sign it now shows.
-  if (root.contains(document.activeElement) || document.activeElement === document.body) fresh?.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true });
+  // Keep focus where it was (a keyboard user's chip or opener).
+  if (sel && (root.contains(document.activeElement) || document.activeElement === document.body)) fresh?.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true });
 }
 
 /** Hover/tap probe card: each active layer's answer to "what's here?". A pinned card gets a close button. */
@@ -193,8 +190,10 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
   const chipsLeft = same ? (root.querySelector('.po-chips')?.scrollLeft ?? 0) : 0;
   const listTop = same ? (root.querySelector('.po-list')?.scrollTop ?? 0) : 0;
   const opened = same ? [...root.querySelectorAll('details')].map((d) => d.open) : [];
+  // Keyboard focus comes back to the same control: found by what it is, else (a control with no key) by its place.
   const focusables = () => [...root.querySelectorAll<HTMLElement>('button, summary, a')];
-  const focused = same && root.contains(document.activeElement) ? focusables().indexOf(document.activeElement as HTMLElement) : -1;
+  const had = same && root.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+  const focused = had ? (keyOf(had) ?? focusables().indexOf(had)) : null;
   let fold = 0;
   root.innerHTML = (pinned ? '<button type="button" class="probe-close" aria-label="Close this card">&times;</button>' : '') +
     (hit?.label ? `<div class="probe-cell">Near ${esc(hit.label)}</div>` : hit?.note ? `<div class="probe-cell">${esc(hit.note)}</div>` : '') +
@@ -225,5 +224,6 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
   if (chips) chips.scrollLeft = chipsLeft;
   const list = root.querySelector('.po-list');
   if (list) list.scrollTop = listTop;
-  if (focused >= 0) focusables()[focused]?.focus();
+  if (typeof focused === 'string') root.querySelector<HTMLElement>(focused)?.focus();
+  else if (focused !== null && focused >= 0) focusables()[focused]?.focus();
 }
