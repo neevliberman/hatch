@@ -502,15 +502,16 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     const asOf = f(dayOfYear(L.asOf));
     const stage = stageAt(q, doy);
     // Same shape as a replay card: the stage first, one answer line, the detail behind "More".
-    const title = `Luna moth: ${STAGE_LABEL[stage]} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`;
+    // The day is the time bar's (and the season line's amber mark), so the title names only the stage.
+    const title = `Luna moth: ${STAGE_LABEL[stage]}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`;
     const lines: string[] = [];
     const more: string[] = [];
     // A small hexagon's peak is the big one's shifted by its local lean; the range shifts with it.
     const lean = fine && i !== undefined && q[2] != null && L.median[i]?.[2] != null ? q[2] - L.median[i]![2]! : 0;
     const lo = i === undefined || L.lo[i]?.[2] == null ? null : L.lo[i]![2]! + lean;
     const hi = i === undefined || L.hi[i]?.[2] == null ? null : L.hi[i]![2]! + lean;
-    if (lo != null && hi != null) lines.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
-    else if (q[2] != null) lines.push(`Peak likely about ${f(q[2])}.`);
+    // The season line says "best ~Jun 2"; the window behind the "~" waits under More.
+    if (lo != null && hi != null) more.push(lo === hi ? `Peak likely ${f(lo)}.` : `Peak likely ${f(lo)} to ${f(hi)}.`);
     const vs = vsNormalLine(q[2], typicalPeak(data.forecast, i));
     if (vs) lines.push(vs);
     if (!seen) lines.push('No sightings nearby to check against.');
@@ -530,8 +531,7 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     more.push(`Real weather to ${asOf}, then forecast.`);
     if (fine) more.push('Small hexagons: the forecast for the larger one, shifted by this spot\u2019s usual warmth.');
     const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar('Luna moth', 'luna-moth', y, lo, hi) : undefined;
-    // The sparkline gives the first and last days; the peak's likely window above is its best day.
-    const season = qSeason(q, y, doy, (lo != null && hi != null) || q[2] != null, lo != null && hi != null ? [lo, hi] : undefined) ?? undefined;
+    const season = qSeason(q, y, doy, lo != null && hi != null ? [lo, hi] : undefined) ?? undefined;
     return { title, swatch: css(STAGE_COLOR[stage]), season, lines, more, calendar };
   };
 
@@ -549,15 +549,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
     res: () => shownRes,
     fineCurrent: () => shownRes > 4 && shownDays !== null && shownDays === fineDaysLoaded.get(`${shownRes}/${mode}`),
     cellAt: (lngLat) => lookup(lngLat)?.cell ?? null,
-    // This year's live forecast where it covers the place and its season isn't over, else the typical year.
-    due(lngLat, now) {
-      const i = cellIndex.get(latLngToCell(lngLat[1], lngLat[0], GRID_RES));
-      if (i === undefined) return null;
-      const q = live && live.season === new Date(now).getUTCFullYear() ? live.median[i] : null;
-      const on = dueOf(q, live?.season);
-      if (!on) return dueOf(data.forecast[TYPICAL]![i]);
-      // This year's live season is over: count down to next year's typical one.
-      return dayOfYear(now) <= on.end ? on : dueOf(data.forecast[TYPICAL]![i], on.year! + 1);
+    // The very forecast the card shows for the place (the season on screen, the hexagon at the zoom on screen), so the
+    // line under the map and the card's season line give the same days.
+    due(lngLat) {
+      const at = lookup(lngLat);
+      return at ? dueOf(at.q, mode === TYPICAL ? undefined : yearOf()) : null;
     },
 
     newest: (t) => newest(dayOfYear(t)),
@@ -779,29 +775,28 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       if (isLive()) return liveProbe(at.parent, at.q, at.seen, doy, at.cell !== at.parent);
       const fine = shownRes > 4;
       const q = at.q;
-      const [q05, q25, q50, q75] = q;
+      const q50 = q[2];
       const stage = stageAt(q, doy);
       // One answer up front; the detail waits behind "More" (pinned cards only) so the card stays small over the map.
       const label = STAGE_LABEL[stage];
-      const title = `Luna moth: ${label} on ${fmtDoy(year, doy)}`; // the species, as both layers can be on at once
+      // The species, as both layers can be on at once; the day is the time bar's (and the season line's amber mark).
+      const title = `Luna moth: ${label}`;
       const lines: string[] = [];
       const more: string[] = [];
       // The window comes from past misses for whole strips of the map, each forecast from that year's real weather.
       // So it only applies to a replayed year: "all years" has no one year's weather, and its spread is much wider.
       const pk = data.interval?.peak;
       const likely = !!(pk && q50 != null && mode !== TYPICAL);
-      // The season here is the sparkline (first, best, last); a replayed year's likely window for the peak stands in
-      // for its best day.
-      if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      const season = qSeason(q, year, doy, likely, likely ? [q50! + pk![0], q50! + pk![1]] : undefined);
+      // The season here is the season line (first, best, last); a replayed year's best day is "~", its likely window
+      // under More.
+      if (likely) more.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
+      const season = qSeason(q, year, doy, likely ? [q50! + pk![0], q50! + pk![1]] : undefined);
       if (mode !== TYPICAL) {
         const pi = cellIndex.get(at.parent);
         const vs = vsNormalLine(pi === undefined ? null : forecast()[pi]?.[2], typicalPeak(data.forecast, pi));
         if (vs) lines.push(vs);
       }
       if (!at.seen) lines.push('No lunas ever seen near here to check this against.');
-      if (likely && q05 != null && q25 != null && q75 != null)
-        more.push(`First moths about ${fmtDoy(year, q05)}. Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
       const band = bandOf(lngLat[1]);
       const sc = mode === TYPICAL ? null : data.scores.find((r) => r.band === band.label && r.year === year);
       if (sc) {

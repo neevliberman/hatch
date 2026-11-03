@@ -45,11 +45,9 @@ export interface PlaceSeason {
   year: number;
   /** The map's day, marked when it falls on the line. */
   today: number;
-  /** Leave the best day out of the words: the card gives it in a line of its own (a likely window). */
-  noBest?: boolean;
-  /** That likely window for the best day, shaded on the line (as the time bar shades where a peak usually falls). */
+  /** A best day known only as a likely window (a replayed or live year): "best ~Jun 2", the window shaded faintly. */
   window?: readonly [number, number];
-  /** Few records behind it: a dashed line. */
+  /** Few records behind it: a lighter line. */
   rough?: boolean;
 }
 

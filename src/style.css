@@ -290,7 +290,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 #finder .find-none:empty { margin: 0; } /* kept rendered: a live region that appears and fills at once may go unannounced */
 /* With a mouse the hex card is a tooltip beside the pointer (placed from main.ts); it only takes clicks once pinned. */
 /* One width, hovered or pinned, so pinning never re-wraps the title or shifts the card. */
-#probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: min(330px, calc(100vw - 16px)); max-width: none;
+#probe.at-pointer { position: fixed; left: 0; top: 0; z-index: 4; width: min(310px, calc(100vw - 16px)); max-width: none;
   max-height: calc(100vh - 16px); overflow-y: auto; pointer-events: none;
   box-shadow: var(--label), var(--shadow); }
 #probe.at-pointer.pinned { pointer-events: auto; border-color: var(--accent); }
@@ -381,15 +381,19 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 /* The season here (ui/sparkline.ts): first day, a one-line sparkline, last day, best day. The time bar's ink line and
    wash, a leaf-green dot on each best day, and the map's day as the slider's amber line. */
 .probe-season { display: flex; align-items: center; gap: 4px; white-space: nowrap; } /* no taller than a line of text */
+/* Phones wide enough for "May 16 ⌒⌒ Sep 9 · best May 28, Aug 12" at 14px; the smallest keep 13px to stay on one line. */
+@media (max-width: 700px) and (min-width: 385px) { .probe-season { font-size: 14px; } }
+/* While a card's season line speaks for its place, the time bar's Midwest-wide peak note steps aside. */
+#app.place-card .wave.peak-note { visibility: hidden; }
 .probe-season svg { flex: 1 1 0; min-width: 52px; max-width: 140px; height: 1.15em; display: block; overflow: visible; }
 .probe-season path, .probe-season polyline { vector-effect: non-scaling-stroke; fill: none; }
 .ps-area { fill: var(--ink-wash); }
-.ps-window { fill: color-mix(in srgb, var(--text) 20%, transparent); } /* the time bar's usual-peak shade (.range-key) */
+.ps-window { fill: color-mix(in srgb, var(--text) 9%, transparent); } /* a faint likely window behind "best ~" */
 .ps-line { stroke: var(--text); stroke-width: 1.3; stroke-linejoin: round; }
-.ps-line.rough { stroke-dasharray: 3 2.5; }
-.ps-tick { stroke: var(--muted); stroke-width: 1; }
+.ps-line.rough { stroke: var(--muted); stroke-width: 1.1; } /* few records: a lighter line */
 .ps-peak { stroke: var(--moon); stroke-width: 6; stroke-linecap: round; }
-.ps-now { stroke: var(--accent); stroke-width: 2; }
+.ps-now { stroke: var(--sun); stroke-width: 2; } /* the slider handle's amber, behind the line */
+.ps-now.off { stroke-dasharray: 2 2; } /* the map's day lies beyond this end of the season */
 .ps-best { min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* never wider than the card */
 .ps-best::before { content: "\00B7"; margin-right: 4px; color: var(--muted); }
 .probe-more { margin-top: 4px; }

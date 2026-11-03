@@ -30,7 +30,7 @@ export function dueOf(q: Q | undefined, year?: number) {
 /** A cell's forecast as the card's sparkline (ui/sparkline.ts): the same first, peak and last days as dueOf, so the
  * card and "Coming out near you" agree, under a smooth hump that rises to the 25% day and falls by the 75% day (a
  * forecast of quantiles has no curve of its own). */
-export function qSeason(q: Q | undefined, year: number, today: number, noBest = false, window?: [number, number]): PlaceSeason | null {
+export function qSeason(q: Q | undefined, year: number, today: number, window?: [number, number]): PlaceSeason | null {
   const d = dueOf(q);
   if (!d) return null;
   const [, q25, , q75] = q!;
@@ -42,7 +42,7 @@ export function qSeason(q: Q | undefined, year: number, today: number, noBest = 
     const z = (from + k - d.peak) / (from + k < d.peak ? left : right);
     return Math.exp(-0.5 * z * z);
   });
-  return { curve, from, step: 1, broods: [{ start: d.start, peak: d.peak, end: d.end }], year, today, noBest, ...(window ? { window } : {}) };
+  return { curve, from, step: 1, broods: [{ start: d.start, peak: d.peak, end: d.end }], year, today, ...(window ? { window } : {}) };
 }
 
 /** How many hexagons are at each stage on day `doy`. */

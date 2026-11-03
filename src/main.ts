@@ -184,6 +184,10 @@ function start() {
     if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = cur.cellAt(hit.lngLat) ?? hit.cell;
     if (pinned && hit) lastPin = hit.lngLat;
     showProbe(probeEl, registry, hit, time.cursor, pinned);
+    // A pinned card's season line speaks for its place: the time bar's Midwest-wide "peak" note steps aside meanwhile,
+    // and the line under the map follows the same season (warmth, zoom) as the card.
+    $('app').classList.toggle('place-card', pinned && !probeEl.hidden && !!probeEl.querySelector('.probe-season'));
+    showNear();
     // A pinned hexagon gets an outline (not a pinned moth dot: its own glow already marks it).
     map.setPicked(pinned && hit && (!hit.picked || isForecast(hit.picked.layerId)) ? hit.cell : null);
     placeProbe();
