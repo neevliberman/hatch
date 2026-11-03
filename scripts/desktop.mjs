@@ -14,7 +14,7 @@
 // under the map give (ONLY=near). And the card's "Out here now": ranked by nearness to each species' best day there,
 // chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track).
 // And an early or late chip: opens where its slid 2026 season peaks, with the slide as a bracket on the time bar and
-// plain words on the card (ONLY=earlylate).
+// plain words on the card (ONLY=earlylate). And Share's link reopening the pinned card (ONLY=sharepin).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -2284,6 +2284,131 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // Shared links reopen the pinned card (?pin=lat,lng): a hexagon pinned by a tap, for luna (a forecast) and an Atlas
+  // species, then Share. Its link names the hexagon's centre to 2 decimals; that link in a fresh page pins the same card
+  // (title, hexagon and season line), and closing it drops pin= from the address bar. A card pinned from My area shares
+  // its hexagon, not the reader's own spot. A malformed, partial or far-off pin opens with no card and no error, and
+  // leaves the address bar. Desktop and phone. Waits poll on a timer (a software-GL frame can take 10-25 s).
+  // ONLY=sharepin runs just this.
+  const sharePinUnit = async ([w, h, phone], browser) => {
+    const tag = `share pin ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ME = { latitude: 41.8812, longitude: -87.6298 }; // Chicago's Loop: My area's fix
+    const ctx = await settledContext(browser, {
+      viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+      geolocation: ME, permissions: ['geolocation'],
+    });
+    await ctx.route(PHOTOS, (r) => r.abort());
+    const watch = (pg) => pg.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const poll = (pg, fn, arg, timeout = 90000) => pg.waitForFunction(fn, arg, { timeout, polling: 500 }).then(() => true, () => false);
+    const tap = (pg, loc) => (phone ? loc.tap() : loc.click());
+    // The pinned card as a reader sees it: its title, its hexagon, its season line.
+    const card = (pg) => pg.evaluate(() => {
+      const p = document.getElementById('probe');
+      if (!p || p.hidden || !p.querySelector('.probe-close')) return null;
+      return { title: p.querySelector('.probe-title')?.textContent ?? '', cell: (p.dataset.key ?? '').split('|')[0], season: p.querySelector('.probe-season')?.textContent ?? '' };
+    });
+    const same = (a, b) => !!a && !!b && a.title === b.title && a.cell === b.cell && a.season === b.season;
+    // Share's link, as mobile.mjs reads it: whichever of the share sheet or the clipboard the browser offers.
+    const share = async (pg) => {
+      await pg.evaluate(() => {
+        window.__shared = null;
+        const grab = async (d) => void (window.__shared = typeof d === 'string' ? d : d.url);
+        if (navigator.share) navigator.share = grab;
+        else Object.defineProperty(navigator, 'clipboard', { value: { writeText: grab } });
+      });
+      await tap(pg, pg.locator('#share'));
+      return (await poll(pg, () => !!window.__shared, null, 30000)) ? pg.evaluate(() => window.__shared) : null;
+    };
+    const pinOf = (url) => new URL(url).searchParams.get('pin');
+    // Opens a link in a fresh page and waits for its card to match `want`; screenshots it as `shot` if given.
+    const reopen = async (what, url, want, shot) => {
+      const pg = await ctx.newPage();
+      watch(pg);
+      try {
+        await pg.goto(url);
+        if (!(await poll(pg, () => !!window.__hatch?.current()))) return fail(`${what}: the shared link never loaded`);
+        let got = null;
+        const until = Date.now() + 90000;
+        while (Date.now() < until && !same((got = await card(pg)), want)) await pg.waitForTimeout(500);
+        if (!same(got, want)) return fail(`${what}: the shared link pinned ${JSON.stringify(got)}, not ${JSON.stringify(want)}`);
+        if (shot) {
+          for (const scheme of ['light', 'dark']) {
+            await pg.emulateMedia({ colorScheme: scheme });
+            await poll(pg, (d) => document.documentElement.classList.contains('dark') === d || document.documentElement.dataset.theme === (d ? 'dark' : 'light'), scheme === 'dark', 10000);
+            await pg.waitForTimeout(1500); // a software-GL frame in the new colours
+            await pg.screenshot({ path: `${out}/sharepin-${phone ? 'phone' : 'desktop'}-${shot}-${scheme}.png`, timeout: 60000 }).catch(() => {});
+          }
+          await pg.emulateMedia({ colorScheme: 'light' });
+        }
+        // Closing the card takes pin= out of the address bar (it keeps the rest of the view).
+        await tap(pg, pg.locator('#probe .probe-close'));
+        if (!(await poll(pg, () => !/[?&]pin=/.test(location.search) && /[?&]date=/.test(location.search), null, 30000))) fail(`${what}: closing the card left ${await pg.evaluate(() => location.search)}`);
+      } finally {
+        await pg.close();
+      }
+    };
+    const page = await ctx.newPage();
+    watch(page);
+    try {
+      // [what, link, the species' layer id, where to tap]
+      const cases = [
+        ['luna', '/?noauto&today=2027-01-15&date=06-10', 'luna-replay', [-91, 40, -87, 43]],
+        ['firefly', '/?species=firefly&noauto&today=2027-01-15&date=07-01', 'firefly-replay', [-91, 40, -87, 43]],
+        ['atlas', '/?species=papilio-glaucus&noauto&today=2027-01-15&date=06-20', 'papilio-glaucus-atlas', [-91, 40, -87, 43]],
+      ];
+      for (const [what, link, id, box] of cases) {
+        await page.goto(origin + link);
+        if (!(await poll(page, (i) => window.__hatch?.current()?.id === i && window.__hatch.current().cellAt([-89.2, 40.1]) != null, id))) { fail(`${what}: never loaded`); continue; }
+        await page.waitForTimeout(1500); // the first frame, so a tap lands on a drawn hexagon
+        const at = await clearSpotOn(page, box);
+        await (phone ? page.touchscreen.tap(at[0], at[1]) : page.mouse.click(at[0], at[1]));
+        if (!(await poll(page, () => !!document.querySelector('#probe:not([hidden]) .probe-close')))) { fail(`${what}: a tapped hexagon pinned no card`); continue; }
+        // The Atlas card's season line arrives a pass later: read the card once it has settled.
+        await poll(page, () => !!document.querySelector('#probe .probe-season') || !document.querySelector('#probe .probe-title'), null, 30000);
+        await page.waitForTimeout(1000);
+        const want = await card(page);
+        if (!(await poll(page, () => /[?&]pin=/.test(location.search), null, 30000))) fail(`${what}: the address bar never named the pin`);
+        const url = await share(page);
+        if (!url) { fail(`${what}: Share gave no link`); continue; }
+        const pin = pinOf(url);
+        if (!/^-?\d{1,2}\.\d{2},-?\d{1,3}\.\d{2}$/.test(pin ?? '')) { fail(`${what}: the shared link's pin is ${JSON.stringify(pin)} (${url})`); continue; }
+        await reopen(what, url, want, what);
+        await tap(page, page.locator('#probe .probe-close'));
+      }
+      // My area: the link gives the card's hexagon, never the reader's own spot (to any rounding).
+      await page.goto(origin + '/?noauto&today=2027-01-15&date=06-10');
+      await poll(page, () => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null);
+      await tap(page, page.locator('#locate'));
+      if (!(await poll(page, () => !!document.querySelector('#probe:not([hidden]) .probe-close'), null, 30000))) fail('My area pinned no card');
+      else {
+        const want = await card(page);
+        const url = await share(page);
+        const pin = url && pinOf(url);
+        if (!pin) fail(`My area: the shared link has no pin (${url})`);
+        else {
+          const [la, ln] = pin.split(',').map(Number);
+          if ([2, 3, 4].some((d) => la === +ME.latitude.toFixed(d) && ln === +ME.longitude.toFixed(d))) fail(`My area: the link gives the reader's own spot (${pin})`);
+          // The reopened card names no place ("Near you" is the sharer's): compare the hexagon and its season only.
+          await reopen('My area', url, { ...want }, null);
+        }
+      }
+      // Pins to ignore: not numbers, one number, three, far from the Midwest, empty parts. No card, no error, and the
+      // address bar lets them go. (A pin in Lake Michigan is in range but on no hexagon: no card either.)
+      for (const bad of ['abc,-89', '41.9', '41.88,-87.63,5', '10,10', ',', '41.88,', '1e400,-89', '43.0,-87.0']) {
+        await page.goto(`${origin}/?noauto&today=2027-01-15&date=06-10&pin=${encodeURIComponent(bad)}`);
+        if (!(await poll(page, () => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null))) { fail(`pin=${bad}: never loaded`); continue; }
+        await page.waitForTimeout(2500);
+        if (await card(page)) fail(`pin=${bad} pinned a card`);
+        if (bad !== '43.0,-87.0' && !(await poll(page, () => !/[?&]pin=/.test(location.search) && /[?&]date=/.test(location.search), null, 30000)))
+          fail(`pin=${bad} stayed in the address bar: ${await page.evaluate(() => location.search)}`);
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Small feedback (ideas "UI 4"): the species sheet, the town box, a phone's hex card, the short notes, the held time
   // thumb, the watch star and the species button each move a little, and under reduced motion none of them moves at
   // all (no transition or animation longer than 0). Without reduced motion each does move, so the check can't pass
@@ -2394,12 +2519,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), ...watchCases.map((c) => (b) => trackUnit(c, b)), ...watchCases.map((c) => (b) => earlyLateUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), ...watchCases.map((c) => (b) => trackUnit(c, b)), ...watchCases.map((c) => (b) => earlyLateUnit(c, b)), ...[[1280, 800, false], [390, 844, true]].map((c) => (b) => sharePinUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));
   if (process.env.ONLY === 'track') units.splice(0, units.length, ...watchCases.map((c) => (b) => trackUnit(c, b)));
+  if (process.env.ONLY === 'sharepin') units.splice(0, units.length, ...[[1280, 800, false], [390, 844, true]].map((c) => (b) => sharePinUnit(c, b)));
   if (process.env.ONLY === 'earlylate') units.splice(0, units.length, ...watchCases.map((c) => (b) => earlyLateUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));

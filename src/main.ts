@@ -18,7 +18,7 @@ import { mountWarmSlider } from './ui/warmSlider';
 import { mountMarginNotes } from './ui/marginNotes';
 import { loadPlace, nearLine, savePlace, type Place } from './ui/near';
 import type { Due } from './core/layer';
-import { latLngToCell } from 'h3-js';
+import { cellToLatLng, latLngToCell } from 'h3-js';
 import { mountKeyExplore } from './ui/keyexplore';
 import { GRID_RES, nearby } from './core/grid';
 import { isDark, onTheme, toggleMode } from './theme';
@@ -93,12 +93,18 @@ function start() {
   const clock = todayParam && !Number.isNaN(Date.parse(todayParam)) ? Date.parse(todayParam) : Date.now();
   // ?at=41.88,-87.63,6.5 reopens a shared link at the same place and zoom. Anything not near the Midwest (a typo,
   // an empty part) is ignored rather than handed to the map, which would throw and stay blank.
-  const atParts = params.get('at')?.split(',') ?? [];
-  const atNums = atParts.map((x) => (x.trim() === '' ? NaN : Number(x)));
-  const sharedAt =
-    atNums.length === 3 && atNums.every(Number.isFinite) && Math.abs(atNums[0]! - 43) < 12 && Math.abs(atNums[1]! + 89) < 16
-      ? (atNums as [number, number, number])
-      : null;
+  const midwestNums = (key: string, n: number) => {
+    const nums = (params.get(key)?.split(',') ?? []).map((x) => (x.trim() === '' ? NaN : Number(x)));
+    return nums.length === n && nums.every(Number.isFinite) && Math.abs(nums[0]! - 43) < 12 && Math.abs(nums[1]! + 89) < 16 ? nums : null;
+  };
+  const sharedAt = midwestNums('at', 3) as [number, number, number] | null;
+  // ?pin=42.36,-87.83 reopens a shared link with that hexagon's card pinned, once the species' map has loaded. A link
+  // gives the hexagon's centre to 2 decimals, never the spot tapped or found: a card pinned from My area tells no more
+  // than its hexagon (3 km across or more). Anything malformed or far from the Midwest is ignored, as for ?at=.
+  // Kept until a card is pinned or closed by hand, so a switch the link itself makes (its species loading, its live
+  // season arriving) pins it again after dropping it. [lng, lat], as the map takes it.
+  const pinNums = midwestNums('pin', 2);
+  let askedPin: [number, number] | null = pinNums ? [pinNums[1]!, pinNums[0]!] : null;
 
   // Finer hexagons load when the user zooms in; when they arrive (or the level changes) redraw and re-sync the card.
   let onLunaData = () => {};
@@ -181,7 +187,12 @@ function start() {
   // Set once the drawer is mounted: its spot card follows the tapped hex (or My area) and the date.
   let followSpot = (_t: number) => {};
   let placeNote = () => {}; // the after-the-wave margin note, set up once the map exists
+  /** The address bar, kept in step (set once its timer exists, below): a pin or a closed card changes the link. */
+  let syncSoon = () => {};
   const updateProbe = () => {
+    // A ?pin= link's hexagon, once the species it asked for is on screen and has a hexagon there.
+    const pinCell = askedPin && !pinned && !radar && !speciesPending ? cur.cellAt(askedPin) : null;
+    if (pinCell) (hit = { cell: pinCell, lngLat: askedPin! }), (pinned = true);
     // The pinned or hovered hexagon is the one on screen now: after a zoom changes the level, use that level's cell.
     if (hit && (!hit.picked || isForecast(hit.picked.layerId))) hit.cell = cur.cellAt(hit.lngLat) ?? hit.cell;
     if (pinned && hit) lastPin = hit.lngLat;
@@ -196,8 +207,10 @@ function start() {
     followSpot(time.cursor);
     exo?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
     chorus?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
+    syncSoon();
   };
   const unpin = () => {
+    askedPin = null; // closed by hand (or by a radar replay): a link's pin is done with
     if (!pinned && !hit) return;
     pinned = false;
     hit = null;
@@ -287,6 +300,7 @@ function start() {
         // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
         // landed on a neighbour (a point near a hex edge). A hex pinned from My area or the city menu has no picked
         // object, so the cell alone decides.
+        askedPin = null; // the reader's own pick replaces a link's
         const same = pinned && h !== null && hit !== null && (hit.picked ? h.picked?.object === hit.picked.object : h.cell === hit.cell);
         pinned = h !== null && !same;
         hit = pinned ? h : null;
@@ -406,7 +420,7 @@ function start() {
     showCountdown(); // "Peak: about" follows the season on screen
     syncCountdown();
   };
-  picker.addEventListener('change', () => ((wantLive = null), switchMode(picker.value)));
+  picker.addEventListener('change', () => ((wantLive = null), (askedPin = null), switchMode(picker.value)));
   /** A species that should open on live mode once its live forecast is attached (see setSpecies), and the day to open
    * on: a link's own date=, else none (live mode opens on that species' as-of day, however it is entered). */
   let wantLive: { key: string; at?: [number, number] } | null = null;
@@ -437,6 +451,7 @@ function start() {
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
   const setSpecies = async (want: string, wish?: string, atPeak = false) => {
     const ticket = ++asking;
+    if (want !== speciesPending) askedPin = null; // a species the reader picked drops the card, as always
     // A chip asks for its season's peak: not while "Warm the spring" is on (that season is no longer the year's own,
     // and has no slide to show). Its photos start loading now, alongside the species.
     atPeak &&= warmth.value === 0;
@@ -577,7 +592,7 @@ function start() {
   const askedSpecies = params.get('species');
   if (askedSpecies && askedSpecies !== 'luna') {
     speciesPending = askedSpecies;
-    void setSpecies(askedSpecies).finally(() => (speciesPending = null));
+    void setSpecies(askedSpecies).finally(() => ((speciesPending = null), updateProbe())); // and now its ?pin=
   }
 
   const setRibbon = mountScrubber($('bar'), time, () => registry.activeLayers().find((l) => l.endNote)?.endNote, showEnd);
@@ -656,6 +671,11 @@ function start() {
     else q.set('year', picker.value);
     // The place and zoom, once the view has left the whole-Midwest fit (a link from the default view stays short). A radar
     // replay's link names the replay instead, which brings its own view.
+    // The pinned hexagon's centre (see ?pin= above). Not a sighting tracker's dot: it has no hexagons to pin.
+    const pc = pinned && hit && !radar ? cur.cellAt(hit.lngLat) : null;
+    const [plat, plng] = pc ? cellToLatLng(pc) : [];
+    if (pc) q.set('pin', `${plat!.toFixed(2)},${plng!.toFixed(2)}`);
+    else if (!askedPin) q.delete('pin'); // a link's pin stays while its species loads
     const c = map.center(padding());
     if (map.moved() && c && !radar) q.set('at', `${c.lngLat[1].toFixed(3)},${c.lngLat[0].toFixed(3)},${c.zoom.toFixed(1)}`);
     else q.delete('at');
@@ -680,6 +700,7 @@ function start() {
     }, 400);
   };
   time.subscribe(syncUrl);
+  syncSoon = syncUrl;
   // A reload (the map's Redraw) or leaving must not drop the last move still waiting on the timer.
   addEventListener('pagehide', () => { intro?.finish(); clearTimeout(urlTimer); urlTimer = 0; history.replaceState(null, '', viewUrl()); });
   picker.addEventListener('change', syncUrl);
@@ -777,6 +798,7 @@ function start() {
     const first = { cell: latLngToCell(lat, lng, GRID_RES), lngLat: [lng, lat] as [number, number] };
     const here: ProbeHit | undefined = [first, ...ring].find((h) => cur.probe?.(h.lngLat, time.cursor));
     if (!here) return null;
+    askedPin = null;
     hit = { ...here, label };
     pinned = true;
     map.setMarker(null);
@@ -792,7 +814,7 @@ function start() {
     cellAt: (p) => cur.cellAt(p),
     selection: () => (pinned ? hit : null),
     lastPin: () => lastPin,
-    select: (h) => ((hit = h), (pinned = true)),
+    select: (h) => ((askedPin = null), (hit = h), (pinned = true)),
     show: updateProbe,
     busy: () => !!radar,
     say: (text) => say(text),
@@ -926,7 +948,7 @@ function start() {
   time.subscribe(() => time.playing && !intro?.running && clearHint());
   // A first visit with a plain link opens on the season playing itself, so the forecast is seen moving before anything
   // is read. A link that asks for a view (a day, a year, a place, a species, a radar night) opens on that view instead.
-  const plain = !['date', 'season', 'year', 'at', 'species', 'radar', 'night', 'noauto', 'caveats'].some((k) => params.has(k));
+  const plain = !['date', 'season', 'year', 'at', 'pin', 'species', 'radar', 'night', 'noauto', 'caveats'].some((k) => params.has(k));
   // In season the live forecast becomes the default view once its file arrives, so the opening waits for that and
   // lands on today; off-season it is set up now, before the first frame. Not if the reader has already touched something.
   let touched = false;
