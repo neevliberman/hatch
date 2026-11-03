@@ -49,7 +49,7 @@ jobs:
         if: steps.gate.outputs.run == '1'
       # Daymet 2015-2025 at the 551 hex centres (~550 downloads the first time, then cached; saved even if a
       # later step fails, so a retry does not download them again).
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         if: steps.gate.outputs.run == '1'
         id: daymet
         with:
@@ -77,7 +77,7 @@ jobs:
           fi
           python3 pipeline/live/build_live.py "${ARGS[@]}"
           if [ -f "$RUNNER_TEMP/live/latest.json" ]; then echo "built=1" >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: always() && steps.gate.outputs.run == '1' && steps.daymet.outputs.cache-hit != 'true'
         with:
           path: notebooks/data/daymet

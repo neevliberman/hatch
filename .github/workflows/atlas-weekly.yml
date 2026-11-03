@@ -46,7 +46,7 @@ jobs:
           pip install -r "$RUNNER_TEMP/requirements.txt"
       # The iNaturalist photo cache (~20 MB a year). A new entry each run; restore takes the newest. If GitHub has
       # dropped it, the script pulls the whole year again (about an hour), as it does every 14 days anyway.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: notebooks/data/atlas/weekly
           key: atlas-inat-${{ github.run_id }}-${{ github.run_attempt }}
@@ -69,7 +69,7 @@ jobs:
           # 4 h 30 min, then stop cleanly (Ctrl-C), leaving time to save the cache and raise the alarm
           timeout --signal=INT 270m python3 pipeline/atlas/weekly.py "${ARGS[@]}"
           if [ -f "$RUNNER_TEMP/atlas/year.json" ]; then echo "built=1" >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: always()
         with:
           path: notebooks/data/atlas/weekly
