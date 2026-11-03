@@ -22,8 +22,23 @@ export interface AtlasSpecies {
   test: number | null;
 }
 
-/** The year whose real warmth ships (ahead-YEAR.bin), and whose photos are set against the network (seen-YEAR). */
-export const ATLAS_YEAR = 2026;
+/**
+ * The year whose real warmth ships (ahead-YEAR.bin), and whose photos are set against the network (seen-YEAR). main's
+ * own files are 2026's; from March on, the weekly rebuild (pipeline/atlas/weekly.py) lays the current year's over them
+ * on the site, with a year.json naming it. loadAtlasYear() reads that (loadIndex, and so loadAtlas, wait for it), so
+ * every use after the species list loads sees the year the files are for. A live binding: read it, never copy it early.
+ */
+export let ATLAS_YEAR = 2026;
+let yearLoad: Promise<number> | null = null;
+/** year.json's year (the files' own), fetched once; a missing or odd file keeps the built-in year. */
+export function loadAtlasYear(): Promise<number> {
+  yearLoad ??= json<{ year?: unknown }>('year.json').then((f) => {
+    const y = f?.year;
+    if (typeof y === 'number' && Number.isInteger(y) && y >= 2026 && y <= 2100) ATLAS_YEAR = y;
+    return ATLAS_YEAR;
+  });
+  return yearLoad;
+}
 
 /** First and last day of year the ribbon covers, and its step (export.py SEASON, STEP). */
 export const SEASON = [60, 304] as const;
@@ -268,6 +283,6 @@ export const offNote = (days: number) => `${Math.abs(days)} d ${days > 0 ? 'earl
 let index: Promise<AtlasSpecies[] | null> | null = null;
 /** The species list (the last row, "other", left out). Fetched once. */
 export function loadIndex(): Promise<AtlasSpecies[] | null> {
-  index ??= json<AtlasSpecies[]>('species.json').then((s) => (s ? s.slice(0, -1) : ((index = null), null)));
+  index ??= Promise.all([json<AtlasSpecies[]>('species.json'), loadAtlasYear()]).then(([s]) => (s ? s.slice(0, -1) : ((index = null), null)));
   return index;
 }

@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "notebooks"))
 from hatch_p1.degree_days import accumulate  # noqa: E402
 from pipeline.atlas import data as D  # noqa: E402
 from pipeline.atlas.config import DATA, FIRST_YEAR, LAST_YEAR  # noqa: E402
-from pipeline.atlas.export import OUT, SEASON, STEP  # noqa: E402
+from pipeline.atlas.config import OUT, SEASON, STEP  # noqa: E402
 
 F = 3.0               # the slider's reach, °F
 SHIFT = F * 5 / 9     # in °C, Daymet's unit

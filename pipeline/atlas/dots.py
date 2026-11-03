@@ -24,9 +24,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from pipeline.atlas import data as D  # noqa: E402
-from pipeline.atlas.config import BOX, FIRST_YEAR, LAST_YEAR  # noqa: E402
-OUT = ROOT / "public/atlas"
-YEAR = 2026  # export.YEAR (export.py needs torch)
+from pipeline.atlas.config import BOX, FIRST_YEAR, LAST_YEAR, OUT, YEAR  # noqa: E402
 
 CAP = 5_000
 STATES = ("Minnesota", "Wisconsin", "Michigan", "Iowa", "Illinois", "Indiana", "Ohio")
@@ -44,6 +42,20 @@ def pack(df):
         np.clip(lng, 0, Q).astype("<u2").tobytes(),
         (df.year.to_numpy() - 2000).astype("u1").tobytes(),
     ])
+
+
+def unpack(b):
+    """A <i>.bin back to a DataFrame (inat_id, doy, lat, lng, year), positions on the 0-65535 grid turned back into
+    degrees (pack(unpack(b)) == b). weekly.py swaps one year's rows of the shipped files this way."""
+    n = len(b) // 11
+    a = np.frombuffer(b, np.uint8)
+    return pd.DataFrame({
+        "inat_id": a[:4 * n].view("<u4").astype(np.int64),
+        "doy": a[4 * n:6 * n].view("<u2").astype(np.int64),
+        "lat": a[6 * n:8 * n].view("<u2") / Q * (BOX["n"] - BOX["s"]) + BOX["s"],
+        "lng": a[8 * n:10 * n].view("<u2") / Q * (BOX["e"] - BOX["w"]) + BOX["w"],
+        "year": a[10 * n:11 * n].astype(np.int64) + 2000,
+    })
 
 
 def main():

@@ -1597,6 +1597,61 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     console.log('seasons: checked');
   };
+  // The weekly rebuild's year (pipeline/atlas/weekly.py): with a year.json naming 2027 and its files laid over main's
+  // (here 2026's, served as 2027's, marked "so far"), the season menu, the picker's strips and the card all move to
+  // 2027 on their own, and the card says its counts are so far, or too few yet to judge. ONLY=thisyear runs just this.
+  const thisYearUnit = async (browser) => {
+    const tag = 'this year';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, { viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const isOn = (id) => page.waitForFunction((k) => window.__hatch.current().id === k, id, { timeout: 60000 });
+    const file = (f) => readFileSync(join(distDir, 'atlas', f));
+    const seen = JSON.parse(file('seen-2026.json'));
+    const sp = JSON.parse(file('species.json'));
+    const at = (name) => sp.findIndex((s) => s.name === name);
+    seen.year = 2027;
+    seen.so_far = true;
+    seen.species[at('Poecilocapsus lineatus')] = [12, 9.4, null, null];
+    await ctx.route('**/atlas/year.json', (rt) => rt.fulfill({ contentType: 'application/json', body: JSON.stringify({ year: 2027, so_far: true }) }));
+    await ctx.route('**/atlas/seen-2027.json', (rt) => rt.fulfill({ contentType: 'application/json', body: JSON.stringify(seen) }));
+    await ctx.route('**/atlas/seen-2027.bin', (rt) => rt.fulfill({ body: file('seen-2026.bin') }));
+    await ctx.route('**/atlas/ahead-2027.bin', (rt) => rt.fulfill({ body: file('ahead-2026.bin') }));
+    try {
+      await page.goto(`${origin}/?species=lycorma-delicatula&noauto&year=2027&date=09-10`);
+      await isOn('lycorma-delicatula-atlas');
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2027', null, { timeout: 25000 }).catch(() => fail('a ?year=2027 link did not open on 2027'));
+      const opts = await page.locator('#season option').evaluateAll((els) => els.map((e) => e.value));
+      if (!opts.includes('2027') || opts.includes('2026')) fail(`the season menu offers ${opts.join(', ')}`);
+      await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 60000 }).catch(() => fail('2027 drew no photos seen'));
+      const ohio = await clearSpotOn(page, [-84.5, 39.5, -81, 41.5]);
+      await page.mouse.click(ohio[0], ohio[1]);
+      await page.waitForFunction(() => /Across the map in 2027 so far \(1,760 photos\): \d+(\.\d)?× as many photos as expected/.test(document.getElementById('probe').textContent), null, { timeout: 15000 })
+        .catch(async () => fail(`the 2027 card does not say its count is so far: "${await page.locator('#probe').innerText()}"`));
+      await page.screenshot({ path: `${out}/thisyear-card.png`, timeout: 60000 }).catch(() => {});
+      await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&year=2027&date=05-25`);
+      await isOn('poecilocapsus-lineatus-atlas');
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2027', null, { timeout: 25000 }).catch(() => fail('the plant bug did not open on 2027'));
+      await page.locator('#bar .ribbon .seen-only').waitFor({ state: 'attached', timeout: 60000 }).catch(() => {});
+      const mid = await clearSpotOn(page, [-90, 40.5, -86, 42.5]);
+      await page.mouse.click(mid[0], mid[1]);
+      await page.waitForFunction(() => /Across the map in 2027 so far \(12 photos\): too few yet to judge/.test(document.getElementById('probe').textContent), null, { timeout: 15000 })
+        .catch(async () => fail(`a thin 2027 count is not "too few yet to judge": "${await page.locator('#probe').innerText()}"`));
+      await page.locator('#species').click();
+      await page.locator('#sp-odd [data-season]').first().waitFor({ timeout: 15000 }).catch(() => fail('the picker shows no surprises'));
+      const seasons = new Set(await page.locator('#sp-odd [data-season], #sp-off [data-season], #sp-quiet [data-season]').evaluateAll((els) => els.map((e) => e.dataset.season)));
+      if (seasons.size !== 1 || !seasons.has('2027')) fail(`the picker's strips open on ${[...seasons].join(', ')}`);
+      const lab = (await page.locator('#sp-odd .sp-lab').textContent()) ?? '';
+      if (!/^2027 /.test(lab)) fail(`the surprises strip reads "${lab}"`);
+      if ((await page.locator('#sp-odd').getAttribute('aria-label')) !== '2027 surprises') fail('the surprises strip is not labelled for 2027');
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // The usual years' band on the time bar (spread.py): a typical year shades where its peak usually falls, centred on it,
   // with its key line (swatch and words); two broods' shades never overlap; 2026 (expected vs seen) and a species with too few years of photos draw neither. Light and dark (the
   // phone in mobile.mjs). ONLY=band runs just this.
@@ -2030,7 +2085,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), ...watchCases.map((c) => (b) => nearUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
@@ -2044,6 +2099,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   if (process.env.ONLY === 'live') units.splice(0, units.length, ...cases.map((c) => (b) => liveUnit(c, b)));
   if (process.env.ONLY === 'radar') units.splice(0, units.length, radarUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
+  if (process.env.ONLY === 'thisyear') units.splice(0, units.length, thisYearUnit);
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section
   await runUnits(Object.keys(browsers).length === 1 ? 2 : 1);
   server.close();

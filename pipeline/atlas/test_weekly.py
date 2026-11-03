@@ -1,0 +1,344 @@
+"""No-network checks for the weekly Atlas rebuild (weekly.py): the numpy network, the polite iNaturalist client and
+its cache, the warmth clock, and a whole small run end to end on fixtures. No torch needed."""
+import datetime as dt
+import io
+import json
+import shutil
+import struct
+import subprocess
+import urllib.error
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from pipeline.atlas import dots as DOTS
+from pipeline.atlas import weekly as W
+from pipeline.atlas.config import OUT
+from pipeline.atlas.net_reference import FIXTURE, NumpyAtlas
+
+ROOT = Path(__file__).resolve().parents[2]
+SPECIES = json.loads((OUT / "species.json").read_text())
+CELLS = json.loads((OUT / "cells.json").read_text())
+
+
+@pytest.fixture(scope="module")
+def net():
+    return NumpyAtlas()
+
+
+# ---------------------------------------------------------------- the network
+def test_numpy_network_matches_torch(net):
+    """The same log-shares torch gave for the fixture's places (scripts/atlas-net.fixture.json, as the browser checks)."""
+    cases = json.loads(FIXTURE.read_text())
+    place = net.place_features([c["lat"] for c in cases], [c["lng"] for c in cases], [c["dd"] for c in cases])
+    lp = net.log_shares(place, [c["day"] for c in cases], [c["ahead"] for c in cases])
+    gap = max(abs(lp[k][i] - want) for k, c in enumerate(cases) for i, want in c["top"])
+    assert gap < 1e-4
+    assert all(int(np.argmax(lp[k])) == c["top"][0][0] for k, c in enumerate(cases))
+    assert np.allclose(np.exp(lp).sum(1), 1, atol=1e-6)
+
+
+def test_place_features_match_the_model():
+    torch = pytest.importorskip("torch")  # noqa: F841 -- model.py needs it; CI has it, a lean install skips this
+    from pipeline.atlas import model as M
+    lat, lng, dd = np.array([37.0, 44.5, 49.0]), np.array([-96.0, -89.5, -81.0]), np.array([400.0, 600.0, 900.0])
+    assert np.allclose(NumpyAtlas().place_features(lat, lng, dd), M.place_features(lat, lng, dd), atol=1e-6)
+
+
+# ---------------------------------------------------------------- iNaturalist, politely
+class Clock:
+    def __init__(self):
+        self.t, self.slept = 0.0, []
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, s):
+        self.slept.append(round(s, 3))
+        self.t += s
+
+
+def test_limiter_spaces_requests_and_pauses_everyone():
+    c = Clock()
+    lim = W.Limiter(1.0, clock=c, sleep=c.sleep)
+    for _ in range(3):
+        lim.wait()
+    assert c.slept == [1.0, 1.0]           # the first goes at once, then one a second
+    lim.pause(30)
+    lim.wait()
+    assert c.slept[-1] == pytest.approx(30, abs=1)
+
+
+class Reply(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_get_backs_off_on_429_then_succeeds():
+    c = Clock()
+    lim = W.Limiter(1.0, clock=c, sleep=c.sleep)
+    calls = []
+
+    def opener(req, timeout):
+        calls.append(req.full_url)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(req.full_url, 429, "slow down", {"Retry-After": "7"}, None)
+        return Reply(json.dumps({"results": [{"id": 1}]}).encode())
+
+    assert W.get({"a": 1}, lim, opener=opener, sleep=c.sleep) == {"results": [{"id": 1}]}
+    assert len(calls) == 3 and 7.0 in c.slept     # it waited as asked, every thread with it
+
+
+def test_get_gives_up_on_a_plain_error():
+    def opener(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, 422, "bad", {}, None)
+    with pytest.raises(urllib.error.HTTPError):
+        W.get({}, W.Limiter(0), opener=opener)
+
+
+def obs(i, day="2026-06-01", lat=41.9, lng=-88.0, user=1, taxon=48662, rank=10, sp=None):
+    return {"id": i, "observed_on": day, "location": f"{lat},{lng}", "user": {"id": user},
+            "taxon": {"id": taxon, "rank_level": rank, "min_species_taxon_id": sp or taxon}}
+
+
+def test_rows_of_names_the_species_and_drops_the_unplaced():
+    rows = W.rows_of([obs(1), obs(2, taxon=999, rank=5, sp=48662), obs(3, taxon=47224, rank=20),
+                      {"id": 4, "observed_on": None, "location": "1,2", "taxon": {"id": 5}}, {"id": 5, "taxon": None}])
+    assert [r[0] for r in rows] == [1, 2, 3]
+    assert rows[1][7] == 48662                 # a subspecies counts as its species
+    assert rows[2][7] == 0                     # named only to genus: no species
+
+
+def pager(pages_by_query, log=None):
+    """A fake getter serving fixed observations per query (keyed by d1 / updated_since / quality_grade), by id_above."""
+    def getter(params, limiter):
+        if log is not None:
+            log.append(dict(params))
+        key = (params.get("d1"), params.get("updated_since"), params.get("quality_grade"))
+        data = sorted(pages_by_query.get(key, []), key=lambda o: o["id"])
+        res = [o for o in data if o["id"] > params["id_above"]][:params["per_page"]]
+        if params.get("fields") == "id":
+            res = [{"id": o["id"]} for o in res]
+        return {"results": res}
+    return getter
+
+
+def test_stream_pages_by_id_and_stops():
+    data = {("2026-01-01", None, "research"): [obs(i) for i in range(1, 451)]}
+    rows, pages = W.stream(W.query(2026), W.Limiter(0), getter=pager(data))
+    assert len(rows) == 450 and pages == 3 and rows[-1][0] == 450
+    rows, pages = W.stream(W.query(2026), W.Limiter(0), max_pages=1, getter=pager(data))
+    assert len(rows) == 200 and pages == 1
+
+
+def test_months_split_the_year_to_date():
+    assert W.months(2027, dt.date(2027, 3, 10)) == [("2027-01-01", "2027-01-31"), ("2027-02-01", "2027-02-28"),
+                                                    ("2027-03-01", "2027-03-10")]
+
+
+def test_cache_full_then_incremental_then_full_again(tmp_path):
+    now = dt.datetime(2026, 7, 6, 15, tzinfo=dt.timezone.utc)
+    full = {(f"2026-{m:02d}-01", None, "research"): [] for m in range(1, 8)}
+    full[("2026-06-01", None, "research")] = [obs(1), obs(2), obs(3, day="2026-06-20")]
+    full[("2026-07-01", None, "research")] = [obs(4, day="2026-07-02")]
+    log = []
+    df, st = W.update_photos(2026, dt.date(2026, 7, 6), tmp_path, getter=pager(full, log), limiter=W.Limiter(0), now=now)
+    assert st["kind"] == "full" and sorted(df.id) == [1, 2, 3, 4]
+    assert {p["d1"] for p in log} == {f"2026-{m:02d}-01" for m in range(1, 8)}      # one stream a month, to date
+    assert all(p["license"] == p["photo_license"] == "cc0,cc-by,cc-by-nc" for p in log)
+
+    later = now + dt.timedelta(days=7)
+    since = (now - W.OVERLAP).isoformat(timespec="seconds")
+    inc = {("2026-01-01", since, "research"): [obs(2, taxon=67760), obs(5, day="2026-07-10")],
+           ("2026-01-01", since, "needs_id,casual"): [obs(3)]}
+    df, st = W.update_photos(2026, dt.date(2026, 7, 13), tmp_path, getter=pager(inc), limiter=W.Limiter(0), now=later)
+    assert st["kind"] == "incremental" and st["removed"] == 1
+    assert sorted(df.id) == [1, 2, 4, 5]                    # 3 lost research grade; 5 is new
+    assert int(df.set_index("id").taxon[2]) == 67760         # 2's identification changed
+
+    # a month on, the whole year again (deleted photos only leave this way)
+    df, st = W.update_photos(2026, dt.date(2026, 8, 10), tmp_path, getter=pager(full), limiter=W.Limiter(0),
+                             now=now + dt.timedelta(days=W.FULL_EVERY))
+    assert st["kind"] == "full" and sorted(df.id) == [1, 2, 3, 4]
+
+
+def test_a_capped_dry_run_never_becomes_the_cache(tmp_path):
+    full = {("2026-01-01", None, "research"): [obs(i, day="2026-01-05") for i in range(1, 300)]}
+    W.update_photos(2026, dt.date(2026, 1, 31), tmp_path, getter=pager(full), limiter=W.Limiter(0), max_pages=1)
+    assert not list(tmp_path.glob("obs-*"))
+
+
+# ---------------------------------------------------------------- warmth
+def test_days_ahead_reads_an_early_spring_and_holds_the_newest_day():
+    days = np.arange(365)
+    t = 10 + 15 * np.sin((days - 105) / 365 * 2 * np.pi)
+    tmin, tmax = np.tile(t - 6, (2, 1)), np.tile(t + 6, (2, 1))
+    clim = np.cumsum(W.daily_dd(tmin, tmax), 1)
+    warm_min, warm_max = tmin + [[0], [3]], tmax + [[0], [3]]
+    warm_min[:, 150:] = np.nan
+    warm_max[:, 150:] = np.nan
+    a = W.days_ahead(clim, warm_min, warm_max)
+    assert np.allclose(a[0, 60:149], 0, atol=0.3)            # the typical year runs on time
+    assert (a[1, 100:149] > 2).all()                          # 3 °C warmer runs days ahead
+    assert (a[:, :59] == 0).all()                             # nothing before 1 March
+    assert np.allclose(a[1, 150:], a[1, 149])                 # after the newest day (index 149), it holds
+    q = W.quarter_days(a)
+    assert q.dtype == np.int8 and np.allclose(q / 4, np.clip(a, -31.75, 31.75), atol=0.13)
+
+
+def test_days_ahead_ignores_the_unfetched_winter():
+    """observed() fetches from 28 February only: the NaN January must not blank the whole year (it once did)."""
+    days = np.arange(365)
+    t = 10 + 15 * np.sin((days - 105) / 365 * 2 * np.pi)
+    tmin, tmax = np.tile(t - 6, (1, 1)), np.tile(t + 6, (1, 1))
+    clim = np.cumsum(W.daily_dd(tmin, tmax), 1)
+    wmin, wmax = tmin + 3, tmax + 3
+    wmin[:, :58], wmax[:, :58] = np.nan, np.nan
+    wmin[:, 200:], wmax[:, 200:] = np.nan, np.nan
+    a = W.days_ahead(clim, wmin, wmax)
+    assert (a[0, 100:200] > 2).all()
+
+
+def test_default_year_waits_for_march():
+    assert W.default_year(dt.date(2027, 2, 20)) == 2026
+    assert W.default_year(dt.date(2027, 3, 1)) == 2026        # PRISM's lag: nothing of March yet
+    assert W.default_year(dt.date(2027, 3, 10)) == 2027
+
+
+def test_static_matches_the_cell_list():
+    clim, src = W.load_static([c["h"] for c in CELLS])
+    assert clim.shape == (len(CELLS), 365) and (np.diff(clim, axis=1) >= 0).all()
+    assert (clim[:, :58] == 0).all() and clim[:, 180].min() > 100
+    assert ((src >= 0) & (src < len(CELLS))).all()
+    # PRISM's typical warmth by 30 June sits close to the network's own (Daymet) place input
+    gap = clim[:, 180] - np.array([c["dd"] for c in CELLS])
+    assert abs(np.median(gap)) < 60
+
+
+# ---------------------------------------------------------------- photos -> files
+def photo_rows(n=2400, seed=0, year=2026):
+    """Cached rows as update_photos keeps them: a few known species and other insects around Illinois, some bursts."""
+    rng = np.random.default_rng(seed)
+    taxa = [SPECIES[i]["taxon"] for i in (0, 22, 60, 155, 177)] + [47224, 52381]  # + a genus and a family
+    t = rng.choice(taxa, n)
+    day = pd.to_datetime(f"{year}-01-01") + pd.to_timedelta(rng.integers(120, 240, n), "D")
+    df = pd.DataFrame({"id": np.arange(1, n + 1), "day": day.strftime("%Y-%m-%d"), "lat": rng.uniform(38, 44, n),
+                       "lng": rng.uniform(-91, -86, n), "user": rng.integers(1, 300, n), "taxon": t,
+                       "rank": np.where(np.isin(t, [47224, 52381]), 20.0, 10.0),
+                       "species": np.where(np.isin(t, [47224, 52381]), 0, t)})
+    burst = df.iloc[:50].assign(id=lambda d: d.id + 100_000)                     # the same observer again that day
+    off = df.iloc[:5].assign(id=lambda d: d.id + 200_000, lat=20.0)              # outside the box
+    return pd.concat([df, burst, off], ignore_index=True)
+
+
+def test_label_photos_filters_bursts_and_labels():
+    p = W.label_photos(photo_rows(), 2026, 300, SPECIES[:-1], [c["h"] for c in CELLS])
+    assert len(p) == 2400                                     # the burst copies and the photos off the map are gone
+    assert set(p.label) <= {0, 22, 60, 155, 177, len(SPECIES) - 1}
+    assert (p.label == len(SPECIES) - 1).sum() > 500          # named only to genus or family: "other"
+    early = W.label_photos(photo_rows(), 2026, 150, SPECIES[:-1], [c["h"] for c in CELLS])
+    assert early.doy.max() <= 150
+
+
+def fake_weather(as_of):
+    def weather(year, cells, src):
+        days = np.arange(365)
+        t = 10 + 15 * np.sin((days - 105) / 365 * 2 * np.pi) + 1.0
+        tmin, tmax = np.tile(t - 6, (len(cells), 1)), np.tile(t + 6, (len(cells), 1))
+        k = W.calendar_index(as_of) + 1
+        tmin[:, k:], tmax[:, k:] = np.nan, np.nan
+        return tmin, tmax, as_of
+    return weather
+
+
+@pytest.fixture
+def small_ribbon(monkeypatch):
+    monkeypatch.setattr(W, "STEP", 40)     # season.bin at 7 steps, not 62: the same code, a tenth of the network runs
+
+
+def test_a_whole_run_on_fixtures(tmp_path, small_ribbon, monkeypatch):
+    monkeypatch.setattr(W, "MIN_PHOTOS", 500)
+    out = tmp_path / "atlas"
+    res = W.build(2026, dt.date(2026, 9, 1), out, weather=fake_weather(dt.date(2026, 8, 28)), photos=photo_rows(),
+                  use_forecast=False, dots=False)
+    assert res["year"] == 2026 and res["so_far"] and res["photos"] == 2400 and res["last_day"] <= 240
+    n, steps = len(SPECIES), (304 - 60) // 4 + 1
+    assert (out / "ahead-2026.bin").stat().st_size == len(CELLS) * 365
+    assert (out / "seen-2026.bin").stat().st_size == n * 2 * steps
+    assert (out / "season.bin").stat().st_size == n * 2 * 7
+    f = json.loads((out / "seen-2026.json").read_text())
+    assert f["so_far"] is True and f["photos"] == 2400 and len(f["species"]) == n
+    assert sum(r[0] for r in f["species"]) == 2400
+    assert sum(r[1] for r in f["species"]) == pytest.approx(2400, rel=0.01)   # every photo's shares add up to one
+    y = json.loads((out / "year.json").read_text())
+    head = struct.unpack("<4sII", (OUT / "spread.bin").read_bytes()[:12])
+    assert (y["species"], y["species_hash"]) == (head[1], head[2])            # the same hash the app checks
+
+
+def test_nothing_before_march_or_with_too_few_photos(tmp_path, small_ribbon):
+    out = tmp_path / "atlas"
+    assert W.build(2027, dt.date(2027, 2, 10), out, weather=fake_weather(dt.date(2027, 2, 7)), photos=photo_rows()) is None
+    assert W.build(2026, dt.date(2026, 4, 1), out, weather=fake_weather(dt.date(2026, 3, 28)),
+                   photos=photo_rows(n=300), use_forecast=False, dots=False) is None
+    assert W.build(2026, dt.date(2026, 4, 1), out, weather=fake_weather(dt.date(2026, 3, 28)),
+                   photos=photo_rows().iloc[:0], use_forecast=False, dots=False) is None
+    assert not out.exists()
+
+
+def test_judging_a_thin_year_never_crashes():
+    seen, expected = np.zeros((4, 365)), np.zeros((4, 365))
+    seen[0, 100], expected[0, 100] = 2, 1.5
+    rows, phi, phi_t = W.judge_all(seen, expected)
+    assert phi == phi_t == 1.0 and rows[0] == [2, 1.5, None, None]
+
+
+def test_year_dots_swap_this_years_photos(tmp_path):
+    src = tmp_path / "dots"
+    src.mkdir()
+    for i in range(3):
+        shutil.copy(OUT / "dots" / f"{i}.bin", src / f"{i}.bin")
+    p = W.label_photos(photo_rows(), 2026, 300, SPECIES[:-1], [c["h"] for c in CELLS])
+    got = W.year_dots(p, 2026, 3, src)
+    old0 = DOTS.unpack((src / "0.bin").read_bytes())
+    new0 = DOTS.unpack(got[0])
+    assert (new0[new0.year < 2026].reset_index(drop=True) == old0[old0.year < 2026].reset_index(drop=True)).all().all()
+    mine = p[(p.label == 0) & W.in_states(p.lat, p.lng)]
+    assert set(new0[new0.year == 2026].inat_id) == set(mine.id)              # this year's: exactly the new photos
+    assert DOTS.pack(DOTS.unpack(got[0])) == got[0]
+    assert got[2] == DOTS.pack(DOTS.unpack(got[2]))                           # "other" (last) keeps what it had
+
+
+def test_overlay_copies_only_a_matching_build(tmp_path):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("no node")
+    site = tmp_path / "site"
+    site.mkdir()
+    for f in ("species.json", "model.bin"):
+        shutil.copy(OUT / f, site / f)
+    (site / "seen-2026.json").write_text("{}")
+    names = [s["name"] for s in SPECIES[:-1]]
+    import hashlib
+    good = {"year": 2027, "so_far": True, "photos": 1, "last_day": 70, "built": "x", "species": len(names),
+            "species_hash": W.species_hash(names), "model": hashlib.sha256((OUT / "model.bin").read_bytes()).hexdigest()[:12]}
+
+    def run(year):
+        o = tmp_path / f"o{year.get('species')}{year.get('subset', '')}{year.get('model')}"
+        o.mkdir()
+        (o / "year.json").write_text(json.dumps(year))
+        (o / "seen-2027.json").write_text("[]")
+        r = subprocess.run([node, str(ROOT / "scripts/atlas-overlay.mjs"), str(o), str(site)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        return r.stdout
+
+    assert "skipped" in run({**good, "species": 3})
+    assert "skipped" in run({**good, "subset": [1]})
+    assert "skipped" in run({**good, "model": "000000000000"})
+    assert not (site / "seen-2027.json").exists()
+    assert "2027 so far" in run(good)
+    assert (site / "seen-2027.json").exists() and json.loads((site / "year.json").read_text())["year"] == 2027
