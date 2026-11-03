@@ -3,7 +3,7 @@ import { AtlasGpu } from './gpu';
 import { AtlasNet, type ModelMeta, type Place } from './net';
 import { ATLAS_YEAR, atlasUrl, json, loadIndex, pickOffSchedule, type AtlasSpecies, type OffSchedule } from './index';
 
-export { ATLAS_YEAR, atlasKey, loadIndex, seasonsOf, type AtlasSpecies } from './index';
+export { ATLAS_YEAR, atlasKey, atlasYearInfo, loadIndex, seasonsOf, type AtlasSpecies } from './index';
 
 /**
  * The Living Atlas in the page: its files (public/atlas/, written by pipeline/atlas/export.py), the network, and the
@@ -29,6 +29,8 @@ interface SeenFile {
   year: number;
   last_day: number;
   photos: number;
+  /** Built while the year is still coming in (pipeline/atlas/weekly.py): counts are "so far". */
+  so_far?: boolean;
   species: [number, number, number | null, number | null][];
 }
 
@@ -45,6 +47,8 @@ export interface Seen {
   days: number | null;
   /** The last day of the year counted. */
   lastDay: number;
+  /** The year is still coming in (seen-YEAR.json so_far): its counts are so far, not the year's. */
+  soFar: boolean;
 }
 
 /** One photo of a species (dots/<i>.bin, pipeline/atlas/dots.py). */
@@ -154,7 +158,7 @@ export class Atlas {
       if (!f || !row) return null;
       const at = i * 2 * STEPS;
       const scaled = (k: number) => [...f.bytes.subarray(at + k * STEPS, at + (k + 1) * STEPS)].map((v) => v / 255);
-      return { expected: scaled(0), seen: scaled(1), photos: row[0], expectedPhotos: row[1], ratio: row[2], days: row[3], lastDay: f.file.last_day };
+      return { expected: scaled(0), seen: scaled(1), photos: row[0], expectedPhotos: row[1], ratio: row[2], days: row[3], lastDay: f.file.last_day, soFar: !!f.file.so_far };
     });
   }
   /**

@@ -419,7 +419,7 @@ function start() {
   // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
   // keeps the season and the calendar day, and drops any pinned card.
   // A picker row may ask for a season too: a surprise opens on its year.
-  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, ATLAS_YEAR, (k, s) => void setSpecies(k, s), () => {
+  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, () => ATLAS_YEAR, (k, s) => void setSpecies(k, s), () => {
     // The map's day, for the tree's "out now" glow (ATLAS_YEAR's own season when the map shows it, else a typical year).
     const label = new Date(time.cursor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
     return { doy: dayOfYear(time.cursor), year: picker.value === String(ATLAS_YEAR), label };

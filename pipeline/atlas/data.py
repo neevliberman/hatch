@@ -5,7 +5,6 @@ with its warmth cell and clock), and splits them into the piles the frozen rules
 """
 from dataclasses import dataclass
 
-import duckdb
 import h3
 import numpy as np
 import pandas as pd
@@ -20,6 +19,7 @@ LAMBDAS = (0.0, 0.5, 1.0)  # the three clocks: calendar, half warmth, full warmt
 
 def load_records(path=DATA / "records", last_year=LAST_YEAR):
     """All records, one per observer × species × warmth cell × day (the burst filter)."""
+    import duckdb  # only here: weekly.py uses this module's warmth clock without the records store
     con = duckdb.connect()
     df = con.execute(f"""
         SELECT inat_id, inat_taxon, rank, species, genus, family, "order", lat, lng, year, month, day, observer, state

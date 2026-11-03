@@ -4,7 +4,7 @@ import { DataFilterExtension } from '@deck.gl/extensions';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Due, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
-import { ATLAS_YEAR, atlasKey, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
+import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import { animating, ripples } from './motion';
@@ -32,6 +32,11 @@ const DECADES = 2.5;
 /** A season that slides fewer days than this between years gets no band on the time bar: under one ribbon step
  * (spread.py's MIN_BAND, which already leaves such species out). */
 const MIN_BAND = 3;
+/** While the year is still coming in, fewer photos than this (seen and expected) are "too few yet to judge": seen.py's
+ * MIN_TIMING, the count it wants before it judges a season's timing. */
+const SO_FAR_MIN = 30;
+// The "typical weather after that" note matters only while much of the season is still ahead (day 250, about 7 September).
+const WARM_NOTE_UNTIL = 250;
 /** The last year of photos behind the band: the network's training years (spread.py LAST; 2025 is its test year). */
 const BAND_LAST_YEAR = 2024;
 
@@ -165,8 +170,12 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   };
   let fresh = { key: '', list: [] as Dot[] };
   const rings = ripples<Dot>(`${key}-ripples`, (x) => [x.lng, x.lat], () => palette.dotRim);
-  /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. */
+  /** " so far (412 photos)" while the year is still coming in, so an early count never reads as the year's. */
+  const soFar = (y: Seen) => (y.soFar ? ` so far (${y.photos.toLocaleString('en-US')} photo${y.photos === 1 ? '' : 's'})` : '');
+  /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. While
+   * the year is still coming in, a handful of photos is no verdict yet (the strips' own thresholds are higher still). */
   const yearWords = (y: Seen) => {
+    if (y.soFar && y.photos < SO_FAR_MIN && y.expectedPhotos < SO_FAR_MIN) return 'too few yet to judge';
     if (y.photos < 10 && y.expectedPhotos < 10) return 'too few photos to judge';
     const x = y.ratio === null ? 0 : y.ratio < 9.95 ? Math.round(y.ratio * 10) / 10 : Math.round(y.ratio);
     const r =
@@ -490,7 +499,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         swatch: css(color(s)),
         ...(here ? { season: { curve: here.photos, from: SEASON[0], step: STEP, broods: here.due.broods ?? [here.due], year: yearOf(), today: doy, rough: sp.n < 300 } } : {}),
         lines: [
-          ...(mode !== TYPICAL && year ? [`Across the map in ${ATLAS_YEAR}: ${yearWords(year)}`] : []),
+          ...(mode !== TYPICAL && year ? [`Across the map in ${ATLAS_YEAR}${soFar(year)}: ${yearWords(year)}`] : []),
         ],
         others: { title: 'Also out here', list: others },
       };
@@ -517,9 +526,9 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
             : []),
           mode === TYPICAL
             ? 'A typical year: the season as it usually runs.'
-            : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.`,
+            : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.${atlasYearInfo.soFar && atlasYearInfo.warmThrough && atlasYearInfo.warmThrough < WARM_NOTE_UNTIL ? ` Real warmth and the week’s forecast run through ${fmt(ATLAS_YEAR, atlasYearInfo.warmThrough)}; typical weather after that.` : ''}`,
           ...(mode !== TYPICAL && year
-            ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.`]
+            ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.${year.soFar ? ` ${ATLAS_YEAR} is still coming in: these are its photos so far, rebuilt every week, and the latest weeks run short until their photos are identified.` : ''}`]
             : []),
           ...(mode === TYPICAL && spread && spread >= MIN_BAND
             ? [`The shade on the time bar: where its peak usually falls, about ${spread} days either side of the usual date in most years (its photos ${FIRST_YEAR}-${BAND_LAST_YEAR}, year by year, with chance taken out)${(seasonsOf(curve(TYPICAL))?.broods?.length ?? 1) > 1 ? '. One width for every brood, though later broods usually vary more' : ''}.`]
@@ -546,8 +555,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
 
     credits() {
       const out = [
-        { text: 'Insect records: iNaturalist research-grade observations, via GBIF (CC0, CC BY and CC BY-NC).', href: 'https://www.gbif.org/dataset/50c9509d-22c7-4a22-a47d-8c48425ef4a7' },
-        { text: 'Warmth: Daymet (ORNL DAAC); 2026 from PRISM via RCC-ACIS.', href: 'https://daymet.ornl.gov/' },
+        { text: 'Insect records: iNaturalist research-grade observations (CC0, CC BY and CC BY-NC), 2015-2026 via GBIF.', href: 'https://www.gbif.org/dataset/50c9509d-22c7-4a22-a47d-8c48425ef4a7' },
+        ...(ATLAS_YEAR > 2026 ? [{ text: `${ATLAS_YEAR} photos: iNaturalist, research grade, CC0, CC BY and CC BY-NC, updated weekly.`, href: 'https://www.inaturalist.org/' }] : []),
+        { text: 'Warmth: Daymet (ORNL DAAC) for the years the network learned; since 2026, PRISM (PRISM Climate Group, Oregon State University) via RCC-ACIS.', href: 'https://prism.oregonstate.edu/' },
+        ...(atlasYearInfo.warmThrough ? [{ text: 'This week’s warmth forecast: Open-Meteo (CC BY 4.0).', href: 'https://open-meteo.com/' }] : []),
       ];
       if (sp.photo && sp.credit && sp.taxon) out.push({ text: `${name} photo: ${sp.credit}, via iNaturalist.`, href: `https://www.inaturalist.org/taxa/${sp.taxon}` });
       if (sp.taxon) {

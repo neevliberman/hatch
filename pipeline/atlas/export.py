@@ -32,12 +32,8 @@ sys.path.insert(0, str(ROOT))
 from pipeline.atlas import data as D  # noqa: E402
 from pipeline.atlas import model as M  # noqa: E402
 from pipeline.atlas import names as N  # noqa: E402
-from pipeline.atlas.config import BOX, DATA, FIRST_YEAR  # noqa: E402
+from pipeline.atlas.config import BOX, DATA, FIRST_YEAR, OUT, SEASON, STEP, YEAR  # noqa: E402,F401
 
-OUT = ROOT / "public/atlas"
-YEAR = 2026
-SEASON = (60, 304)  # 1 Mar to 31 Oct (365-day calendar)
-STEP = 4
 INAT = "https://api.inaturalist.org/v1/taxa?per_page=30&id="
 
 

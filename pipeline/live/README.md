@@ -125,3 +125,70 @@ Rehearsed on 2026 with weekly rebuilt forecasts for all three species (`rehearse
 `leadtime.py` (luna only) rebuilds the forecast as issued on 1 Apr, 15 Apr, 1 May, 15 May and 1 Jun of 2023-2026 (GFS as the
 7-day forecast) and grades it with the scorecard's code: about 0.5 to 1.5 days better than the usual date from
 1 April, and the 7-day forecast adds almost nothing. See `LEADTIME.md`.
+
+## Atlas this year (weekly)
+The Atlas's "this year" (the season menu's year, its time bar, the surprises / off schedule / fewer photos strips,
+the year's photo dots) is rebuilt every Monday by `.github/workflows/atlas-weekly.yml`, which runs
+`pipeline/atlas/weekly.py`. main's own `public/atlas/` keeps 2026's files; the weekly files go into the
+`atlas-data` release (not the repo's history), and `deploy-pages.yml` lays them over `dist/atlas/` after each build
+with `scripts/atlas-overlay.mjs`.
+
+One run:
+1. **Warmth.** This year's PRISM (RCC-ACIS, read by weather day as above) at every Atlas cell from 28 February, then
+   the 7-day Open-Meteo forecast, read against the typical year in `pipeline/atlas/weekly_static.npz` (PRISM
+   2015-2025, `weekly_static.py`; the same thermometer on both sides, so no Daymet offsets are needed) with the
+   network's own clock (`data.days_ahead`) -> `ahead-YYYY.bin`. After the newest real or forecast day the year runs
+   as typical (0 days ahead), not held; `year.json` `warm_through` names that day, and the card says so.
+2. **Photos.** Research-grade iNaturalist insect observations in the Atlas box, observation and photo licensed
+   CC0 / CC BY / CC BY-NC, from the v2 API (lean fields, 200 a page, paged by id). A shared limiter keeps it to about
+   one request a second across 4 threads; a 429 or 5xx pauses every thread, slots already promised included
+   (Retry-After, else 5 s doubling). The cache (`notebooks/data/atlas/weekly/obs-YYYY.parquet`, an Actions cache
+   between runs) is updated with everything in the box that changed since the last run's start (`updated_since`, one
+   day of overlap), asked for **without** grade, licence or photo filters, so an observation that lost research
+   grade, changed licence or lost its open photos comes back and is dropped (the code checks each row against the
+   same rules). One whose location was made private probably does not come back (the box filter can't match hidden
+   coordinates); it is removed, like a deletion, at the next full pull, within 14 days. Every 14 days (by the hour, from the run's start, 12 h slack), or when the cache is gone,
+   it pulls the whole year again (month by month, side by side), which also clears deletions and photos that left
+   the box or Insecta. A stream ends only on an empty page and must reach its first page's `total_results`; a stream
+   that comes up short is tried once more from the start, then the run fails; a cached year that shrinks by more than 20% since the last run also fails (rerun with `--full`). Then
+   `data.load_records`' burst filter (one per observer, taxon, cell and day).
+3. **Expected vs seen.** `net_reference.NumpyAtlas` runs the exported float16 network in numpy (no torch; it matches
+   torch's fixture to 1e-5), sums every photo's shares into each species' expected photos, and `seen.py`'s own
+   rules judge them -> `seen-YYYY.bin` / `seen-YYYY.json`, with `"so_far": true` while the year is current.
+4. **season.bin** (both halves again, numpy), **dots-year/** (this year's dots only, per species file) and
+   **year.json**: year, last day, photos, `warm_through`, the species-list hash, `model.bin` and `cells.json` hashes,
+   `dry_run`, sources, timings, and `files`, a manifest of every file's sha256.
+
+The overlay at deploy refuses (a warning, main's files stay, the deploy goes on) an unreadable release (bad
+`year.json`, a truncated tarball, a manifest entry that is not a file), a dry run, a year older than main's `year.json`, another
+species list, `model.bin` or `cells.json`, and any folder that does not match its manifest exactly. It copies only
+the manifest's files, swaps `dots-year/<i>.bin` into main's `dots/<i>.bin` in place of that year's rows (older years
+always come from main), and restamps `dist/sw.js`'s `VERSION` (a hash of the old one and every atlas file), since the
+worker serves atlas files cache-first and returning visitors would otherwise keep last week's.
+
+Honest early on: the app reads `year.json` (`loadAtlasYear`, before the species list resolves) and switches its year
+only when the release has one. Before 15 April a scheduled run rebuilds last year instead (2026 had 3.3k photos by
+1 March, too few weeks to judge), so the site keeps last year with its late identifications; from then the new year
+takes over once it has 1,000 photos. While the year is current the card reads "Across the map in 2027 so far (412
+photos): ...", the strips "2027 surprises so far" and "2027 so far: furthest off schedule", and under 30 photos seen
+and expected, "too few yet to judge"; the fine print says the latest weeks run short until their photos are
+identified. Runs with `--taxa`, `--max-pages` or `--no-dots` are marked `dry_run` and never published.
+
+Cost (measured 2026-11-03, see the PR): 2026 has ~628k qualifying observations, so a full pull is ~3,150 requests,
+~55 minutes at one a second. The unfiltered update query is bigger than the qualifying set (June 2026: 308k insect
+observations in the box, 113k qualifying): an early-November week is ~56k changed observations, ~280 requests
+(5 min); a peak-season week is estimated at up to ~1,500 requests (25 min). PRISM for ~1,200 cells takes a few
+minutes; the network over a whole year's photos ~3 minutes on 4 cores. A normal Monday is ~15-40 minutes, a full-pull
+Monday (every other week) ~1 h 15 min to 1 h 45 min, well inside the job's 4 h 30 min cap, so it does not shard.
+(Splitting by species would not help: every species' expected count sums the network over every insect photo, so
+each shard would need all of them.)
+
+```
+python3 pipeline/atlas/weekly.py --out /tmp/atlas                                  # what the job runs
+python3 pipeline/atlas/weekly.py --out /tmp/a26 --year 2026 --compare public/atlas  # rebuild 2026, compare
+python3 pipeline/atlas/weekly.py --out /tmp/dry --year 2026 --taxa 48662 47916 --no-dots   # dry run, a few species
+python3 pipeline/atlas/weekly_static.py                                            # only if cells.json changes
+python3 -m pytest pipeline/atlas/test_weekly.py                                    # offline tests
+```
+Manual run from GitHub: Actions > atlas-weekly > Run workflow (optionally a year, 2026 or later, and "full" to
+pull it all again).

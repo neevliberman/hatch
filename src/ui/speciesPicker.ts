@@ -1,5 +1,5 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, json, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
+import { atlasKey, atlasYearInfo, json, loadAtlasYear, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES, searchSpecies } from '../atlas/names';
 import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
@@ -7,7 +7,10 @@ import { dueShort } from './near';
 import { loadWatch, saveWatch, WATCH_MAX } from './watch';
 import type { TNode, TreeData, TreeOfLife } from './treeOfLife';
 
-const offCaption = (year: number) => `${year}: furthest off schedule`;
+// While the year is still coming in (year.json so_far), its strips say so.
+const soFar = () => (atlasYearInfo.soFar ? ' so far' : '');
+const offCaption = (year: number) => `${year}${soFar()}: furthest off schedule`;
+const oddCaption = (year: number) => `${year} surprises${soFar()}`;
 const quietCaption = (year: number) => `${year}: fewer photos so far`;
 // The seen counts are research-grade photos only: a hard-to-name insect's photos can wait months for identifications.
 const QUIET_NOTE = 'Photo-based: counts identified iNaturalist photos, not insects. Hard-to-identify species are still gaining IDs.';
@@ -40,8 +43,8 @@ export function mountSpeciesPicker(
   button: HTMLButtonElement,
   sheet: HTMLElement,
   featured: SpeciesEntry[],
-  /** The year whose surprises it lists (seen-YEAR.json). */
-  surpriseYear: number,
+  /** The year whose surprises it lists (seen-YEAR.json): read once the species list has loaded (ATLAS_YEAR). */
+  surpriseYear: () => number,
   /** A species picked; `season` when a row asks for one (a surprise opens on its year). */
   onPick: (key: string, season?: string) => void,
   /** The map's day (its day of year, whether it is ATLAS_YEAR's own season, and its words), for the tree's glow. */
@@ -75,9 +78,9 @@ export function mountSpeciesPicker(
     <nav class="sp-crumbs" aria-label="Tree of life" aria-live="polite"></nav>
     <ul id="sp-list" aria-label="Species"></ul>
     <ul id="sp-twins" class="sp-strip" aria-label="Flies with" hidden></ul>
-    <ul id="sp-odd" class="sp-strip" aria-label="${surpriseYear} surprises" hidden></ul>
-    <ul id="sp-off" class="sp-strip" aria-label="${offCaption(surpriseYear)}" hidden></ul>
-    <ul id="sp-quiet" class="sp-strip" aria-label="${quietCaption(surpriseYear)}" hidden></ul>
+    <ul id="sp-odd" class="sp-strip" aria-label="${oddCaption(surpriseYear())}" hidden></ul>
+    <ul id="sp-off" class="sp-strip" aria-label="${offCaption(surpriseYear())}" hidden></ul>
+    <ul id="sp-quiet" class="sp-strip" aria-label="${quietCaption(surpriseYear())}" hidden></ul>
     <div class="sp-tree" hidden></div>`;
   const input = sheet.querySelector<HTMLInputElement>('#sp-q')!;
   const crumbs = sheet.querySelector<HTMLElement>('.sp-crumbs')!;
@@ -227,7 +230,7 @@ export function mountSpeciesPicker(
     odd
       .map(({ i, note }) => {
         const s = all?.find((x) => x.i === i);
-        return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span><span class="sp-n">${esc(note)}</span></button>`) : '';
+        return s ? row(s).replace('data-key=', `data-season="${surpriseYear()}" data-key=`).replace('</span></button>', `</span><span class="sp-n">${esc(note)}</span></button>`) : '';
       })
       .join('');
   // The most off-schedule species (days early amber, late blue); the same rows as the surprises, one line each.
@@ -236,7 +239,7 @@ export function mountSpeciesPicker(
       .map(([i, d]) => {
         const s = all?.find((x) => x.i === i);
         const n = `<span class="sp-n sp-${d > 0 ? 'early' : 'late'}">${offNote(d)}</span>`;
-        return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
+        return s ? row(s).replace('data-key=', `data-season="${surpriseYear()}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
       .join('');
   // The species with the fewest photos against expected: "5 of 336" photos seen of those expected (photos, not abundance).
@@ -245,7 +248,7 @@ export function mountSpeciesPicker(
       .map(({ i, seen, expected }) => {
         const s = all?.find((x) => x.i === i);
         const n = `<span class="sp-n" title="${seen} identified photos so far, ${expected} expected">${seen} of ${expected}</span>`;
-        return s ? row(s).replace('data-key=', `data-season="${surpriseYear}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
+        return s ? row(s).replace('data-key=', `data-season="${surpriseYear()}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
       .join('');
   const twinRows = () =>
@@ -272,10 +275,10 @@ export function mountSpeciesPicker(
     });
   };
   const quietList = () =>
-    quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear)}</li>${quietRows()}<li class="sp-note sp-fine">${QUIET_NOTE}</li>` : '';
+    quiet.length && all ? `<li class="sp-sec">${quietCaption(surpriseYear())}</li>${quietRows()}<li class="sp-note sp-fine">${QUIET_NOTE}</li>` : '';
   const offList = () =>
-    off.length && all ? `<li class="sp-sec">${offCaption(surpriseYear)}</li>${offRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
-  const surpriseRows = () => (odd.length && all ? `<li class="sp-sec">${surpriseYear} surprises</li>${surprises()}` : '');
+    off.length && all ? `<li class="sp-sec">${offCaption(surpriseYear())}</li>${offRows()}<li class="sp-note sp-fine">Photo-based: counts iNaturalist photos, not insects.</li>` : '';
+  const surpriseRows = () => (odd.length && all ? `<li class="sp-sec">${oddCaption(surpriseYear())}</li>${surprises()}` : '');
   const featuredRows = () =>
     featured
       .map((e) => {
@@ -310,9 +313,9 @@ export function mountSpeciesPicker(
     if (tree) {
       list.innerHTML = featuredRows();
       twinStrip.innerHTML = `<li class="sp-lab" title="Typical season across the Midwest">Flies with</li>${twinRows()}`;
-      oddStrip.innerHTML = `<li class="sp-lab">${surpriseYear} surprises</li>${surprises()}`;
-      offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${offCaption(surpriseYear)}</li>${offRows()}`;
-      quietStrip.innerHTML = `<li class="sp-lab" title="${QUIET_NOTE}">${quietCaption(surpriseYear)}</li>${quietRows()}`;
+      oddStrip.innerHTML = `<li class="sp-lab">${oddCaption(surpriseYear())}</li>${surprises()}`;
+      offStrip.innerHTML = `<li class="sp-lab" title="Photo-based: counts iNaturalist photos, not insects.">${offCaption(surpriseYear())}</li>${offRows()}`;
+      quietStrip.innerHTML = `<li class="sp-lab" title="${QUIET_NOTE}">${quietCaption(surpriseYear())}</li>${quietRows()}`;
       treeCrumbs?.();
       tree.shown();
       glow();
@@ -364,8 +367,11 @@ export function mountSpeciesPicker(
   const loadAll = () => {
     if (all || fetching) return;
     fetching = true;
-    void Promise.all([loadIndex(), loadSurprises(surpriseYear), loadOffSchedule(surpriseYear), loadQuiet(surpriseYear)]).then(([s, u, o, qu]) => {
+    void loadAtlasYear().then((y) => Promise.all([loadIndex(), loadSurprises(y), loadOffSchedule(y), loadQuiet(y)])).then(([s, u, o, qu]) => {
       fetching = false;
+      oddStrip.setAttribute('aria-label', `${oddCaption(surpriseYear())}`);
+      offStrip.setAttribute('aria-label', offCaption(surpriseYear()));
+      quietStrip.setAttribute('aria-label', quietCaption(surpriseYear()));
       odd = u?.list ?? [];
       off = o ?? [];
       quiet = qu ?? [];

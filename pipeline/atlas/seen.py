@@ -24,14 +24,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from pipeline.atlas import data as D  # noqa: E402
-from pipeline.atlas import model as M  # noqa: E402
-from pipeline.atlas.config import DATA, FIRST_YEAR  # noqa: E402
-from pipeline.atlas.export import OUT, SEASON, STEP, YEAR  # noqa: E402
+# torch and the records store load in main() only: weekly.py reuses the judging below without either
+from pipeline.atlas.config import DATA, FIRST_YEAR, OUT, SEASON, STEP, YEAR  # noqa: E402
 
 MIN_TIMING = 30   # photos before its timing is judged
 Z = 3.0           # a gap counts once it is this many standard errors from expected
@@ -141,8 +138,12 @@ def repick():
     print("surprises:", ", ".join(names[i] for i in f["surprises"]))
 
 
-@torch.no_grad()
 def main():
+    import torch
+
+    from pipeline.atlas import data as D
+    from pipeline.atlas import model as M
+    torch.set_grad_enabled(False)
     ck = torch.load(DATA / "model/run2/atlas.pt")
     sp = ck["species"]
     net = M.Atlas(len(sp) + 1)
