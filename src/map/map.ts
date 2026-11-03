@@ -187,6 +187,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   let nudge = 0;
   let overSighting = false;
   let redrawQueued = false;
+  let lastViewAt = -Infinity; // when the view last moved
   let refreshedAt = NaN; // the zoom the layers were last built for
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   // While the camera glides, the frames in between say nothing about whether the reader moved the map.
@@ -318,6 +319,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         requestAnimationFrame(() => land(back));
         return { ...viewState, ...back }; // deck draws what this returns
       }
+      lastViewAt = performance.now();
+      // The map moved under a still mouse (a coast): the hovered hexagon and its card are no longer under it.
+      if (hovered) {
+        hovered = null;
+        onProbe(null, false);
+        refresh();
+      }
       zoom = viewState.zoom;
       // Only the view, not deck's whole viewState: that carries a stale width/height that would skew center().
       current = { longitude: viewState.longitude, latitude: viewState.latitude, zoom: viewState.zoom };
@@ -412,9 +420,14 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   container.addEventListener('mouseleave', () => setHovered(null));
   // Capture phase: deck's own handler (on the canvas inside) stops the glide first, and must find this already set.
   for (const type of ['pointerdown', 'wheel']) container.addEventListener(type, () => (grabbed = true), { capture: true, passive: true });
-  // Hover picking reads pixels back from the GPU on every mouse move, which stalls a drag: off while a button is down.
-  container.addEventListener('pointerdown', (e) => { down++; if (e.pointerType === 'mouse') deck.setProps({ _pickable: false }); }, { capture: true });
-  for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => { down = Math.max(0, down - 1); if (!down) deck.setProps({ _pickable: true }); }, { capture: true });
+  container.addEventListener('pointerdown', () => down++, { capture: true });
+  for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => (down = Math.max(0, down - 1)), { capture: true });
+  // A press while the map is still coasting stops it, and is not a tap: the reader meant "stop", not "pin what slides under me".
+  container.addEventListener('pointerdown', () => {
+    if (performance.now() - lastViewAt > 120) return;
+    touchDown = null;
+    land({ ...current }); // a fresh view stops deck's coast where it is
+  });
   // A phone can take the graphics context back to save memory, which leaves only plain water. Ask for it back
   // (preventDefault is what lets the browser offer a restore), then redraw by reloading: the link in the address bar
   // keeps the place, zoom and day (main.ts writes it on pagehide). Automatic reloads are capped at one a minute and
