@@ -10,7 +10,8 @@
 // port in Chromium, desktop and phone, and fails if the season menu lacks it, picking it errors, the hex card has no
 // "Peak likely", hexes go finer when zoomed, the default or stale rules break, or a missing file does anything visible.
 // Also over http: the radar replays (load nothing until opened from About, then play at La Crosse, the Quad Cities or on Lake Erie and
-// close cleanly).
+// close cleanly), and My area's card: one sparkline of the season there, whose dates are the only ones it and the line
+// under the map give (ONLY=near).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -1649,6 +1650,71 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     }
     console.log(`${tag}: checked`);
   };
+  // "When is it out near me?": My area pins the card on Chicago (15 January, so the line under the map counts down to
+  // the coming season). The card's one-line sparkline of the season here draws, one line high, and the card and that
+  // line give one set of dates: every date either states is the sparkline's first, last or best day, and the countdown
+  // names its first. A two-brood skipper shows both best days; the luna moth (no Atlas) has the same line. Desktop and
+  // phone. Waits poll on a timer (a software-GL frame can take 10-25 s). ONLY=near runs just this.
+  const nearUnit = async ([w, h, phone], browser) => {
+    const tag = `near ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, {
+      viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+      geolocation: { latitude: 41.88, longitude: -87.63 }, permissions: ['geolocation'],
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const DATE = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[  ]\d{1,2}\b/g;
+    const norm = (d) => d.replace(' ', ' ');
+    try {
+      for (const [what, query, id, peaks] of [
+        ['zabulon skipper', 'species=lon-zabulon&date=07-01', 'lon-zabulon-atlas', 2],
+        ['luna moth', 'date=05-20', 'luna-replay', 1],
+      ]) {
+        await page.goto(`${origin}/?${query}&noauto&today=2027-01-15`);
+        await page.waitForFunction((k) => window.__hatch?.current().id === k, id, { timeout: 120000, polling: 500 });
+        await page.locator('#locate').click();
+        // The first field and the cell's season are worked out on a busy page: poll on a timer, not every frame.
+        const ok = await page.waitForFunction(() => document.querySelector('#probe:not([hidden]) .probe-season svg polyline') && !document.getElementById('near').hidden,
+          null, { timeout: 120000, polling: 500 }).then(() => true, () => false);
+        if (!ok) {
+          fail(`${what}: My area pinned no card with a season line, or no line under the map (card: ${JSON.stringify(await page.locator('#probe').innerText().catch(() => ''))})`);
+          continue;
+        }
+        const got = await page.evaluate(() => {
+          const row = document.querySelector('#probe .probe-season');
+          const svg = row.querySelector('svg').getBoundingClientRect();
+          const line = parseFloat(getComputedStyle(row).lineHeight) || parseFloat(getComputedStyle(row).fontSize) * 1.4;
+          const card = document.getElementById('probe').cloneNode(true);
+          card.querySelectorAll('.sr, .probe-more').forEach((e) => e.remove());
+          return {
+            row: [...row.children].filter((e) => !e.classList.contains('sr') && e.tagName !== 'svg').map((e) => e.textContent.replace(/^to /, '')),
+            svg: [svg.width, svg.height], height: row.getBoundingClientRect().height, line, over: row.scrollWidth - row.clientWidth,
+            dots: row.querySelectorAll('.ps-peak').length, card: card.textContent, near: document.getElementById('near-go').textContent,
+          };
+        });
+        const [first, end, best = ''] = got.row;
+        const set = new Set([first, end, ...(best.match(DATE) ?? [])].map(norm));
+        if (!(got.svg[0] >= 40 && got.svg[1] >= 12)) fail(`${what}: the sparkline is ${got.svg.map(Math.round).join('x')} px`);
+        if (got.height > Math.max(24, got.line * 1.5)) fail(`${what}: the season line is ${Math.round(got.height)} px high, more than one line`);
+        if (got.over > 1) fail(`${what}: the season line overflows the card by ${got.over} px`);
+        if (got.dots !== peaks || (best.match(DATE) ?? []).length !== peaks) fail(`${what}: ${got.dots} best-day dots and "${best}", not ${peaks} best day${peaks > 1 ? 's' : ''}`);
+        if (/Best here|First moths|Busiest \w/.test(got.card)) fail(`${what}: the card still has a separate dates line: ${got.card}`);
+        const stray = [...got.card.matchAll(DATE), ...got.near.matchAll(DATE)].map((m) => norm(m[0])).filter((d) => !set.has(d));
+        // The luna card's title names the map's day ("starting on May 20"): that is the day shown, not a season date.
+        const shown = what === 'luna moth' ? ['May 20'] : [];
+        const bad = stray.filter((d) => !shown.includes(d));
+        if (bad.length) fail(`${what}: the card or the line under the map gives ${bad.join(', ')}, not one of the season line's ${[...set].join(', ')}`);
+        const due = /\((\w+[  ]\d+)\)$/.exec(got.near)?.[1];
+        if (!due || norm(due) !== norm(first)) fail(`${what}: the line under the map counts down to ${due}, the card's season starts ${first}`);
+        await page.screenshot({ path: `${out}/near-${phone ? 'phone' : 'desktop'}-${id.split('-')[0]}.png`, timeout: 60000 }).catch(() => {});
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Memory: only the last ATLAS_KEPT (src/main.ts) Atlas species stay loaded. Flips through more than that from the
   // picker, comes back to the first, and checks it was let go and loaded again: it draws, and its map's colours are
   // the very ones a fresh page draws for it. ONLY=evict runs just this.
@@ -1944,9 +2010,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), ...watchCases.map((c) => (b) => nearUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
+  if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));

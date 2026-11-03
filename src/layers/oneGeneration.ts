@@ -15,7 +15,7 @@ import { APPROXIMATE, modelChecks, replayData, TYPICAL, windowCheck, type Mode, 
 import { animating, hexFade, ripples } from './motion';
 import { fineQ, fineSource, KEEP_SEASONS, liveFineDays, parentOf, RELEASE_MS, remember, RETRY_MS, type FineLevel } from './fineData';
 import { COARSE, FINE_ZOOM, GLOW_DAYS, SETTLE_MS, liveNotice, modeLabel, seasonProfile, STAGE_LABEL, STRIPE_MAPPING, stripes, washer, type LunaLayer } from './lunaReplay';
-import { dueOf, isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
+import { dueOf, qSeason, isAsleep, isBusy, MIDWEST_MARGIN, onPaper, stageAt, stageCounts, STAGES, type Stage } from './stages';
 import { peakCalendar, typicalPeak, vsNormalLine } from './vsNormal';
 
 type RGBA = [number, number, number, number];
@@ -309,7 +309,9 @@ export function createOneGenerationLayer(
     more.push(`Real weather to ${asOf}, then forecast.`);
     if (finer) more.push('Small hexagons: the forecast for the larger one, shifted by this spot\u2019s usual warmth.');
     const calendar = lo != null && hi != null && doyToMs(y, hi + 1) > Date.now() ? peakCalendar(one, key, y, lo, hi) : undefined;
-    return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), lines, more, calendar };
+    // The sparkline gives the first and last days; the peak's likely window above is its best day.
+    const season = qSeason(q, y, doy, (lo != null && hi != null) || q[2] != null, lo != null && hi != null ? [lo, hi] : undefined) ?? undefined;
+    return { title: `${one}: ${label} on ${f(doy)}${L.asOf < doyToMs(y, doy) ? ' (forecast)' : ''}`, swatch: css(STAGE_COLOR[stage]), season, lines, more, calendar };
   };
 
   const isDot = (id: string) => id === `${key}-glow` || id === `${key}-dots`;
@@ -514,10 +516,10 @@ export function createOneGenerationLayer(
       const more: string[] = [];
       const pk = data.interval?.peak;
       const likely = !!(pk && q50 != null && mode !== TYPICAL);
+      // The season here is the sparkline (first, best, last); a replayed year's likely window for the peak stands in
+      // for its best day.
       if (likely) lines.push(`Busiest day likely ${fmtDoy(year, q50 + pk[0])} to ${fmtDoy(year, q50 + pk[1])}.`);
-      // In date order: the first ones, then the busiest stretch.
-      else if (q25 != null && q75 != null)
-        lines.push(`${q05 != null ? `First ${plural} about ${fmtDoy(year, q05)}. ` : ''}Busiest ${fmtDoy(year, q25)} to ${fmtDoy(year, q75)}.`);
+      const season = qSeason(at.q, year, doy, likely, likely ? [q50! + pk![0], q50! + pk![1]] : undefined);
       if (mode !== TYPICAL) {
         const pi = cellIndex.get(at.parent);
         const vs = vsNormalLine(pi === undefined ? null : forecast()[pi]?.[2], typicalPeak(data.forecast, pi));
@@ -545,7 +547,7 @@ export function createOneGenerationLayer(
           : `No sightings in ${where}${mode === TYPICAL ? '' : ' this year'}.`,
       );
       if (shownRes > GRID_RES) more.push('Small hexagon: uses its own local temperatures. Accuracy is only checked for whole strips.');
-      return { title: `${one}: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), lines, more };
+      return { title: `${one}: ${label} on ${fmtDoy(year, doy)}`, swatch: css(STAGE_COLOR[stage]), ...(season ? { season } : {}), lines, more };
     },
 
     caveats(): CaveatCard {

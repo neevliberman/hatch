@@ -798,9 +798,13 @@ function start() {
   // "Coming out near you": the last place found (My area or Find), kept in this browser, gets one line under the map
   // for the species on screen, from today. Tapping it brings the place back; the cross forgets it.
   let home = loadPlace();
-  /** The species on screen's season at the remembered place. A lakeshore town's own hexagon can be water: the nearest land one within two rings speaks for it, as on the map. */
-  const homeDue = (): Due | null =>
-    home && cur.due ? [[home.lng, home.lat] as [number, number], ...nearby(home.lat, home.lng, 2).map((h) => h.lngLat)].reduce<Due | null>((got, at) => got ?? cur.due!(at, clock), null) : null;
+  /** The species on screen's season at the remembered place. A lakeshore town's own hexagon can be water: the nearest land one within two rings speaks for it, as on the map
+   * (showPlace's hexagon, so the line and that pinned card's sparkline give the same dates, or both none). */
+  const homeDue = (): Due | null => {
+    if (!home || !cur.due) return null;
+    const at = [[home.lng, home.lat] as [number, number], ...nearby(home.lat, home.lng, 2).map((h) => h.lngLat)].find((p) => cur.cellAt(p) !== null);
+    return at ? cur.due(at, clock) : null;
+  };
   showNear = () => {
     const now = clock;
     const d = homeDue();
@@ -870,7 +874,8 @@ function start() {
   // A phone's bar has no room for it, so there it opens the About panel instead (re-added each time the panel redraws).
   // Phones hide the strip's countdown; it shows in About instead, under the opening line.
   const aboutCountdown = () => {
-    const text = $('countdown').hidden ? '' : ($('countdown').textContent ?? '').trim();
+    // Not beside a remembered place's own line: one answer to "when?", the place's, not the Midwest's month as well.
+    const text = $('countdown').hidden || $('countdown').classList.contains('by-near') ? '' : ($('countdown').textContent ?? '').trim();
     const hook = $('drawer').querySelector('.ex-hook');
     if (!text || !hook) return;
     const p = document.createElement('p');
