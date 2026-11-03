@@ -64,7 +64,9 @@ const units = [];
 // pages drawing through it starve each other into load timeouts.
 const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
 // A section's `w` is its rough cost in seconds on a CI runner with two sections running at once (from the timestamps of
-// desktop-smoke runs 41637536187 and 41648610818, the slower of the two where both ran); one without counts as a minute.
+// desktop-smoke runs 41637536187 and 41648610818, the slower of the two where both ran, and 41710698039 for the radar,
+// watch, near, track, early/late, share pin, atlas, band, evict and live rerun / late file sections); one without counts
+// as a minute.
 const runUnits = async (n) => {
   // Longest first, each to whichever of all the shards' workers (n a shard) is free soonest, so every shard ends at about
   // the same time (round robin left one shard with both ~7-minute "watch" sections and twice another's work). Every
@@ -632,8 +634,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         if (said !== 'season over') fail(`off-season the badge reads "${said}", not "season over"`);
         if (!/season ended Sep 30/.test((await badge.getAttribute('title')) ?? '')) fail(`off-season the badge's title reads "${await badge.getAttribute('title')}"`);
       } else if (query.includes(inSeason) && /season over|days old/.test(said)) fail(`in season the badge reads "${said}"`);
+      // A feed that is late in season keeps its warning.
+      if (label === 'late file' && !/stale/.test(said)) fail(`a late file's badge reads "${said}", with no stale warning`);
       // The address bar follows the view on a throttle; a software-GL page can take seconds per frame, so wait for it.
-      await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 10000 })
+      await page.waitForFunction(() => new URLSearchParams(location.search).get('season') === 'live', null, { timeout: 10000, polling: 250 })
         .catch(() => fail(`address bar does not keep live mode: ${page.url()}`));
       await page.mouse.move(2, height / 2);
       await shotL('1-map');
@@ -882,10 +886,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const odd = page.locator('#sp-odd [data-season="2026"]').first();
       await odd.waitFor({ timeout: 10000 }).catch(() => fail('the species picker shows no 2026 surprises'));
       await shotA('2d-surprises');
+      // No periodical cicada (a brood's off-year) and no near-zero shortfall (seen.py surprises): none of Magicicada.
+      const oddKeys = await page.locator('#sp-odd [data-key]').evaluateAll((els) => els.map((e) => e.dataset.key));
+      if (oddKeys.some((k) => k.startsWith('magicicada-'))) fail(`the 2026 surprises list a periodical cicada: ${oddKeys.join(', ')}`);
       const oddKey = await odd.getAttribute('data-key');
       await odd.click();
       if (!(await isOn(`${oddKey}-atlas`))) fail(`the first 2026 surprise (${oddKey}) did not open`);
-      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 })
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000, polling: 250 })
         .catch(() => fail('a 2026 surprise did not open on 2026'));
       // 2026, with its real warmth.
       if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
@@ -2196,7 +2203,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     try {
       await page.goto(`${origin}/?noauto&today=2027-01-15`);
       await page.locator('#species').click({ timeout: 60000 });
-      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000 });
+      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000, polling: 250 });
       // [query, the top row's key, or a test of its name]
       for (const [q, want] of [['luna', 'luna'], ['monarch', 'monarch'], ['firefly', 'firefly'], ['cicada', /^[\w' -]* Cicada$/], ['bumble', /Bumble Bee$/],
         ['red-spotted purple', 'limenitis-astyanax'], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
@@ -2209,10 +2216,20 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // A featured species shows its own label, as on the featured strip.
         if (q === 'luna' && name !== 'Luna moth') fail(`searching "luna" lists the luna moth as "${name}"`);
       }
+      // A word start later in the name counts like the name's own start, and a tie goes to the species with more records:
+      // "lunate" lists the lunate species by their record counts (species.json n), whichever word "Lunate" is.
+      await page.locator('#sp-q').fill('lunate');
+      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 2, null, { timeout: 10000, polling: 250 }).catch(() => {});
+      const lunate = await page.evaluate(async () => {
+        const n = new Map((await (await fetch('atlas/species.json')).json()).map((s) => [s.common, s.n]));
+        return [...document.querySelectorAll('#sp-list .sp-row .sp-name')].map((e) => [e.firstChild.textContent, n.get(e.firstChild.textContent)]);
+      });
+      if (lunate.length < 2 || lunate.some(([, k], i) => k === undefined || (i && k > lunate[i - 1][1])))
+        fail(`"lunate" is not listed by records: ${JSON.stringify(lunate)}`);
       // Enter picks the top row: "luna" opens the luna moth, not a lunate one.
       await page.locator('#sp-q').fill('luna');
       await page.locator('#sp-q').press('Enter');
-      await page.waitForFunction(() => /^luna/.test(window.__hatch.current().id), null, { timeout: 30000 })
+      await page.waitForFunction(() => /^luna/.test(window.__hatch.current().id), null, { timeout: 30000, polling: 250 })
         .catch(async () => fail(`Enter on "luna" opened ${await page.evaluate(() => window.__hatch.current().id)}`));
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
@@ -2732,15 +2749,15 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // the last big one, and splits them over SHARD by cost.
   const W = (label, w, fn) => Object.assign(fn, { label, w });
   const per = (cases, label, w, fn) => cases.map((c, k) => W(`${label} ${c[2] ? 'phone' : 'desktop'}`, Array.isArray(w) ? w[k] : w, (b) => fn(c, b)));
-  const liveCost = { 'in-season default': 120, 'off-season pick': 55, 'late file': 65, 'small phone': 50, rerun: 80, 'stub on request': 70, 'no file': 30, phone: 70 };
-  units.push(W('radar', 430, radarUnit), W('screen 2560', 165, screenFor('chromium', 2560, 1440)), W('screen 1920', 120, screenFor('chromium', 1920, 1080)),
+  const liveCost = { 'in-season default': 120, 'off-season pick': 55, 'late file': 40, 'small phone': 50, rerun: 40, 'stub on request': 70, 'no file': 30, phone: 70 };
+  units.push(W('radar', 650, radarUnit), W('screen 2560', 110, screenFor('chromium', 2560, 1440)), W('screen 1920', 120, screenFor('chromium', 1920, 1080)),
     W('screen 1280', 110, screenFor('chromium', 1280, 720)), W('screen 900', 100, screenFor('chromium', 900, 700)),
     ...speciesCases.map((c) => W(`species ${c[0]}`, 85, (b) => speciesUnit(c, b))),
-    ...per([[1366, 768, false], [390, 844, true]], 'find', 75, findUnit), W('atlas', 240, atlasUnit), W('search', 15, searchUnit), W('seasons', 10, seasonsUnit),
-    ...per(watchCases, 'watch', [420, 455], watchUnit), ...per(watchCases, 'empty', 25, emptyUnit), ...per(watchCases, 'quiet', 30, quietUnit),
-    ...per(watchCases, 'twins', 30, twinsUnit), ...per(watchCases, 'tree', 25, treeUnit), W('band', 160, (b) => bandUnit([1280, 800, false], b)), W('this year', 80, thisYearUnit),
-    ...per(watchCases, 'near', 145, nearUnit), ...per(watchCases, 'out', 80, outUnit), ...per(watchCases, 'track', [165, 200], trackUnit),
-    ...per(watchCases, 'early/late', 150, earlyLateUnit), ...per(sharePinCases, 'share pin', [360, 240], sharePinUnit), W('evict', 125, evictUnit),
+    ...per([[1366, 768, false], [390, 844, true]], 'find', 75, findUnit), W('atlas', 170, atlasUnit), W('search', 15, searchUnit), W('seasons', 10, seasonsUnit),
+    ...per(watchCases, 'watch', [290, 470], watchUnit), ...per(watchCases, 'empty', 25, emptyUnit), ...per(watchCases, 'quiet', 30, quietUnit),
+    ...per(watchCases, 'twins', 30, twinsUnit), ...per(watchCases, 'tree', 25, treeUnit), W('band', 120, (b) => bandUnit([1280, 800, false], b)), W('this year', 80, thisYearUnit),
+    ...per(watchCases, 'near', [100, 155], nearUnit), ...per(watchCases, 'out', 80, outUnit), ...per(watchCases, 'track', [130, 140], trackUnit),
+    ...per(watchCases, 'early/late', [100, 160], earlyLateUnit), ...per(sharePinCases, 'share pin', [265, 130], sharePinUnit), W('evict', 100, evictUnit),
     ...motionCases.map((c) => W(`motion ${c[2] ? 'phone' : 'desktop'}${c[3] ? ' reduced' : ''}`, c[2] ? 35 : 15, (b) => motionUnit(c, b))),
     ...cases.map((c) => W(`live ${c[0]}`, liveCost[c[0]] ?? 60, (b) => liveUnit(c, b))), W('no WebGL', 15, noWebglUnit),
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => W(`screen ${s.join(' ')}`, 90, (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined))),
@@ -2758,6 +2775,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   if (process.env.ONLY === 'motion') units.splice(0, units.length, ...motionCases.map((c) => (b) => motionUnit(c, b)));
   if (process.env.ONLY === 'evict') units.splice(0, units.length, evictUnit);
   if (process.env.ONLY === 'search') units.splice(0, units.length, searchUnit);
+  if (process.env.ONLY === 'atlas') units.splice(0, units.length, atlasUnit);
   if (process.env.ONLY === 'big') units.splice(0, units.length, screenFor('chromium', 2560, 1440)); // the largest screen, first visit included
   if (process.env.ONLY === 'live') units.splice(0, units.length, ...cases.map((c) => (b) => liveUnit(c, b)));
   if (process.env.ONLY === 'radar') units.splice(0, units.length, radarUnit);
