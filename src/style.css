@@ -524,6 +524,18 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .cav.synthetic { border-color: var(--warn); background: linear-gradient(var(--warn-bg), var(--warn-bg)), var(--panel-solid); }
 .cav h3 { margin: 8px 0 6px; font-size: 15px; }
 .cav ul { margin: 0; padding-left: 18px; } .cav li { margin: 6px 0; }
+/* A track record (an Atlas species' tests against its own calendar): one inked stamp per test, then what it was tested
+   on. Green beat, rust lost, plain ink for tied or untested. The stamps share one width, so the lines start together. */
+.cav-rec { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.cav-rec ul { list-style: none; padding: 0; font-size: 13px; }
+.cav-rec li { display: grid; grid-template-columns: 74px 1fr; align-items: baseline; gap: 6px; margin: 5px 0; }
+.cav-rec small { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.stamp { box-sizing: border-box; padding: 0 4px; border: 1.5px solid currentColor; border-radius: 3px;
+  font: 700 11px/17px var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; text-align: center; color: var(--muted);
+  transform: rotate(-2deg); }
+.stamp.beat { color: var(--moon); }
+.stamp.lost { color: var(--warn); }
+.stamp.untested { border-style: dashed; }
 
 /* Desktop: an open About drawer sits beside the controls instead of over My area, Share and the end of the time bar. */
 @media (min-width: 701px) and (min-height: 501px) {

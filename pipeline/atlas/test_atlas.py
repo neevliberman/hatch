@@ -156,6 +156,23 @@ def test_surprises_leave_out_periodical_cicadas():
     assert picks and not [species[i]["name"] for i in picks if periodical(species[i]["name"])]
 
 
+def test_track_record_matches_the_gate_and_ships():
+    """track_record.py: beat, tied or lost per test, untested below the gate's thresholds, and species.json holds
+    exactly what per_species.csv says. The gate's 753 wins of 798 in 2026 are 743 beats and 10 of the 22 ties."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.track_record import outcome, track_record
+    assert [outcome(g, 50, 500) for g in (10, 2.9, -2.9, -10)] == [1, 0, 0, -1]
+    assert outcome(500, 19, 500) is None and outcome(500, 50, 399) is None
+    rec = track_record()
+    c = [r[0] for r in rec.values()]
+    assert (c.count(1), c.count(0), c.count(-1)) == (743, 22, 33)  # 798 tested, as the gate scored them
+    assert rec["Bombus impatiens"] == [1, 5660, 1, 3234] and rec["Spilosoma virginica"] == [0, 1000, -1, 231]
+    assert "Magicicada septendecim" not in rec  # no brood in 2026: too few photos to test
+    species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
+    assert {s["name"]: s["rec"] for s in species if "rec" in s} == rec and not any("test" in s for s in species)
+
+
 def test_names_fill_in_english_from_the_other_sources():
     """names.py: iNaturalist's subspecies stands in for GBIF's species; a GBIF name needs North American backing (an
     authority, or two regional checklists) and must say something of its own: not the Latin name or its genus, not the

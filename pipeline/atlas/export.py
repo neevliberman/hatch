@@ -2,7 +2,7 @@
 
 - model.bin + model.json: every weight as float16, in the order model.json lists (offsets in values, not bytes).
 - species.json: one row per output, in output order: scientific name, common name, order/family/genus, training
-  records, iNaturalist taxon id, a credited square photo, its 2026 test result. The last row is "other".
+  records, iNaturalist taxon id, a credited square photo, its track record (track_record.py). The last row is "other".
 - cells.json: the H3 res-4 warmth cells inside the box and each one's typical warmth by 30 June (a model input).
 - ahead-YYYY.bin: "days ahead" for every cell and day of YEAR, int8 in quarter days ([cell][day], 365 days).
 - season.bin: each species' expected photos through the season, every STEP days from SEASON[0], in a typical year and
@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT))
 from pipeline.atlas import data as D  # noqa: E402
 from pipeline.atlas import model as M  # noqa: E402
 from pipeline.atlas import names as N  # noqa: E402
+from pipeline.atlas.track_record import track_record  # noqa: E402
 from pipeline.atlas.config import BOX, DATA, FIRST_YEAR, OUT, SEASON, STEP, YEAR  # noqa: E402,F401
 
 INAT = "https://api.inaturalist.org/v1/taxa?per_page=30&id="
@@ -147,9 +148,8 @@ def main():
     names = inat([tax[s]["taxon"] for s in sp if s in tax])
     res = pd.read_csv(ROOT / "pipeline/atlas/results/run2/per_species.csv").set_index("species")
     n = res.n_train
-    # 2026's test (gate test C): 1 if the network beat the species' own calendar, 0 if not, None if too few records
-    scored = res[(res.n_train >= 400) & (res.n_c >= 20)]
-    test = {s: int(g > 0) for s, g in scored.gain_c.items()}
+    # Its track record (track_record.py): 2026 and WI/MN against its own calendar, for its "How sure?" panel
+    rec = track_record(res.reset_index())
     rows = []
     for i, s in enumerate(sp):
         t = tax.get(s, {})
@@ -158,7 +158,8 @@ def main():
         common, photo, credit = names.get(int(t["taxon"]) if t.get("taxon") else -1, (None, None, None))
         rows.append({"i": i, "name": s, "common": common, "order": t.get("ord"), "family": t.get("family"),
                      "genus": t.get("genus"), "n": int(n.get(s, 0)), "taxon": int(t["taxon"]) if t.get("taxon") else None,
-                     "photo": photo, "credit": credit, "peak": float(f"{top[i]:.4g}"), "test": test.get(s)})
+                     "photo": photo, "credit": credit, "peak": float(f"{top[i]:.4g}"),
+                     **({"rec": rec[s]} if s in rec else {})})
     N.fill(rows)  # names.py: an English name for those iNaturalist's preferred name leaves without one
     rows.append({"i": len(sp), "name": "(other)", "common": "Other insects", "peak": float(f"{top[-1]:.4g}")})
     (OUT / "species.json").write_text(json.dumps(rows, separators=(",", ":"), ensure_ascii=False))

@@ -1,10 +1,17 @@
-import type { Explainer } from '../core/layer';
+import type { CaveatCard, Explainer } from '../core/layer';
 import type { LayerRegistry } from '../core/registry';
 import { CITIES, explainerHtml, spotHtml } from './explainer';
 import { CROSS } from './icons';
 import { warmthHtml } from './warmth';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+const STAMP = { beat: 'Beat', tied: 'Tied', lost: 'Lost', untested: 'Untested' } as const;
+/** A layer's track record (CaveatCard.record): one line per test, a stamp, what it was tested on, a plain count. */
+const recordHtml = (r: NonNullable<CaveatCard['record']>) => `<div class="cav-rec" data-track>
+  <div class="ex-h">${esc(r.title)}</div>
+  <ul>${r.rows.map((x) => `<li data-result="${x.result}"><b class="stamp ${x.result}">${STAMP[x.result]}</b> <span>${esc(x.what)}${
+    x.count ? ` <small>· ${esc(x.count)}</small>` : ''}</span></li>`).join('')}</ul></div>`;
 
 export interface Drawer {
   /** Open or close. On a phone held upright it opens as a sheet at its middle stop, or at the tall one with `full`. */
@@ -84,6 +91,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
                 return `<section class="cav ${c.severity}" data-why>
                   ${c.severity === 'synthetic' ? '<div class="badge">SYNTHETIC DATA</div>' : ''}
                   <h3>${esc(c.title)}</h3>
+                  ${c.record ? recordHtml(c.record) : ''}
                   <ul>${c.bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></section>`;
               })
               .join('')
