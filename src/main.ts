@@ -209,6 +209,11 @@ function start() {
     chorus?.sync(pinned && hit ? { lngLat: hit.lngLat as [number, number], label: hit.label } : null, time.cursor, probeEl);
     syncSoon();
   };
+  /** A ?pin= the species on screen has no hexagon for, once that species has loaded: let it go, so it is neither carried
+   * into every later link nor pinned out of the blue after a zoom much later. */
+  const settlePin = () => {
+    if (askedPin && !pinned) (askedPin = null), syncSoon();
+  };
   const unpin = () => {
     askedPin = null; // closed by hand (or by a radar replay): a link's pin is done with
     if (!pinned && !hit) return;
@@ -592,7 +597,14 @@ function start() {
   const askedSpecies = params.get('species');
   if (askedSpecies && askedSpecies !== 'luna') {
     speciesPending = askedSpecies;
-    void setSpecies(askedSpecies).finally(() => ((speciesPending = null), updateProbe())); // and now its ?pin=
+    void setSpecies(askedSpecies).finally(() => {
+      speciesPending = null;
+      // A species that never loaded (an unknown key, a failed file) leaves luna on screen: not the card the link meant.
+      // (Checked by layer, not key: a link may name a species by another key, as ?species=photinus-pyralis.)
+      if (cur === luna) askedPin = null;
+      updateProbe(); // and now its ?pin=
+      settlePin();
+    });
   }
 
   const setRibbon = mountScrubber($('bar'), time, () => registry.activeLayers().find((l) => l.endNote)?.endNote, showEnd);
@@ -1171,6 +1183,7 @@ function start() {
   themeBtn.setAttribute('aria-pressed', String(isDark()));
 
   refresh();
+  if (!speciesPending) settlePin(); // luna's hexagons are in the page: a pin on none of them is done with now
   // For the test scripts: the app's clock, layers and map, and the Atlas (loaded on first ask).
   (window as unknown as { __hatch: unknown }).__hatch = {
     time, registry, luna, map, padding, current: () => cur,
