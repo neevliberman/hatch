@@ -333,6 +333,7 @@ function start() {
   onLunaData = () => {
     refresh();
     onRerun();
+    showCountdown(); // a year's photos landing can move its peak
     showNear(); // a live forecast arriving changes it
   };
   registry.subscribe(() => {
@@ -402,6 +403,7 @@ function start() {
     asSwitch(() => registry.setTime(cur.id, fitSeason(cur, timeFor(cur, m, at?.[0], at?.[1]))));
     if (!at) wantDay = dayOf(time.cursor); // live opens on its own last observed day: that becomes the day asked for
     updateProbe(); // a card pinned in the old season describes that season: it went with the switch
+    showCountdown(); // "Peak: about" follows the season on screen
     syncCountdown();
   };
   picker.addEventListener('change', () => ((wantLive = null), switchMode(picker.value)));
@@ -431,9 +433,14 @@ function start() {
     due: (k) => (k === curKey ? homeDue() : null),
   });
   let asking = 0;
+  const PEAK_WAIT = 3000;
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
   const setSpecies = async (want: string, wish?: string, atPeak = false) => {
     const ticket = ++asking;
+    // A chip asks for its season's peak: not while "Warm the spring" is on (that season is no longer the year's own,
+    // and has no slide to show). Its photos start loading now, alongside the species.
+    atPeak &&= warmth.value === 0;
+    if (atPeak && __BASEMAP__) void import('./atlas/atlas').then((m) => m.loadAtlas()).then((a) => a?.seen(0));
     const entry = (await findSpecies(want)) ?? SPECIES[0]!;
     if (ticket !== asking) return;
     if (!loaded.has(entry.key)) {
@@ -464,14 +471,15 @@ function start() {
       const layer = await pending;
       speciesPick.disabled = loading.size > 0; // still waiting on another species' load
       if (ticket !== asking) return; // a newer pick won
-      if (!layer) return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map.`, null, { label: 'Try again', run: () => void setSpecies(want, wish) });
+      if (!layer) return say(`Couldn\u2019t load the ${entry.label.toLowerCase()} map.`, null, { label: 'Try again', run: () => void setSpecies(want, wish, atPeak) });
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
-    // Asked to open on its peak: the season's own day, in place of the calendar day (a moment's wait for its photos).
+    // Asked to open on its peak: where its slid season peaks, in place of the calendar day (a moment's wait for its
+    // photos, at most PEAK_WAIT ms: then the calendar day stays).
     if (atPeak && next.peak) {
       const m = wish && (next.seasons?.() ?? []).includes(wish) ? wish : picker.value;
-      const at = await next.peak(m).catch(() => null);
+      const at = await Promise.race([next.peak(m).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), PEAK_WAIT))]);
       if (ticket !== asking) return;
       if (at) wantDay = at;
     }
@@ -879,10 +887,12 @@ function start() {
   // Each species has its own season: the firefly's starts weeks after the luna moth's. (?today= fakes the clock.)
   function showCountdown() {
     const [short, more] = cur.countdown(clock);
+    const el = $('countdown');
+    if (el.firstChild?.textContent === short && el.querySelector('.more')?.textContent === more) return;
     const moreEl = document.createElement('span');
     moreEl.className = 'more';
     moreEl.textContent = more;
-    $('countdown').replaceChildren(short, moreEl);
+    el.replaceChildren(short, moreEl);
   }
   showCountdown();
   // A phone's bar has no room for it, so there it opens the About panel instead (re-added each time the panel redraws).

@@ -53,19 +53,20 @@ function ribbon(p: SeasonProfile): string {
         `<path class="range-edge" d="M${a} 23V27H${b}V23" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
-  // An early or late year: a pencil bracket under the two peaks, expected to seen, in the picker's early/late inks; its
-  // words ("11 d late") sit beside it in the empty lower half (scrubber's placeShift keeps them clear of the thumb).
+  // An early or late year: its season's slide, a pencil bracket from the expected peak to where the slid season peaks,
+  // in the bar's empty lower half and the picker's early/late inks, with its words beside it ("11 days late"; a phone's
+  // "11 d late", as its chip). placeShift keeps the words clear of the thumb and the bracket out from under it.
   const sh = p.shift;
-  const shift = sh
-    ? `<path class="shift ${sh.to < sh.from ? 'early' : 'late'}" d="M${x(sh.from).toFixed(1)} 17V25H${x(sh.to).toFixed(1)}V17" vector-effect="non-scaling-stroke"/>`
-    : '';
+  const way = sh && (sh.days > 0 ? 'early' : 'late');
+  const nd = sh ? Math.abs(sh.days) : 0;
+  const shift = sh ? `<path class="shift ${way}" d="M${x(sh.from).toFixed(1)} 17V25H${x(sh.to).toFixed(1)}V17" vector-effect="non-scaling-stroke"/>` : '';
   const wash = range
     ? '<defs><linearGradient id="t-range-wash"><stop offset="0"/><stop offset="0.18"/><stop offset="0.82"/><stop offset="1"/></linearGradient></defs>'
     : '';
   return `<svg viewBox="0 0 1000 28" preserveAspectRatio="none">${wash}${areas.join('')}${range}<path class="seen" d="M0 14L${line}L1000 14Z"/>${only.join('')}` +
     `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>${shift}` +
     `<rect class="frame" width="1000" height="28" vector-effect="non-scaling-stroke"/></svg>` +
-    (sh ? `<span class="shift-note ${sh.to < sh.from ? 'early' : 'late'}" data-from="${x(sh.from) / 1000}" data-to="${x(sh.to) / 1000}">${sh.text}</span>` : '') +
+    (sh ? `<span class="shift-note ${way}" data-from="${x(sh.from) / 1000}" data-to="${x(sh.to) / 1000}" data-full="${nd} day${nd === 1 ? '' : 's'} ${way}" data-short="${nd} d ${way}"></span>` : '') +
     p.notes
       .map((k) => `<span class="wave${/^peak /.test(k.text) ? ' peak-note' : ''}" data-full="${k.text}" data-short="${k.text.split(' ')[0]}" style="left:${((k.at / (n - 1)) * 100).toFixed(2)}%">${k.text}</span>`)
       .join('');
@@ -132,18 +133,39 @@ export function mountScrubber(
   // on either side. On a narrow track (a phone, or a desktop band squeezed by the About panel) a note that still runs
   // into another or off the ribbon shortens to its first word ("2nd"), then all do, and one that still collides is
   // left out.
-  // The early/late words go beside the bracket, on the seen peak's side unless the thumb is there, then the other.
+  // The slide bracket: at least half a thumb and 8 px wide, its end farther from the thumb drawn out (away from it) when
+  // the days are fewer, so the thumb never hides it; its words beside it, on the slid end's side unless the thumb is
+  // there, then the other. A phone says "11 d late" (its chip's words), and so does a desktop bar too narrow for more.
+  const phone = matchMedia('(max-width: 700px)');
   const placeShift = () => {
     const el = ribbonEl.querySelector<HTMLElement>('.shift-note');
-    if (!el) return;
+    const path = ribbonEl.querySelector<SVGPathElement>('.shift');
+    if (!el || !path) return;
     const w = ribbonEl.clientWidth;
-    const clear = (range.offsetWidth - w) / 2 + 3;
+    if (!w) return;
+    const thumb = range.offsetWidth - w;
     const x = (time.stepIndex / Math.max(1, time.steps)) * w;
-    const [from, to] = [Number(el.dataset.from) * w, Number(el.dataset.to) * w];
-    const lw = el.offsetWidth;
-    const right = Math.max(from, to) + 4, left = Math.min(from, to) - 4 - lw;
-    const hits = (l: number) => x + clear > l && x - clear < l + lw;
-    const spot = (to >= from ? [right, left] : [left, right]).concat(x + clear, x - clear - lw).find((l) => l >= 0 && l + lw <= w && !hits(l));
+    const from = Number(el.dataset.from) * w, to = Number(el.dataset.to) * w;
+    let [a, b] = from <= to ? [from, to] : [to, from];
+    const short = thumb / 2 + 8 - (b - a);
+    if (short > 0) {
+      if (Math.abs(a - x) > Math.abs(b - x)) a = Math.max(0, a - short);
+      else b = Math.min(w, b + short);
+    }
+    const u = (v: number) => ((v / w) * 1000).toFixed(1);
+    const [p, q] = from <= to ? [a, b] : [b, a]; // the expected end first, as drawn
+    path.setAttribute('d', `M${u(p)} 17V25H${u(q)}V17`);
+    const clear = thumb / 2 + 3;
+    const fit = (text: string) => {
+      el.hidden = false;
+      el.textContent = text;
+      const lw = el.offsetWidth;
+      const hits = (l: number) => x + clear > l && x - clear < l + lw;
+      const right = b + 4, left = a - 4 - lw;
+      return (to >= from ? [right, left] : [left, right]).concat(x + clear, x - clear - lw).find((l) => l >= 0 && l + lw <= w && !hits(l));
+    };
+    let spot = phone.matches ? undefined : fit(el.dataset.full!);
+    if (spot === undefined) spot = fit(el.dataset.short!);
     el.hidden = spot === undefined;
     el.style.left = `${(spot ?? 0).toFixed(1)}px`;
   };
