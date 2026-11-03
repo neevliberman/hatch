@@ -1,4 +1,4 @@
-import type { AtlasNet } from './net';
+import { logSoftmax, type AtlasNet } from './net';
 
 /**
  * The Atlas network on the graphics card (WebGL2), for the map: every cell at once in a few milliseconds, where the
@@ -244,6 +244,49 @@ export class AtlasGpu {
    */
   run(places: Float32Array, day: number | Float32Array, ahead: Float32Array | null, species: number[]): Float32Array[] {
     const gl = this.gl;
+    const rows = places.length / this.net.placeDim;
+    const tex = this.scores(places, day, ahead);
+    const z = tex.get('z')!;
+    const p = tex.get('p')!;
+    const sp = [0, 1, 2, 3].map((k) => species[k] ?? species[0] ?? 0);
+    gl.useProgram(this.prog.pick);
+    gl.uniform4i(gl.getUniformLocation(this.prog.pick, 'uSp'), sp[0]!, sp[1]!, sp[2]!, sp[3]!);
+    this.pass('pick', p, { uZPer: z.l.perLine, uZWidth: z.l.width, uN: this.net.nOut }, { uZ: z.t });
+    const outPx = new Float32Array(p.l.w * p.l.h * 4);
+    gl.readPixels(0, 0, p.l.w, p.l.h, gl.RGBA, gl.FLOAT, outPx);
+    return species.slice(0, 4).map((_, k) => {
+      const v = new Float32Array(rows);
+      for (let r = 0; r < rows; r++) v[r] = outPx[r * 4 + k]!;
+      return v;
+    });
+  }
+
+  /**
+   * Every species' log-share at each row (as run, but all of them): [row * nOut + species]. The scores come back from
+   * the graphics card and the softmax is taken here (a few thousand numbers a row). For a place's whole season at once:
+   * 62 rows of 1,946 species is about half a megabyte.
+   */
+  all(places: Float32Array, day: number | Float32Array, ahead: Float32Array | null): Float32Array {
+    const gl = this.gl;
+    const S = this.net.nOut;
+    const rows = places.length / this.net.placeDim;
+    const z = this.scores(places, day, ahead).get('z')!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, z.t, 0);
+    const px = new Float32Array(z.l.w * z.l.h * 4);
+    gl.readPixels(0, 0, z.l.w, z.l.h, gl.RGBA, gl.FLOAT, px);
+    const out = new Float32Array(rows * S);
+    for (let r = 0; r < rows; r++) {
+      const at = (Math.floor(r / z.l.perLine) * z.l.w + (r % z.l.perLine) * z.l.width) * 4;
+      out.set(logSoftmax(px.subarray(at, at + S)), r * S);
+    }
+    return out;
+  }
+
+  /** The network up to each species' score (before the softmax), for every row: left in the scratch sheet 'z',
+   * returned with the other sheets. */
+  private scores(places: Float32Array, day: number | Float32Array, ahead: Float32Array | null) {
+    const gl = this.gl;
     const net = this.net;
     const P = net.placeDim;
     const rows = places.length / P;
@@ -280,17 +323,6 @@ export class AtlasGpu {
     const z = tex.get('z')!;
     this.pass('score', z, { uHPer: a.l.perLine, uHWidth: a.l.width, uM: M },
       { uH: a.t, uW: W('head.weight'), uB: W('head.bias'), uMix: W(ahead ? 'mix' : 'ones') });
-    const p = tex.get('p')!;
-    const sp = [0, 1, 2, 3].map((k) => species[k] ?? species[0] ?? 0);
-    gl.useProgram(this.prog.pick);
-    gl.uniform4i(gl.getUniformLocation(this.prog.pick, 'uSp'), sp[0]!, sp[1]!, sp[2]!, sp[3]!);
-    this.pass('pick', p, { uZPer: z.l.perLine, uZWidth: z.l.width, uN: net.nOut }, { uZ: z.t });
-    const outPx = new Float32Array(p.l.w * p.l.h * 4);
-    gl.readPixels(0, 0, p.l.w, p.l.h, gl.RGBA, gl.FLOAT, outPx);
-    return species.slice(0, 4).map((_, k) => {
-      const v = new Float32Array(rows);
-      for (let r = 0; r < rows; r++) v[r] = outPx[r * 4 + k]!;
-      return v;
-    });
+    return tex;
   }
 }

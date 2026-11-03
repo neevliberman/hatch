@@ -400,19 +400,41 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .probe-more summary { cursor: pointer; color: var(--moon); font-weight: 600; min-height: 32px; padding-top: 6px; box-sizing: border-box; display: list-item; }
 .probe-more p { margin: 4px 0 0; }
 .probe-card + .probe-card { margin-top: 8px; }
-/* The Atlas's "also out here": a few other species at this spot, each a tap away. */
+/* The Atlas's "Out here now" (panels.ts): a handwritten title, chips to narrow it and an opener on one line, then a
+   few species near their best here, each a tap away. Opened out it lists up to 20 and scrolls in its own room. */
 .probe-others { margin-top: 6px; }
-.po-title { color: var(--muted); font-size: 12px; }
-.probe-others ul { list-style: none; margin: 2px 0 0; padding: 0; }
-.probe-others button { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; width: 100%; min-height: 32px;
+.po-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.po-title { flex: none; font: 600 16px/1 var(--font-note); color: var(--accent); }
+.po-chips { flex: 1 1 auto; display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 2px 1px;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent); }
+.po-chips::-webkit-scrollbar { display: none; }
+.po-chip, .po-more { position: relative; flex: none; height: 24px; padding: 0 9px; border: 1px solid var(--line); border-radius: 12px;
+  background: none; color: var(--text); font: inherit; font-size: 12px; line-height: 22px; white-space: nowrap; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; }
+.po-chip[aria-pressed="true"] { border-color: var(--moon); background: color-mix(in srgb, var(--moon) 14%, transparent); color: var(--moon); font-weight: 700; }
+.po-more { margin-left: auto; padding: 0 8px; color: var(--moon); font-weight: 700; }
+.po-chip:hover, .po-more:hover { background: var(--track-faint); }
+.po-chip:focus-visible, .po-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.po-list { list-style: none; margin: 3px 0 0; padding: 0; }
+.po-list.open { max-height: min(320px, 42vh); overflow-y: auto; overscroll-behavior: contain; margin-right: -6px; padding-right: 6px; }
+.probe-others li button { display: grid; grid-template-columns: 28px minmax(0, 1fr) 32px 3.6em; gap: 8px; align-items: center; width: 100%; min-height: 32px;
   padding: 2px 4px; margin: 0 -4px; border: 0; border-radius: var(--radius); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.probe-others button:hover { background: var(--track-faint); }
-.probe-others button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.probe-others li button:hover { background: var(--track-faint); }
+.probe-others li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .probe-others img, .po-blank { width: 28px; height: 28px; border-radius: 3px; object-fit: cover; background: var(--track-faint); display: block; }
-.probe-others button:has(.po-blank) { grid-template-columns: 1fr auto; } /* no photo: no empty box */
+.probe-others li button:has(.po-blank) { grid-template-columns: minmax(0, 1fr) 32px 3.6em; } /* no photo: no empty box */
 .po-blank { display: none; }
 .po-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.po-note { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.po-note { color: var(--muted); font-size: 12px; white-space: nowrap; text-align: right; }
+/* Each row's season here: the card's own sparkline in miniature, the map's day as the slider's amber tick. */
+.po-spark { width: 32px; height: 12px; display: block; overflow: visible; }
+.po-spark polyline, .po-spark path { vector-effect: non-scaling-stroke; fill: none; }
+.po-area { fill: var(--ink-wash); }
+.po-line { stroke: var(--text); stroke-width: 1.1; stroke-linejoin: round; }
+.po-now { stroke: var(--sun); stroke-width: 1.5; }
+/* Being worked out: the rows' room, faintly ruled, so the card doesn't jump when they land. */
+.po-wait li { height: 32px; display: flex; align-items: center; }
+.po-wait i { display: block; width: 60%; height: 8px; border-radius: 4px; background: var(--track-faint); }
 #probe.at-pointer:not(.pinned) .probe-others { display: none; }
 
 #bar { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -510,7 +532,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 @media (max-width: 1300px) { .more { display: none; } }
 @media (max-width: 1000px) { #actions .lbl { display: none; } #actions .icon-btn { padding: 0; } }
 .dot-note { display: none; }
-@media (max-width: 820px) { .dots { display: none; } .dot-note { display: inline; } .probe-others li:nth-child(n + 3) { display: none; } } /* the key says what the dots are; the Atlas line names them too; a phone's Atlas card keeps two others so the map keeps its height */
+@media (max-width: 820px) { .dots { display: none; } .dot-note { display: inline; } } /* the key says what the dots are; the Atlas line names them too */
 /* A bigger thumb for fingers. */
 @media (pointer: coarse), (max-width: 700px) { :root { --thumb: 28px; } }
 
@@ -542,6 +564,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .lg-items li { margin: 0 10px 2px 0; }
   .lg-title { display: none; } /* the swatch names say what they are; the drawer explains the colours */
   #probe { max-width: none; padding: 6px 10px; }
+  /* "Out here now" stays short: rows a little tighter, and opened out it scrolls in about a third of the screen. */
+  .probe-others li button { min-height: 28px; grid-template-columns: 24px minmax(0, 1fr) 32px 3.6em; }
+  .probe-others img { width: 24px; height: 24px; }
+  .po-list.open { max-height: min(270px, 33vh); }
   .probe-more summary { min-height: 28px; padding-top: 4px; }
   .probe-more p { margin-top: 2px; }
   /* A tapped card replaces the legend instead of stacking on it, so the map keeps its room. Tap empty map to get it back. */
@@ -869,7 +895,7 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .season .pick-btn:hover { background-color: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
 .season .pick-btn:active { background-color: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
 /* A tapped row answers at once, while its species loads. */
-.sp-row:active, .sp-group:active, .sp-go:active, .sp-wx:active, .probe-others button:active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.sp-row:active, .sp-group:active, .sp-go:active, .sp-wx:active, .probe-others li button:active, .po-chip:active, .po-more:active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 @media (prefers-reduced-motion: no-preference) {
   .season .pick-btn { transition: transform 120ms ease-out, background-color 120ms ease-out; }
   .season .pick-btn:active { transform: scale(0.96); }

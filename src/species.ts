@@ -78,7 +78,7 @@ export async function findSpecies(key: string): Promise<SpeciesEntry | undefined
   const own = SPECIES.find((e) => e.key === key);
   if (own || !__BASEMAP__) return own;
   const { atlasKey, loadIndex } = await import('./atlas/index');
-  // An Atlas key for a species the list above has (the card's "also out here" can name the monarch): its own layer.
+  // An Atlas key for a species the list above has (the card's "out here now" can name the monarch): its own layer.
   const same = SPECIES.find((e) => e.sci && atlasKey(e.sci) === key);
   if (same) return same;
   const sp = (await loadIndex())?.find((s) => atlasKey(s.name) === key);
