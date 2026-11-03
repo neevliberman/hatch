@@ -3,7 +3,7 @@ import { AtlasGpu } from './gpu';
 import { AtlasNet, type ModelMeta, type Place } from './net';
 import { ATLAS_YEAR, atlasUrl, json, loadIndex, pickOffSchedule, type AtlasSpecies, type OffSchedule } from './index';
 
-export { ATLAS_YEAR, atlasKey, atlasYearInfo, loadIndex, seasonsOf, type AtlasSpecies, type Result } from './index';
+export { ATLAS_YEAR, atlasKey, atlasYearInfo, loadIndex, offNote, seasonsOf, type AtlasSpecies, type Result } from './index';
 
 /**
  * The Living Atlas in the page: its files (public/atlas/, written by pipeline/atlas/export.py), the network, and the

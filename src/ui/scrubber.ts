@@ -53,12 +53,19 @@ function ribbon(p: SeasonProfile): string {
         `<path class="range-edge" d="M${a} 23V27H${b}V23" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
+  // An early or late year: a pencil bracket under the two peaks, expected to seen, in the picker's early/late inks; its
+  // words ("11 d late") sit beside it in the empty lower half (scrubber's placeShift keeps them clear of the thumb).
+  const sh = p.shift;
+  const shift = sh
+    ? `<path class="shift ${sh.to < sh.from ? 'early' : 'late'}" d="M${x(sh.from).toFixed(1)} 17V25H${x(sh.to).toFixed(1)}V17" vector-effect="non-scaling-stroke"/>`
+    : '';
   const wash = range
     ? '<defs><linearGradient id="t-range-wash"><stop offset="0"/><stop offset="0.18"/><stop offset="0.82"/><stop offset="1"/></linearGradient></defs>'
     : '';
   return `<svg viewBox="0 0 1000 28" preserveAspectRatio="none">${wash}${areas.join('')}${range}<path class="seen" d="M0 14L${line}L1000 14Z"/>${only.join('')}` +
-    `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>` +
+    `<path class="seen-line" d="M${line}" vector-effect="non-scaling-stroke"/>${shift}` +
     `<rect class="frame" width="1000" height="28" vector-effect="non-scaling-stroke"/></svg>` +
+    (sh ? `<span class="shift-note ${sh.to < sh.from ? 'early' : 'late'}" data-from="${x(sh.from) / 1000}" data-to="${x(sh.to) / 1000}">${sh.text}</span>` : '') +
     p.notes
       .map((k) => `<span class="wave${/^peak /.test(k.text) ? ' peak-note' : ''}" data-full="${k.text}" data-short="${k.text.split(' ')[0]}" style="left:${((k.at / (n - 1)) * 100).toFixed(2)}%">${k.text}</span>`)
       .join('');
@@ -125,7 +132,23 @@ export function mountScrubber(
   // on either side. On a narrow track (a phone, or a desktop band squeezed by the About panel) a note that still runs
   // into another or off the ribbon shortens to its first word ("2nd"), then all do, and one that still collides is
   // left out.
+  // The early/late words go beside the bracket, on the seen peak's side unless the thumb is there, then the other.
+  const placeShift = () => {
+    const el = ribbonEl.querySelector<HTMLElement>('.shift-note');
+    if (!el) return;
+    const w = ribbonEl.clientWidth;
+    const clear = (range.offsetWidth - w) / 2 + 3;
+    const x = (time.stepIndex / Math.max(1, time.steps)) * w;
+    const [from, to] = [Number(el.dataset.from) * w, Number(el.dataset.to) * w];
+    const lw = el.offsetWidth;
+    const right = Math.max(from, to) + 4, left = Math.min(from, to) - 4 - lw;
+    const hits = (l: number) => x + clear > l && x - clear < l + lw;
+    const spot = (to >= from ? [right, left] : [left, right]).concat(x + clear, x - clear - lw).find((l) => l >= 0 && l + lw <= w && !hits(l));
+    el.hidden = spot === undefined;
+    el.style.left = `${(spot ?? 0).toFixed(1)}px`;
+  };
   const placeWaves = () => {
+    placeShift();
     const waves = [...ribbonEl.querySelectorAll<HTMLElement>('.wave')];
     if (!waves.length) return;
     const w = ribbonEl.clientWidth;

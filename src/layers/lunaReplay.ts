@@ -301,6 +301,9 @@ export interface LunaLayer extends HatchLayer {
   seasons?(): Mode[];
   /** Its own time range for a mode, when not replayTimeSpec's (an Atlas species spans its own months). */
   timeSpec?(mode: Mode, month?: number, day?: number): TimeSpec;
+  /** The [month, day] its season peaked in a mode: in a year of photos, when they did (an early or late year's own
+   * peak); null when unknown. */
+  peak?(mode: Mode): Promise<[number, number] | null>;
   /** "Coming out near you": its season at a place, from the live forecast while there is one, else a typical year. */
   due?(lngLat: [number, number], now: number): Due | null;
   /** "Warm the spring": rerun the season with every spring day `degF` warmer (negative: cooler); 0 is as it was. */

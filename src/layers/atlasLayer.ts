@@ -5,7 +5,7 @@ import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import { OTHERS_MAX, type CaveatCard, type Due, type LegendSpec, type OtherSpecies, type OthersList, type ProbeCard, type SeasonProfile, type SpeciesWords } from '../core/layer';
 import { groupOf, OUT_CHIPS, OUT_GROUPS, outNow, placeCache, placeSeasons, type OutNow, type PlaceSeasons } from '../atlas/outNow';
-import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Result, type Seen } from '../atlas/atlas';
+import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, offNote, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Result, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import { animating, ripples } from './motion';
@@ -173,7 +173,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const rings = ripples<Dot>(`${key}-ripples`, (x) => [x.lng, x.lat], () => palette.dotRim);
   /** " so far (412 photos)" while the year is still coming in, so an early count never reads as the year's. */
   const soFar = (y: Seen) => (y.soFar ? ` so far (${y.photos.toLocaleString('en-US')} photo${y.photos === 1 ? '' : 's'})` : '');
-  /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. While
+  /** "3.4× as many photos as expected, and came 6 days early": its year over the whole map, in a few words. While
    * the year is still coming in, a handful of photos is no verdict yet (the strips' own thresholds are higher still). */
   const yearWords = (y: Seen) => {
     if (y.soFar && y.photos < SO_FAR_MIN && y.expectedPhotos < SO_FAR_MIN) return 'too few yet to judge';
@@ -184,8 +184,8 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       : y.ratio === 0 ? 'no photos, though some expected'
       : y.ratio < 1 ? `${Math.max(1, Math.round(y.ratio * 100))}% as many photos as expected`
       : `${x}× as many photos as expected`;
-    // Early or late for the warmth: the expectation already knows how warm the spring was.
-    const d = y.days === null ? '' : `, ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'early' : 'late'} for its warmth`;
+    // Early or late against the expected season, which already knows how warm the spring was (so not "than usual").
+    const d = y.days === null ? '' : `, and came ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'early' : 'late'}`;
     return r + d;
   };
 
@@ -396,6 +396,13 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         label: m === TYPICAL ? (ms) => `${fmt(year, dayOfYear(ms))} (typical year)` : undefined,
       } satisfies TimeSpec;
     },
+    // In ATLAS_YEAR its photos' peak: the expected one moved by the days early or late (the time bar's bracket ends there).
+    async peak(m) {
+      const s = m === TYPICAL ? null : await atlas.seen(sp.i);
+      const d = s ? peakDay(s.expected) - (s.days ?? 0) : peakDay(curve(m));
+      const t = new Date(Date.UTC(m === TYPICAL ? TYPICAL_AXIS_YEAR : ATLAS_YEAR, 0, d));
+      return [t.getUTCMonth(), t.getUTCDate()];
+    },
 
     summary(t) {
       const doy = dayOfYear(t);
@@ -450,7 +457,9 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           if (last && w.from <= last.to) last.to = Math.max(last.to, w.to);
           else if (w.to > 0 && w.from < n - 1) range.push(w);
         }
-        profiles.set(pk, (p = { bands: [], seen, notes, ...(seenOnly ? { seenOnly } : {}), ...(range.length ? { range } : {}) }));
+        // An early or late year: a bracket from the expected peak to the seen one, "11 d late".
+        const offset = vs?.days ? { from: top - d0, to: top - vs.days - d0, text: offNote(vs.days) } : null;
+        profiles.set(pk, (p = { bands: [], seen, notes, ...(seenOnly ? { seenOnly } : {}), ...(range.length ? { range } : {}), ...(offset ? { shift: offset } : {}) }));
       }
       return p;
     },

@@ -208,6 +208,9 @@ export interface SeasonProfile {
   /** Where each peak falls in most years (8 of 10), from day index `from` to `to` (fractional): soft bands across the
    * bar. Only from a real year-to-year spread (spread.py), never a guess. */
   range?: { from: number; to: number }[];
+  /** A season that came early or late: a bracket from the expected peak (`from`) to the seen one (`to`), day indices,
+   * and its words ("11 d late"). */
+  shift?: { from: number; to: number; text: string };
   /** Handwritten notes on the line, at a day index. */
   notes: { at: number; text: string }[];
 }

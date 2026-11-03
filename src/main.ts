@@ -72,6 +72,8 @@ function cutProfile(p: SeasonProfile, off: number, n: number): SeasonProfile {
     seen: cut(p.seen),
     seenOnly: p.seenOnly?.map((o) => ({ ...o, seen: cut(o.seen) })),
     range: p.range?.map((r) => ({ from: r.from - off, to: r.to - off })).filter((r) => r.to > 0 && r.from < n - 1),
+    shift: p.shift && Math.min(p.shift.from, p.shift.to) - off >= 0 && Math.max(p.shift.from, p.shift.to) - off < n
+      ? { ...p.shift, from: p.shift.from - off, to: p.shift.to - off } : undefined,
     notes: p.notes.map((k) => ({ ...k, at: k.at - off })).filter((k) => k.at >= 0 && k.at < n),
   };
 }
@@ -418,8 +420,8 @@ function start() {
 
   // Species picker (src/ui/speciesPicker.ts): a search box over the tree of life, the hand-built species first. Switching
   // keeps the season and the calendar day, and drops any pinned card.
-  // A picker row may ask for a season too: a surprise opens on its year.
-  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, () => ATLAS_YEAR, (k, s) => void setSpecies(k, s), () => {
+  // A picker row may ask for a season too: a surprise opens on its year, at its peak that year (an early or late one's own).
+  const speciesPick = mountSpeciesPicker($<HTMLButtonElement>('species'), $('species-sheet'), SPECIES, () => ATLAS_YEAR, (k, s) => void setSpecies(k, s, !!s), () => {
     // The map's day, for the tree's "out now" glow (ATLAS_YEAR's own season when the map shows it, else a typical year).
     const label = new Date(time.cursor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
     return { doy: dayOfYear(time.cursor), year: picker.value === String(ATLAS_YEAR), label };
@@ -430,7 +432,7 @@ function start() {
   });
   let asking = 0;
   const loading = new Map<string, Promise<LunaLayer | null>>(); // the latest pick: a slow load that finishes after a newer pick must not switch to its species
-  const setSpecies = async (want: string, wish?: string) => {
+  const setSpecies = async (want: string, wish?: string, atPeak = false) => {
     const ticket = ++asking;
     const entry = (await findSpecies(want)) ?? SPECIES[0]!;
     if (ticket !== asking) return;
@@ -466,9 +468,17 @@ function start() {
     }
     if (ticket !== asking) return;
     const next = loaded.get(entry.key)!;
+    // Asked to open on its peak: the season's own day, in place of the calendar day (a moment's wait for its photos).
+    if (atPeak && next.peak) {
+      const m = wish && (next.seasons?.() ?? []).includes(wish) ? wish : picker.value;
+      const at = await next.peak(m).catch(() => null);
+      if (ticket !== asking) return;
+      if (at) wantDay = at;
+    }
     if (next === cur) {
-      // Already on screen: only the season it asked for, if any.
+      // Already on screen: only the season it asked for, if any (and its peak).
       if (wish && wish !== picker.value && (next.seasons?.() ?? []).includes(wish)) (picker.value = wish), picker.dispatchEvent(new Event('change'));
+      else if (atPeak) switchMode(picker.value);
       return;
     }
     // Live was wanted for it (picked from live mode, or a ?season=live&species= link): goes live as soon as its live
