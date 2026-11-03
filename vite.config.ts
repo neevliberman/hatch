@@ -78,7 +78,7 @@ function csp(): Plugin {
           `style-src 'self' 'unsafe-inline'`,
           `img-src 'self' data: blob: https:`, // iNaturalist photos live on several hosts; images cannot run code
           `font-src 'self' data:`,
-          `connect-src 'self' https://api.inaturalist.org https://api.open-meteo.com https://archive-api.open-meteo.com`,
+          `connect-src 'self' data: https://api.inaturalist.org https://api.open-meteo.com https://archive-api.open-meteo.com`,
           `worker-src 'self' blob:`,
           `frame-src 'self'`,
           `object-src 'none'`,
