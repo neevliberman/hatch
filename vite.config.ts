@@ -59,10 +59,42 @@ const chunkOf = (id: string): string | undefined => {
 // shows before any script has arrived. Shared with the one-file build.
 export const loader = (): Plugin => ({ name: 'hatch-loader', transformIndexHtml: (html) => html.replace('<!-- loader -->', loaderHtml()) });
 
+// A Content-Security-Policy for the deployed page. GitHub Pages cannot send headers, so it rides in a <meta> tag. It
+// is the second lock behind escaping: even if some outside text slipped into the page as markup, the browser would
+// refuse to run it, refuse to load code from anywhere but this site, and refuse to send data to any host except the
+// ones Hatch really reads (iNaturalist, Open-Meteo). The one inline script (the light/dark flash guard) is allowed by
+// its hash, not by 'unsafe-inline'. Multi-file build only: the one-file build inlines its whole bundle.
+function csp(): Plugin {
+  return {
+    name: 'hatch-csp',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${createHash('sha256').update(m[1]!).digest('base64')}'`);
+        const policy = [
+          `default-src 'self'`,
+          `script-src 'self' ${hashes.join(' ')} 'wasm-unsafe-eval'`,
+          `style-src 'self' 'unsafe-inline'`,
+          `img-src 'self' data: blob: https:`, // iNaturalist photos live on several hosts; images cannot run code
+          `font-src 'self' data:`,
+          `connect-src 'self' data: https://api.inaturalist.org https://api.open-meteo.com https://archive-api.open-meteo.com`,
+          `worker-src 'self' blob:`,
+          `frame-src 'self'`,
+          `object-src 'none'`,
+          `base-uri 'self'`,
+          `form-action 'self'`,
+        ].join('; ');
+        return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n  <meta http-equiv="Content-Security-Policy" content="${policy}" />`);
+      },
+    },
+  };
+}
+
 // Normal multi-file build -> dist/. Relative base so it works under any sub-path (GitHub Pages etc.).
 export default defineConfig({
   base: './',
-  plugins: [leanDeps(), packReplay(), packBasemap(), serviceWorker(), loader()],
+  plugins: [leanDeps(), packReplay(), packBasemap(), serviceWorker(), loader(), csp()],
   build: {
     outDir: 'dist',
     target: 'es2022',
