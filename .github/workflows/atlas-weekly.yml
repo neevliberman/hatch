@@ -1,0 +1,115 @@
+# Weekly Atlas "this year" rebuild (pipeline/atlas/weekly.py; see pipeline/live/README.md, "Atlas this year").
+# Pulls this year's warmth (PRISM via RCC-ACIS + Open-Meteo forecast) and new research-grade iNaturalist insect photos
+# (CC0 / CC BY / CC BY-NC, about one request a second, cached between runs), reruns the Atlas network on the CPU (numpy,
+# no torch), and writes ahead-YYYY.bin, seen-YYYY.bin/.json, season.bin, dots-year/ and year.json (with a manifest).
+# They go into the `atlas-data` release (not git history), then the site redeploys and deploy-pages lays them over
+# main's public/atlas. Until 15 April it refines last year (late identifications); from then the new year takes over
+# once it has 1,000 photos. With nothing to publish it writes nothing and the site keeps what it has.
+# If anything fails it opens (or comments on) an "Atlas weekly failed" issue.
+name: atlas-weekly
+on:
+  schedule:
+    - cron: '30 14 * * 1'   # Mondays 14:30 UTC: 9:30 am CDT in summer, 8:30 am CST in winter
+  workflow_dispatch:
+    inputs:
+      year:
+        description: 'Year to rebuild, 2026 or later (blank = this year from 15 April, last year before)'
+        required: false
+      full:
+        description: 'Pull the whole year from iNaturalist again (about 1 hour; it does this every 14 days anyway)'
+        type: boolean
+        default: false
+permissions:
+  contents: write   # the atlas-data release
+  actions: write    # start deploy-pages (gh workflow run) and the keepalive (re-enable this workflow)
+  issues: write     # failure alarm
+concurrency:
+  group: atlas-weekly
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: notebooks/requirements.txt
+      # Everything the pipeline uses except torch: the network runs in numpy (net_reference.NumpyAtlas).
+      - name: Install (no torch)
+        run: |
+          grep -v -e '^torch' -e 'download.pytorch.org' notebooks/requirements.txt > "$RUNNER_TEMP/requirements.txt"
+          pip install -r "$RUNNER_TEMP/requirements.txt"
+      # The iNaturalist photo cache (~20 MB a year). A new entry each run; restore takes the newest. If GitHub has
+      # dropped it, the script pulls the whole year again (about an hour), as it does every 14 days anyway.
+      - uses: actions/cache/restore@v4
+        with:
+          path: notebooks/data/atlas/weekly
+          key: atlas-inat-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: atlas-inat-
+      - name: Build this year's Atlas files
+        id: build
+        env:
+          YEAR: ${{ inputs.year }}
+          FULL: ${{ inputs.full }}
+        run: |
+          set -euo pipefail
+          ARGS=(--out "$RUNNER_TEMP/atlas")
+          if [ -n "${YEAR:-}" ]; then
+            if ! [[ "$YEAR" =~ ^20[2-9][0-9]$ ]] || [ "$YEAR" -lt 2026 ]; then
+              echo "::error::year must be 2026 or later, like 2027 (got '$YEAR')"; exit 1
+            fi
+            ARGS+=(--year "$YEAR")
+          fi
+          if [ "${FULL:-false}" = "true" ]; then ARGS+=(--full); fi
+          # 4 h 30 min, then stop cleanly (Ctrl-C), leaving time to save the cache and raise the alarm
+          timeout --signal=INT 270m python3 pipeline/atlas/weekly.py "${ARGS[@]}"
+          if [ -f "$RUNNER_TEMP/atlas/year.json" ]; then echo "built=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: notebooks/data/atlas/weekly
+          key: atlas-inat-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Publish to the atlas-data release
+        if: steps.build.outputs.built == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tar -czf "$RUNNER_TEMP/atlas-site.tar.gz" -C "$RUNNER_TEMP/atlas" .
+          if ! gh release view atlas-data --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create atlas-data --repo "$GITHUB_REPOSITORY" --target main --latest=false \
+              --title "Atlas this-year data (rebuilt weekly)" \
+              --notes "Written by the atlas-weekly workflow (pipeline/atlas/weekly.py) and laid over public/atlas by deploy-pages. Photos: iNaturalist research grade, CC0 / CC BY / CC BY-NC. Warmth: PRISM via RCC-ACIS, Open-Meteo forecast (CC BY 4.0)."
+          fi
+          gh release upload atlas-data "$RUNNER_TEMP/atlas-site.tar.gz" "$RUNNER_TEMP/atlas/year.json" --repo "$GITHUB_REPOSITORY" --clobber
+          cat "$RUNNER_TEMP/atlas/year.json"
+      - name: Redeploy site
+        if: steps.build.outputs.built == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+      - name: Failure alarm
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "Atlas weekly failed in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$N" ]; then
+            gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "Failed again $(date -u +%F): $URL"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Atlas weekly failed" \
+              --body "The weekly Atlas rebuild failed on $(date -u +%F): $URL. The site keeps last week's files. Close this once a run is green."
+          fi
+      # Scheduled workflows in public repos switch off after 60 days without repo activity; re-enabling resets the clock.
+      - name: Keepalive
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/atlas-weekly.yml/enable"
