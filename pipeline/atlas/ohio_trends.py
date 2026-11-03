@@ -1,15 +1,15 @@
-"""Ohio butterfly trends, 1996-2016, for the Atlas species card: species.json's "ohio" (method: PREREG_OHIO.md).
+"""Ohio butterfly trends, 1996-2016: our own refit (method: PREREG_OHIO.md). RESEARCH ONLY: it failed its
+validation against the paper (RESULT_OHIO.md), and the app never reads it. The card's line ships the paper's own
+per-species trends (ohio_published.py).
 
-ohio = [pct, lo, hi, n_sites, n_years]: annual % change in the Ohio Lepidopterists' effort-corrected population
-index (Wepprich et al. 2019, PLoS ONE, doi:10.1371/journal.pone.0216270; data doi:10.5061/dryad.cf78420, CC0), its
-95% two-way (site × year) bootstrap interval, and how many sites and years counted the species. Species below the
-thresholds, or not in the Atlas, get no "ohio".
+Per species: annual % change in the Ohio Lepidopterists' effort-corrected population index (Wepprich et al. 2019,
+PLoS ONE, doi:10.1371/journal.pone.0216270; data doi:10.5061/dryad.cf78420, CC0), its 95% two-way (site × year)
+bootstrap interval, and how many sites and years counted the species.
 
 Model: log E[index] = site + β·year + log(survey minutes), Poisson quasi-likelihood with the site effects profiled
 out exactly, so each fit is a 1-D Newton solve. numpy and pandas only.
 
-  python3 pipeline/atlas/ohio_trends.py            # fetches (cached), fits, validates, rewrites species.json's "ohio"
-  python3 pipeline/atlas/ohio_trends.py --report   # same, plus results/ohio/ tables; species.json untouched
+  python3 pipeline/atlas/ohio_trends.py   # fetches (cached), fits, validates, writes results/ohio/; exit 1 on a failed gate
 """
 import json
 import sys
@@ -198,8 +198,32 @@ def run(n_boot=BOOT):
     return d, sp, tot, total, cache
 
 
+def gate(total: dict, m: pd.DataFrame) -> tuple[bool, list[str]]:
+    """PREREG's validation against the paper. m: one row per species fitted by both (beta, verdict, estimate,
+    p.value). A missing slope or correlation is reported as such and fails."""
+    lines = []
+    pct = total.get("pct", np.nan)
+    ok_total = bool(np.isfinite(pct) and abs(pct - PAPER_TOTAL_PCT) <= 1.0)
+    lines.append(f"total: {pct:+.2f}%/yr (bootstrap {total.get('lo', np.nan):+.2f} to {total.get('hi', np.nan):+.2f}; "
+                 f"quasi-Poisson {total.get('q_lo', np.nan):+.2f} to {total.get('q_hi', np.nan):+.2f}); paper "
+                 f"{PAPER_TOTAL_PCT:+.1f} -> {'PASS' if ok_total else 'FAIL'}"
+                 if np.isfinite(pct) else "total: no slope (fit not identified) -> FAIL")
+    fin = m[np.isfinite(m.beta) & np.isfinite(m.estimate)]
+    if len(fin) < len(m):
+        lines.append(f"species: {len(m) - len(fin)} of {len(m)} without a slope, left out of r: "
+                     + ", ".join(m.loc[~m.index.isin(fin.index), "CommonName"]))
+    r = float(np.corrcoef(fin.beta, fin.estimate)[0, 1]) if len(fin) >= 3 else np.nan
+    both = fin[(fin.verdict != "no clear trend") & (fin["p.value"] < 0.05)]
+    flips = int((np.sign(both.beta) != np.sign(both.estimate)).sum())
+    ok_species = bool(np.isfinite(r) and r >= 0.8 and flips <= 1)
+    lines.append(f"species vs paper: n={len(fin)} r={'not computable' if not np.isfinite(r) else f'{r:.3f}'}, "
+                 f"both significant {len(both)}, opposite signs {flips} -> {'PASS' if ok_species else 'FAIL'}")
+    return ok_total and ok_species, lines
+
+
 def main():
-    report = "--report" in sys.argv
+    """Research only: the refit and its gate, written to results/ohio/. The app ships the paper's own per-species
+    trends instead (ohio_published.py). Exits non-zero while the gate fails."""
     d, sp, tot, total, cache = run()
     paper = pd.read_csv(cache / "speciesTrends.csv")
     names = pd.read_csv(cache / "species_names.csv")
@@ -209,19 +233,12 @@ def main():
     sp["verdict"] = [verdict(a, b) for a, b in zip(sp.lo, sp.hi)]
     sp["atlas"] = sp.CommonName.map(match)
     m = sp.merge(paper[["CommonName", "estimate", "std.error", "p.value"]], on="CommonName", how="inner")
-    r = float(np.corrcoef(m.beta, m.estimate)[0, 1])
-    both = m[(m.verdict != "no clear trend") & (m["p.value"] < 0.05)]
-    flips = int((np.sign(both.beta) != np.sign(both.estimate)).sum())
-    ok_total = abs(total["pct"] - PAPER_TOTAL_PCT) <= 1.0
-    ok_species = r >= 0.8 and flips <= 1
-    print(f"total: {total['pct']:+.2f}%/yr ({total['lo']:+.2f} to {total['hi']:+.2f}); quasi "
-          f"({total['q_lo']:+.2f} to {total['q_hi']:+.2f}); paper -2.0  -> {'PASS' if ok_total else 'FAIL'}")
-    print(f"species vs paper: n={len(m)} r={r:.3f}, both-significant {len(both)}, opposite signs {flips} "
-          f"-> {'PASS' if ok_species else 'FAIL'}")
-    if report:
-        RESULTS.mkdir(parents=True, exist_ok=True)
-        sp.merge(paper[["CommonName", "estimate", "std.error", "p.value"]], on="CommonName", how="left").to_csv(
-            RESULTS / "species.csv", index=False, float_format="%.5g")
+    ok, lines = gate(total, m)
+    print("\n".join(lines))
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    sp.merge(paper[["CommonName", "estimate", "std.error", "p.value"]], on="CommonName", how="left").to_csv(
+        RESULTS / "species.csv", index=False, float_format="%.5g")
+    if "--quick" not in sys.argv:
         sens = {"primary": total,
                 "raw_per_survey": trend(tot, response="YearTotal", offset="SurvPerYear"),
                 "with_list_length": trend(tot, extra="meanLL")}
@@ -232,19 +249,8 @@ def main():
             c = trend(g, extra="meanLL", n_boot=0)
             alt.append({"CommonName": name, "raw_beta": a["beta"], "ll_beta": c["beta"]})
         pd.DataFrame(alt).to_csv(RESULTS / "sensitivity.csv", index=False, float_format="%.5g")
-        return
-    if not (ok_total and ok_species):
-        sys.exit("validation failed: species.json not touched (PREREG_OHIO.md)")
-    ship = {r.atlas: [round(r.pct, 1), round(r.lo, 1), round(r.hi, 1), int(r.n_sites), int(r.n_years)]
-            for r in sp[sp.shown & sp.atlas.notna()].itertuples()}
-    for s in species:
-        s.pop("ohio", None)
-        if s["name"] in ship:
-            s["ohio"] = ship[s["name"]]
-    (OUT / "species.json").write_text(json.dumps(species, separators=(",", ":"), ensure_ascii=False))
-    v = [verdict(a[1], a[2]) for a in ship.values()]
-    print(f"species.json: {len(ship)} species with an Ohio line: {v.count('declining')} declining, "
-          f"{v.count('increasing')} increasing, {v.count('no clear trend')} no clear trend")
+    if not ok:
+        sys.exit("validation against the paper failed (PREREG_OHIO.md): research only, nothing ships from this fit")
 
 
 if __name__ == "__main__":

@@ -63,4 +63,7 @@ matched species that pass the thresholds. The app shows one line in "How sure?",
 a past baseline and not current status, crediting Ohio Lepidopterists / Wepprich et al. with a link.
 
 ## Amendments
-(none yet)
+- **3 Nov 2026, after the gate failed** (RESULT_OHIO.md): nothing from this fit ships. The card instead shows the
+  paper's own published per-species trends (`speciesTrends.csv`, the paper's Table 2): coefficient ± 1.96 SE as %/yr,
+  "declining" or "increasing" only where that interval excludes 0, and the same thresholds (≥ 10 sites, ≥ 10 years,
+  the deposit's `nsite` and `yrs`). Field `trend` in species.json, from `ohio_published.py`. This fit stays as research.

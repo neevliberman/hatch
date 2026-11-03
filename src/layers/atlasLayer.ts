@@ -6,6 +6,7 @@ import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import { OTHERS_MAX, type CaveatCard, type Due, type LegendSpec, type OtherSpecies, type OthersList, type ProbeCard, type SeasonProfile, type SpeciesWords } from '../core/layer';
 import { groupOf, OUT_CHIPS, OUT_GROUPS, outNow, placeCache, placeSeasons, type OutNow, type PlaceSeasons } from '../atlas/outNow';
 import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Result, type Seen } from '../atlas/atlas';
+import { TREND_SOURCES, trendWords } from '../atlas/index';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import { animating, ripples } from './motion';
@@ -629,10 +630,17 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           'Calendar: just the weeks it’s usually photographed, 2° of latitude at a time (2015-2025).',
         ],
       };
+      // A published long-term count trend, where one exists (species.json "trend", pipeline/atlas/ohio_published.py):
+      // a past baseline from one state, never today's numbers.
+      const src = sp.trend && TREND_SOURCES[sp.trend[0]];
+      const trend = sp.trend && src
+        ? { label: src.label, value: trendWords(sp.trend), note: 'Ohio only; a past baseline, not today’s status.', credit: src.credit, href: src.href }
+        : undefined;
       return {
         title: `${name}: fine print`,
         severity: 'normal',
         record,
+        ...(trend ? { trend } : {}),
         bullets: [
           `Colors: a model’s expectation, not sightings: of the insect photos taken here on this day, the share that would be ${name}.`,
           `Dots: real iNaturalist photos, each lit ${GLOW_DAYS} days, from ${mode === TYPICAL ? `${FIRST_YEAR}-${ATLAS_YEAR - 1}` : ATLAS_YEAR} (at most 5,000, picked at random).`,
@@ -677,6 +685,8 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         { text: 'Warmth: Daymet (ORNL DAAC) for the years the network learned; since 2026, PRISM (PRISM Climate Group, Oregon State University) via RCC-ACIS.', href: 'https://prism.oregonstate.edu/' },
         ...(atlasYearInfo.warmThrough ? [{ text: 'This week’s warmth forecast: Open-Meteo (CC BY 4.0).', href: 'https://open-meteo.com/' }] : []),
       ];
+      const ts = sp.trend && TREND_SOURCES[sp.trend[0]];
+      if (ts) out.push({ text: `${ts.label}: Ohio Lepidopterists’ volunteer butterfly monitoring, trends from Wepprich et al. 2019, PLoS ONE (data CC0).`, href: ts.href });
       if (sp.photo && sp.credit && sp.taxon) out.push({ text: `${name} photo: ${sp.credit}, via iNaturalist.`, href: `https://www.inaturalist.org/taxa/${sp.taxon}` });
       if (sp.taxon) {
         out.push({ text: `Recent ${name} sightings on iNaturalist.`, href: `https://www.inaturalist.org/observations?taxon_id=${sp.taxon}&order_by=observed_on` });

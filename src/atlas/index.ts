@@ -25,7 +25,26 @@ export interface AtlasSpecies {
    * Minnesota 2026 (states it never saw), their photos]. Each result 1 beat, 0 tied, -1 lost, null not tested (its
    * count then 0). Absent when neither was tested. */
   rec?: [Result, number, Result, number];
+  /** A published long-term count trend (pipeline/atlas/ohio_published.py): [source, % per year, its 95% interval low
+   * and high, sites, years]. Source "oh": Ohio butterfly monitoring 1996-2016 (TREND_SOURCES). Absent for most. */
+  trend?: [string, number, number, number, number, number];
 }
+
+/** Where a species' `trend` comes from: the line's label, its credit and the link. */
+export const TREND_SOURCES: Record<string, { label: string; credit: string; href: string }> = {
+  oh: { label: 'Ohio counts 1996–2016', credit: 'Ohio Lepidopterists / Wepprich et al. 2019', href: 'https://doi.org/10.1371/journal.pone.0216270' },
+};
+
+/** A trend's % per year as written: whole numbers, one decimal under 1 (never a bare 0), a true minus sign. */
+export const pctWord = (v: number) => {
+  const a = Math.abs(v);
+  const t = a >= 1 ? String(Math.round(a)) : a.toFixed(a >= 0.05 ? 1 : 2);
+  return `${v < 0 ? '−' : '+'}${t}`;
+};
+
+/** A species' trend in a few words: "−7%/yr (−11 to −3)" when its interval keeps clear of 0, else "no clear trend". */
+export const trendWords = ([, pct, lo, hi]: NonNullable<AtlasSpecies['trend']>) =>
+  lo > 0 || hi < 0 ? `${pctWord(pct)}%/yr (${pctWord(lo)} to ${pctWord(hi)})` : 'no clear trend';
 
 /**
  * The year whose real warmth ships (ahead-YEAR.bin), and whose photos are set against the network (seen-YEAR). main's

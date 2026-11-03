@@ -88,3 +88,50 @@ def test_names_match_renames_and_skip_complexes():
     assert O.atlas_names(names, atlas) == {"Red-spotted Purple": "Limenitis astyanax",
                                            "White Admiral": "Limenitis arthemis", "Monarch": "Danaus plexippus"}
     assert set(O.SYNONYMS.values()) <= atlas
+
+
+# The paper's own trends (ohio_published.py): rows copied from the deposit's speciesTrends.csv.
+PUBLISHED = pd.DataFrame([
+    ["Red-spotted Purple", "Limenitis arthemis", 6226, 87, 21, 913, -0.0639573151008051, 0.0186049899927946, 0.000586800612230841],
+    ["Bronze Copper", "Lycaena hyllus", 656, 23, 21, 254, -0.062904279889323, 0.0385885470431892, 0.103074398447765],
+    ["Eastern Tiger Swallowtail", "Papilio glaucus", 29299, 101, 21, 996, -0.0103721528938899, 0.0147821243533328, 0.482885842815634],
+    ["Least Skipper", "Ancyloxypha numitor", 27506, 84, 21, 844, 0.0529930718469354, 0.0151674528964492, 0.00047607710653368],
+    ["Gemmed Satyr", "Cyllopsis gemma", 1059, 6, 16, 81, 0.227739836170602, 0.0519625139394471, 1.17178883071611e-05],
+    ["Azures", "Celastrina ladon", 30000, 103, 21, 999, -0.01, 0.01, 0.3],
+], columns=["CommonName", "Latin", "Total", "nsite", "yrs", "sy", "estimate", "std.error", "p.value"])
+
+
+def test_published_trend_conversion_and_verdicts():
+    from pipeline.atlas.ohio_published import convert, verdict
+    pct, lo, hi = convert(np.log(0.97), 0.0)
+    assert abs(pct + 3) < 1e-9 and lo == hi == pct
+    pct, lo, hi = convert(-0.0639573151008051, 0.0186049899927946)
+    assert (round(pct, 1), round(lo, 1), round(hi, 1)) == (-6.2, -9.6, -2.7)
+    assert lo < pct < hi and abs(np.log1p(hi / 100) + np.log1p(lo / 100) - 2 * np.log1p(pct / 100)) < 1e-12  # symmetric in logs
+    assert verdict(lo, hi) == "declining" and verdict(-4.0, 0.2) == "no clear trend" and verdict(0.1, 9) == "increasing"
+    # The 95% interval excludes 0 exactly when the paper's two-sided p < 0.05 (both are Wald, from the same SE).
+    for r in PUBLISHED.itertuples():
+        _, lo, hi = convert(r.estimate, r._8)
+        assert (verdict(lo, hi) != "no clear trend") == (r._9 < 0.05)
+
+
+def test_published_records_match_thresholds_and_names():
+    from pipeline.atlas.ohio_published import records
+    atlas = {s["name"] for s in json.loads((ROOT / "public/atlas/species.json").read_text())}
+    ship, table = records(PUBLISHED, atlas)
+    assert ship == {"Limenitis astyanax": ["oh", -6.2, -9.6, -2.7, 87, 21], "Tharsalea hyllus": ["oh", -6.1, -12.9, 1.3, 23, 21],
+                    "Papilio glaucus": ["oh", -1.0, -3.9, 1.9, 101, 21], "Ancyloxypha numitor": ["oh", 5.4, 2.4, 8.6, 84, 21]}
+    why = dict(zip(table.CommonName, table.why_not))
+    assert why["Gemmed Satyr"] == "not in the Atlas" and why["Azures"].startswith("complex")
+
+
+def test_shipped_trends_are_butterflies_and_well_formed():
+    species = json.loads((ROOT / "public/atlas/species.json").read_text())
+    with_trend = [s for s in species if "trend" in s]
+    assert 50 <= len(with_trend) <= 69 and not any("ohio" in s for s in species)
+    for s in with_trend:
+        src, pct, lo, hi, n_sites, n_years = s["trend"]
+        assert src == "oh" and s["order"] == "Lepidoptera" and lo <= pct <= hi and n_sites >= 10 and n_years >= 10
+    t = {s["name"]: s["trend"] for s in with_trend}
+    assert t["Limenitis astyanax"] == ["oh", -6.2, -9.6, -2.7, 87, 21] and t["Papilio glaucus"][2] < 0 < t["Papilio glaucus"][3]
+    assert "Bombus impatiens" not in t and "Lethe eurydice" not in t and "Celastrina ladon" not in t

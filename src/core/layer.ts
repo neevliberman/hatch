@@ -15,6 +15,9 @@ export interface CaveatCard {
   /** A track record drawn above the bullets: a stamp per test (beat, tied, lost or untested), what it was tested on,
    * and a plain count. Then `act`, what to do about a loss, and small `notes` (what the stamps are measured against). */
   record?: { title: string; rows: { result: 'beat' | 'tied' | 'lost' | 'untested'; what: string; count?: string }[]; act?: string; notes?: string[] };
+  /** A published count trend for the species, under the track record: a label and its value on one line, a small
+   * note saying what it is not, and the credit as a link. */
+  trend?: { label: string; value: string; note: string; credit: string; href: string };
 }
 
 export interface ProbeCard {
