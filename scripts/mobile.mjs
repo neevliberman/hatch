@@ -426,9 +426,13 @@ if (existsSync(join(distDir, 'radar'))) {
           await page.waitForSelector('#radar', { timeout: 30000 });
           const cap = (await page.locator('#radar .rd-cap').innerText()).replace(/\s+/g, ' ');
           if (!cap.includes(ev.tz) || !/[Mm]ayflies/.test(cap)) fail(`the caption reads "${cap}"`);
+          // Zoomed in on it: the dish near the middle across, and between the header and the card (the card's Giant Mayfly
+          // line, src/main.ts, makes it taller once the Atlas is in, and the radar moves up to keep clear of it).
           await page.waitForFunction(([lng, lat]) => {
-            const c = window.__hatch.map.center(window.__hatch.padding());
-            return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && Math.abs(c.lngLat[0] - lng) < 0.6 && Math.abs(c.lngLat[1] - lat) < 0.7;
+            const at = window.__hatch.map.project([lng, lat]);
+            const top = document.getElementById('top').getBoundingClientRect().bottom;
+            const card = document.getElementById('radar').getBoundingClientRect();
+            return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && !!at && Math.abs(at[0] - innerWidth / 2) < innerWidth / 4 && at[1] > top && at[1] < card.top;
           }, ev.at, { timeout: 30000, polling: 250 }).catch(() => fail('the map did not go to the radar'));
           const card = await page.evaluate(() => {
             const bad = [];
@@ -648,8 +652,8 @@ if (existsSync(join(distDir, 'radar'))) {
   }
   // The header names the species on the map (a group sketch showed every moth as the luna), still in one row: the
   // featured luna, then a long Atlas name picked from search, whole in at most two lines; nothing covered, off-screen or
-  // scrolling sideways. A radar replay hides both menus (it is one evening, not a species' season) and × brings them
-  // back. The smallest phone of each engine, both ways up. ONLY=header runs just this.
+  // scrolling sideways. A radar replay names the Giant Mayfly (its map's) and hides the season menu (it is one evening,
+  // not a season), and × brings luna and the menu back. The smallest phone of each engine, both ways up. ONLY=header runs just this.
   for (const [phone, engine, pw0, ph0, dpr] of small) {
     for (const orient of ['portrait', 'landscape']) {
       if ((process.env.ONLY && process.env.ONLY !== 'header') || !mine()) continue;
@@ -698,12 +702,26 @@ if (existsSync(join(distDir, 'radar'))) {
         }
         await page.goto(`${origin}/?radar=karx-2014-07-20&noauto&today=2027-01-15`);
         await page.waitForSelector('#radar', { timeout: 30000 });
-        if (await page.locator('#top .season:visible').count()) fail('the species or season menu stays up over a radar replay');
-        if (!(await page.locator('.brand').isVisible()) || (await page.locator('.brand .mark').isVisible())) fail('over a radar replay the title is missing or still wears the species sketch');
+        // The replay's map is the Giant Mayfly's (src/main.ts): the header names it, the season menu steps aside, no luna
+        // hexagon is drawn, and its line on the card fits; × puts luna back. (Desktop: desktop.mjs ONLY=radarmayfly.)
+        if (await page.locator('#season').isVisible()) fail('the season menu stays up over a radar replay');
+        if (await page.locator('.brand .mark').isVisible()) fail('over a radar replay the title still wears the species sketch');
         if (!(await page.locator('#theme-btn').isVisible()) || !(await page.locator('#info-btn').isVisible())) fail('a radar replay hid the theme or About button');
+        if (await page.evaluate(() => window.__hatch.map.drawn().some((id) => id.startsWith('luna-')))) fail('luna hexagons drawn under a radar replay');
+        await page.waitForFunction(() => !document.querySelector('#radar .rd-model').hidden, null, { timeout: 90000, polling: 400 }).catch(() => fail('the replay never got its Giant Mayfly line'));
+        // One line, whole: the model's share on the hatch and its thin-data flag.
+        const line = await page.locator('#radar .rd-model').evaluate((el) => ({ text: el.textContent, cut: el.scrollWidth > el.clientWidth + 1 }));
+        if (line.cut || !/^Typical year here: (~1 in [\d,]+ photos|hardly any) · 285 records$/.test(line.text)) fail(`the replay's line reads "${line.text}"${line.cut ? ', cut off' : ''}`);
+        const f = await face();
+        if (f.text !== 'Giant Mayfly' || !f.shown || !f.whole) fail(`over a radar replay the species button reads "${f.text}"${f.shown && f.whole ? '' : ', not whole'}`);
+        if (!f.row) fail('over a radar replay the header is not one row');
+        const a = await page.evaluate(audit);
+        a.bad.forEach((m) => fail(`over a radar replay, ${m}`));
+        await page.screenshot({ path: `${out}/header-${phone}-${orient}-radar.png` });
         await page.locator('#radar .rd-x').click({ timeout: 30000 });
-        await page.locator('#species').waitFor({ state: 'visible', timeout: 30000 }).catch(() => fail('closing the replay did not bring the species menu back'));
-        if (!(await page.locator('#season').isVisible())) fail('closing the replay did not bring the season menu back');
+        await page.locator('#season').waitFor({ state: 'visible', timeout: 30000 }).catch(() => fail('closing the replay did not bring the season menu back'));
+        await page.waitForFunction(() => document.querySelector('#species .sp-face').textContent === 'Luna moth' && window.__hatch.map.drawn().some((id) => id.startsWith('luna-forecast')),
+          null, { timeout: 30000, polling: 400 }).catch(() => fail('closing the replay did not put luna back'));
       } catch (e) {
         fail(`stopped: ${e.message.split('\n')[0]}`);
       }

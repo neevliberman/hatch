@@ -310,6 +310,10 @@ export interface LunaLayer extends HatchLayer {
   setWarmth?(degF: number): void;
   /** What the warmth does to it, e.g. "about 6 days earlier" (empty at 0). */
   warmthNote?(): string;
+  /** An Atlas species' expected share of insect photos at a place on a day ("1 in 300", or null when hardly expected),
+   * how many records it learned from, and whether that is too few to trust closely (its fine print's "rough"; the
+   * radar replay's line, main.ts). Null outside the map. */
+  expected?(lngLat: [number, number], t: number): { oneIn: string | null; records: number; rough: boolean } | null;
 }
 
 interface FineCell {

@@ -875,7 +875,10 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
   .season.species .pick-btn .sp-face { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
     white-space: normal; hyphens: manual; overflow-wrap: normal; word-break: normal; }
   .sp-face .nb { white-space: nowrap; }
-  #app:not(.radar-on) #top:has(.species:not([hidden])) .brand { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  /* Over a radar replay the species button is a name alone (no season menu beside it): as wide as the name. */
+  #app.radar-on .season.species:has(.pick-btn) { flex: 0 1 auto; margin-left: 0; }
+  #app.radar-on #theme-btn { margin-left: auto; }
+  #top:has(.species:not([hidden])) .brand { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
   /* The season menu's face shows just the season (main.ts sets data-face); the open menu keeps the counts. It keeps its
      own width; the species button takes what is left. */
   .season:not(.species) { position: relative; flex: none; width: auto; }
@@ -896,10 +899,12 @@ body:has(#explore:focus) #action-msg { top: calc(120px + env(safe-area-inset-top
 .sc-try li::marker { color: var(--ac); }
 
 /* Radar replay (src/radar/): a specimen label in the key's place, with its own play button, so the time bar, key, hex
-   cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. The species
-   and season menus step aside too: the replay is one real evening, not that species' season (its hexagons hide, map.ts). */
-#app.radar-on :is(#legend, #probe, #dock, #recenter, #asleep, #end-note, #explore, #top .season) { display: none !important; }
-#app.radar-on #theme-btn { margin-left: auto; }
+   cards and margin notes step aside while it is open. About's way in sits under the species' opening lines. The season
+   menu steps aside too: the replay is one real evening, and its map the Giant Mayfly's (main.ts), which the species
+   button names but does not open until the replay closes (no arrow). */
+#app.radar-on :is(#legend, #probe, #dock, #recenter, #asleep, #end-note, #explore, #top .season:not(.species)) { display: none !important; }
+#app.radar-on .species .pick-btn { cursor: default; padding-right: 10px; background: var(--panel); }
+#app.radar-on .species .pick-btn:is(:hover, :active) { background-color: var(--panel); transform: none; }
 #app.radar-on .brand .mark { display: none; } /* a plain title: no species sketch over one real evening */
 .ex-radars { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 10px; }
 .ex-radars p { flex: 1 0 100%; margin: 0; font-size: 12px; color: var(--muted); }

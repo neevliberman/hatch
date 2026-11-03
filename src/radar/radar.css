@@ -15,6 +15,12 @@
 .rd-i:hover, .rd-x:hover { color: var(--text); background: var(--track-faint); }
 .rd-i.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .rd-i:focus-visible, .rd-x:focus-visible, .rd-credits a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* What the Atlas expects on the hatch (main.ts): one muted line, never two, its thin-data flag after it. */
+.rd-model { margin: 5px 4px 0; font-size: 12px; line-height: 1.3; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-model[hidden] { display: none; }
+/* "How we know" open: its notes take the card's room (a phone keeps the radar in view above them). */
+#radar:has(.rd-more:not([hidden])) .rd-model { display: none; }
+.rd-thin { font-style: italic; }
 .rd-prog { height: 2px; margin: 6px 4px 0; border-radius: 1px; background: var(--track-faint); }
 .rd-prog i { display: block; width: 0; height: 100%; border-radius: 1px; background: var(--accent); }
 .rd-more { margin: 7px 4px 0; padding-top: 7px; border-top: 1px solid var(--line); max-height: min(44vh, 360px); overflow-y: auto; overscroll-behavior: contain; }

@@ -15,11 +15,15 @@ export interface RadarEvent {
   /** Numbers quoted from the paper, each on its own line. */
   numbers: { lead: string; items: string[] };
   credits: { text: string; href: string }[];
+  /** [lng, lat] on the hatch itself, by hand where the echo is thickest (on a shore beside it: the Atlas has no lake
+   * cells): the place the card's Giant Mayfly line speaks for (main.ts), not the radar dish. */
+  hatch: [number, number];
 }
 
 export const EVENTS: Record<string, RadarEvent> = {
   'karx-2014-07-20': {
     id: 'karx-2014-07-20',
+    hatch: [-91.25, 43.72], // the Mississippi just below La Crosse
     caption: 'Mayflies rising off the Mississippi',
     tz: { name: 'CDT', offset: -5 },
     more: [
@@ -37,6 +41,7 @@ export const EVENTS: Record<string, RadarEvent> = {
   },
   'kdvn-2012-06-23': {
     id: 'kdvn-2012-06-23',
+    hatch: [-90.35, 41.70], // the Mississippi above the Quad Cities, at Le Claire
     caption: 'Echoes fit mayflies on the river, not the storms',
     tz: { name: 'CDT', offset: -5 },
     more: [
@@ -55,6 +60,7 @@ export const EVENTS: Record<string, RadarEvent> = {
   },
   'kcle-2019-06-26': {
     id: 'kcle-2019-06-26',
+    hatch: [-82.94, 41.51], // the western basin's shore by the islands, at Port Clinton
     caption: 'Mayflies rising off Lake Erie',
     tz: { name: 'EDT', offset: -4 },
     more: [
