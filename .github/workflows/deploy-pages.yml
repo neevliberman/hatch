@@ -46,6 +46,27 @@ jobs:
           else
             echo "could not check the live-data branch (exit $RC)"; exit 1
           fi
+      # This year's Atlas files, rebuilt weekly by atlas-weekly.yml into the `atlas-data` release, go over main's
+      # public/atlas. scripts/atlas-overlay.mjs checks them (same species list, network and cells, a full run, its
+      # manifest) and restamps dist/sw.js so returning visitors get them. No release yet, or a release that won't
+      # unpack or read, = a warning and main's files; failing to reach GitHub fails the deploy.
+      - name: Add this year's Atlas
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          set +e; ASSETS=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/atlas-data" --jq '.assets[].name' 2>"$RUNNER_TEMP/rel.err"); RC=$?; set -e
+          if [ "$RC" != 0 ]; then
+            if grep -q 'HTTP 404' "$RUNNER_TEMP/rel.err"; then echo "no atlas-data release yet"; exit 0; fi
+            cat "$RUNNER_TEMP/rel.err"; exit 1
+          fi
+          if ! grep -qx 'atlas-site.tar.gz' <<<"$ASSETS"; then echo "::warning::no atlas-site.tar.gz"; exit 0; fi
+          gh release download atlas-data --repo "$GITHUB_REPOSITORY" -p atlas-site.tar.gz -D "$RUNNER_TEMP"
+          mkdir -p "$RUNNER_TEMP/atlas-site"
+          if ! tar -xzf "$RUNNER_TEMP/atlas-site.tar.gz" -C "$RUNNER_TEMP/atlas-site"; then
+            echo "::warning::atlas-site.tar.gz would not unpack; keeping main's atlas files"; exit 0
+          fi
+          node scripts/atlas-overlay.mjs "$RUNNER_TEMP/atlas-site" dist/atlas
       - name: Push dist to gh-pages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,3 +80,4 @@ jobs:
           git add -A
           git commit -q -m "deploy ${GITHUB_SHA::7}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+ 
