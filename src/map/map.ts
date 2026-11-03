@@ -187,7 +187,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   let nudge = 0;
   let overSighting = false;
   let redrawQueued = false;
-  let lastViewAt = -Infinity; // when the view last moved
+  let lastViewAt = -Infinity; // when the reader's drag or its coast last moved the view
   let refreshedAt = NaN; // the zoom the layers were last built for
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   // While the camera glides, the frames in between say nothing about whether the reader moved the map.
@@ -319,7 +319,9 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         requestAnimationFrame(() => land(back));
         return { ...viewState, ...back }; // deck draws what this returns
       }
-      lastViewAt = performance.now();
+      // Only the reader's own moves (a drag and the coast after it): the app's glides (a panel opening or closing,
+      // My area, Find a town) are not a coast, and a press just after one is a tap like any other.
+      if (!gliding) lastViewAt = performance.now();
       // The map moved under a still mouse (a coast): the hovered hexagon and its card are no longer under it.
       if (hovered) {
         hovered = null;
