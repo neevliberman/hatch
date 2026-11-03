@@ -12,7 +12,7 @@
 // Also over http: the radar replays (load nothing until opened from About, then play at La Crosse, the Quad Cities or on Lake Erie and
 // close cleanly), and My area's card: one sparkline of the season there, whose dates are the only ones it and the line
 // under the map give (ONLY=near). And the card's "Out here now": ranked by nearness to each species' best day there,
-// chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track).
+// chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track), and a butterfly's Ohio count trend there (ONLY=ohio).
 // And an early or late chip: opens where its slid 2026 season peaks, with the slide as a bracket on the time bar and
 // plain words on the card (ONLY=earlylate). And Share's link reopening the pinned card (ONLY=sharepin). And a radar
 // replay's map on the Giant Mayfly, then × putting back the view under it (ONLY=radarmayfly). And the tree of life's English
@@ -2302,6 +2302,57 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // A published count trend in "How sure?" (species.json "trend", pipeline/atlas/ohio_published.py): the Red-spotted
+  // Purple's and the wood-nymph's Ohio counts fell (their intervals clear of 0; the wood-nymph's −9.47 rounds once, to −9), the eastern tiger swallowtail's show no clear trend, and a
+  // bumble bee (no Ohio counts) has no line at all. The line says Ohio only and a past baseline, and links the paper.
+  // Desktop only, light: one page, four species. Waits poll on a timer. ONLY=ohio runs just this.
+  const ohioUnit = async ([w, h], browser) => {
+    const tag = 'ohio trend desktop';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h } });
+    const page = await ctx.newPage();
+    await ctx.route(PHOTOS, (r) => r.abort());
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 90000, polling: 400 }).then(() => true, () => false);
+    const cases = [
+      ['limenitis-astyanax', 'Ohio trend, 1996–2016: −6%/yr (likely −10 to −3)'],
+      ['cercyonis-pegala', 'Ohio trend, 1996–2016: −7%/yr (likely −9 to −5)'],
+      ['papilio-glaucus', 'Ohio trend, 1996–2016: no clear trend'],
+      ['bombus-impatiens', null],
+    ];
+    try {
+      for (const [key, want] of cases) {
+        await page.goto(`${origin}/?species=${key}&noauto&today=2027-01-15`);
+        if (!(await poll((k) => window.__hatch?.current()?.id === `${k}-atlas`, key))) { fail(`${key}: never opened`); continue; }
+        await page.locator('#why').click();
+        if (!(await poll(() => {
+          const d = document.querySelector('#drawer.open');
+          return !!d?.querySelector('[data-track]') && !d.getAnimations({ subtree: false }).length && getComputedStyle(d).transform === 'none';
+        }))) { fail(`${key}: "How sure?" never opened`); continue; }
+        const got = await page.evaluate(() => {
+          const t = document.querySelector('#drawer [data-trend]');
+          if (!t) return null;
+          const card = t.closest('.cav').getBoundingClientRect(), r = t.getBoundingClientRect();
+          return { line: t.querySelector('.trend-line').textContent.replace(/\s+/g, ' ').trim(), note: t.querySelector('.rec-note').textContent,
+            href: t.querySelector('a')?.href, inside: r.left >= card.left && r.right <= card.right + 0.5 && t.scrollWidth <= t.clientWidth + 1 };
+        });
+        if (!want) {
+          if (got) fail(`${key}: a non-butterfly shows a count trend: "${got.line}"`);
+          continue;
+        }
+        if (!got) { fail(`${key}: no count trend line`); continue; }
+        if (got.line !== want) fail(`${key}: the line reads "${got.line}", not "${want}"`);
+        if (!/^Past, Ohio only; not today’s status\. /.test(got.note) || !/Wepprich et al\. 2019/.test(got.note)) fail(`${key}: the small print reads "${got.note}"`);
+        if (got.href !== 'https://doi.org/10.1371/journal.pone.0216270') fail(`${key}: the credit links ${got.href}`);
+        if (!got.inside) fail(`${key}: the trend spills out of the panel`);
+        await page.screenshot({ path: `${out}/ohio-desktop-${key}.png`, timeout: 60000 }).catch(() => {});
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Early or late (seen.py's `days`: the whole expected 2026 season slid to fit its photos). A chip ("11 d late") opens
   // that species on 2026 where its slid season peaks (the expected peak moved by those days), not on the calendar day the
   // map was on; the time bar draws the slide as a bracket from the expected peak, in words ("11 days late"; a phone says
@@ -2756,7 +2807,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     ...per([[1366, 768, false], [390, 844, true]], 'find', 75, findUnit), W('atlas', 170, atlasUnit), W('search', 15, searchUnit), W('seasons', 10, seasonsUnit),
     ...per(watchCases, 'watch', [290, 470], watchUnit), ...per(watchCases, 'empty', 25, emptyUnit), ...per(watchCases, 'quiet', 30, quietUnit),
     ...per(watchCases, 'twins', 30, twinsUnit), ...per(watchCases, 'tree', 25, treeUnit), W('band', 120, (b) => bandUnit([1280, 800, false], b)), W('this year', 80, thisYearUnit),
-    ...per(watchCases, 'near', [100, 155], nearUnit), ...per(watchCases, 'out', 80, outUnit), ...per(watchCases, 'track', [130, 140], trackUnit),
+    ...per(watchCases, 'near', [100, 155], nearUnit), ...per(watchCases, 'out', 80, outUnit), ...per(watchCases, 'track', [130, 140], trackUnit), W('ohio', 40, (b) => ohioUnit([1280, 800], b)),
     ...per(watchCases, 'early/late', [100, 160], earlyLateUnit), ...per(sharePinCases, 'share pin', [265, 130], sharePinUnit), W('evict', 100, evictUnit),
     ...motionCases.map((c) => W(`motion ${c[2] ? 'phone' : 'desktop'}${c[3] ? ' reduced' : ''}`, c[2] ? 35 : 15, (b) => motionUnit(c, b))),
     ...cases.map((c) => W(`live ${c[0]}`, liveCost[c[0]] ?? 60, (b) => liveUnit(c, b))), W('no WebGL', 15, noWebglUnit),
@@ -2766,6 +2817,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));
+  if (process.env.ONLY === 'ohio') units.splice(0, units.length, (b) => ohioUnit([1280, 800], b));
   if (process.env.ONLY === 'track') units.splice(0, units.length, ...watchCases.map((c) => (b) => trackUnit(c, b)));
   if (process.env.ONLY === 'sharepin') units.splice(0, units.length, ...sharePinCases.map((c) => (b) => sharePinUnit(c, b)));
   if (process.env.ONLY === 'earlylate') units.splice(0, units.length, ...watchCases.map((c) => (b) => earlyLateUnit(c, b)));

@@ -74,7 +74,7 @@ const audit = () => {
     else if (Math.min(b.width, b.height) < 24) bad.push(`${name} is only ${Math.round(b.width)}x${Math.round(b.height)}px`);
     else {
       const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-      if (hit && !el.contains(hit)) bad.push(`${name} is covered by ${hit.id || hit.className || hit.tagName}`);
+      if (hit && !el.contains(hit)) bad.push(`${name} is covered by ${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ''}${hit.getAttribute('class') ? `.${hit.getAttribute('class').trim().split(/\s+/).join('.')}` : ''}${hit.parentElement ? ` in ${hit.parentElement.tagName.toLowerCase()}${hit.parentElement.id ? `#${hit.parentElement.id}` : ''}${hit.parentElement.getAttribute('class') ? `.${hit.parentElement.getAttribute('class').trim().split(/\s+/).join('.')}` : ''}` : ''}`);
     }
   }
   return {

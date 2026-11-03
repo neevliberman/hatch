@@ -1,0 +1,103 @@
+CommonName,beta,pct,n_sites,n_years,n_rows,counted,q_lo,q_hi,phi,dropped,lo,hi,shown,verdict,atlas,estimate,std.error,p.value
+Acadian Hairstreak,0.0063919,0.64124,11,21,290,1488,-2.0262,3.3813,50.449,0,-13.755,46.953,True,no clear trend,Strymon acadica,,,
+American Copper,-0.066494,-6.4331,64,21,1360,20278,-7.5755,-5.2766,83.383,0,-15.713,0.60253,True,no clear trend,Lycaena hypophlaeas,-0.1925,0.024269,2.1556e-15
+American Lady,-0.039189,-3.8431,86,21,1818,3922,-5.4275,-2.2321,36.77,0,-13.159,6.4479,True,no clear trend,Vanessa virginiensis,-0.044927,0.033465,0.17943
+American Snout Butterfly,-0.00057511,-0.057494,63,19,1328,1928,-1.5326,1.4397,12.65,0,-6.8171,7.6363,True,no clear trend,Libytheana carinenta,-0.025339,0.049898,0.61158
+Aphrodite Fritillary,-0.1634,-15.075,31,20,686,720,-17.448,-12.635,17.895,0,-23.199,-3.0744,True,declining,Speyeria aphrodite,-0.23285,0.059553,9.2344e-05
+Appalachian Eyed Brown,-0.019443,-1.9255,30,20,572,3662,-3.7774,-0.037975,33.497,0,-21.883,13.67,True,no clear trend,,0.05958,0.044513,0.18074
+Azures,0.024353,2.4651,104,21,2010,121354,1.7365,3.1991,188.6,0,-1.5308,7.2349,True,no clear trend,,0.047284,0.020638,0.021961
+Baltimore,-0.1608,-14.854,16,18,364,1404,-17.647,-11.965,31.831,0,-29.674,2.4022,True,no clear trend,Euphydryas phaeton,-0.22387,0.070777,0.0015611
+Banded Hairstreak,0.034567,3.5171,73,21,1548,2120,1.534,5.539,24.454,0,-10.22,18.489,True,no clear trend,Satyrium calanus,0.0041104,0.031426,0.89594
+Black Dash,0.036472,3.7145,22,18,532,260,0.74018,6.7766,6.6677,0,-14.122,12.139,True,no clear trend,Euphyes conspicua,,,
+Black Swallowtail,-0.024949,-2.4641,103,21,2004,23062,-3.2395,-1.6824,46.185,0,-5.5246,1.108,True,no clear trend,Papilio polyxenes,-0.04409,0.015148,0.0036079
+Broad-winged Skipper,-0.13044,-12.229,13,17,294,8584,-17.877,-6.1929,441.31,0,-44.632,18.475,True,no clear trend,Poanes viator,,,
+Bronze Copper,-0.10174,-9.6736,48,21,1046,1248,-11.991,-7.2954,13.789,0,-22.351,1.5999,True,no clear trend,Tharsalea hyllus,-0.062904,0.038589,0.10307
+Cabbage White,-0.027305,-2.6936,104,21,2010,586240,-3.204,-2.1805,522.35,0,-5.5894,0.27271,True,no clear trend,Pieris rapae,-0.038247,0.01031,0.00020755
+Carolina Satyr,0.036163,3.6825,10,16,202,860,0.43803,7.0318,15.787,0,-5.7718,12.288,True,no clear trend,,,,
+Checkered White,-0.041386,-4.0541,13,9,276,70,-10.369,2.7054,9.615,0,-23.325,13.814,False,no clear trend,Pontia protodice,,,
+Clouded Sulphur,-0.0292,-2.8777,104,21,2010,91420,-3.7212,-2.0268,264.75,0,-6.0203,0.92713,True,no clear trend,Colias philodice,-0.014451,0.01355,0.2862
+Cloudless Sulphur,0.15894,17.227,59,20,1320,3338,14.128,20.411,72.809,0,-6.7901,48.763,True,no clear trend,Phoebis sennae,0.087712,0.056601,0.12122
+Common Buckeye,0.090486,9.4707,97,19,1954,29470,7.4306,11.55,336.31,0,-3.8718,28.775,True,no clear trend,Junonia coenia,0.049523,0.066902,0.45916
+Common Checkered-Skipper,0.091115,9.5395,56,19,1176,5420,7.4558,11.664,65.028,0,1.5191,22.161,True,increasing,Burnsius communis,0.091971,0.046178,0.046408
+Common Roadside Skipper,-0.17586,-16.127,13,13,294,220,-19.917,-12.157,9.9675,0,-28.03,-5.7545,True,declining,Mastor vialis,,,
+Common Sooty Wing,-0.054564,-5.3102,64,20,1386,2116,-7.0807,-3.5061,18.727,0,-12.549,1.7479,True,no clear trend,Pholisora catullus,-0.071572,0.014925,1.6237e-06
+Common Wood Nymph,-0.037039,-3.6362,98,21,1936,41098,-4.2355,-3.0331,60.777,0,-7.1688,-0.34082,True,declining,Cercyonis pegala,-0.07319,0.013403,4.7434e-08
+Coral Hairstreak,-0.0016537,-0.16523,28,21,736,1162,-1.6888,1.382,8.8474,0,-8.0484,8.8527,True,no clear trend,Harkenclenus titus,-0.094457,0.024788,0.0001386
+Crossline Skipper,-0.0011882,-0.11875,54,21,1186,2078,-1.4918,1.2735,12.759,0,-5.6476,4.9753,True,no clear trend,,0.0093452,0.01972,0.63558
+Dainty Sulphur,0.19873,21.986,23,3,516,612,13.915,30.628,91.386,0.004,-2.5257,81.257,False,no clear trend,Nathalis iole,,,
+Delaware Skipper,-0.012763,-1.2682,64,21,1332,2090,-3.1799,0.68118,13.056,0,-7.7698,7.7627,True,no clear trend,,-0.011355,0.029166,0.69705
+Dion Skipper,0.06219,6.4164,9,11,188,56,-2.2856,15.893,8.3582,0,-15.513,41.843,False,no clear trend,Euphyes dion,,,
+Dreamy Duskywing,-0.069561,-6.7197,38,21,918,1604,-8.4851,-4.9202,17.529,0,-17.428,2.8249,True,no clear trend,Erynnis icelus,-0.12037,0.023748,4.0052e-07
+Duke's Skipper,0.018568,1.8742,7,12,124,262,-4.3754,8.5322,16.505,0,-18.972,18.771,False,no clear trend,Euphyes dukesi,,,
+Dun Skipper,-0.0012219,-0.12211,82,21,1646,3186,-1.4039,1.1763,16.45,0,-6.0563,5.3192,True,no clear trend,Euphyes vestris,-0.014063,0.011555,0.22359
+Dusted Skipper,0.099596,10.472,6,9,130,248,1.6482,20.063,26.661,0,-25.573,35.642,False,no clear trend,Atrytonopsis hianna,,,
+Eastern Comma,0.012844,1.2927,101,21,1976,11666,0.50641,2.0852,22.775,0,-1.8169,4.3304,True,no clear trend,Polygonia comma,-0.0065252,0.011226,0.56107
+Eastern Tailed Blue,0.023474,2.3752,104,21,2010,104518,1.6987,3.0562,172.53,0,-0.2571,5.5713,True,no clear trend,Elkalyce comyntas,0.01638,0.010343,0.11328
+Eastern Tiger Swallowtail,-0.0033976,-0.33918,104,21,2010,54424,-1.0134,0.33965,94.385,0,-3.7621,2.7946,True,no clear trend,Papilio glaucus,-0.010372,0.014782,0.48289
+Edwards' Hairstreak,0.025284,2.5607,9,15,256,304,-1.5947,6.8915,14.483,0,-8.8879,20.379,False,no clear trend,Satyrium edwardsii,,,
+European Skipper,-0.078448,-7.545,79,21,1676,91806,-8.3991,-6.6829,292.36,0,-15.344,-1.9375,True,declining,Thymelicus lineola,-0.17293,0.021264,4.2075e-16
+Falcate Orangetip,-0.071408,-6.8919,11,18,236,1346,-8.8661,-4.8748,18.707,0,-13.755,-0.11378,True,declining,Anthocharis midea,-0.12288,0.040274,0.00228
+Fiery Skipper,0.10563,11.142,86,20,1772,7728,9.1377,13.182,81.925,0,-11.4,26.487,True,no clear trend,Hylephila phyleus,-0.056941,0.061104,0.35141
+Gemmed Satyr,0.15208,16.426,9,16,212,2052,12.568,20.416,57.968,0,-0.57149,39.079,False,no clear trend,,0.22774,0.051963,1.1718e-05
+Giant Swallowtail,-0.0045391,-0.45288,62,21,1236,2108,-1.5602,0.66685,7.1811,0,-4.1456,3.6293,True,no clear trend,Papilio cresphontes,0.002098,0.019059,0.91235
+Gold-banded Skipper,-0.011963,-1.1892,2,2,34,14,-17.439,18.259,8.5562,0.001,-42.699,17.963,False,no clear trend,,,,
+Gray Hairstreak,0.017648,1.7805,79,19,1670,4554,0.57024,3.0053,23.482,0,-3.7282,8.0905,True,no clear trend,Strymon melinus,-0.043847,0.025815,0.089411
+Great Spangled Fritillary,-0.005993,-0.59751,102,21,1972,63204,-1.3129,0.12308,127.59,0,-5.824,3.2,True,no clear trend,Speyeria cybele,-0.040612,0.020402,0.046527
+Hackberry Emperor,0.013358,1.3448,58,20,1178,19262,0.354,2.3453,44.761,0,-4.5889,6.0207,True,no clear trend,Asterocampa celtis,-0.036578,0.01715,0.032937
+Harvester,0.12525,13.343,34,20,756,664,9.5839,17.232,19.04,0,-2.5674,33.154,True,no clear trend,Feniseca tarquinius,0.1223,0.061409,0.046418
+Hayhurst's Scallopwing,0.1314,14.043,2,5,46,66,-1.1856,31.618,31.961,0.024,-79.17,92.014,False,no clear trend,,,,
+Henry's Elfin,0.0070772,0.71023,10,17,188,196,-3.6389,5.2557,8.9894,0,-10.263,12.212,True,no clear trend,Incisalia henrici,0.017421,0.055028,0.75155
+Hickory Hairstreak,-0.0025774,-0.25741,27,20,642,388,-3.467,3.0589,13.742,0,-11.434,11.651,True,no clear trend,,-0.023487,0.052663,0.65561
+Hoary Edge Skipper,-0.020001,-1.9802,19,19,424,414,-5.1613,1.3075,11.702,0,-15.106,13.145,True,no clear trend,Cecropterus lyciades,-0.178,0.060742,0.0033848
+Hobomok Skipper,-0.020731,-2.0518,81,21,1632,13326,-2.9819,-1.1127,52.243,0,-6.3171,1.9276,True,no clear trend,Lon hobomok,-0.040421,0.014283,0.0046542
+Horace's Duskywing,0.043754,4.4725,64,21,1304,5346,2.7805,6.1923,42.758,0,-3.8737,14.781,True,no clear trend,Erynnis horatius,-0.010958,0.022976,0.6334
+Indian Skipper,-0.30611,-26.369,13,14,372,162,-31.566,-20.777,12.137,0,-44.133,-12.287,True,declining,Hesperia sassacus,,,
+Juvenal's Duskywing,-0.02686,-2.6502,60,21,1312,6510,-3.794,-1.4928,38.171,0,-8.5826,2.8542,True,no clear trend,Erynnis juvenalis,-0.083211,0.019912,2.9303e-05
+Least Skipper,0.03965,4.0446,99,21,1962,53266,3.3058,4.7888,96.247,0,0.59484,8.4549,True,increasing,Ancyloxypha numitor,0.052993,0.015167,0.00047608
+Leonard's Skipper,-0.086923,-8.3252,25,20,578,2466,-10.793,-5.7892,51.191,0,-17.187,2.6303,True,no clear trend,Hesperia leonardus,-0.11003,0.024829,9.3639e-06
+Little Glassy Wing,0.026989,2.7357,76,21,1542,17096,1.7849,3.6953,62.818,0,-2.8042,7.4115,True,no clear trend,Vernia verna,0.019183,0.018792,0.30736
+Little Wood Satyr,0.00065651,0.065673,100,21,1950,148232,-0.49677,0.6313,226.83,0,-3.6306,3.0123,True,no clear trend,Euptychia cymela,-0.026379,0.0094731,0.0053582
+Little Yellow,0.11862,12.594,63,19,1360,3054,9.536,15.738,58.422,0,-4.6985,35.423,True,no clear trend,Eurema lisa,-0.0076621,0.07343,0.91689
+Long Dash,-0.035306,-3.469,36,21,814,2560,-4.9508,-1.964,19.54,0,-11.972,1.6959,True,no clear trend,,-0.046523,0.020237,0.021509
+Meadow Fritillary,-0.046391,-4.5331,84,21,1760,9834,-6.0694,-2.9717,62.909,0,-14.992,5.9987,True,no clear trend,,-0.055681,0.027058,0.039603
+Milbert's Tortoise Shell,-0.081123,-7.792,26,17,616,278,-10.391,-5.118,6.3474,0,-17.735,-0.42656,True,declining,Aglais milberti,-0.1735,0.065379,0.00796
+Monarch,-0.061531,-5.9676,104,21,2010,88244,-6.7579,-5.1707,196.24,0,-10.007,-1.5136,True,declining,Danaus plexippus,-0.070115,0.022864,0.0021651
+Mourning Cloak,-0.0043609,-0.43514,102,21,1998,6112,-1.1902,0.32568,13.449,0,-4.2597,4.1508,True,no clear trend,Nymphalis antiopa,-0.020842,0.018351,0.25607
+Mulberry Wing,-0.067101,-6.49,2,8,44,60,-14.872,2.7174,10.019,0,-17.674,31.878,False,no clear trend,Poanes massasoit,,,
+Northern Broken-Dash,-0.017434,-1.7282,72,21,1414,11610,-2.6888,-0.75824,36.385,0,-5.4535,1.6793,True,no clear trend,Polites egeremet,-0.061879,0.018016,0.00059318
+Northern Cloudywing,-0.077745,-7.48,34,20,814,850,-9.3232,-5.5993,11.059,0,-12.517,-1.8903,True,declining,,-0.095094,0.033318,0.0043151
+Northern Eyed Brown,-0.021839,-2.1602,34,21,734,2550,-4.1826,-0.095172,26.79,0,-10.291,12.061,True,no clear trend,Lethe eurydice,0.015794,0.034901,0.65088
+Northern Metalmark,-0.068436,-6.6147,5,9,132,58,-12.107,-0.77871,5.1866,0,-28.656,18.292,False,no clear trend,,,,
+Northern Pearly-Eye,-0.00027675,-0.027671,62,21,1300,5236,-1.3164,1.2779,29.813,0,-7.2659,9.0242,True,no clear trend,Lethe anthedon,0.070711,0.019865,0.00037135
+Ocola Skipper,-0.075545,-7.2762,13,11,292,80,-10.972,-3.4274,5.5628,0,-21.097,6.8568,True,no clear trend,Panoquina ocola,,,
+Olive Hairstreak,-0.049212,-4.8021,7,16,194,332,-8.1551,-1.3266,15.092,0,-17.704,6.9308,False,no clear trend,Mitoura gryneus,,,
+Orange Sulphur,-0.043062,-4.2148,103,21,2004,118148,-4.9386,-3.4854,266.07,0,-7.1252,-0.8802,True,declining,Colias eurytheme,-0.055138,0.02082,0.0080908
+Painted Lady,-0.053244,-5.1851,102,21,1996,10924,-7.1639,-3.1642,168.22,0,-18.575,12.517,True,no clear trend,Vanessa cardui,-0.041501,0.053766,0.44019
+Pearl Crescent,0.0099478,0.99974,104,21,2010,343330,0.37734,1.626,529.98,0,-2.628,4.3432,True,no clear trend,Phyciodes tharos,-0.010246,0.013884,0.46055
+Peck's Skipper,-0.003328,-0.33224,100,21,1954,46112,-1.018,0.35827,81.278,0,-3.9341,3.1447,True,no clear trend,,0.014132,0.013805,0.30598
+Pepper and Salt Skipper,0.00018487,0.018489,5,11,122,60,-6.3127,6.7775,7.938,0,-15.844,31.003,False,no clear trend,Mastor hegon,,,
+Pipevine Swallowtail,0.033809,3.4387,46,18,948,1222,1.4236,5.4937,15.997,0,-6.7878,14.326,True,no clear trend,Battus philenor,0.052891,0.033059,0.10962
+Question Mark,-0.0050382,-0.50255,102,21,1988,12498,-1.5997,0.60678,51.232,0,-7.0792,6.9085,True,no clear trend,Polygonia interrogationis,-0.011861,0.025355,0.63993
+Red Admiral,0.032364,3.2894,104,21,2010,55822,1.5412,5.0676,509.86,0,-11.544,20.308,True,no clear trend,Vanessa atalanta,0.0075715,0.044475,0.86482
+Red-banded Hairstreak,-0.023725,-2.3446,18,18,432,682,-4.9447,0.32659,24.304,0,-9.8119,9.4846,True,no clear trend,Calycopis cecrops,0.0087602,0.057353,0.8786
+Red-spotted Purple,-0.025319,-2.5001,103,21,2004,11702,-3.2833,-1.7105,25.308,0,-6.2044,0.65579,True,no clear trend,Limenitis astyanax,-0.063957,0.018605,0.0005868
+Sachem,0.02849,2.89,43,19,970,2842,-0.017479,5.8821,74.847,0,-9.1235,20.607,True,no clear trend,,0.012926,0.057832,0.82315
+Silver-bordered Fritillary,-0.17425,-15.991,7,12,198,2078,-23.032,-8.3067,104.28,0,-67.805,49.825,False,no clear trend,,,,
+Silver-spotted Skipper,0.012797,1.288,103,21,1998,104294,0.45581,2.127,230.09,0,-4.0797,6.2741,True,no clear trend,Epargyreus clarus,0.005083,0.012023,0.67247
+Silvery Checkerspot,0.034486,3.5088,42,19,878,3672,1.7737,5.2735,36.694,0,-5.0929,9.9935,True,no clear trend,Chlosyne nycteis,0.039149,0.021935,0.074291
+Sleepy Duskywing,-0.028779,-2.8369,26,19,560,1548,-5.4991,-0.099584,31.244,0,-13.415,5.8073,True,no clear trend,Erynnis brizo,-0.071314,0.032303,0.027268
+Sleepy Orange,0.021196,2.1423,10,17,214,4046,-3.3327,7.9274,204.36,0.001,-59.772,37.426,True,no clear trend,Abaeis nicippe,0.14598,0.13406,0.2762
+Southern Cloudywing,-0.0092023,-0.91601,27,20,672,1210,-3.3263,1.5544,21.368,0,-12.117,8.1189,True,no clear trend,,-0.12869,0.037342,0.00056826
+Southern Dogface,0.048866,5.0079,10,9,214,180,-1.7876,12.274,22.804,0,-34.794,37.536,False,no clear trend,Zerene cesonia,,,
+Spicebush Swallowtail,-0.0062593,-0.62398,92,21,1826,48408,-1.2712,0.027452,77.661,0,-4.1937,2.8183,True,no clear trend,Papilio troilus,-0.014263,0.014469,0.32425
+Striped Hairstreak,-0.02907,-2.8652,30,19,748,304,-5.1443,-0.53121,6.3511,0,-11.082,5.603,True,no clear trend,Satyrium liparops,-0.027641,0.067368,0.68159
+Swarthy Skipper,-0.10958,-10.379,20,17,422,746,-13.285,-7.3761,14.163,0,-19.802,-1.8573,True,declining,Nastra lherminier,-0.11372,0.041433,0.0060551
+Tawny Emperor,-0.040095,-3.9301,48,19,948,1800,-5.5639,-2.2681,12.422,0,-12.615,4.9729,True,no clear trend,Asterocampa clyton,-0.11367,0.03589,0.0015398
+Tawny-edged Skipper,-0.013784,-1.3689,72,21,1464,4430,-2.4569,-0.26887,17.653,0,-6.8938,4.1526,True,no clear trend,Polites themistocles,-0.058159,0.016419,0.00039679
+Variegated Fritillary,0.14826,15.982,57,19,1196,1672,13.11,18.926,30.778,0,-9.6991,33.308,True,no clear trend,Euptoieta claudia,-0.027205,0.052297,0.60292
+Viceroy,-0.015858,-1.5733,99,21,1950,31330,-2.2334,-0.9087,44.485,0,-6.2555,2.8063,True,no clear trend,Limenitis archippus,-0.038992,0.015856,0.01393
+West Virginia White,-0.038,-3.7287,11,16,264,254,-7.4855,0.18061,13.97,0,-26.308,5.2582,True,no clear trend,Pieris virginiensis,-0.057804,0.059174,0.32864
+White M Hairstreak,-0.027068,-2.6704,32,16,784,184,-4.7196,-0.57728,3.8441,0,-6.9685,2.4168,True,no clear trend,Parrhasius m-album,-0.10503,0.081081,0.19519
+Wild Indigo Duskywing,0.052274,5.3664,72,19,1478,30258,4.4805,6.2598,65.896,0,-0.09446,12.419,True,no clear trend,Erynnis baptisiae,0.10556,0.019591,7.128e-08
+Zabulon Skipper,0.031275,3.1769,87,21,1732,20994,2.3623,3.998,51.495,0,-1.6894,8.1344,True,no clear trend,Lon zabulon,0.061278,0.021513,0.0043933
+Zebra Swallowtail,0.049031,5.0253,31,18,644,2320,3.8674,6.1962,11.064,0,-0.12708,10.138,True,no clear trend,Protographium marcellus,0.075329,0.029779,0.011421

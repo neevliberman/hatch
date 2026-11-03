@@ -14,6 +14,11 @@ const recordHtml = (r: NonNullable<CaveatCard['record']>) => `<div class="cav-re
     x.count ? ` <small>· ${esc(x.count)}</small>` : ''}</span></li>`).join('')}</ul>${
     r.act ? `<p class="rec-act">${esc(r.act)}</p>` : ''}${(r.notes ?? []).map((n) => `<p class="rec-note">${esc(n)}</p>`).join('')}</div>`;
 
+/** A published count trend (CaveatCard.trend): one line, then what it is not and whose counts, as small print. */
+const trendHtml = (t: NonNullable<CaveatCard['trend']>) => `<div class="cav-trend" data-trend>
+  <p class="trend-line"><b>${esc(t.label)}:</b> ${esc(t.value)}</p>
+  <p class="rec-note">${esc(t.note)} <a href="${esc(t.href)}" target="_blank" rel="noopener noreferrer">${esc(t.credit)}<span class="sr"> (opens in a new tab)</span></a></p></div>`;
+
 export interface Drawer {
   /** Open or close. On a phone held upright it opens as a sheet at its middle stop, or at the tall one with `full`. */
   (open: boolean, full?: boolean): void;
@@ -93,6 +98,7 @@ export function mountCaveatDrawer(btn: HTMLElement, drawer: HTMLElement, registr
                   ${c.severity === 'synthetic' ? '<div class="badge">SYNTHETIC DATA</div>' : ''}
                   <h3>${esc(c.title)}</h3>
                   ${c.record ? recordHtml(c.record) : ''}
+                  ${c.trend ? trendHtml(c.trend) : ''}
                   <ul>${c.bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></section>`;
               })
               .join('')
