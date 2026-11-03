@@ -677,7 +677,10 @@ function start() {
     if (pc) q.set('pin', `${plat!.toFixed(2)},${plng!.toFixed(2)}`);
     else if (!askedPin) q.delete('pin'); // a link's pin stays while its species loads
     const c = map.center(padding());
-    if (map.moved() && c && !radar) q.set('at', `${c.lngLat[1].toFixed(3)},${c.lngLat[0].toFixed(3)},${c.zoom.toFixed(1)}`);
+    // To 2 decimals (~1 km, a few px at the deepest zoom): a link from a view near the reader tells no more than ?pin=.
+    // Only past zoom 11 (a radar replay's depth), where 1 km is a large step on screen, does it keep 3.
+    const dp = c && c.zoom > 11 ? 3 : 2;
+    if (map.moved() && c && !radar) q.set('at', `${c.lngLat[1].toFixed(dp)},${c.lngLat[0].toFixed(dp)},${c.zoom.toFixed(1)}`);
     else q.delete('at');
     if (radar) q.set('radar', radar.id);
     else q.delete('radar');
@@ -802,8 +805,10 @@ function start() {
     hit = { ...here, label };
     pinned = true;
     map.setMarker(null);
-    // Close enough to see the town's neighbours, and never further out than the current view.
-    map.focus([lng, lat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding(), true);
+    // Close enough to see the town's neighbours, and never further out than the current view. Centred on the hexagon,
+    // not the spot: the view (and so a shared link's ?at=) never says where My area found the reader.
+    const [clat, clng] = cellToLatLng(here.cell);
+    map.focus([clng, clat], Math.max(map.fitZoom() + 1.5, map.zoom() ?? 0), padding(), true);
     updateProbe();
     return here === first ? 'exact' : 'nearby';
   };

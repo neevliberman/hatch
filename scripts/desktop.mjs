@@ -2287,7 +2287,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Shared links reopen the pinned card (?pin=lat,lng): a hexagon pinned by a tap, for luna (a forecast) and an Atlas
   // species, then Share. Its link names the hexagon's centre to 2 decimals; that link in a fresh page pins the same card
   // (title, hexagon and season line), and closing it drops pin= from the address bar. A card pinned from My area shares
-  // its hexagon, not the reader's own spot. A malformed, partial or far-off pin opens with no card and no error, and
+  // its hexagon, and no part of its link (pin=, at=) gives the reader's own spot. A malformed, partial or far-off pin opens with no card and no error, and
   // leaves the address bar. Desktop and phone. Waits poll on a timer (a software-GL frame can take 10-25 s).
   // ONLY=sharepin runs just this.
   const sharePinUnit = async ([w, h, phone], browser) => {
@@ -2341,9 +2341,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           }
           await pg.emulateMedia({ colorScheme: 'light' });
         }
-        // Closing the card takes pin= out of the address bar (it keeps the rest of the view).
-        await tap(pg, pg.locator('#probe .probe-close'));
-        if (!(await poll(pg, () => !/[?&]pin=/.test(location.search) && /[?&]date=/.test(location.search), null, 30000))) fail(`${what}: closing the card left ${await pg.evaluate(() => location.search)}`);
+        // Closing the card takes pin= out of the address bar (it keeps the rest of the view). A card rebuilt between the
+        // press and the click (a late file landing) ignores that click, as it would a reader's: press again if it stayed.
+        for (let i = 0; i < 3 && (await card(pg)); i++) {
+          await tap(pg, pg.locator('#probe .probe-close'));
+          await poll(pg, () => !document.querySelector('#probe:not([hidden]) .probe-close'), null, 5000);
+        }
+        if (!(await poll(pg, () => !/[?&]pin=/.test(location.search) && /[?&]date=/.test(location.search), null, 30000))) fail(`${what}: closing the card left ${await pg.evaluate(() => location.search)} (card: ${JSON.stringify(await card(pg))})`);
       } finally {
         await pg.close();
       }
@@ -2387,8 +2391,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         const pin = url && pinOf(url);
         if (!pin) fail(`My area: the shared link has no pin (${url})`);
         else {
-          const [la, ln] = pin.split(',').map(Number);
-          if ([2, 3, 4].some((d) => la === +ME.latitude.toFixed(d) && ln === +ME.longitude.toFixed(d))) fail(`My area: the link gives the reader's own spot (${pin})`);
+          // Nowhere in the link (pin=, at= or anything else), at any rounding, as text or as numbers.
+          const nums = (decodeURIComponent(new URL(url).search).match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+          for (const d of [2, 3, 4]) {
+            const [la, ln] = [ME.latitude.toFixed(d), ME.longitude.toFixed(d)];
+            if (url.includes(la) || url.includes(ln) || nums.includes(+la) || nums.includes(+ln)) fail(`My area: the link gives the reader's own spot to ${d} decimals (${url})`);
+          }
           // The reopened card names no place ("Near you" is the sharer's): compare the hexagon and its season only.
           await reopen('My area', url, { ...want }, null);
         }
