@@ -2188,7 +2188,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // that species on 2026 where its slid season peaks (the expected peak moved by those days), not on the calendar day the
   // map was on; the time bar draws the slide as a bracket from the expected peak, in words ("11 days late"; a phone says
   // it as its chip does), the thumb on its slid end, the words and at least part of the bracket clear of the thumb; the
-  // caption's "Peak: about" month is the bar note's; a pinned card says it plainly ("came 11 days later than expected")
+  // caption's "Peak: about" month is the bar note's; a pinned card says it plainly ("came 11 days later")
   // and the Midwest-wide bracket steps aside for it. With "Warm the spring" on, a chip keeps the calendar day and draws
   // no bracket. The days and dates are written out here (public/atlas/seen-2026), not worked out the app's way. Desktop
   // and phone. Waits poll on a timer (a software-GL frame can take 10-25 s). ONLY=earlylate runs just this.
@@ -2255,7 +2255,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // A pinned card says it in words, and the Midwest-wide marks step aside for its place.
         const at = await clearSpotOn(page, [-91, 43.5, -88.5, 45.5]);
         await (phone ? page.touchscreen.tap(at[0], at[1]) : page.mouse.click(at[0], at[1]));
-        const plain = `and came ${days} days ${way === 'late' ? 'later' : 'earlier'} than expected`;
+        const plain = `and came ${days} days ${way === 'late' ? 'later' : 'earlier'}`;
         if (!(await poll((t) => (document.getElementById('probe')?.textContent ?? '').includes(t), plain)))
           fail(`${key}: the card does not say "${plain}": "${await page.locator('#probe').innerText().catch(() => '')}"`);
         if (/for its warmth/.test((await page.locator('#probe').textContent()) ?? '')) fail(`${key}: the card still says "for its warmth"`);

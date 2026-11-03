@@ -193,7 +193,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const rings = ripples<Dot>(`${key}-ripples`, (x) => [x.lng, x.lat], () => palette.dotRim);
   /** " so far (412 photos)" while the year is still coming in, so an early count never reads as the year's. */
   const soFar = (y: Seen) => (y.soFar ? ` so far (${y.photos.toLocaleString('en-US')} photo${y.photos === 1 ? '' : 's'})` : '');
-  /** "3.4× as many photos as expected, and came 6 days earlier than expected": its year over the whole map, in a few words. While
+  /** "3.4× as many photos as expected, and came 6 days earlier" (than expected, as the first half already says): its year over the whole map, in a few words. While
    * the year is still coming in, a handful of photos is no verdict yet (the strips' own thresholds are higher still). */
   const yearWords = (y: Seen) => {
     if (y.soFar && y.photos < SO_FAR_MIN && y.expectedPhotos < SO_FAR_MIN) return 'too few yet to judge';
@@ -206,7 +206,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       : `${x}× as many photos as expected`;
     // Early or late against the expected season, which already knows how warm the spring was (so "than expected", not
     // "than usual"): seen.py's best slide of the whole expected season to fit the photos.
-    const d = y.days === null ? '' : `, and came ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'earlier' : 'later'} than expected`;
+    const d = y.days === null ? '' : `, and came ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'earlier' : 'later'}`;
     return r + d;
   };
 
