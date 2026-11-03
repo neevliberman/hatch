@@ -1054,11 +1054,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // opened: About lists every event, its link then fetches that event's code and frames (and no other's), the map glides
   // to the radar and plays, the card gives the local time, "How we know" has the sources, the link names the replay, and
   // × brings the Midwest back. A ?radar= link with reduced motion opens it paused, on a scan with echo.
-  // Per event: the radar, its time zone and month, and a point on its paper sheet (60 km out, clear of echo).
+  // Per event: the radar, and its time zone and month.
   const RADARS = {
-    'karx-2014-07-20': { at: [-91.19, 43.82], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*July 2014/, sheet: [-91.94, 43.82] },
-    'kdvn-2012-06-23': { at: [-90.58, 41.61], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*June 2012/, sheet: [-90.58, 41.07] },
-    'kcle-2019-06-26': { at: [-81.86, 41.41], when: /\b\d{1,2}:\d\d (am|pm) EDT\b[\s\S]*June 2019/, sheet: [-81.86, 40.87] },
+    'karx-2014-07-20': { at: [-91.19, 43.82], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*July 2014/ },
+    'kdvn-2012-06-23': { at: [-90.58, 41.61], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*June 2012/ },
+    'kcle-2019-06-26': { at: [-81.86, 41.41], when: /\b\d{1,2}:\d\d (am|pm) EDT\b[\s\S]*June 2019/ },
   };
   const ERIE = 'kcle-2019-06-26';
   const QC = 'kdvn-2012-06-23';
@@ -1150,38 +1150,17 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(([lng, lat]) => {
         const c = window.__hatch.map.center(window.__hatch.padding());
         return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && Math.abs(c.lngLat[0] - lng) < 0.5 && Math.abs(c.lngLat[1] - lat) < 0.6;
-      }, ev.at, { timeout: 30000 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
+      }, ev.at, { timeout: 30000, polling: 300 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
       await settled();
-      // Drawn where it belongs: the radar's paper sheet 60 km from the radar. The species that was on screen is not part
-      // of the replay, so its hexagons are out of sight (map.ts); the Giant Mayfly's field is the map's now (ONLY=radarmayfly).
-      // The frames arrive and are drawn on their own beat, which can lag the glide on a runner with software GL: look again
-      // for up to 10 s before calling the sheet missing.
-      const paper = ([r, g, b]) => r > 225 && g > 220 && b > 200;
+      // Drawn: the echo, its range rings and the dish (no paper sheet by day: the Giant Mayfly's field shows through,
+      // dimmed). The species that was on screen is not part of the replay, so its hexagons are out of sight (map.ts); the
+      // Giant Mayfly's field is the map's now (ONLY=radarmayfly). The frames arrive on their own beat, which can lag the
+      // glide on a runner with software GL.
       const hexesDrawn = () => page.evaluate(() => window.__hatch.map.drawn().filter((id) => /-(forecast|unseen)-r\d/.test(id) && !id.startsWith('hexagenia-limbata-')));
-      let px;
-      for (let tries = 0; tries < 20; tries++) {
-        const png = await shotR('1-open');
-        px = await page.evaluate(async ([b64, sheet, off]) => {
-          const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
-          const c = new OffscreenCanvas(bmp.width, bmp.height);
-          const g = c.getContext('2d');
-          g.drawImage(bmp, 0, 0);
-          const k = bmp.width / innerWidth;
-          // The lightest pixel of a 9 x 9 patch: the ground's own colour, past any tree mark or line drawn over it.
-          const lightest = (lngLat) => {
-            const [x, y] = window.__hatch.map.project(lngLat);
-            if (x < 5 || y < 5 || x > innerWidth - 5 || y > innerHeight - 5) return null; // off a phone's screen
-            const d = g.getImageData(Math.round(x * k) - 4, Math.round(y * k) - 4, 9, 9).data;
-            let best = [0, 0, 0];
-            for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > best[0] + best[1] + best[2]) best = [d[i], d[i + 1], d[i + 2]];
-            return best;
-          };
-          return { sheet: lightest(sheet) };
-        }, [png.toString('base64'), ev.sheet]);
-        if (px.sheet && paper(px.sheet)) break;
-        await page.waitForTimeout(500);
-      }
-      if (!px.sheet || !paper(px.sheet)) fail(`no radar sheet at its place (${px.sheet})`);
+      const radarDrawn = () => page.waitForFunction(() => ['radar-frame', 'radar-rings', 'radar-site'].every((id) => window.__hatch.map.drawn().includes(id)),
+        null, { timeout: 30000, polling: 400 }).then(() => true, () => false);
+      if (!(await radarDrawn())) fail(`the radar is not drawn: ${(await page.evaluate(() => window.__hatch.map.drawn())).filter((id) => id.startsWith('radar')).join(', ')}`);
+      await shotR('1-open');
       const under = await hexesDrawn();
       if (under.length) fail(`forecast hexagons drawn under the replay: ${under.join(', ')}`);
       // Nor is the replay that species' season: the season menu steps aside while it is up.
@@ -1189,7 +1168,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // The title stays plain (no species sketch beside it; a phone gives its room to the species' name, as always).
       if ((!phone && !(await page.locator('.brand').isVisible())) || (await page.locator('.brand .mark').isVisible())) fail('over the replay the title is missing or still wears the species sketch');
       const t0 = await page.locator('#radar .rd-time').textContent();
-      const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000 })
+      const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000, polling: 250 })
         .then(() => true, () => false);
       if (moving === reduce) fail(reduce ? 'it plays under reduced motion' : 'the replay does not play');
       if (reduce && !/^Play/.test((await page.locator('#radar .rd-play').getAttribute('aria-label')) ?? '')) fail('under reduced motion it does not open paused');
@@ -1221,10 +1200,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // zoom may go in past town scale. It stays on through ×, which must still bring the Midwest back.
       if (!reduce && !phone) {
         await page.locator('#radar .rd-night').click();
-        await page.waitForFunction(() => document.querySelector('#radar .rd-night')?.getAttribute('aria-pressed') === 'true', null, { timeout: 30000 }).catch(() => fail('Night did not turn on'));
+        await page.waitForFunction(() => document.querySelector('#radar .rd-night')?.getAttribute('aria-pressed') === 'true', null, { timeout: 30000, polling: 300 }).catch(() => fail('Night did not turn on'));
         if (!(await page.locator('#radar .rd-sim').isVisible())) fail('Night does not say its dots are simulated');
         if (!(await page.locator('#radar .rd-spark').isVisible())) fail('Night shows no echo line');
-        await page.waitForFunction(() => new URL(location.href).searchParams.get('night') === '1', null, { timeout: 5000 }).catch(() => fail('the link does not say night'));
+        await page.waitForFunction(() => new URL(location.href).searchParams.get('night') === '1', null, { timeout: 5000, polling: 300 }).catch(() => fail('the link does not say night'));
         if (!fetched.some((p) => p.endsWith(`/radar/${id}/wind.json`))) fail('Night never fetched the wind');
         await page.evaluate((at) => window.__hatch.map.view(at, 12), ev.at);
         if (((await page.evaluate(() => window.__hatch.map.zoom())) ?? 0) < 11) fail('Night does not zoom in past town scale');
@@ -1233,7 +1212,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#radar .rd-x').click();
       if (await page.locator('#radar').count()) fail('× did not close the replay');
       // Back at the whole-Midwest fit: not just flagged as fitted, but drawn at the fit's zoom once the glide is done.
-      await page.waitForFunction(() => window.__hatch.map.moved() === false && Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05, null, { timeout: 30000 })
+      await page.waitForFunction(() => window.__hatch.map.moved() === false && Math.abs(window.__hatch.map.zoom() - window.__hatch.map.fitZoom()) < 0.05, null, { timeout: 30000, polling: 300 })
         .catch(async () => fail(`closing it did not bring the Midwest back: ${JSON.stringify(await view())}, fit zoom ${await page.evaluate(() => window.__hatch.map.fitZoom())}`));
       // Open it once more (past the shore zoom, back out, past it again), then close with Escape: a console error fails
       // the run. On a keyboard's screens: a phone has no Escape key, and its first open and × are checked above. Lake
@@ -1331,16 +1310,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if ((await page.locator('#radar').count()) !== 1 || !/EDT/.test(await page.locator('#radar .rd-cap').innerText())) fail('of two quick clicks, the wrong card is left');
       if (!(await page.evaluate(() => document.getElementById('app').classList.contains('radar-on')))) fail('of two quick clicks, the time bar came back over the replay');
       if (!(await at(ERIE))) fail('of two quick clicks, the first one moved the map after the last opened');
-      const png = await shotCdp(page, `${out}/radar-switch-race.png`);
-      const sheet = await page.evaluate(async ([b64, lngLat]) => {
-        const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
-        const c = new OffscreenCanvas(bmp.width, bmp.height);
-        const g = c.getContext('2d');
-        g.drawImage(bmp, 0, 0);
-        const [x, y] = window.__hatch.map.project(lngLat);
-        return [...g.getImageData(Math.round(x), Math.round(y), 1, 1).data.slice(0, 3)];
-      }, [png.toString('base64'), RADARS[ERIE].sheet]);
-      if (!(sheet[0] > 225 && sheet[1] > 220 && sheet[2] > 200)) fail(`of two quick clicks, the replay's sheet is gone from the map (${sheet})`);
+      await shotCdp(page, `${out}/radar-switch-race.png`);
+      const drawn = await page.waitForFunction(() => ['radar-frame', 'radar-rings', 'radar-site'].every((id) => window.__hatch.map.drawn().includes(id)),
+        null, { timeout: 30000, polling: 400 }).then(() => true, () => false);
+      if (!drawn) fail('of two quick clicks, the replay is gone from the map');
       await page.locator('#radar .rd-x').click();
       if (!(await home())) fail('× after two quick clicks did not bring the Midwest back');
     } catch (e) {
@@ -2543,8 +2516,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   };
   // A replay's map is the Giant Mayfly's (src/main.ts): opened over luna in 2019 on 2 June with a card pinned, the header
   // names the Giant Mayfly at once, the season menu steps aside, no luna hexagon is drawn, the mayfly's field fades in
-  // on the replay's day with one line on it (its thin-data flag too: 285 records), and the link keeps the view under it.
-  // × puts back the species, season, day and card. One desktop case (the phone's header: mobile.mjs). Waits poll on a
+  // on the replay's day with one line on it (the model's share on the hatch, and its thin-data flag: 285 records), and
+  // the link keeps the view under it. × puts back the species, season, day and card, also when pressed before the Atlas
+  // has arrived (from a link). One desktop case (the phone's header: mobile.mjs). Waits poll on a
   // timer (a software-GL frame can take 10-25 s). ONLY=radarmayfly runs just this.
   const radarMayflyUnit = async (browser) => {
     const tag = 'radar mayfly';
@@ -2591,7 +2565,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (during.day !== '07-20') fail(`the mayfly's field is on ${during.day}, not the replay's 20 July`);
       if (during.hexes.join() !== 'hexagenia-limbata') fail(`drawn under the replay: ${during.hexes.join(', ')}`);
       const line = await page.locator('#radar .rd-model').innerText();
-      if (!/^Model, typical year: (1 in [\d,]+ photos here are|hardly any) Giant Mayflies/.test(line) || !/only 285 records/.test(line)) fail(`the replay's line reads "${line}"`);
+      // The model's own number on the hatch (RadarEvent.hatch, the river below La Crosse) that day, not the radar dish's.
+      const want = await page.evaluate((at) => {
+        const e = window.__hatch.current().expected(at, window.__hatch.time.cursor);
+        return e && `Typical year here: ${e.oneIn ? `~${e.oneIn} photos` : 'hardly any'} · ${e.records} records`;
+      }, [-91.25, 43.72]);
+      if (!want || line.trim() !== want || !/285 records/.test(line)) fail(`the replay's line reads "${line}", not "${want}"`);
+      if (await page.locator('#radar .rd-model').evaluate((el) => el.scrollWidth > el.clientWidth + 1)) fail('the replay\'s line is cut off');
       const q = new URLSearchParams(during.url);
       if (q.get('radar') !== 'karx-2014-07-20' || q.get('year') !== '2019' || q.get('date') !== '06-02' || q.has('species') || q.get('pin') !== new URLSearchParams(before.url).get('pin'))
         fail(`over the replay the link reads ${during.url}, not the view under it (${before.url})`);
@@ -2607,6 +2587,24 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       };
       if (!(await poll(back, before, 30000)))
         fail(`× did not put the view back: ${JSON.stringify(await look())}, before ${JSON.stringify(before)}`);
+      // Closed while the Atlas is still on its way (its network held back): luna, 2019 and 2 June come back at once, and
+      // the Atlas arriving later changes nothing.
+      let release = () => {};
+      const held = new Promise((r) => (release = r));
+      await ctx.route('**/atlas/model.bin', async (r) => (await held, r.continue()));
+      await page.goto(origin + '/?noauto&today=2027-01-15&year=2019&date=06-02&radar=karx-2014-07-20');
+      await page.waitForSelector('#radar', { timeout: 30000 });
+      if ((await look()).species !== 'Giant Mayfly') fail('a replay from a link does not name the Giant Mayfly while the Atlas loads');
+      await page.locator('#radar .rd-x').click();
+      const early = (b) => document.querySelector('#species .sp-face').textContent === 'Luna moth' && document.getElementById('season').checkVisibility() &&
+        document.getElementById('season').value === '2019' && new Date(window.__hatch.time.cursor).toISOString().slice(5, 10) === '06-02' &&
+        window.__hatch.current().id === 'luna-replay' && window.__hatch.map.drawn().some((id) => id.startsWith('luna-forecast'));
+      if (!(await poll(early, null, 30000))) fail(`closed before the Atlas came, the view is ${JSON.stringify(await look())}`);
+      const done = page.waitForEvent('requestfinished', { predicate: (r) => r.url().endsWith('/atlas/model.bin'), timeout: 60000 }).catch(() => null);
+      release();
+      await done;
+      await page.waitForTimeout(2000); // nothing to poll for: it must change nothing
+      if (!(await page.evaluate(early))) fail(`the Atlas arriving after × changed the view: ${JSON.stringify(await look())}`);
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
@@ -2633,7 +2631,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     ...motionCases.map((c) => W(`motion ${c[2] ? 'phone' : 'desktop'}${c[3] ? ' reduced' : ''}`, c[2] ? 35 : 15, (b) => motionUnit(c, b))),
     ...cases.map((c) => W(`live ${c[0]}`, liveCost[c[0]] ?? 60, (b) => liveUnit(c, b))), W('no WebGL', 15, noWebglUnit),
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => W(`screen ${s.join(' ')}`, 90, (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined))),
-    W('radar mayfly', 60, radarMayflyUnit));
+    W('radar mayfly', 75, radarMayflyUnit));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));

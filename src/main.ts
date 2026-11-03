@@ -162,7 +162,7 @@ function start() {
   /** What was on screen before a replay opened (its species, season, day and pinned card), put back when it closes,
    * and the link it had: while a replay is up the address bar keeps that one and names the replay, so a shared link
    * opens the same view under it. Null while no replay is up or loading. */
-  let beforeRadar: { key: string; mode: Mode; day: [number, number]; hit: ProbeHit | null; askedPin: [number, number] | null; query: string } | null = null;
+  let beforeRadar: { key: string; mode: Mode; day: [number, number]; warm: number; hit: ProbeHit | null; askedPin: [number, number] | null; query: string } | null = null;
   /** The header's species name (the species picker's button), to put back if a replay's species never arrived. */
   let curLabel = 'Luna moth';
   const probeEl = $('probe');
@@ -1121,17 +1121,21 @@ function start() {
     map.overlayHexes(`${RADAR_SPECIES.key}-`);
     speciesPick.show(RADAR_SPECIES.key, RADAR_SPECIES.label);
     wantDay = day;
+    // The season as it usually runs, as its line says (the reader's warmth, or a link's, comes back with their view).
+    askedWarm = 0;
+    warmth.set(0);
     await setSpecies(RADAR_SPECIES.key, TYPICAL);
-    if (radar?.id !== id || curKey !== RADAR_SPECIES.key) return;
+    if (radar?.id !== id) return;
+    // It never came (no Atlas): the header names what is really there, over a bare map.
+    if (curKey !== RADAR_SPECIES.key) return speciesPick.show(curKey, curLabel);
     if (!sameDay(day)) switchMode(picker.value, day); // it was on screen already, on another day
     radarNote();
   };
   radarNote = () => {
     if (!radar) return;
+    // The share of insect photos the model expects to be Giant Mayflies on the hatch, that day (the header names it).
     const e = curKey === RADAR_SPECIES.key ? cur.expected?.(radar.at, time.cursor) : null;
-    const many = cur.words.plural;
-    radar.note(e ? `Model, typical year: ${e.oneIn ? `${e.oneIn} photos here are ${many}` : `hardly any ${many} expected here`}` : null,
-      e?.rough ? `only ${e.records} records` : undefined);
+    radar.note(e ? `Typical year here: ${e.oneIn ? `~${e.oneIn} photos` : 'hardly any'}` : null, e?.rough ? `${e.records} records` : undefined);
   };
   /** Settles once a closed replay has put the reader's view back. */
   let radarLeft: Promise<void> = Promise.resolve();
@@ -1141,8 +1145,10 @@ function start() {
     map.overlayHexes(null);
     if (!b) return;
     wantDay = b.day;
+    askedWarm = b.warm; // applied as its species comes back (setSpecies), if that one takes warmth
     await setSpecies(b.key, b.mode);
     if (beforeRadar) return; // a replay opened again meanwhile: it took this view over
+    if (askedWarm && cur.setWarmth) warmth.set(askedWarm), (askedWarm = 0); // (already on screen: setSpecies kept it)
     speciesPick.show(curKey, curLabel); // the Giant Mayfly may never have come
     if (picker.value !== b.mode && (cur.seasons?.() ?? []).includes(b.mode)) picker.value = b.mode;
     if (!sameDay(b.day) || cur.mode() !== picker.value) switchMode(picker.value, b.day);
@@ -1166,7 +1172,7 @@ function start() {
       if (mode === LIVE) q.set('season', LIVE);
       else if (mode !== TYPICAL) q.set('year', mode);
       q.set('date', `${String(wantDay[0] + 1).padStart(2, '0')}-${String(wantDay[1]).padStart(2, '0')}`);
-      beforeRadar = { key: speciesPending ?? curKey, mode, day: wantDay, hit: pinned ? hit : null, askedPin, query: q.toString() };
+      beforeRadar = { key: speciesPending ?? curKey, mode, day: wantDay, warm: warmth.value || askedWarm, hit: pinned ? hit : null, askedPin, query: q.toString() };
     }
     // The Atlas starts loading now, alongside the replay's frames (it takes longer).
     void import('./atlas/atlas').then((m) => m.loadAtlas());

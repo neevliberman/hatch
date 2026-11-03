@@ -45,7 +45,7 @@ export type View = NonNullable<ReturnType<MapHandle['center']>>;
 
 export interface Radar {
   id: string;
-  /** The radar's own place, [lng, lat]. */
+  /** The place on the hatch the card's line speaks for, [lng, lat] (RadarEvent.hatch). */
   at: [number, number];
   /** Where × goes back to: a place the reader had panned to, or null for the whole Midwest. */
   before: View | null;
@@ -224,8 +224,8 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     return img;
   };
 
-  // A sheet of paper under the radar's reach, so the forecast hexagons don't read as part of it; the rivers and state
-  // lines still draw on top. Range rings at half the reach and at the reach (40 and 80 km, or 60 and 120), and the
+  // Under the radar's reach: by day nothing (the Giant Mayfly's field shows through, dimmed, map.ts), at night the dark
+  // sky; the rivers and state lines still draw on top. Range rings at half the reach and at the reach (40 and 80 km, or 60 and 120), and the
   // radar itself as an ink dot.
   const reach = meta.kept.range_km[1] * 1000;
   const disc = [{ ring: circle(meta, reach + meta.polar.gate_m) }];
@@ -233,7 +233,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     id: 'radar-sheet',
     data: disc,
     getPolygon: (d) => d.ring,
-    getFillColor: dark ? NIGHT_SKY : ([...palette.land.slice(0, 3), 235] as RGBA),
+    getFillColor: dark ? NIGHT_SKY : [0, 0, 0, 0],
   });
   let sheet = sheetOf(false);
   const rings = new PathLayer<{ path: [number, number][] }>({
@@ -526,5 +526,5 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
     if (text && flag) model.append(' ', Object.assign(document.createElement('span'), { className: 'rd-thin', textContent: `· ${flag}` }));
     if (open && card.offsetHeight !== was) look(true); // a taller card: keep the radar clear of it
   };
-  return { id, at: [meta.lon, meta.lat], before, close, night: () => nightOn, note };
+  return { id, at: ev.hatch, before, close, night: () => nightOn, note };
 }

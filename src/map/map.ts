@@ -54,7 +54,8 @@ export interface MapHandle {
    * While any are set the sighting dots stand down, so nothing but the overlay's own story sits on it. [] clears it. */
   setOverlay(layers: Layer[], overWater?: Layer[]): void;
   /** The hexagons that stay under an overlay: those whose layer id starts with `prefix` (the radar replay's own species,
-   * main.ts). They fade in the first time they draw under it. null: none, the overlay hides every species' hexagons. */
+   * main.ts), dimmed so the overlay stays the thing to look at. They fade in the first time they draw under it. null:
+   * none, the overlay hides every species' hexagons. */
   overlayHexes(prefix: string | null): void;
   /** Let the zoom go in past town scale (the radar replay's night view, where simulated insects resolve into dots). */
   deep(on: boolean): void;
@@ -573,6 +574,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   let fadeAt = 0;
   let fadeFrame = 0;
   const FADE_MS = 600;
+  /** How much of their colour the overlay's own species' hexagons keep under it. */
+  const UNDER = 0.32;
   const fadeIn = () => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return 1;
     const now = performance.now();
@@ -599,7 +602,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // Not drawn yet (still loading): its fade starts when it is.
     const fade = all.some(kept) ? fadeIn() : ((fadeAt = 0), 1);
     const hexes = all.map((l) => (!on ? l : kept(l)
-      ? l.clone({ opacity: (l.props.opacity ?? 1) * fade, pickable: false, autoHighlight: false })
+      ? l.clone({ opacity: (l.props.opacity ?? 1) * UNDER * fade, pickable: false, autoHighlight: false })
       : l.clone({ visible: false, pickable: false, autoHighlight: false })));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
     // An overlay goes over the woods' tree marks and under the lakes, roads and rivers; its over-water part just after

@@ -426,13 +426,13 @@ if (existsSync(join(distDir, 'radar'))) {
           await page.waitForSelector('#radar', { timeout: 30000 });
           const cap = (await page.locator('#radar .rd-cap').innerText()).replace(/\s+/g, ' ');
           if (!cap.includes(ev.tz) || !/[Mm]ayflies/.test(cap)) fail(`the caption reads "${cap}"`);
-          // Zoomed in on it, in the free map between the header and the card (the card's Giant Mayfly line, src/main.ts,
-          // makes it taller once the Atlas is in, and the radar moves up to keep clear of it).
+          // Zoomed in on it: the dish near the middle across, and between the header and the card (the card's Giant Mayfly
+          // line, src/main.ts, makes it taller once the Atlas is in, and the radar moves up to keep clear of it).
           await page.waitForFunction(([lng, lat]) => {
             const at = window.__hatch.map.project([lng, lat]);
             const top = document.getElementById('top').getBoundingClientRect().bottom;
             const card = document.getElementById('radar').getBoundingClientRect();
-            return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && !!at && at[0] > 0 && at[0] < innerWidth && at[1] > top && at[1] < card.top;
+            return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && !!at && Math.abs(at[0] - innerWidth / 2) < innerWidth / 4 && at[1] > top && at[1] < card.top;
           }, ev.at, { timeout: 30000, polling: 250 }).catch(() => fail('the map did not go to the radar'));
           const card = await page.evaluate(() => {
             const bad = [];
@@ -709,6 +709,9 @@ if (existsSync(join(distDir, 'radar'))) {
         if (!(await page.locator('#theme-btn').isVisible()) || !(await page.locator('#info-btn').isVisible())) fail('a radar replay hid the theme or About button');
         if (await page.evaluate(() => window.__hatch.map.drawn().some((id) => id.startsWith('luna-')))) fail('luna hexagons drawn under a radar replay');
         await page.waitForFunction(() => !document.querySelector('#radar .rd-model').hidden, null, { timeout: 90000, polling: 400 }).catch(() => fail('the replay never got its Giant Mayfly line'));
+        // One line, whole: the model's share on the hatch and its thin-data flag.
+        const line = await page.locator('#radar .rd-model').evaluate((el) => ({ text: el.textContent, cut: el.scrollWidth > el.clientWidth + 1 }));
+        if (line.cut || !/^Typical year here: (~1 in [\d,]+ photos|hardly any) · 285 records$/.test(line.text)) fail(`the replay's line reads "${line.text}"${line.cut ? ', cut off' : ''}`);
         const f = await face();
         if (f.text !== 'Giant Mayfly' || !f.shown || !f.whole) fail(`over a radar replay the species button reads "${f.text}"${f.shown && f.whole ? '' : ', not whole'}`);
         if (!f.row) fail('over a radar replay the header is not one row');
