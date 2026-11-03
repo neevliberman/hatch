@@ -53,6 +53,9 @@ export interface MapHandle {
    * state lines until the zoomed-in shore draws the lakes over those (then over them, never under a lake).
    * While any are set the sighting dots stand down, so nothing but the overlay's own story sits on it. [] clears it. */
   setOverlay(layers: Layer[], overWater?: Layer[]): void;
+  /** The hexagons that stay under an overlay: those whose layer id starts with `prefix` (the radar replay's own species,
+   * main.ts). They fade in the first time they draw under it. null: none, the overlay hides every species' hexagons. */
+  overlayHexes(prefix: string | null): void;
   /** Let the zoom go in past town scale (the radar replay's night view, where simulated insects resolve into dots). */
   deep(on: boolean): void;
   /** After a light/dark switch: drop every layer and draw them again, so none keeps its old colours on the GPU. */
@@ -102,7 +105,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     container.insertAdjacentHTML('afterend', `<p id="no-webgl" role="status">This map needs a graphics feature (WebGL) that isn't working in this
       browser. Try another browser, or turn on hardware acceleration in this one's settings.</p>`);
     onFirstDraw?.();
-    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {}, deep() {}, recolor() {}, drawn: () => [] };
+    return { refresh() {}, fit() {}, rebound() {}, moved: () => false, focus() {}, center: () => null, fitZoom: () => 4, setMarker() {}, setPicked() {}, project: () => null, zoom: () => null, view() {}, setOverlay() {}, overlayHexes() {}, deep() {}, recolor() {}, drawn: () => [] };
   }
   let deepest = 9.5;
   const size = () => ({ width: container.clientWidth || 800, height: container.clientHeight || 600 });
@@ -564,6 +567,20 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         pickable: false, autoHighlight: false, highlightedObjectIndex: null } as never)];
     });
 
+  // The overlay's own species' hexagons (overlayHexes) and when they first drew under it: they fade in over FADE_MS,
+  // a frame at a time even while the overlay itself is still (a paused replay). No fade under reduced motion.
+  let keepHexes: string | null = null;
+  let fadeAt = 0;
+  let fadeFrame = 0;
+  const FADE_MS = 600;
+  const fadeIn = () => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return 1;
+    const now = performance.now();
+    fadeAt ||= now;
+    const k = Math.min(1, (now - fadeAt) / FADE_MS);
+    if (k < 1) fadeFrame ||= requestAnimationFrame(() => ((fadeFrame = 0), refresh()));
+    return k * k * (3 - 2 * k);
+  };
   let drawnLayers: Layer[] = [];
   const refresh = () => {
     refreshedAt = zoom;
@@ -576,8 +593,14 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     // While an overlay tells its story (a radar replay), the species' forecast is not part of it: its hexagons go out of
     // sight, as the sighting dots stand down, so their colours never read as echo. Kept loaded (not drawn), so closing
     // the overlay brings them straight back.
-    const hexes = dataLayers.filter((l) => isHexes(l.id))
-      .map((l) => (on ? l.clone({ visible: false, pickable: false, autoHighlight: false }) : l));
+    // Only the overlay's own species stays (overlayHexes), fading in, never picked: the overlay owns the pointer.
+    const all = dataLayers.filter((l) => isHexes(l.id));
+    const kept = (l: Layer) => on && !!keepHexes && l.id.startsWith(keepHexes);
+    // Not drawn yet (still loading): its fade starts when it is.
+    const fade = all.some(kept) ? fadeIn() : ((fadeAt = 0), 1);
+    const hexes = all.map((l) => (!on ? l : kept(l)
+      ? l.clone({ opacity: (l.props.opacity ?? 1) * fade, pickable: false, autoHighlight: false })
+      : l.clone({ visible: false, pickable: false, autoHighlight: false })));
     const rest = dataLayers.filter((l) => !isHexes(l.id));
     // An overlay goes over the woods' tree marks and under the lakes, roads and rivers; its over-water part just after
     // the last layer of water: the lakes, or zoomed in, the shore (lakes drawn again over the state lines, so a coast
@@ -661,6 +684,12 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     setOverlay(layers, wet = []) {
       overlay = layers;
       overWater = wet;
+      refresh();
+    },
+    overlayHexes(prefix) {
+      if (prefix === keepHexes) return;
+      keepHexes = prefix;
+      fadeAt = 0;
       refresh();
     },
     deep(on) {

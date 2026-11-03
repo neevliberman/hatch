@@ -33,6 +33,9 @@ const DECADES = 2.5;
 /** A season that slides fewer days than this between years gets no band on the time bar: under one ribbon step
  * (spread.py's MIN_BAND, which already leaves such species out). */
 const MIN_BAND = 3;
+/** Fewer training records than this make a species' field rough: its fine print says so, its card's season line is
+ * drawn rough, and a radar replay's line flags it. */
+const ROUGH = 300;
 /** While the year is still coming in, fewer photos than this (seen and expected) are "too few yet to judge": seen.py's
  * MIN_TIMING, the count it wants before it judges a season's timing. */
 const SO_FAR_MIN = 30;
@@ -388,6 +391,13 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return c === null ? null : atlas.cells[c]!.h;
     },
     seasonCount: () => 0,
+    expected([lng, lat], t) {
+      const c = atlas.cellAt(lat, lng);
+      if (c === null) return null;
+      // That very day from the plain network (the field may still be showing a nearby day while it works it out).
+      const s = shareNow(c, dayOfYear(t));
+      return { oneIn: s > 1e-4 ? oneIn(s) : null, records: sp.n, rough: sp.n < ROUGH };
+    },
     endNote: ['That was the season.', 'Press replay to watch again'],
     countdown(now) {
       const doy = dayOfYear(now);
@@ -590,7 +600,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       return {
         title: s > 1e-4 ? `${name}: ${oneIn(s)} insect photos` : `${name}: hardly expected`,
         swatch: css(color(s)),
-        ...(here ? { season: { curve: here.photos, from: SEASON[0], step: STEP, broods: here.due.broods ?? [here.due], year: yearOf(), today: doy, rough: sp.n < 300 } } : {}),
+        ...(here ? { season: { curve: here.photos, from: SEASON[0], step: STEP, broods: here.due.broods ?? [here.due], year: yearOf(), today: doy, rough: sp.n < ROUGH } } : {}),
         lines: [
           ...(mode !== TYPICAL && year ? [`Across the map in ${ATLAS_YEAR}${soFar(year)}: ${yearWords(year)}`] : []),
         ],
@@ -627,7 +637,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           `Colors: a model’s expectation, not sightings: of the insect photos taken here on this day, the share that would be ${name}.`,
           `Dots: real iNaturalist photos, each lit ${GLOW_DAYS} days, from ${mode === TYPICAL ? `${FIRST_YEAR}-${ATLAS_YEAR - 1}` : ATLAS_YEAR} (at most 5,000, picked at random).`,
           `One network learns all ${atlas.species.length.toLocaleString()} Midwest insects with 100+ records at once, from 2.1 million iNaturalist photos (2015-2025). ${name}: ${sp.n.toLocaleString()} of them.`,
-          ...(sp.n < 300 ? [`Only ${sp.n.toLocaleString()} records: this forecast is rough.`] : sp.n >= 5000 ? [`Well recorded (${sp.n.toLocaleString()} records).`] : []),
+          ...(sp.n < ROUGH ? [`Only ${sp.n.toLocaleString()} records: this forecast is rough.`] : sp.n >= 5000 ? [`Well recorded (${sp.n.toLocaleString()} records).`] : []),
           ...(mode !== TYPICAL && year && year.ratio !== null && year.ratio < 0.6 && year.expectedPhotos >= 10
             ? ['Fewer photos than expected this year. Seen one? Add it on iNaturalist.']
             : []),

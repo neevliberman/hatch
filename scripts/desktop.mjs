@@ -14,7 +14,8 @@
 // under the map give (ONLY=near). And the card's "Out here now": ranked by nearness to each species' best day there,
 // chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track).
 // And an early or late chip: opens where its slid 2026 season peaks, with the slide as a bracket on the time bar and
-// plain words on the card (ONLY=earlylate). And Share's link reopening the pinned card (ONLY=sharepin).
+// plain words on the card (ONLY=earlylate). And Share's link reopening the pinned card (ONLY=sharepin). And a radar
+// replay's map on the Giant Mayfly, then × putting back the view under it (ONLY=radarmayfly).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -1053,12 +1054,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // opened: About lists every event, its link then fetches that event's code and frames (and no other's), the map glides
   // to the radar and plays, the card gives the local time, "How we know" has the sources, the link names the replay, and
   // × brings the Midwest back. A ?radar= link with reduced motion opens it paused, on a scan with echo.
-  // Per event: the radar, its time zone and month, a point on its paper sheet (60 km out, clear of echo) and one well
-  // outside it (on the forecast hexagons).
+  // Per event: the radar, its time zone and month, and a point on its paper sheet (60 km out, clear of echo).
   const RADARS = {
-    'karx-2014-07-20': { at: [-91.19, 43.82], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*July 2014/, sheet: [-91.94, 43.82], off: [-93.0, 43.82] },
-    'kdvn-2012-06-23': { at: [-90.58, 41.61], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*June 2012/, sheet: [-90.58, 41.07], off: [-90.58, 40.2] },
-    'kcle-2019-06-26': { at: [-81.86, 41.41], when: /\b\d{1,2}:\d\d (am|pm) EDT\b[\s\S]*June 2019/, sheet: [-81.86, 40.87], off: [-83.78, 41.41] },
+    'karx-2014-07-20': { at: [-91.19, 43.82], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*July 2014/, sheet: [-91.94, 43.82] },
+    'kdvn-2012-06-23': { at: [-90.58, 41.61], when: /\b\d{1,2}:\d\d (am|pm) CDT\b[\s\S]*June 2012/, sheet: [-90.58, 41.07] },
+    'kcle-2019-06-26': { at: [-81.86, 41.41], when: /\b\d{1,2}:\d\d (am|pm) EDT\b[\s\S]*June 2019/, sheet: [-81.86, 40.87] },
   };
   const ERIE = 'kcle-2019-06-26';
   const QC = 'kdvn-2012-06-23';
@@ -1152,12 +1152,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         return window.__hatch.map.zoom() > window.__hatch.map.fitZoom() + 1 && Math.abs(c.lngLat[0] - lng) < 0.5 && Math.abs(c.lngLat[1] - lat) < 0.6;
       }, ev.at, { timeout: 30000 }).catch(async () => fail(`the map did not go to the radar: ${JSON.stringify(await view())}`));
       await settled();
-      // Drawn where it belongs: the radar's paper sheet 60 km from the radar, and outside it the bare map: the species'
-      // forecast is not part of the replay, so its hexagons are out of sight (map.ts), and only there.
+      // Drawn where it belongs: the radar's paper sheet 60 km from the radar. The species that was on screen is not part
+      // of the replay, so its hexagons are out of sight (map.ts); the Giant Mayfly's field is the map's now (ONLY=radarmayfly).
       // The frames arrive and are drawn on their own beat, which can lag the glide on a runner with software GL: look again
       // for up to 10 s before calling the sheet missing.
       const paper = ([r, g, b]) => r > 225 && g > 220 && b > 200;
-      const hexesDrawn = () => page.evaluate(() => window.__hatch.map.drawn().filter((id) => /-(forecast|unseen)-r\d/.test(id)));
+      const hexesDrawn = () => page.evaluate(() => window.__hatch.map.drawn().filter((id) => /-(forecast|unseen)-r\d/.test(id) && !id.startsWith('hexagenia-limbata-')));
       let px;
       for (let tries = 0; tries < 20; tries++) {
         const png = await shotR('1-open');
@@ -1176,19 +1176,18 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
             for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > best[0] + best[1] + best[2]) best = [d[i], d[i + 1], d[i + 2]];
             return best;
           };
-          return { sheet: lightest(sheet), off: lightest(off) };
-        }, [png.toString('base64'), ev.sheet, ev.off]);
-        if (px.sheet && paper(px.sheet) && (!px.off || paper(px.off))) break;
+          return { sheet: lightest(sheet) };
+        }, [png.toString('base64'), ev.sheet]);
+        if (px.sheet && paper(px.sheet)) break;
         await page.waitForTimeout(500);
       }
       if (!px.sheet || !paper(px.sheet)) fail(`no radar sheet at its place (${px.sheet})`);
-      if (px.off && !paper(px.off)) fail(`the forecast still colours the map outside the radar sheet (${px.off})`);
       const under = await hexesDrawn();
       if (under.length) fail(`forecast hexagons drawn under the replay: ${under.join(', ')}`);
-      // Nor is the replay that species' season: the species and season menus step aside while it is up.
-      if (await page.locator('#top .season:visible').count()) fail('the species or season menu stays up over the replay');
-      // The title stays, plain: no species sketch beside it.
-      if (!(await page.locator('.brand').isVisible()) || (await page.locator('.brand .mark').isVisible())) fail('over the replay the title is missing or still wears the species sketch');
+      // Nor is the replay that species' season: the season menu steps aside while it is up.
+      if (await page.locator('#season').isVisible()) fail('the season menu stays up over the replay');
+      // The title stays plain (no species sketch beside it; a phone gives its room to the species' name, as always).
+      if ((!phone && !(await page.locator('.brand').isVisible())) || (await page.locator('.brand .mark').isVisible())) fail('over the replay the title is missing or still wears the species sketch');
       const t0 = await page.locator('#radar .rd-time').textContent();
       const moving = await page.waitForFunction((t) => document.querySelector('#radar .rd-time')?.textContent !== t, t0, { timeout: reduce ? 4000 : 30000 })
         .then(() => true, () => false);
@@ -2542,6 +2541,78 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked ${seen.length} elements`);
   };
+  // A replay's map is the Giant Mayfly's (src/main.ts): opened over luna in 2019 on 2 June with a card pinned, the header
+  // names the Giant Mayfly at once, the season menu steps aside, no luna hexagon is drawn, the mayfly's field fades in
+  // on the replay's day with one line on it (its thin-data flag too: 285 records), and the link keeps the view under it.
+  // × puts back the species, season, day and card. One desktop case (the phone's header: mobile.mjs). Waits poll on a
+  // timer (a software-GL frame can take 10-25 s). ONLY=radarmayfly runs just this.
+  const radarMayflyUnit = async (browser) => {
+    const tag = 'radar mayfly';
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, { viewport: { width: 1280, height: 800 } });
+    await ctx.route(PHOTOS, (r) => r.abort());
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const poll = (fn, arg, timeout = 90000) => page.waitForFunction(fn, arg, { timeout, polling: 400 }).then(() => true, () => false);
+    // What a reader sees: the header's species, the season menu, the day, the pinned card's title, the hexagons drawn.
+    const look = () => page.evaluate(() => {
+      const h = window.__hatch;
+      const p = document.getElementById('probe');
+      const season = document.getElementById('season');
+      return {
+        species: document.querySelector('#species .sp-face').textContent,
+        season: season.checkVisibility() ? season.value : null,
+        day: new Date(h.time.cursor).toISOString().slice(5, 10),
+        card: !p.hidden && p.querySelector('.probe-close') ? p.querySelector('.probe-title')?.textContent ?? '' : null,
+        hexes: [...new Set(h.map.drawn().filter((id) => /-(forecast|unseen)-r\d/.test(id) && !id.endsWith('-pad')).map((id) => id.split('-').slice(0, 2).join('-')))],
+        url: location.search,
+      };
+    });
+    try {
+      await page.goto(origin + '/?noauto&today=2027-01-15&year=2019&date=06-02');
+      if (!(await poll(() => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null))) throw new Error('luna never loaded');
+      await page.waitForTimeout(1500); // the first frame, so the click lands on a drawn hexagon
+      const at = await clearSpotOn(page, [-91, 40, -87, 43]);
+      await page.mouse.click(at[0], at[1]);
+      if (!(await poll(() => !!document.querySelector('#probe:not([hidden]) .probe-close') && /[?&]pin=/.test(location.search), null, 30000))) fail('a clicked hexagon pinned no card');
+      const before = await look();
+      await page.locator('#info-btn').click();
+      await poll(() => getComputedStyle(document.getElementById('drawer')).transform === 'none', null, 30000);
+      await page.locator('#drawer .ex-radar[data-radar="karx-2014-07-20"]').click();
+      await page.waitForSelector('#radar', { timeout: 30000 });
+      // At once, before the Atlas has loaded: the mayfly's name, no season menu, no luna under the radar.
+      const now = await look();
+      if (now.species !== 'Giant Mayfly') fail(`over the replay the header reads "${now.species}"`);
+      if (now.season !== null) fail('the season menu stays up over the replay');
+      if (now.hexes.some((k) => k !== 'hexagenia-limbata')) fail(`other hexagons drawn under the replay: ${now.hexes.join(', ')}`);
+      if (!(await poll(() => window.__hatch.map.drawn().some((id) => id.startsWith('hexagenia-limbata-forecast')) && !document.querySelector('#radar .rd-model').hidden)))
+        fail('the Giant Mayfly\'s field or its line never came');
+      const during = await look();
+      if (during.day !== '07-20') fail(`the mayfly's field is on ${during.day}, not the replay's 20 July`);
+      if (during.hexes.join() !== 'hexagenia-limbata') fail(`drawn under the replay: ${during.hexes.join(', ')}`);
+      const line = await page.locator('#radar .rd-model').innerText();
+      if (!/^Model, typical year: (1 in [\d,]+ photos here are|hardly any) Giant Mayflies/.test(line) || !/only 285 records/.test(line)) fail(`the replay's line reads "${line}"`);
+      const q = new URLSearchParams(during.url);
+      if (q.get('radar') !== 'karx-2014-07-20' || q.get('year') !== '2019' || q.get('date') !== '06-02' || q.has('species') || q.get('pin') !== new URLSearchParams(before.url).get('pin'))
+        fail(`over the replay the link reads ${during.url}, not the view under it (${before.url})`);
+      await shotCdp(page, `${out}/radar-mayfly-open.png`);
+      await page.locator('#radar .rd-x').click();
+      const back = (b) => {
+        const p = document.getElementById('probe');
+        const season = document.getElementById('season');
+        return document.querySelector('#species .sp-face').textContent === b.species && season.checkVisibility() && season.value === b.season &&
+          new Date(window.__hatch.time.cursor).toISOString().slice(5, 10) === b.day && !p.hidden && p.querySelector('.probe-title')?.textContent === b.card &&
+          !window.__hatch.map.drawn().some((id) => id.startsWith('hexagenia-limbata-')) &&
+          [...new URLSearchParams(location.search)].sort().join() === [...new URLSearchParams(b.url)].sort().join();
+      };
+      if (!(await poll(back, before, 30000)))
+        fail(`× did not put the view back: ${JSON.stringify(await look())}, before ${JSON.stringify(before)}`);
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   const motionCases = [[1280, 800, false, true], [390, 844, true, true], [1280, 800, false, false], [390, 844, true, false]];
   const watchCases = [[1280, 800, false], [390, 844, true]];
   const sharePinCases = watchCases;
@@ -2561,7 +2632,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     ...per(watchCases, 'early/late', 150, earlyLateUnit), ...per(sharePinCases, 'share pin', [360, 240], sharePinUnit), W('evict', 125, evictUnit),
     ...motionCases.map((c) => W(`motion ${c[2] ? 'phone' : 'desktop'}${c[3] ? ' reduced' : ''}`, c[2] ? 35 : 15, (b) => motionUnit(c, b))),
     ...cases.map((c) => W(`live ${c[0]}`, liveCost[c[0]] ?? 60, (b) => liveUnit(c, b))), W('no WebGL', 15, noWebglUnit),
-    ...screens.filter((s) => s[0] !== 'chromium').map((s) => W(`screen ${s.join(' ')}`, 90, (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined))));
+    ...screens.filter((s) => s[0] !== 'chromium').map((s) => W(`screen ${s.join(' ')}`, 90, (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined))),
+    W('radar mayfly', 60, radarMayflyUnit));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));
@@ -2577,6 +2649,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   if (process.env.ONLY === 'big') units.splice(0, units.length, screenFor('chromium', 2560, 1440)); // the largest screen, first visit included
   if (process.env.ONLY === 'live') units.splice(0, units.length, ...cases.map((c) => (b) => liveUnit(c, b)));
   if (process.env.ONLY === 'radar') units.splice(0, units.length, radarUnit);
+  if (process.env.ONLY === 'radarmayfly') units.splice(0, units.length, radarMayflyUnit);
   if (process.env.ONLY === 'quiet') units.splice(0, units.length, ...watchCases.map((c) => (b) => quietUnit(c, b)));
   if (process.env.ONLY === 'thisyear') units.splice(0, units.length, thisYearUnit);
   if (process.env.ONLY === 'watch') units.splice(0, units.length, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b))); // a local shortcut: just this section

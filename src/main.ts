@@ -27,7 +27,7 @@ import { shareCard } from './ui/shareCard';
 import { exoEnabled, mountExo } from './ui/exoPanel';
 import { chorusEnabled, mountChorus } from './ui/chorusPanel';
 import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
-import { RADAR_HEAD, RADAR_LINKS } from './radar/index';
+import { RADAR_HEAD, RADAR_LINKS, RADAR_SPECIES, radarDay } from './radar/index';
 import type { Radar, View } from './radar/radarReplay';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -159,6 +159,12 @@ function start() {
   let lastPin: [number, number] | null = null; // the last pinned spot, by any means: where the keyboard explorer starts
   // An open radar replay (src/radar/): the map belongs to it for now, so hexagons give no cards.
   let radar: Radar | null = null;
+  /** What was on screen before a replay opened (its species, season, day and pinned card), put back when it closes,
+   * and the link it had: while a replay is up the address bar keeps that one and names the replay, so a shared link
+   * opens the same view under it. Null while no replay is up or loading. */
+  let beforeRadar: { key: string; mode: Mode; day: [number, number]; hit: ProbeHit | null; askedPin: [number, number] | null; query: string } | null = null;
+  /** The header's species name (the species picker's button), to put back if a replay's species never arrived. */
+  let curLabel = 'Luna moth';
   const probeEl = $('probe');
   // ?exo: a pinned card offers a sketched monarch that lives the place's real temperature on the map's date.
   const exo = exoEnabled() ? mountExo(probeEl) : null;
@@ -321,11 +327,13 @@ function start() {
   const notes = mountMarginNotes($('app'), map, () => registry.activeLayers(), () => time.cursor, phone);
   placeNote = notes.place;
   const showEnd = notes.showEnd;
+  let radarNote = () => {}; // the replay card's line on the Giant Mayfly (set with the replays, below)
   const refresh = () => {
     map.refresh();
     updateProbe();
     placeNote();
     srSummary.textContent = cur.summary(time.cursor);
+    radarNote();
   };
   time.subscribe(refresh);
   // The calendar day the reader asked for (a link's ?date=, the slider, playback), kept apart from the cursor: each
@@ -537,6 +545,7 @@ function start() {
     cur = next;
     curKey = entry.key;
     speciesPick.show(entry.key, entry.label);
+    curLabel = entry.label;
     fillPicker();
     picker.value = mode;
     if (picker.value !== mode) (picker.value = TYPICAL), cur.setMode(TYPICAL); // a tracker's year with no sightings
@@ -670,6 +679,13 @@ function start() {
 
   // Keep the address bar in step with the view, so any link copied or shared reopens the same season and day.
   const viewUrl = () => {
+    if (beforeRadar) {
+      // A replay's map is not the reader's view: the link keeps the view under it, and names the replay.
+      const q = new URLSearchParams(beforeRadar.query);
+      if (radar) q.set('radar', radar.id);
+      if (radar?.night()) q.set('night', '1');
+      return `${location.pathname}?${q}`;
+    }
     const q = new URLSearchParams(location.search);
     const d = new Date(time.cursor);
     q.set('date', `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
@@ -843,8 +859,11 @@ function start() {
       radar?.close(false); // a town's card replaces the radar replay; the map goes to the town, not back to the Midwest
       // On a phone, drop the About sheet to its middle stop first, so the place lands in the map above it.
       if ($('drawer').classList.contains('open') && phone.matches && !slim.matches) toggleDrawer(true);
-      if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
-      else remember({ name, lat, lng });
+      // On the species the replay had replaced, once it is back.
+      void radarLeft.then(() => {
+        if (!showPlace(lat, lng, name)) say(`No forecast for ${name}`, $('find'));
+        else remember({ name, lat, lng });
+      });
     }, say);
     $('drawer').addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-find]');
@@ -1056,6 +1075,7 @@ function start() {
     if (e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest('input, select, textarea, [contenteditable]')) return;
     if (e.repeat || !$('species-sheet').hidden || $('drawer').classList.contains('open')) return;
     const k = e.key.toLowerCase();
+    if (radar && (k === '/' || k === 's')) return; // the replay's species stays until it closes
     if (k === '/') (e.preventDefault(), $('species').click());
     else if (k === 's' && !e.shiftKey && !surprising) {
       surprising = true;
@@ -1089,10 +1109,67 @@ function start() {
   let radarBack: View | null | undefined;
   // A pen radar: the dish's dot, two range rings and the sweep.
   const RADAR_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="10" stroke-dasharray="3 2.4"/><path d="M12 12l6.4-6.6"/></g><circle cx="12" cy="12" r="1.9" fill="currentColor"/></svg>';
+  // While a replay is up, its map is the Atlas's Giant Mayfly on that calendar day (a typical year: the Atlas has no
+  // 2012 to 2019 seasons), the insect these evenings are, in place of the species the reader had: its field fades in
+  // under the radar whenever it arrives (the first Atlas load is slow; the radar never waits for it), and every other
+  // species' hexagons stay out of sight meanwhile (map.overlayHexes). The season menu steps aside; the header names
+  // it. Closing puts back what was on screen (species, season, day and pinned card).
+  const sameDay = (d: [number, number]) => dayOf(time.cursor).every((v, i) => v === d[i]);
+  const radarSpecies = async (id: string) => {
+    const day = radarDay(id);
+    if (!day) return;
+    map.overlayHexes(`${RADAR_SPECIES.key}-`);
+    speciesPick.show(RADAR_SPECIES.key, RADAR_SPECIES.label);
+    wantDay = day;
+    await setSpecies(RADAR_SPECIES.key, TYPICAL);
+    if (radar?.id !== id || curKey !== RADAR_SPECIES.key) return;
+    if (!sameDay(day)) switchMode(picker.value, day); // it was on screen already, on another day
+    radarNote();
+  };
+  radarNote = () => {
+    if (!radar) return;
+    const e = curKey === RADAR_SPECIES.key ? cur.expected?.(radar.at, time.cursor) : null;
+    const many = cur.words.plural;
+    radar.note(e ? `Model, typical year: ${e.oneIn ? `${e.oneIn} photos here are ${many}` : `hardly any ${many} expected here`}` : null,
+      e?.rough ? `only ${e.records} records` : undefined);
+  };
+  /** Settles once a closed replay has put the reader's view back. */
+  let radarLeft: Promise<void> = Promise.resolve();
+  const leaveRadar = () => (radarLeft = (async () => {
+    const b = beforeRadar;
+    beforeRadar = null;
+    map.overlayHexes(null);
+    if (!b) return;
+    wantDay = b.day;
+    await setSpecies(b.key, b.mode);
+    if (beforeRadar) return; // a replay opened again meanwhile: it took this view over
+    speciesPick.show(curKey, curLabel); // the Giant Mayfly may never have come
+    if (picker.value !== b.mode && (cur.seasons?.() ?? []).includes(b.mode)) picker.value = b.mode;
+    if (!sameDay(b.day) || cur.mode() !== picker.value) switchMode(picker.value, b.day);
+    if (b.hit) (hit = b.hit), (pinned = true);
+    else askedPin = b.askedPin;
+    updateProbe();
+    syncUrl();
+  })());
   const openRadar = async (id: string) => {
     if (!__BASEMAP__) return;
     if ($('drawer').classList.contains('open')) toggleDrawer(false);
     if (radar?.id === id) return;
+    // The view to come back to: taken once, before the first replay of a run (a switch or a reopen keeps it).
+    if (!beforeRadar) {
+      // (A link's species may still be loading: its own season, not the one on screen meanwhile.)
+      const mode = speciesPending && asked ? asked : picker.value;
+      const q = new URLSearchParams(viewUrl().split('?')[1]);
+      q.delete('at'); // a replay's link brings its own view
+      q.delete('year');
+      q.delete('season');
+      if (mode === LIVE) q.set('season', LIVE);
+      else if (mode !== TYPICAL) q.set('year', mode);
+      q.set('date', `${String(wantDay[0] + 1).padStart(2, '0')}-${String(wantDay[1]).padStart(2, '0')}`);
+      beforeRadar = { key: speciesPending ?? curKey, mode, day: wantDay, hit: pinned ? hit : null, askedPin, query: q.toString() };
+    }
+    // The Atlas starts loading now, alongside the replay's frames (it takes longer).
+    void import('./atlas/atlas').then((m) => m.loadAtlas());
     // Switching: the open one closes where it is, and the next one takes over its way back. radar-on stays, so the
     // time bar doesn't flash up while the next one loads.
     if (radar) {
@@ -1119,7 +1196,8 @@ function start() {
           if (radar?.id !== id) return;
           radar = null;
           $('app').classList.remove('radar-on');
-          syncUrl();
+          speciesPick.button.removeAttribute('aria-disabled');
+          void leaveRadar();
         },
       }))
       .catch(() => null);
@@ -1133,18 +1211,26 @@ function start() {
         $('app').classList.remove('radar-on');
         if (back) map.focus(back.lngLat, back.zoom, padding(), true);
         else map.fit(padding(), true);
-        syncUrl();
       }
+      void leaveRadar();
       return say('Couldn\u2019t load the radar replay.', null, { label: 'Try again', run: () => void openRadar(id) });
     }
     msg.textContent = '';
     radar = opened;
     $('app').classList.add('radar-on');
+    speciesPick.button.setAttribute('aria-disabled', 'true'); // a name while the replay is up, not a menu
     syncUrl();
+    void radarSpecies(id);
   };
+  // Its button names the replay's species but opens nothing until the replay closes.
+  speciesPick.button.parentElement!.addEventListener('click', (e) => {
+    if (radar) e.stopImmediatePropagation(), e.preventDefault();
+  }, true);
   // The About panel's way in, under its opening lines (re-added each time the panel redraws): a short row of evenings.
   const aboutRadar = () => {
-    const hook = $('drawer').querySelector('.ex-hook');
+    // While a replay is up the panel is the Giant Mayfly's (no explainer, so no hook): the row goes under its title, so
+    // the other evenings stay a tap away.
+    const hook = $('drawer').querySelector('.ex-hook') ?? (radar ? $('drawer').querySelector('.cav > h3') : null);
     // Not without WebGL: there is no map to replay it on.
     if (!__BASEMAP__ || document.getElementById('no-webgl') || !hook || hook.parentElement!.querySelector('.ex-radar')) return;
     const links = RADAR_LINKS.map((r) => `<button type="button" class="ex-radar" data-radar="${r.id}" title="${r.title}">${RADAR_ICON}${r.label}</button>`);

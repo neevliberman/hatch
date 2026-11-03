@@ -45,12 +45,17 @@ export type View = NonNullable<ReturnType<MapHandle['center']>>;
 
 export interface Radar {
   id: string;
+  /** The radar's own place, [lng, lat]. */
+  at: [number, number];
   /** Where × goes back to: a place the reader had panned to, or null for the whole Midwest. */
   before: View | null;
   /** Close it; `back` (the default) returns the map to `before`. */
   close(back?: boolean): void;
   /** Whether the night view is on. */
   night(): boolean;
+  /** The card's line on the map under the radar (main.ts: what the Atlas expects there), with a muted `flag` after it
+   * (a thin field's "only 285 records"); null hides it. */
+  note(text: string | null, flag?: string): void;
 }
 
 type RGBA = [number, number, number, number];
@@ -277,6 +282,7 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
       <button type="button" class="rd-i" aria-expanded="false" aria-controls="radar-more" aria-label="How we know it’s insects" title="How we know">i</button>
       <button type="button" class="rd-x" aria-label="Close the radar replay" title="Close">${CROSS}</button>
     </div>
+    <p class="rd-model" hidden></p>
     <div class="rd-spark" aria-hidden="true" hidden><svg viewBox="0 0 100 14" preserveAspectRatio="none"><path/></svg></div>
     <div class="rd-prog" aria-hidden="true"><i></i></div>
     <p class="rd-sim" hidden>Dots are simulated from the echo and the wind.</p>
@@ -509,5 +515,16 @@ export async function openRadar(id: string, host: RadarHost): Promise<Radar | nu
   window.addEventListener('keydown', onKey, true);
   q<HTMLButtonElement>('.rd-x').addEventListener('click', () => close());
   playBtn.focus({ preventScroll: true });
-  return { id, before, close, night: () => nightOn };
+  const model = q<HTMLElement>('.rd-model');
+  let noted = '';
+  const note = (text: string | null, flag?: string) => {
+    if (`${text}|${flag}` === noted) return;
+    noted = `${text}|${flag}`;
+    const was = card.offsetHeight;
+    model.hidden = !text;
+    model.replaceChildren(text ?? '');
+    if (text && flag) model.append(' ', Object.assign(document.createElement('span'), { className: 'rd-thin', textContent: `· ${flag}` }));
+    if (open && card.offsetHeight !== was) look(true); // a taller card: keep the radar clear of it
+  };
+  return { id, at: [meta.lon, meta.lat], before, close, night: () => nightOn, note };
 }
