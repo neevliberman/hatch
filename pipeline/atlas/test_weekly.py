@@ -68,7 +68,24 @@ def test_limiter_spaces_requests_and_pauses_everyone():
     assert c.slept == [1.0, 1.0]           # the first goes at once, then one a second
     lim.pause(30)
     lim.wait()
-    assert c.slept[-1] == pytest.approx(30, abs=1)
+    assert c.slept[-1] == pytest.approx(31, abs=1)
+
+
+def test_a_pause_cancels_slots_already_promised():
+    """A thread promised the next slot before a 429 must not go at that slot: it asks again, after the pause."""
+    c = Clock()
+    lim = W.Limiter(1.0, clock=c, sleep=None)
+    lim.wait()                                       # t=0: someone goes
+    starts = []
+
+    def sleep(s):                                    # while this thread sleeps toward its slot, another thread hits a 429
+        if not starts:
+            lim.pause(60)
+        starts.append(s)
+        c.t += s
+    lim.sleep = sleep
+    lim.wait()
+    assert c.t >= 60                                 # it went only after the pause, not at t=1
 
 
 class Reply(io.BytesIO):
@@ -91,7 +108,7 @@ def test_get_backs_off_on_429_then_succeeds():
         return Reply(json.dumps({"results": [{"id": 1}]}).encode())
 
     assert W.get({"a": 1}, lim, opener=opener, sleep=c.sleep) == {"results": [{"id": 1}]}
-    assert len(calls) == 3 and 7.0 in c.slept     # it waited as asked, every thread with it
+    assert len(calls) == 3 and c.t >= 14                # it waited as asked, twice, every thread with it
 
 
 def test_get_gives_up_on_a_plain_error():
@@ -101,39 +118,60 @@ def test_get_gives_up_on_a_plain_error():
         W.get({}, W.Limiter(0), opener=opener)
 
 
-def obs(i, day="2026-06-01", lat=41.9, lng=-88.0, user=1, taxon=48662, rank=10, sp=None):
-    return {"id": i, "observed_on": day, "location": f"{lat},{lng}", "user": {"id": user},
+def obs(i, day="2026-06-01", lat=41.9, lng=-88.0, user=1, taxon=48662, rank=10, sp=None, grade="research",
+        lic="cc-by", photo="cc-by-nc", where=True):
+    return {"id": i, "observed_on": day, "location": f"{lat},{lng}" if where else None, "user": {"id": user},
+            "quality_grade": grade, "license_code": lic, "photos": [{"license_code": photo}] if photo else [],
             "taxon": {"id": taxon, "rank_level": rank, "min_species_taxon_id": sp or taxon}}
 
 
-def test_rows_of_names_the_species_and_drops_the_unplaced():
-    rows = W.rows_of([obs(1), obs(2, taxon=999, rank=5, sp=48662), obs(3, taxon=47224, rank=20),
-                      {"id": 4, "observed_on": None, "location": "1,2", "taxon": {"id": 5}}, {"id": 5, "taxon": None}])
-    assert [r[0] for r in rows] == [1, 2, 3]
+def test_rows_of_names_the_species_and_sorts_out_the_unusable():
+    rows, gone = W.rows_of([obs(1), obs(2, taxon=999, rank=5, sp=48662), obs(3, taxon=47224, rank=20),
+                            obs(4, day=None), obs(5, grade="needs_id"), obs(6, lic=None), obs(7, lic="cc-by-sa"),
+                            obs(8, photo="cc-by-nd"), obs(9, photo=None), obs(10, where=False),
+                            obs(11, day="2025-12-31"), obs(12, lic="CC-BY")], year=2026)
+    assert [r[0] for r in rows] == [1, 2, 3, 12]
     assert rows[1][7] == 48662                 # a subspecies counts as its species
     assert rows[2][7] == 0                     # named only to genus: no species
+    assert gone == [4, 5, 6, 7, 8, 9, 10, 11]  # not research grade, all rights reserved, no open photo, private, ...
 
 
-def pager(pages_by_query, log=None):
-    """A fake getter serving fixed observations per query (keyed by d1 / updated_since / quality_grade), by id_above."""
+def pager(pages_by_query, log=None, total=None):
+    """A fake getter serving fixed observations per query (keyed by d1 / updated_since / quality_grade), by id_above,
+    with total_results counted from id_above 0 as iNaturalist does (or `total` to fake a lie)."""
     def getter(params, limiter):
         if log is not None:
             log.append(dict(params))
         key = (params.get("d1"), params.get("updated_since"), params.get("quality_grade"))
         data = sorted(pages_by_query.get(key, []), key=lambda o: o["id"])
         res = [o for o in data if o["id"] > params["id_above"]][:params["per_page"]]
-        if params.get("fields") == "id":
-            res = [{"id": o["id"]} for o in res]
-        return {"results": res}
+        return {"total_results": len(data) if total is None else total, "results": res}
     return getter
 
 
-def test_stream_pages_by_id_and_stops():
+def test_stream_pages_by_id_until_an_empty_page():
     data = {("2026-01-01", None, "research"): [obs(i) for i in range(1, 451)]}
-    rows, pages = W.stream(W.query(2026), W.Limiter(0), getter=pager(data))
-    assert len(rows) == 450 and pages == 3 and rows[-1][0] == 450
-    rows, pages = W.stream(W.query(2026), W.Limiter(0), max_pages=1, getter=pager(data))
+    rows, gone, pages = W.stream(W.query(2026), W.Limiter(0), getter=pager(data))
+    assert len(rows) == 450 and pages == 4 and rows[-1][0] == 450 and not gone
+    rows, gone, pages = W.stream(W.query(2026), W.Limiter(0), max_pages=1, getter=pager(data))
     assert len(rows) == 200 and pages == 1
+
+
+def test_a_short_page_does_not_end_the_stream():
+    """A page shorter than asked for (the server's choice) is followed up; only an empty page ends it."""
+    data = [obs(i) for i in range(1, 301)]
+
+    def getter(params, limiter):
+        res = [o for o in data if o["id"] > params["id_above"]][:150]      # never a full 200
+        return {"total_results": 300, "results": res}
+    rows, _, pages = W.stream(W.query(2026), W.Limiter(0), getter=getter)
+    assert len(rows) == 300 and pages == 3
+
+
+def test_a_stream_that_comes_up_short_fails():
+    data = {("2026-01-01", None, "research"): [obs(i) for i in range(1, 101)]}
+    with pytest.raises(W.Incomplete):
+        W.stream(W.query(2026), W.Limiter(0), getter=pager(data, total=200))
 
 
 def test_months_split_the_year_to_date():
@@ -144,27 +182,42 @@ def test_months_split_the_year_to_date():
 def test_cache_full_then_incremental_then_full_again(tmp_path):
     now = dt.datetime(2026, 7, 6, 15, tzinfo=dt.timezone.utc)
     full = {(f"2026-{m:02d}-01", None, "research"): [] for m in range(1, 8)}
-    full[("2026-06-01", None, "research")] = [obs(1), obs(2), obs(3, day="2026-06-20")]
+    full[("2026-06-01", None, "research")] = [obs(1), obs(2), obs(3, day="2026-06-20"), obs(6), obs(7), obs(8), obs(9)]
+    full[("2026-06-01", None, "research")] += [obs(i) for i in range(20, 40)]   # enough that losing 4 is no shrink
     full[("2026-07-01", None, "research")] = [obs(4, day="2026-07-02")]
     log = []
     df, st = W.update_photos(2026, dt.date(2026, 7, 6), tmp_path, getter=pager(full, log), limiter=W.Limiter(0), now=now)
-    assert st["kind"] == "full" and sorted(df.id) == [1, 2, 3, 4]
+    assert st["kind"] == "full" and sorted(df.id) == [1, 2, 3, 4, 6, 7, 8, 9, *range(20, 40)]
     assert {p["d1"] for p in log} == {f"2026-{m:02d}-01" for m in range(1, 8)}      # one stream a month, to date
     assert all(p["license"] == p["photo_license"] == "cc0,cc-by,cc-by-nc" for p in log)
 
     later = now + dt.timedelta(days=7)
     since = (now - W.OVERLAP).isoformat(timespec="seconds")
-    inc = {("2026-01-01", since, "research"): [obs(2, taxon=67760), obs(5, day="2026-07-10")],
-           ("2026-01-01", since, "needs_id,casual"): [obs(3)]}
-    df, st = W.update_photos(2026, dt.date(2026, 7, 13), tmp_path, getter=pager(inc), limiter=W.Limiter(0), now=later)
-    assert st["kind"] == "incremental" and st["removed"] == 1
-    assert sorted(df.id) == [1, 2, 4, 5]                    # 3 lost research grade; 5 is new
+    log = []
+    # one query of everything that changed, whatever its grade or licence now: rows_of sorts it out
+    inc = {("2026-01-01", since, None): [obs(2, taxon=67760), obs(5, day="2026-07-10"), obs(3, grade="needs_id"),
+                                         obs(6, lic="cc-by-nd"), obs(7, photo="cc-by-sa"), obs(8, where=False)]}
+    df, st = W.update_photos(2026, dt.date(2026, 7, 13), tmp_path, getter=pager(inc, log), limiter=W.Limiter(0), now=later)
+    assert st["kind"] == "incremental" and st["removed"] == 4
+    assert "license" not in log[0] and "photo_license" not in log[0] and "quality_grade" not in log[0]
+    assert sorted(df.id) == [1, 2, 4, 5, 9, *range(20, 40)]               # 3 lost research grade, 6-8 licence or privacy; 5 is new
     assert int(df.set_index("id").taxon[2]) == 67760         # 2's identification changed
 
-    # a month on, the whole year again (deleted photos only leave this way)
-    df, st = W.update_photos(2026, dt.date(2026, 8, 10), tmp_path, getter=pager(full), limiter=W.Limiter(0),
-                             now=now + dt.timedelta(days=W.FULL_EVERY))
-    assert st["kind"] == "full" and sorted(df.id) == [1, 2, 3, 4]
+    # two weeks on (a few hours early by the clock still counts), the whole year again: deletions only leave this way
+    df, st = W.update_photos(2026, dt.date(2026, 7, 20), tmp_path, getter=pager(full), limiter=W.Limiter(0),
+                             now=now + dt.timedelta(days=W.FULL_EVERY, hours=-6))
+    assert st["kind"] == "full"
+
+
+def test_a_shrinking_year_is_not_trusted(tmp_path):
+    now = dt.datetime(2026, 7, 6, 15, tzinfo=dt.timezone.utc)
+    full = {("2026-06-01", None, "research"): [obs(i) for i in range(1, 11)]}
+    W.update_photos(2026, dt.date(2026, 6, 30), tmp_path, getter=pager(full), limiter=W.Limiter(0), now=now)
+    since = (now - W.OVERLAP).isoformat(timespec="seconds")
+    inc = {("2026-01-01", since, None): [obs(i, grade="casual") for i in range(1, 4)]}
+    with pytest.raises(SystemExit, match="shrank"):
+        W.update_photos(2026, dt.date(2026, 7, 13), tmp_path, getter=pager(inc), limiter=W.Limiter(0),
+                        now=now + dt.timedelta(days=7))
 
 
 def test_a_capped_dry_run_never_becomes_the_cache(tmp_path):
@@ -174,7 +227,7 @@ def test_a_capped_dry_run_never_becomes_the_cache(tmp_path):
 
 
 # ---------------------------------------------------------------- warmth
-def test_days_ahead_reads_an_early_spring_and_holds_the_newest_day():
+def test_days_ahead_reads_an_early_spring_then_runs_typical():
     days = np.arange(365)
     t = 10 + 15 * np.sin((days - 105) / 365 * 2 * np.pi)
     tmin, tmax = np.tile(t - 6, (2, 1)), np.tile(t + 6, (2, 1))
@@ -184,9 +237,9 @@ def test_days_ahead_reads_an_early_spring_and_holds_the_newest_day():
     warm_max[:, 150:] = np.nan
     a = W.days_ahead(clim, warm_min, warm_max)
     assert np.allclose(a[0, 60:149], 0, atol=0.3)            # the typical year runs on time
-    assert (a[1, 100:149] > 2).all()                          # 3 °C warmer runs days ahead
+    assert (a[1, 100:150] > 2).all()                          # 3 °C warmer runs days ahead
     assert (a[:, :59] == 0).all()                             # nothing before 1 March
-    assert np.allclose(a[1, 150:], a[1, 149])                 # after the newest day (index 149), it holds
+    assert (a[1, 150:] == 0).all()                            # after the newest day (index 149): a typical year, not held
     q = W.quarter_days(a)
     assert q.dtype == np.int8 and np.allclose(q / 4, np.clip(a, -31.75, 31.75), atol=0.13)
 
@@ -204,10 +257,10 @@ def test_days_ahead_ignores_the_unfetched_winter():
     assert (a[0, 100:200] > 2).all()
 
 
-def test_default_year_waits_for_march():
+def test_default_year_waits_for_mid_april():
     assert W.default_year(dt.date(2027, 2, 20)) == 2026
-    assert W.default_year(dt.date(2027, 3, 1)) == 2026        # PRISM's lag: nothing of March yet
-    assert W.default_year(dt.date(2027, 3, 10)) == 2027
+    assert W.default_year(dt.date(2027, 4, 14)) == 2026       # 2026 had 3.3k photos by 1 March: too soon to say
+    assert W.default_year(dt.date(2027, 4, 15)) == 2027
 
 
 def test_static_matches_the_cell_list():
@@ -256,38 +309,56 @@ def fake_weather(as_of):
     return weather
 
 
-@pytest.fixture
-def small_ribbon(monkeypatch):
-    monkeypatch.setattr(W, "STEP", 40)     # season.bin at 7 steps, not 62: the same code, a tenth of the network runs
+@pytest.fixture(scope="module")
+def run_2026(tmp_path_factory):
+    """One whole run on fixtures (season.bin at 7 steps, not 62: the same code, a tenth of the network runs)."""
+    out = tmp_path_factory.mktemp("run") / "atlas"
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(W, "STEP", 40)
+        mp.setattr(W, "MIN_PHOTOS", 500)
+        res = W.build(2026, dt.date(2026, 9, 1), out, weather=fake_weather(dt.date(2026, 6, 28)), photos=photo_rows(),
+                      use_forecast=False)
+    return res, out
 
 
-def test_a_whole_run_on_fixtures(tmp_path, small_ribbon, monkeypatch):
-    monkeypatch.setattr(W, "MIN_PHOTOS", 500)
-    out = tmp_path / "atlas"
-    res = W.build(2026, dt.date(2026, 9, 1), out, weather=fake_weather(dt.date(2026, 8, 28)), photos=photo_rows(),
-                  use_forecast=False, dots=False)
-    assert res["year"] == 2026 and res["so_far"] and res["photos"] == 2400 and res["last_day"] <= 240
+def test_a_whole_run_on_fixtures(run_2026):
+    res, out = run_2026
+    assert res["year"] == 2026 and res["so_far"] and not res["dry_run"]
+    assert res["weather_through"] == "2026-06-28" and res["warm_through"] == 179 and res["last_day"] == 179
     n, steps = len(SPECIES), (304 - 60) // 4 + 1
-    assert (out / "ahead-2026.bin").stat().st_size == len(CELLS) * 365
+    a = np.fromfile(out / "ahead-2026.bin", np.int8).reshape(len(CELLS), 365)
+    assert (a[:, 179:] == 0).all() and (a[:, 120:179] != 0).any()     # real warmth to 28 June, then a typical year
     assert (out / "seen-2026.bin").stat().st_size == n * 2 * steps
     assert (out / "season.bin").stat().st_size == n * 2 * 7
     f = json.loads((out / "seen-2026.json").read_text())
-    assert f["so_far"] is True and f["photos"] == 2400 and len(f["species"]) == n
-    assert sum(r[0] for r in f["species"]) == 2400
-    assert sum(r[1] for r in f["species"]) == pytest.approx(2400, rel=0.01)   # every photo's shares add up to one
+    assert f["so_far"] is True and f["photos"] == res["photos"] and len(f["species"]) == n
+    assert sum(r[0] for r in f["species"]) == res["photos"]
+    assert sum(r[1] for r in f["species"]) == pytest.approx(res["photos"], rel=0.01)   # each photo's shares add to one
     y = json.loads((out / "year.json").read_text())
     head = struct.unpack("<4sII", (OUT / "spread.bin").read_bytes()[:12])
     assert (y["species"], y["species_hash"]) == (head[1], head[2])            # the same hash the app checks
+    on_disk = sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file() and p.name != "year.json")
+    assert sorted(y["files"]) == on_disk and len(on_disk) == 4 + n            # the manifest lists every file
+    assert not (out / "dots").exists() and (out / "dots-year" / "0.bin").exists()
 
 
-def test_nothing_before_march_or_with_too_few_photos(tmp_path, small_ribbon):
+def test_nothing_too_early_or_with_too_few_photos(tmp_path):
     out = tmp_path / "atlas"
     assert W.build(2027, dt.date(2027, 2, 10), out, weather=fake_weather(dt.date(2027, 2, 7)), photos=photo_rows()) is None
-    assert W.build(2026, dt.date(2026, 4, 1), out, weather=fake_weather(dt.date(2026, 3, 28)),
-                   photos=photo_rows(n=300), use_forecast=False, dots=False) is None
-    assert W.build(2026, dt.date(2026, 4, 1), out, weather=fake_weather(dt.date(2026, 3, 28)),
-                   photos=photo_rows().iloc[:0], use_forecast=False, dots=False) is None
+    # mid-April is the earliest a new year takes over, however many photos it has
+    assert W.build(2026, dt.date(2026, 4, 10), out, weather=fake_weather(dt.date(2026, 4, 7)), photos=photo_rows()) is None
+    assert W.build(2026, dt.date(2026, 6, 1), out, weather=fake_weather(dt.date(2026, 5, 28)),
+                   photos=photo_rows(n=300), use_forecast=False) is None
+    assert W.build(2026, dt.date(2026, 6, 1), out, weather=fake_weather(dt.date(2026, 5, 28)),
+                   photos=photo_rows().iloc[:0], use_forecast=False) is None
     assert not out.exists()
+
+
+def test_a_limited_run_is_marked_dry(tmp_path, monkeypatch):
+    monkeypatch.setattr(W, "STEP", 40)
+    res = W.build(2026, dt.date(2026, 9, 1), tmp_path / "a", weather=fake_weather(dt.date(2026, 8, 28)),
+                  photos=photo_rows(n=300), use_forecast=False, dots=False)
+    assert res["dry_run"] is True                               # --no-dots: never published (and not held to MIN_PHOTOS)
 
 
 def test_judging_a_thin_year_never_crashes():
@@ -297,48 +368,94 @@ def test_judging_a_thin_year_never_crashes():
     assert phi == phi_t == 1.0 and rows[0] == [2, 1.5, None, None]
 
 
-def test_year_dots_swap_this_years_photos(tmp_path):
-    src = tmp_path / "dots"
-    src.mkdir()
-    for i in range(3):
-        shutil.copy(OUT / "dots" / f"{i}.bin", src / f"{i}.bin")
+def test_year_dots_hold_this_years_photos_only():
     p = W.label_photos(photo_rows(), 2026, 300, SPECIES[:-1], [c["h"] for c in CELLS])
-    got = W.year_dots(p, 2026, 3, src)
-    old0 = DOTS.unpack((src / "0.bin").read_bytes())
-    new0 = DOTS.unpack(got[0])
-    assert (new0[new0.year < 2026].reset_index(drop=True) == old0[old0.year < 2026].reset_index(drop=True)).all().all()
-    mine = p[(p.label == 0) & W.in_states(p.lat, p.lng)]
-    assert set(new0[new0.year == 2026].inat_id) == set(mine.id)              # this year's: exactly the new photos
-    assert DOTS.pack(DOTS.unpack(got[0])) == got[0]
-    assert got[2] == DOTS.pack(DOTS.unpack(got[2]))                           # "other" (last) keeps what it had
+    got = W.year_dots(p, 2026, 3)
+    d0 = DOTS.unpack(got[0])
+    assert (d0.year == 2026).all()
+    assert set(d0.inat_id) == set(p[(p.label == 0) & W.in_states(p.lat, p.lng)].id)
+    assert DOTS.pack(d0) == got[0] and got[2] == b""              # "other" (last) gets none
 
 
-def test_overlay_copies_only_a_matching_build(tmp_path):
+# ---------------------------------------------------------------- the overlay at deploy (scripts/atlas-overlay.mjs)
+def node_or_skip():
     node = shutil.which("node")
     if not node:
         pytest.skip("no node")
-    site = tmp_path / "site"
-    site.mkdir()
-    for f in ("species.json", "model.bin"):
+    return node
+
+
+def site_copy(tmp_path):
+    """A built site's atlas folder (the files the overlay reads), a few dots files, and a dist/sw.js."""
+    dist = tmp_path / "dist"
+    site = dist / "atlas"
+    (site / "dots").mkdir(parents=True)
+    for f in ("species.json", "model.bin", "cells.json", "year.json", "seen-2026.json"):
         shutil.copy(OUT / f, site / f)
-    (site / "seen-2026.json").write_text("{}")
-    names = [s["name"] for s in SPECIES[:-1]]
-    import hashlib
-    good = {"year": 2027, "so_far": True, "photos": 1, "last_day": 70, "built": "x", "species": len(names),
-            "species_hash": W.species_hash(names), "model": hashlib.sha256((OUT / "model.bin").read_bytes()).hexdigest()[:12]}
+    for i in range(3):
+        shutil.copy(OUT / "dots" / f"{i}.bin", site / "dots" / f"{i}.bin")
+    (dist / "sw.js").write_text("const VERSION = 'abcdef012345';\nconst CACHE = `hatch-${VERSION}`;\n")
+    return dist, site
 
-    def run(year):
-        o = tmp_path / f"o{year.get('species')}{year.get('subset', '')}{year.get('model')}"
-        o.mkdir()
-        (o / "year.json").write_text(json.dumps(year))
-        (o / "seen-2027.json").write_text("[]")
-        r = subprocess.run([node, str(ROOT / "scripts/atlas-overlay.mjs"), str(o), str(site)], capture_output=True, text=True)
-        assert r.returncode == 0, r.stderr
-        return r.stdout
 
-    assert "skipped" in run({**good, "species": 3})
-    assert "skipped" in run({**good, "subset": [1]})
-    assert "skipped" in run({**good, "model": "000000000000"})
-    assert not (site / "seen-2027.json").exists()
-    assert "2027 so far" in run(good)
-    assert (site / "seen-2027.json").exists() and json.loads((site / "year.json").read_text())["year"] == 2027
+def overlay(node, src, site):
+    r = subprocess.run([node, str(ROOT / "scripts/atlas-overlay.mjs"), str(src), str(site)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def edited(run, tmp_path, name, change):
+    """A copy of the run's output with year.json changed by `change` (a function of the dict and the folder)."""
+    o = tmp_path / name
+    shutil.copytree(run, o)
+    y = json.loads((o / "year.json").read_text())
+    change(y, o)
+    (o / "year.json").write_text(json.dumps(y))
+    return o
+
+
+def test_overlay_refuses_what_does_not_fit(run_2026, tmp_path):
+    node = node_or_skip()
+    _, out = run_2026
+    dist, site = site_copy(tmp_path)
+    before = {p: p.read_bytes() for p in site.rglob("*") if p.is_file()}
+
+    def tamper(y, o):
+        (o / "seen-2026.bin").write_bytes(b"x")
+    cases = {
+        "dry": lambda y, o: y.update(dry_run=True),
+        "older": lambda y, o: y.update(year=2025),
+        "species": lambda y, o: y.update(species=3),
+        "model": lambda y, o: y.update(model="000000000000"),
+        "cells": lambda y, o: y.update(cells="000000000000"),
+        "tampered": tamper,
+        "extra": lambda y, o: (o / "stale-2025.json").write_text("{}"),
+        "no-manifest": lambda y, o: y.pop("files"),
+    }
+    for name, change in cases.items():
+        assert "skipped" in overlay(node, edited(out, tmp_path, name, change), site), name
+    assert {p: p.read_bytes() for p in site.rglob("*") if p.is_file()} == before
+    assert "abcdef012345" in (dist / "sw.js").read_text()
+
+
+def test_overlay_swaps_this_years_dots_and_restamps_the_worker(run_2026, tmp_path):
+    node = node_or_skip()
+    _, out = run_2026
+    dist, site = site_copy(tmp_path)
+    main0 = DOTS.unpack((site / "dots" / "0.bin").read_bytes())
+    said = overlay(node, out, site)
+    assert "atlas overlay: 2026 so far" in said
+    assert json.loads((site / "year.json").read_text())["year"] == 2026 and (site / "seen-2026.bin").exists()
+    assert not (site / "dots-year").exists()
+    now0 = (site / "dots" / "0.bin").read_bytes()
+    d = DOTS.unpack(now0)
+    year0 = DOTS.unpack((out / "dots-year" / "0.bin").read_bytes())
+    # main's older years untouched, its 2026 rows replaced by the release's, in dots.py's order
+    want = pd.concat([main0[main0.year != 2026], year0], ignore_index=True).sort_values(["year", "doy"], kind="stable")
+    assert now0 == DOTS.pack(want)
+    assert (d[d.year < 2026].reset_index(drop=True) == main0[main0.year < 2026].reset_index(drop=True)).all().all()
+    v = (dist / "sw.js").read_text()
+    assert "abcdef012345" not in v and "const VERSION = '" in v       # returning visitors get the new files
+    # the same overlay again changes nothing but proves it is repeatable (dots swapped, not appended)
+    overlay(node, out, site)
+    assert (site / "dots" / "0.bin").read_bytes() == now0

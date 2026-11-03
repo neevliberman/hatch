@@ -6,19 +6,22 @@ the year's photo dots).
 What one run does (analogy: a teacher re-marking this term's exams as new papers come in):
 1. Warmth: this year's PRISM (RCC-ACIS, as the live job reads it: live/sources.prism_point) at every map cell, then
    the 7-day Open-Meteo forecast, against the typical year in weekly_static.npz -> "days ahead" (data.days_ahead,
-   the network's own clock) -> ahead-YEAR.bin.
+   the network's own clock) -> ahead-YEAR.bin. After the forecast the year runs as typical (0), not held.
 2. Photos: this year's research-grade iNaturalist insect photos in the Atlas box (CC0 / CC BY / CC BY-NC only, both
-   the observation and the photo), pulled incrementally into a local cache (only what changed since the last run;
-   all of it again every FULL_EVERY days, or when the cache is gone). About one request a second, backing off on 429.
+   the observation and the photo), pulled incrementally into a local cache: what changed since the last run, whatever
+   its grade or licence now, so photos that stopped qualifying leave; all of it again every FULL_EVERY days (the only
+   way deleted or moved photos leave), or when the cache is gone. About one request a second, backing off on 429.
 3. Expected vs seen (seen.py's rules, unchanged): the network (net_reference.NumpyAtlas, plain numpy on the CPU)
    says how likely each photo is of each species; summed, that is each species' expected photos, set against the
    photos there were -> seen-YEAR.bin / seen-YEAR.json (with "so_far" while the year is still filling in).
-4. season.bin (the time bar's typical and this-year curves, export.py's), dots/<i>.bin (this year's photos swapped
-   in, dots.py's format) and year.json (which year the files are for; the app reads it to pick its year).
+4. season.bin (the time bar's typical and this-year curves, export.py's), dots-year/<i>.bin (this year's photos only,
+   dots.py's format) and year.json (which year; where real warmth ends; the species, cells and model it was built for;
+   every file's sha256). The app reads year.json to pick its year.
 
-Early in the year, or with too few photos (MIN_PHOTOS), it writes nothing and exits 0: the site keeps the last
+Before FLIP (15 April), or with too few photos (MIN_PHOTOS), it writes nothing and exits 0: the site keeps the last
 year it had. The outputs go to --out; the workflow packs them into the `atlas-data` release, and deploy-pages lays
-them over main's public/atlas (scripts/atlas-overlay.mjs, which checks they were built for the same species list).
+them over main's public/atlas (scripts/atlas-overlay.mjs: checks the manifest and that they were built for the same
+species, cells and model, swaps this year's dots into main's, and restamps the service worker so visitors refetch).
 
   python3 pipeline/atlas/weekly.py --out /tmp/atlas                      # this year, incremental
   python3 pipeline/atlas/weekly.py --out /tmp/atlas --year 2026 --compare public/atlas
@@ -59,13 +62,20 @@ API = "https://api.inaturalist.org/v2/observations"
 UA = {"User-Agent": "hatch-atlas-weekly/0.1 (github.com/neevliberman/hatch)"}
 INSECTA = 47158
 LICENCES = "cc0,cc-by,cc-by-nc"
-FIELDS = "id,observed_on,location,user.id,taxon.id,taxon.rank_level,taxon.min_species_taxon_id"
+OPEN = frozenset(LICENCES.split(","))
+FIELDS = ("id,observed_on,location,quality_grade,license_code,photos.license_code,user.id,taxon.id,taxon.rank_level,"
+          "taxon.min_species_taxon_id")
 PAGE = 200                  # iNaturalist's largest page
 INTERVAL = 1.0              # seconds between request starts, across all threads (iNat asks for about 1 a second)
 WORKERS = 4                 # requests in flight (each takes 2-4 s server-side, so 4 keep about 1 a second going)
-FULL_EVERY = 28             # days: pull the whole year again, so photos that lost research grade or were deleted go
+FULL_EVERY = 14             # days: pull the whole year again. Only a full pull sees photos that were deleted, moved out
+                            # of the box or re-identified as something other than an insect (an update query can't).
+FULL_SLACK_HOURS = 12       # a run a few hours earlier in the week than the last full pull still counts as 14 days on
 OVERLAP = dt.timedelta(days=1)  # each incremental pull reaches back this far past the last one
+MAX_DROP = 0.2              # the cached year shrinking by more than this since the last run: stop, publish nothing
 MIN_PHOTOS = 1000           # fewer photos than this (after the burst filter): write nothing, the site keeps its year
+FLIP = (4, 15)              # (month, day): the new year never takes over before this. 2026 had 3.3k photos by 1 March,
+                            # but too few weeks of them to say anything about the year.
 PRISM_LAG_DAYS = 3          # as live/build_live.py
 FORECAST_DAYS, MIN_FORECAST_DAYS = 7, 5
 MAX_BAD_CELLS = 0.02
@@ -74,25 +84,33 @@ CACHE = DATA / "weekly"
 
 # ---------------------------------------------------------------- iNaturalist
 class Limiter:
-    """At most one request start per `interval` seconds, shared by every thread."""
+    """At most one request start per `interval` seconds, shared by every thread. pause() (a 429) pushes every start
+    back, including those already promised a slot: a thread whose slot was reserved before the pause asks again."""
 
     def __init__(self, interval=INTERVAL, clock=time.monotonic, sleep=time.sleep):
         self.interval, self.clock, self.sleep = interval, clock, sleep
         self.lock = threading.Lock()
         self.next = 0.0
+        self.paused = 0           # bumped by every pause, so reserved slots know they were cancelled
 
     def wait(self):
-        with self.lock:
-            now = self.clock()
-            at = max(now, self.next)
-            self.next = at + self.interval
-        if at > now:
-            self.sleep(at - now)
+        while True:
+            with self.lock:
+                now = self.clock()
+                at = max(now, self.next)
+                self.next = at + self.interval
+                gen = self.paused
+            if at > now:
+                self.sleep(at - now)
+            with self.lock:
+                if self.paused == gen:
+                    return
 
     def pause(self, seconds):
         """Everyone waits (a 429: the server asked us to slow down)."""
         with self.lock:
-            self.next = max(self.next, self.clock() + seconds)
+            self.paused += 1
+            self.next = max(self.next, self.clock()) + seconds
 
 
 def get(params, limiter, opener=urllib.request.urlopen, tries=8, sleep=time.sleep):
@@ -117,45 +135,81 @@ def get(params, limiter, opener=urllib.request.urlopen, tries=8, sleep=time.slee
 
 
 def query(year, taxa=None):
-    """The fixed part of every request: research-grade insect photos in the box, openly licensed."""
+    """The full pull's query: research-grade insect photos in the box, openly licensed (observation and photo)."""
     return {"taxon_id": ",".join(map(str, taxa)) if taxa else INSECTA, "quality_grade": "research",
             "license": LICENCES, "photo_license": LICENCES, "photos": "true",
             "swlat": BOX["s"], "swlng": BOX["w"], "nelat": BOX["n"], "nelng": BOX["e"],
             "d1": f"{year}-01-01", "d2": f"{year}-12-31", "per_page": PAGE, "order_by": "id", "order": "asc"}
 
 
-def rows_of(results):
-    """API results -> plain rows. Photos without a day, a place or a taxon are dropped."""
-    out = []
+def changes(year, taxa=None):
+    """The incremental query: every insect observation of the year in the box, whatever its grade, licence or photos,
+    so one that stopped qualifying (lost research grade, licence or photo licence changed, photos deleted, location
+    made private) comes back too, and rows_of() decides. The caller adds updated_since."""
+    q = query(year, taxa)
+    for k in ("quality_grade", "license", "photo_license", "photos"):
+        del q[k]
+    return q
+
+
+def usable(o, year=None):
+    """True for an observation the Atlas may count and show: research grade, openly licensed, at least one openly
+    licensed photo, a public location, a day (in `year`, if given) and a taxon."""
+    t = o.get("taxon") or {}
+    day = str(o.get("observed_on") or "")
+    return bool(
+        o.get("quality_grade") == "research" and (o.get("license_code") or "").lower() in OPEN
+        and any((p.get("license_code") or "").lower() in OPEN for p in o.get("photos") or [])
+        and o.get("location") and day and t.get("id") and (year is None or day[:4] == str(year)))
+
+
+def rows_of(results, year=None):
+    """API results -> (rows of the usable ones, ids of the rest)."""
+    out, gone = [], []
     for o in results:
-        t, loc, day = o.get("taxon") or {}, o.get("location"), o.get("observed_on")
-        if not (t.get("id") and loc and day):
+        if not usable(o, year):
+            gone.append(int(o["id"]))
             continue
-        lat, lng = (float(v) for v in loc.split(","))
+        t = o["taxon"]
+        lat, lng = (float(v) for v in o["location"].split(","))
         rank = t.get("rank_level") or 100
         sp = t.get("min_species_taxon_id") if rank <= 10 else None
-        out.append((int(o["id"]), str(day)[:10], lat, lng, int((o.get("user") or {}).get("id") or 0), int(t["id"]),
-                    float(rank), int(sp) if sp else 0))
-    return out
+        out.append((int(o["id"]), str(o["observed_on"])[:10], lat, lng, int((o.get("user") or {}).get("id") or 0),
+                    int(t["id"]), float(rank), int(sp) if sp else 0))
+    return out, gone
 
 
 COLUMNS = ["id", "day", "lat", "lng", "user", "taxon", "rank", "species"]
 
 
-def stream(params, limiter, max_pages=None, fields=FIELDS, getter=get):
-    """Every page of one query, by id (id_above), so no deep-offset limit. -> list of rows (ids only with fields="id")."""
-    rows, last, pages = [], 0, 0
+SLACK = 3
+
+
+class Incomplete(RuntimeError):
+    """A query returned fewer observations than it said it had."""
+
+
+def stream(params, limiter, max_pages=None, getter=get, year=None):
+    """Every page of one query, by id (id_above), so no deep-offset limit. A page shorter than asked for does not end it;
+    only an empty one does, and then the count must match the first page's total_results (observations added during
+    the pull may push it over, never under). -> (usable rows, ids that no longer qualify, pages)."""
+    rows, gone, last, pages, seen, total = [], [], 0, 0, 0, None
     while max_pages is None or pages < max_pages:
-        js = getter({**params, "id_above": last, "fields": fields}, limiter)
+        js = getter({**params, "id_above": last, "fields": FIELDS}, limiter)
+        if total is None:
+            total = int(js.get("total_results", 0))
         res = js.get("results") or []
         pages += 1
         if not res:
+            if seen < total - SLACK - total // 2000:   # a few may lose research grade or be deleted mid-pull
+                raise Incomplete(f"iNaturalist listed {total} observations but returned {seen}: {params}")
             break
-        rows += [int(o["id"]) for o in res] if fields == "id" else rows_of(res)
+        seen += len(res)
+        r, g = rows_of(res, year)
+        rows += r
+        gone += g
         last = max(int(o["id"]) for o in res)
-        if len(res) < params.get("per_page", PAGE):
-            break
-    return rows, pages
+    return rows, gone, pages
 
 
 def months(year, through):
@@ -171,7 +225,7 @@ def months(year, through):
 
 
 def merge(cache, fresh, gone=()):
-    """Cache rows updated by fresh ones (same id: the fresh row wins), minus ids no longer research grade."""
+    """Cache rows updated by fresh ones (same id: the fresh row wins), minus ids that no longer qualify."""
     df = pd.concat([cache, fresh], ignore_index=True)
     df = df.drop_duplicates("id", keep="last")
     if len(gone):
@@ -181,47 +235,48 @@ def merge(cache, fresh, gone=()):
 
 def update_photos(year, today, cache_dir, taxa=None, full=False, max_pages=None, workers=WORKERS, limiter=None,
                   getter=get, now=None):
-    """This year's photos, from the cache plus what changed since the last run. -> (DataFrame, stats)."""
+    """This year's photos, from the cache plus what changed since the last run. `now`: the run's start (UTC), which
+    becomes the next run's updated_since and decides whether a full pull is due. -> (DataFrame, stats)."""
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     tag = f"{year}" + (f"-taxa-{'-'.join(map(str, taxa))}" if taxa else "")
     f_rows, f_meta = cache_dir / f"obs-{tag}.parquet", cache_dir / f"meta-{tag}.json"
     now = now or dt.datetime.now(dt.timezone.utc)
     limiter = limiter or Limiter()
-    q = query(year, taxa)
     meta = json.loads(f_meta.read_text()) if f_meta.exists() else {}
-    have = f_rows.exists() and meta.get("columns") == COLUMNS
-    stale = not have or full or (now - dt.datetime.fromisoformat(meta["full_at"])).days >= FULL_EVERY
+    have = f_rows.exists() and meta.get("columns") == COLUMNS and meta.get("fields") == FIELDS
+    age = (now - dt.datetime.fromisoformat(meta["full_at"])).total_seconds() / 3600 if have else None
+    stale = not have or full or age >= FULL_EVERY * 24 - FULL_SLACK_HOURS
     t0 = time.time()
     if stale:
         through = min(today, dt.date(year, 12, 31))
-        parts = [{**q, "d1": a, "d2": b} for a, b in months(year, through)]
+        parts = [{**query(year, taxa), "d1": a, "d2": b} for a, b in months(year, through)]
         with ThreadPoolExecutor(workers) as ex:
-            got = list(ex.map(lambda p: stream(p, limiter, max_pages, getter=getter), parts))
-        df = pd.DataFrame([r for rows, _ in got for r in rows], columns=COLUMNS).drop_duplicates("id")
-        pages, gone, kind = sum(p for _, p in got), [], "full"
+            got = list(ex.map(lambda p: stream(p, limiter, max_pages, getter, year), parts))
+        df = pd.DataFrame([r for rows, _, _ in got for r in rows], columns=COLUMNS).drop_duplicates("id")
+        pages, gone, kind = sum(p for *_, p in got), [g for _, gs, _ in got for g in gs], "full"
         meta = {"full_at": now.isoformat()}
     else:
         since = (dt.datetime.fromisoformat(meta["updated_since"]) - OVERLAP).isoformat(timespec="seconds")
         old = pd.read_parquet(f_rows)
-        with ThreadPoolExecutor(2) as ex:
-            new = ex.submit(stream, {**q, "updated_since": since}, limiter, max_pages, FIELDS, getter)
-            # photos that lost research grade (an identification changed) since the last run leave the cache
-            drop = ex.submit(stream, {**q, "quality_grade": "needs_id,casual", "updated_since": since}, limiter,
-                             max_pages, "id", getter)
-            (rows, p1), (gone, p2) = new.result(), drop.result()
+        rows, gone, pages = stream({**changes(year, taxa), "updated_since": since}, limiter, max_pages, getter, year)
         df = merge(old, pd.DataFrame(rows, columns=COLUMNS), gone)
-        pages, kind = p1 + p2, "incremental"
+        kind = "incremental"
+        prev = meta.get("photos")
+        if prev and len(df) < (1 - MAX_DROP) * prev:
+            raise SystemExit(f"iNat: the cached year shrank from {prev:,} to {len(df):,} photos (more than "
+                             f"{MAX_DROP:.0%}); not trusting it. Rerun with --full.")
     df = df.astype({"id": "int64", "user": "int64", "taxon": "int64", "species": "int64", "lat": "float64",
                     "lng": "float64", "rank": "float64"})
     if max_pages is None:  # a capped dry run never becomes the cache the next run builds on
         tmp = f_rows.with_suffix(".tmp")
         df.to_parquet(tmp, index=False)
         tmp.replace(f_rows)
-        f_meta.write_text(json.dumps({**meta, "updated_since": now.isoformat(), "columns": COLUMNS}))
+        f_meta.write_text(json.dumps({**meta, "updated_since": now.isoformat(), "columns": COLUMNS, "fields": FIELDS,
+                                      "photos": len(df)}))
     stats = {"kind": kind, "pages": pages, "photos": len(df), "removed": len(gone), "seconds": round(time.time() - t0)}
     print(f"iNat: {kind} pull, {pages} pages in {stats['seconds']} s -> {len(df):,} photos cached"
-          + (f" ({len(gone)} no longer research grade)" if kind == "incremental" else ""), flush=True)
+          + (f" ({len(gone)} no longer qualify)" if kind == "incremental" else ""), flush=True)
     return df, stats
 
 
@@ -273,7 +328,7 @@ def observed(year, as_of, cells, src, fetch=None):
 
 def forecast(cells, after, tmin, tmax, fetch=None):
     """The next days from Open-Meteo written in after `after` (in place). -> the last day written, or `after` if the
-    forecast was unusable (the newest real day then holds, as export.py does). A forecast failure never fails the run."""
+    forecast was unusable (the year then runs as typical from the day after). A forecast failure never fails the run."""
     from live.sources import open_meteo
     fetch = fetch or open_meteo
     lat, lng = np.array([h3.cell_to_latlng(c) for c in cells]).T
@@ -281,13 +336,13 @@ def forecast(cells, after, tmin, tmax, fetch=None):
     try:
         f_min, f_max = fetch(lat, lng, a, b)
     except Exception as e:  # noqa: BLE001
-        print(f"  Open-Meteo failed ({e!r}); holding the newest real day", flush=True)
+        print(f"  Open-Meteo failed ({e!r}); typical after the newest real day", flush=True)
         return after
     keep = ~(np.isnan(f_min).any(0) | np.isnan(f_max).any(0))
     n = int(np.argmin(keep)) if not keep.all() else len(keep)
     n = min(n, 365 - calendar_index(a))
     if n < MIN_FORECAST_DAYS or (np.nanmin(f_min[:, :n]) < -45 or np.nanmax(f_max[:, :n]) > 50):
-        print(f"  Open-Meteo: only {n} usable days; holding the newest real day", flush=True)
+        print(f"  Open-Meteo: only {n} usable days; typical after the newest real day", flush=True)
         return after
     i = calendar_index(a)
     tmin[:, i:i + n], tmax[:, i:i + n] = f_min[:, :n], f_max[:, :n]
@@ -296,7 +351,9 @@ def forecast(cells, after, tmin, tmax, fetch=None):
 
 def days_ahead(clim, tmin, tmax):
     """[cell, 365] days ahead of the typical year (data.days_ahead, the network's clock) from this year's daily
-    weather (NaN after the newest known day, which then holds, as export.py holds it). Days before 28 February are
+    weather (NaN after the newest known day: real weather, then the forecast). After that day the year runs as a typical
+    one (0), not as its newest day held all season: one warm March week must not slide the whole summer. (After
+    midsummer the clock holds its own last value, as it did in training, data.HOLD_RATE.) Days before 28 February are
     never fetched: no warmth counts before 1 March, so they stand in as 0 °C."""
     tmin, tmax = tmin.copy(), tmax.copy()
     early = slice(0, START_DOY - 2)
@@ -308,9 +365,7 @@ def days_ahead(clim, tmin, tmax):
     if n:
         dd[:, :n] = np.cumsum(daily_dd(np.nan_to_num(tmin[:, :n]), np.nan_to_num(tmax[:, :n])), 1)
     out = np.stack([D.days_ahead(clim[c].astype(np.float32), dd[c]) for c in range(len(clim))])
-    if n:
-        out = np.where(np.isfinite(out), out, out[:, [n - 1]])
-    return np.nan_to_num(out)
+    return np.where(np.isfinite(out), out, 0.0)
 
 
 def quarter_days(a):
@@ -411,24 +466,22 @@ def in_states(lat, lng):
     return inside
 
 
-def year_dots(photos, year, n_files, dots_from):
-    """{i: bytes}: each species' shipped dots with this year's photos swapped in (dots.py: at most CAP, a fixed-seed
-    sample, the seven states only)."""
+def year_dots(photos, year, n_files):
+    """{i: bytes}: each species' photos of this year alone, in dots.py's format (at most CAP, a fixed-seed sample, the
+    seven states only). Only these go in the release: at deploy, scripts/atlas-overlay.mjs swaps them into main's own
+    dots/<i>.bin in place of that year's rows, so the release never brings back older years' dots."""
     p = photos[photos.label < n_files - 1]
     p = p[in_states(p.lat.to_numpy(), p.lng.to_numpy())]
     by = {i: g for i, g in p.groupby("label")}
     out = {}
     for i in range(n_files):
-        f = Path(dots_from) / f"{i}.bin"
-        old = DOTS.unpack(f.read_bytes()) if f.exists() else pd.DataFrame(columns=["inat_id", "doy", "lat", "lng", "year"])
-        old = old[old.year != year]
         g = by.get(i)
-        if g is not None:
-            g = g.sample(DOTS.CAP, random_state=i) if len(g) > DOTS.CAP else g
-            g = pd.DataFrame({"inat_id": g.id.to_numpy(), "doy": g.doy.to_numpy(), "lat": g.lat.to_numpy(),
-                              "lng": g.lng.to_numpy(), "year": year})
-            old = pd.concat([old, g], ignore_index=True) if len(old) else g
-        out[i] = DOTS.pack(old) if len(old) else b""
+        if g is None:
+            out[i] = b""
+            continue
+        g = g.sample(DOTS.CAP, random_state=i) if len(g) > DOTS.CAP else g
+        out[i] = DOTS.pack(pd.DataFrame({"inat_id": g.id.to_numpy(), "doy": g.doy.to_numpy(), "lat": g.lat.to_numpy(),
+                                         "lng": g.lng.to_numpy(), "year": year}))
     return out
 
 
@@ -441,25 +494,40 @@ def species_hash(names):
 
 
 # ---------------------------------------------------------------- the run
+def flips(year):
+    """The first day `year` may take over the site (FLIP)."""
+    return dt.date(year, *FLIP)
+
+
 def default_year(today):
-    """The year a scheduled run rebuilds: this one once its season has begun (1 March, plus PRISM's lag), else last
-    year, whose late identifications keep coming in through the winter (so January and February refine the year the
-    site already shows; the new year takes over once it has MIN_PHOTOS photos)."""
-    return today.year if today >= dt.date(today.year, 3, 1) + dt.timedelta(days=PRISM_LAG_DAYS) else today.year - 1
+    """The year a scheduled run rebuilds: this one from FLIP (15 April) on, else last year, whose late identifications
+    keep coming in through the winter and spring (so until mid-April the site refines the year it already shows; the
+    new year takes over from FLIP once it has MIN_PHOTOS photos)."""
+    return today.year if today >= flips(today.year) else today.year - 1
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def build(year, today, out, cache_dir=CACHE, taxa=None, full=False, max_pages=None, use_forecast=True, dots=True,
-          workers=WORKERS, weather=None, photos=None, atlas=OUT):
-    """Everything for `year` into `out`. -> summary dict, or None when there is nothing to publish yet."""
+          workers=WORKERS, weather=None, photos=None, atlas=OUT, now=None):
+    """Everything for `year` into `out`. -> summary dict, or None when there is nothing to publish yet. A run limited
+    in any way (a few taxa, capped pages, no dots) is marked dry_run in year.json, and the overlay never publishes it."""
     t0 = time.time()
+    now = now or dt.datetime.now(dt.timezone.utc)
     atlas = Path(atlas)
     species = json.loads((atlas / "species.json").read_text())
     cells_rows = json.loads((atlas / "cells.json").read_text())
     cells = [c["h"] for c in cells_rows]
     cells_dd = np.array([c["dd"] for c in cells_rows], np.float32)
     cell_ll = np.array([h3.cell_to_latlng(c) for c in cells])
+    dry = bool(taxa or max_pages or not dots)
     if year > today.year or today < dt.date(year, 3, 1) + dt.timedelta(days=PRISM_LAG_DAYS):
         print(f"{year}: no data yet ({today}); nothing written, the site keeps its last year.")
+        return None
+    if today < flips(year) and not dry:
+        print(f"{year}: too early in the season ({today}; it takes over from {flips(year)}); nothing written.")
         return None
 
     # 1. warmth
@@ -484,7 +552,8 @@ def build(year, today, out, cache_dir=CACHE, taxa=None, full=False, max_pages=No
 
     # 2. photos
     if photos is None:
-        photos, pull = update_photos(year, min(today, dt.date(year, 12, 31)), cache_dir, taxa, full, max_pages, workers)
+        photos, pull = update_photos(year, min(today, dt.date(year, 12, 31)), cache_dir, taxa, full, max_pages, workers,
+                                     now=now)
     else:
         pull = {"kind": "given", "pages": 0, "photos": len(photos), "removed": 0, "seconds": 0}
     last_day = calendar_index(as_of) + 1
@@ -494,7 +563,7 @@ def build(year, today, out, cache_dir=CACHE, taxa=None, full=False, max_pages=No
         return None
     last_day = min(last_day, int(p.doy.max()))
     p = p[p.doy <= last_day]
-    if len(p) < MIN_PHOTOS and not taxa:
+    if len(p) < MIN_PHOTOS and not dry:
         print(f"{year}: only {len(p)} photos so far (fewer than {MIN_PHOTOS}); nothing written, the site keeps its last year.")
         return None
 
@@ -515,7 +584,7 @@ def build(year, today, out, cache_dir=CACHE, taxa=None, full=False, max_pages=No
     t2 = time.time()
     vol = json.loads((atlas / "season.json").read_text())["volume"]
     season = season_bin(net, cell_ll, cells_dd, ahead_q, vol)
-    dot_files = year_dots(p, year, len(species), atlas / "dots") if dots else {}
+    dot_files = year_dots(p, year, len(species)) if dots else {}
     t_files = time.time() - t2
     so_far = year >= today.year
     head = {"year": year, "last_day": last_day, "photos": len(p), "so_far": so_far}
@@ -526,15 +595,19 @@ def build(year, today, out, cache_dir=CACHE, taxa=None, full=False, max_pages=No
     (out / f"seen-{year}.json").write_text(json.dumps({**head, "species": rows, "surprises": picks}, separators=(",", ":")))
     season.tofile(out / "season.bin")
     if dot_files:
-        (out / "dots").mkdir(exist_ok=True)
+        (out / "dots-year").mkdir(exist_ok=True)
         for i, b in dot_files.items():
-            (out / "dots" / f"{i}.bin").write_bytes(b)
+            (out / "dots-year" / f"{i}.bin").write_bytes(b)
+    files = sorted(str(f.relative_to(out)) for f in out.rglob("*") if f.is_file())
     summary = {
         **head, "built": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # real warmth through weather_through, the forecast through warm_through (day of year); typical after that
         "weather_through": as_of.isoformat(), "forecast_through": through.isoformat() if through > as_of else None,
+        "warm_through": calendar_index(through) + 1,
         "species": len(names), "species_hash": species_hash(names),
-        "model": hashlib.sha256((atlas / "model.bin").read_bytes()).hexdigest()[:12],
-        **({"subset": list(taxa)} if taxa else {}),
+        "model": sha(atlas / "model.bin")[:12], "cells": sha(atlas / "cells.json")[:12],
+        "dry_run": dry, **({"subset": list(taxa)} if taxa else {}),
+        "files": {f: sha(out / f) for f in files},
         "sources": {"photos": "iNaturalist research grade, CC0 / CC BY / CC BY-NC (observation and photo)",
                     "warmth": "PRISM daily via RCC-ACIS; Open-Meteo forecast (CC BY 4.0)"},
         "checks": {"pull": pull, "cached_photos": len(photos), "seconds": {"weather": round(t_weather), "network": round(t_net),
@@ -583,7 +656,7 @@ def compare(out, ref, year):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True, help="folder for the files (only written when there is a year to show)")
-    ap.add_argument("--year", type=int, help="default: this year from March, last year before (default_year)")
+    ap.add_argument("--year", type=int, help="default: this year from 15 April, last year before (default_year)")
     ap.add_argument("--cache", type=Path, default=CACHE, help="iNaturalist cache folder, kept between runs")
     ap.add_argument("--full", action="store_true", help="pull the whole year again, not just what changed")
     ap.add_argument("--no-forecast", action="store_true")
@@ -595,9 +668,13 @@ def main(argv=None):
     a = ap.parse_args(argv)
     today = dt.datetime.now(dt.timezone.utc).date()
     year = a.year or default_year(today)
+    if not 2026 <= year <= today.year:
+        raise SystemExit(f"--year {year}: must be 2026 or later, and not in the future")
     tmp = a.out.with_name(a.out.name + ".tmp")
     shutil.rmtree(tmp, ignore_errors=True)
-    res = build(year, today, tmp, a.cache, a.taxa, a.full, a.max_pages, not a.no_forecast, not a.no_dots, a.workers)
+    now = dt.datetime.now(dt.timezone.utc)  # the run's start: the next updated_since, and the full pull's clock
+    res = build(year, now.date(), tmp, a.cache, a.taxa, a.full, a.max_pages, not a.no_forecast, not a.no_dots, a.workers,
+                now=now)
     if res is None:
         return 0
     shutil.rmtree(a.out, ignore_errors=True)

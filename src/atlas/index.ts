@@ -29,12 +29,20 @@ export interface AtlasSpecies {
  * every use after the species list loads sees the year the files are for. A live binding: read it, never copy it early.
  */
 export let ATLAS_YEAR = 2026;
+/** About ATLAS_YEAR's files (year.json): still coming in ("so far"), and the last day of real warmth in ahead-YEAR.bin
+ * (day of year, the forecast included; the year runs as typical after it), or null when the file holds it all season. */
+export const atlasYearInfo: { soFar: boolean; warmThrough: number | null } = { soFar: false, warmThrough: null };
 let yearLoad: Promise<number> | null = null;
 /** year.json's year (the files' own), fetched once; a missing or odd file keeps the built-in year. */
 export function loadAtlasYear(): Promise<number> {
-  yearLoad ??= json<{ year?: unknown }>('year.json').then((f) => {
+  yearLoad ??= json<{ year?: unknown; so_far?: unknown; warm_through?: unknown }>('year.json').then((f) => {
     const y = f?.year;
-    if (typeof y === 'number' && Number.isInteger(y) && y >= 2026 && y <= 2100) ATLAS_YEAR = y;
+    if (typeof y === 'number' && Number.isInteger(y) && y >= 2026 && y <= 2100) {
+      ATLAS_YEAR = y;
+      atlasYearInfo.soFar = f?.so_far === true;
+      const w = f?.warm_through;
+      atlasYearInfo.warmThrough = typeof w === 'number' && w >= 1 && w <= 365 ? w : null;
+    }
     return ATLAS_YEAR;
   });
   return yearLoad;

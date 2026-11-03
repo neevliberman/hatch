@@ -4,7 +4,7 @@ import { DataFilterExtension } from '@deck.gl/extensions';
 import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import type { CaveatCard, Due, LegendSpec, ProbeCard, SeasonProfile, SpeciesWords } from '../core/layer';
-import { ATLAS_YEAR, atlasKey, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
+import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import { animating, ripples } from './motion';
@@ -524,7 +524,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
             : []),
           mode === TYPICAL
             ? 'A typical year: the season as it usually runs.'
-            : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.`,
+            : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.${atlasYearInfo.warmThrough ? ` Real warmth and the week’s forecast run through ${fmt(ATLAS_YEAR, atlasYearInfo.warmThrough)}; after that, a typical spring.` : ''}`,
           ...(mode !== TYPICAL && year
             ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.${year.soFar ? ` ${ATLAS_YEAR} is still coming in: these are its photos so far, rebuilt every week, and the latest weeks run short until their photos are identified.` : ''}`]
             : []),
@@ -553,8 +553,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
 
     credits() {
       const out = [
-        { text: 'Insect records: iNaturalist research-grade observations, via GBIF (CC0, CC BY and CC BY-NC).', href: 'https://www.gbif.org/dataset/50c9509d-22c7-4a22-a47d-8c48425ef4a7' },
-        { text: 'Warmth: Daymet (ORNL DAAC); 2026 from PRISM via RCC-ACIS.', href: 'https://daymet.ornl.gov/' },
+        { text: 'Insect records: iNaturalist research-grade observations (CC0, CC BY and CC BY-NC), 2015-2026 via GBIF.', href: 'https://www.gbif.org/dataset/50c9509d-22c7-4a22-a47d-8c48425ef4a7' },
+        ...(ATLAS_YEAR > 2026 ? [{ text: `${ATLAS_YEAR} photos: iNaturalist, research grade, CC0, CC BY and CC BY-NC, updated weekly.`, href: 'https://www.inaturalist.org/' }] : []),
+        { text: 'Warmth: Daymet (ORNL DAAC) for the years the network learned; since 2026, PRISM (PRISM Climate Group, Oregon State University) via RCC-ACIS.', href: 'https://prism.oregonstate.edu/' },
+        ...(atlasYearInfo.warmThrough ? [{ text: 'This week’s warmth forecast: Open-Meteo (CC BY 4.0).', href: 'https://open-meteo.com/' }] : []),
       ];
       if (sp.photo && sp.credit && sp.taxon) out.push({ text: `${name} photo: ${sp.credit}, via iNaturalist.`, href: `https://www.inaturalist.org/taxa/${sp.taxon}` });
       if (sp.taxon) {
