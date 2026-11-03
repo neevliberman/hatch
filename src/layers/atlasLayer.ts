@@ -562,30 +562,33 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     },
 
     caveats(): CaveatCard {
-      // Its track record (species.json "rec"): 2026 in the states it learned, then Wisconsin and Minnesota, which it
-      // never saw. Each beat, tied or lost against its own calendar, or untested (too few photos).
+      // Its track record (species.json "rec"): the map against a plain calendar on photos it never learned from, 2026
+      // in the states it learned, then Wisconsin and Minnesota, which it never saw. Each beat, tied or lost, or
+      // untested: under 400 photos to learn from, or under 20 new ones (the gate's rule, track_record.py).
       const [c, nc, d, nd] = sp.rec ?? [null, 0, null, 0];
       const RESULT = { 1: 'beat', 0: 'tied', '-1': 'lost' } as const;
       const row = (r: Result, n: number, what: string) =>
-        r === null ? { result: 'untested' as const, what, count: 'too few photos' } : { result: RESULT[r], what, count: `${n.toLocaleString()} photos` };
+        r === null ? { result: 'untested' as const, what, count: 'too few new photos' } : { result: RESULT[r], what, count: `${n.toLocaleString()} photos` };
+      const rows = c === null && d === null
+        ? [{ result: 'untested' as const, what: sp.n < 400 ? 'Under 400 photos to learn from: too few to test' : 'Too few new photos (2026, WI & MN) to test' }]
+        : [row(c, nc, '2026, a season it never saw'), row(d, nd, 'WI & MN, states it never saw')];
       const record = {
-        title: 'Against its own calendar',
-        rows: c === null && d === null
-          ? [{ result: 'untested' as const, what: 'Too few photos to test' }]
-          : [row(c, nc, '2026, a season it never saw'), row(d, nd, 'WI & MN, states it never saw')],
+        title: 'Map vs. a plain calendar',
+        rows,
+        act: c === -1 ? 'Read this map loosely.' : d === -1 ? 'Read this map loosely in WI & MN.' : undefined,
+        notes: [
+          ...(c === 0 || d === 0 ? ['Tied: neither was 20× more likely to be right.'] : []),
+          'Calendar: just the weeks it’s usually photographed, 2° of latitude at a time (2015-2025).',
+        ],
       };
       return {
         title: `${name}: fine print`,
         severity: 'normal',
         record,
         bullets: [
-          ...(c === -1 ? ['Lost in 2026: read this map loosely.'] : []),
           `Colors: a model’s expectation, not sightings: of the insect photos taken here on this day, the share that would be ${name}.`,
           `Dots: real iNaturalist photos, each lit ${GLOW_DAYS} days, from ${mode === TYPICAL ? `${FIRST_YEAR}-${ATLAS_YEAR - 1}` : ATLAS_YEAR} (at most 5,000, picked at random).`,
           `One network learns all ${atlas.species.length.toLocaleString()} Midwest insects with 100+ records at once, from 2.1 million iNaturalist photos (2015-2025). ${name}: ${sp.n.toLocaleString()} of them.`,
-          ...(c !== null || d !== null
-            ? ['Its own calendar: the weeks it was photographed, 2° of latitude at a time, 2015-2025. Tied: too close to call.']
-            : []),
           ...(sp.n < 300 ? [`Only ${sp.n.toLocaleString()} records: this forecast is rough.`] : sp.n >= 5000 ? [`Well recorded (${sp.n.toLocaleString()} records).`] : []),
           ...(mode !== TYPICAL && year && year.ratio !== null && year.ratio < 0.6 && year.expectedPhotos >= 10
             ? ['Fewer photos than expected this year. Seen one? Add it on iNaturalist.']

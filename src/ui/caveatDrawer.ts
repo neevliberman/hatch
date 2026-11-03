@@ -11,7 +11,8 @@ const STAMP = { beat: 'Beat', tied: 'Tied', lost: 'Lost', untested: 'Untested' }
 const recordHtml = (r: NonNullable<CaveatCard['record']>) => `<div class="cav-rec" data-track>
   <div class="ex-h">${esc(r.title)}</div>
   <ul>${r.rows.map((x) => `<li data-result="${x.result}"><b class="stamp ${x.result}">${STAMP[x.result]}</b> <span>${esc(x.what)}${
-    x.count ? ` <small>· ${esc(x.count)}</small>` : ''}</span></li>`).join('')}</ul></div>`;
+    x.count ? ` <small>· ${esc(x.count)}</small>` : ''}</span></li>`).join('')}</ul>${
+    r.act ? `<p class="rec-act">${esc(r.act)}</p>` : ''}${(r.notes ?? []).map((n) => `<p class="rec-note">${esc(n)}</p>`).join('')}</div>`;
 
 export interface Drawer {
   /** Open or close. On a phone held upright it opens as a sheet at its middle stop, or at the tall one with `full`. */

@@ -2118,9 +2118,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     console.log(`${tag}: checked`);
   };
   // An Atlas species' track record in "How sure?" (species.json "rec", pipeline/atlas/track_record.py): a stamp per
-  // test against its own calendar. The common eastern bumble bee beat it in 2026 and in WI & MN; the Virginian tiger
-  // moth tied in 2026 and lost in the states it never saw; the 17-year cicada (no brood in 2026) was never tested. Each
-  // stamp sits on one line beside its words and never spills out of the panel. Desktop and phone. Waits poll on a timer
+  // test of the map against a plain calendar. The common eastern bumble bee beat it in 2026 and in WI & MN; the
+  // Virginian tiger moth tied in 2026 and lost in the states it never saw (so: read loosely in WI & MN, and what tied
+  // means); the stink bug lost 2026; the 17-year cicada (no brood in 2026) was never tested. Every card says what the
+  // calendar is. Each stamp sits on one line beside its words, on screen, and never spills out of the panel. Desktop
+  // and phone. Waits poll on a timer
   // (a software-GL frame can take 10-25 s). ONLY=track runs just this.
   const trackUnit = async ([w, h, phone], browser) => {
     const tag = `track record ${phone ? 'phone' : 'desktop'}`;
@@ -2130,17 +2132,32 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.route(PHOTOS, (r) => r.abort());
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 90000, polling: 500 }).then(() => true, () => false);
+    const CAL = 'Calendar: just the weeks it’s usually photographed, 2° of latitude at a time (2015-2025).';
+    const TIED = 'Tied: neither was 20× more likely to be right.';
+    // [key, [result, line]...], then the lines under the stamps
     const cases = [
-      ['bombus-impatiens', [['beat', /^Beat 2026, a season it never saw · 5,660 photos$/], ['beat', /^Beat WI & MN, states it never saw · 3,234 photos$/]]],
-      ['spilosoma-virginica', [['tied', /^Tied 2026, a season it never saw · 1,000 photos$/], ['lost', /^Lost WI & MN, states it never saw · 231 photos$/]]],
-      ['magicicada-septendecim', [['untested', /^Untested Too few photos to test$/]]],
+      ['bombus-impatiens', [['beat', /^Beat 2026, a season it never saw · 5,660 photos$/], ['beat', /^Beat WI & MN, states it never saw · 3,234 photos$/]], [CAL]],
+      ['spilosoma-virginica', [['tied', /^Tied 2026, a season it never saw · 1,000 photos$/], ['lost', /^Lost WI & MN, states it never saw · 231 photos$/]],
+        ['Read this map loosely in WI & MN.', TIED, CAL]],
+      ['halyomorpha-halys', [['lost', /^Lost 2026, a season it never saw · 998 photos$/], ['beat', /^Beat WI & MN, states it never saw · 116 photos$/]], ['Read this map loosely.', CAL]],
+      ['magicicada-septendecim', [['untested', /^Untested Too few new photos \(2026, WI & MN\) to test$/]], [CAL]],
     ];
     try {
-      for (const [key, want] of cases) {
+      for (const [key, want, notes] of cases) {
         await page.goto(`${origin}/?species=${key}&noauto&today=2027-01-15`);
         if (!(await poll((k) => window.__hatch?.current()?.id === `${k}-atlas`, key))) { fail(`${key}: never opened`); continue; }
         await (phone ? page.locator('#why').tap() : page.locator('#why').click());
-        if (!(await poll(() => document.querySelector('#drawer.open [data-track] li')))) { fail(`${key}: "How sure?" has no track record`); continue; }
+        // The drawer slides in (0.28 s, or a few slow software-GL frames): wait until it has stopped and every stamp is
+        // on screen, so the checks and the screenshot see it where it rests.
+        if (!(await poll(() => {
+          const d = document.querySelector('#drawer.open');
+          const s = [...(d?.querySelectorAll('[data-track] .stamp') ?? [])];
+          return s.length && !d.getAnimations({ subtree: false }).length && getComputedStyle(d).transform === 'none'
+            && s.every((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; });
+        }))) { fail(`${key}: "How sure?" never showed a track record on screen`); continue; }
+        const lines = await page.locator('#drawer [data-track] p').allInnerTexts();
+        if (lines.join('|') !== notes.join('|')) fail(`${key}: the lines under the stamps read ${JSON.stringify(lines)}, not ${JSON.stringify(notes)}`);
+        if (/Its own calendar|Lost in 2026/.test(await page.locator('#drawer').innerText())) fail(`${key}: an old calendar or loss bullet is still there`);
         const got = await page.evaluate(() => [...document.querySelectorAll('#drawer [data-track] li')].map((li) => {
           const s = li.querySelector('.stamp').getBoundingClientRect();
           const card = li.closest('.cav').getBoundingClientRect();
