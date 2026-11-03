@@ -142,6 +142,26 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     });
   };
   askYear();
+  /**
+   * Its peak over the whole map (day of year), the one the bar's note, the caption's "Peak: about", the slide bracket and
+   * a chip's opening day all use: in ATLAS_YEAR as it was, the expected photos' (seasonsOf, the card's own rule);
+   * otherwise its curve for the mode, warmed by the days the warmth moves it. Null for an empty curve.
+   */
+  const peakOf = (m: Mode, y: Seen | null = year): number | null => {
+    const r = run();
+    const warmed = r.mode === m && r.warm !== 0;
+    const p = seasonsOf(m !== TYPICAL && !warmed && y ? y.expected : curve(m))?.peak;
+    return p === undefined ? null : Math.round(p - (r.mode === m ? shift(r) : 0));
+  };
+  /** A year's slide (seen.py's `days`: the whole expected season moved to fit the photos) drawn from its expected peak,
+   * as [expected peak, where the slid season peaks], or null when there is none, or either day falls outside [lo, hi]
+   * or past the year's last day of photos. */
+  const slide = (y: Seen, lo: number, hi: number): [number, number] | null => {
+    const top = peakOf(String(ATLAS_YEAR), y);
+    if (top === null) return null;
+    const to = top - (y.days ?? 0);
+    return Math.min(top, to) >= lo && Math.max(top, to) <= Math.min(hi, y.lastDay) ? [top, to] : null;
+  };
 
   // How far its season slides between years (Atlas.spread), for the typical year's band on the time bar.
   let spread: number | null = null;
@@ -173,7 +193,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   const rings = ripples<Dot>(`${key}-ripples`, (x) => [x.lng, x.lat], () => palette.dotRim);
   /** " so far (412 photos)" while the year is still coming in, so an early count never reads as the year's. */
   const soFar = (y: Seen) => (y.soFar ? ` so far (${y.photos.toLocaleString('en-US')} photo${y.photos === 1 ? '' : 's'})` : '');
-  /** "3.4× as many photos as expected, 6 days early for its warmth": its year over the whole map, in a few words. While
+  /** "3.4× as many photos as expected, and came 6 days earlier" (than expected, as the first half already says): its year over the whole map, in a few words. While
    * the year is still coming in, a handful of photos is no verdict yet (the strips' own thresholds are higher still). */
   const yearWords = (y: Seen) => {
     if (y.soFar && y.photos < SO_FAR_MIN && y.expectedPhotos < SO_FAR_MIN) return 'too few yet to judge';
@@ -184,8 +204,9 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       : y.ratio === 0 ? 'no photos, though some expected'
       : y.ratio < 1 ? `${Math.max(1, Math.round(y.ratio * 100))}% as many photos as expected`
       : `${x}× as many photos as expected`;
-    // Early or late for the warmth: the expectation already knows how warm the spring was.
-    const d = y.days === null ? '' : `, ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'early' : 'late'} for its warmth`;
+    // Early or late against the expected season, which already knows how warm the spring was (so "than expected", not
+    // "than usual"): seen.py's best slide of the whole expected season to fit the photos.
+    const d = y.days === null ? '' : `, and came ${Math.abs(y.days)} day${Math.abs(y.days) === 1 ? '' : 's'} ${y.days > 0 ? 'earlier' : 'later'}`;
     return r + d;
   };
 
@@ -372,7 +393,8 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       const doy = dayOfYear(now);
       const c = curve(TYPICAL);
       if (at(c, doy) > 0.25) return ['Out now', ''];
-      const d = new Date(Date.UTC(new Date(now).getUTCFullYear(), 0, peakDay(c)));
+      // The season on screen's own peak: the same day as the time bar's note.
+      const d = new Date(Date.UTC(new Date(now).getUTCFullYear(), 0, peakOf(mode) ?? peakDay(c)));
       return [`Peak: about ${d.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' })}`, ''];
     },
     busy: (t) => at(curve(mode), dayOfYear(t)) > 0.3,
@@ -387,7 +409,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       const start = Date.UTC(year, a.getUTCMonth(), 1);
       const end = Math.min(Date.UTC(year, 0, SEASON[1]), Date.UTC(year, b.getUTCMonth() + 1, 0));
       const asked = month === undefined ? NaN : Date.UTC(year, month, day ?? 1);
-      const initial = asked >= start && asked <= end ? asked : Date.UTC(year, 0, peakDay(c));
+      const initial = asked >= start && asked <= end ? asked : Date.UTC(year, 0, peakOf(m) ?? peakDay(c));
       return {
         start,
         end,
@@ -395,6 +417,18 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         initial,
         label: m === TYPICAL ? (ms) => `${fmt(year, dayOfYear(ms))} (typical year)` : undefined,
       } satisfies TimeSpec;
+    },
+    // In ATLAS_YEAR as it was, where its slid season peaks: the expected peak moved by its days early or late (the end of
+    // the time bar's slide bracket; the expected peak when it came on time). Null, so the calendar day stays, without
+    // the year's photos, while warmed, or when the bracket would be left off the bar.
+    async peak(m) {
+      if (m === TYPICAL || warm) return null;
+      const s = await atlas.seen(sp.i);
+      const t = this.timeSpec!(m);
+      const d = s && slide(s, dayOfYear(t.start), dayOfYear(t.end));
+      if (!d) return null;
+      const at = new Date(Date.UTC(ATLAS_YEAR, 0, d[1]));
+      return [at.getUTCMonth(), at.getUTCDate()];
     },
 
     summary(t) {
@@ -438,7 +472,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         const n = Math.round((s.end - s.start) / TimeAxis.DAY) + 1;
         const line = vs ? vs.expected : c;
         const seen = Array.from({ length: n }, (_, j) => at(line, d0 + j + by));
-        const top = Math.round(peakDay(line) - by);
+        const top = peakOf(r.mode) ?? Math.round(peakDay(line) - by);
         const notes = top >= d0 && top < d0 + n ? [{ at: top - d0, text: `peak ${fmt(y, top)}` }] : [];
         const g = isDark() ? BRIGHT : palette.stages.peak;
         const seenOnly = vs ? [{ color: `rgb(${g[0]},${g[1]},${g[2]})`, seen: Array.from({ length: n }, (_, j) => at(vs.seen, d0 + j)) }] : undefined;
@@ -450,7 +484,11 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
           if (last && w.from <= last.to) last.to = Math.max(last.to, w.to);
           else if (w.to > 0 && w.from < n - 1) range.push(w);
         }
-        profiles.set(pk, (p = { bands: [], seen, notes, ...(seenOnly ? { seenOnly } : {}), ...(range.length ? { range } : {}) }));
+        // An early or late year: its season's slide, drawn as a bracket from the expected peak to where the slid season
+        // peaks ("11 d late"); left off when either end is off the bar or past the year's photos.
+        const sl = vs?.days ? slide(vs, d0, d0 + n - 1) : null;
+        const offset = sl && vs?.days ? { from: sl[0] - d0, to: sl[1] - d0, days: vs.days } : null;
+        profiles.set(pk, (p = { bands: [], seen, notes, ...(seenOnly ? { seenOnly } : {}), ...(range.length ? { range } : {}), ...(offset ? { shift: offset } : {}) }));
       }
       return p;
     },

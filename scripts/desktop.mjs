@@ -13,6 +13,8 @@
 // close cleanly), and My area's card: one sparkline of the season there, whose dates are the only ones it and the line
 // under the map give (ONLY=near). And the card's "Out here now": ranked by nearness to each species' best day there,
 // chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track).
+// And an early or late chip: opens where its slid 2026 season peaks, with the slide as a bracket on the time bar and
+// plain words on the card (ONLY=earlylate).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -2182,6 +2184,106 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // Early or late (seen.py's `days`: the whole expected 2026 season slid to fit its photos). A chip ("11 d late") opens
+  // that species on 2026 where its slid season peaks (the expected peak moved by those days), not on the calendar day the
+  // map was on; the time bar draws the slide as a bracket from the expected peak, in words ("11 days late"; a phone says
+  // it as its chip does), the thumb on its slid end, the words and at least part of the bracket clear of the thumb; the
+  // caption's "Peak: about" month is the bar note's; a pinned card says it plainly ("came 11 days later")
+  // and the Midwest-wide bracket steps aside for it. With "Warm the spring" on, a chip keeps the calendar day and draws
+  // no bracket. The days and dates are written out here (public/atlas/seen-2026), not worked out the app's way. Desktop
+  // and phone. Waits poll on a timer (a software-GL frame can take 10-25 s). ONLY=earlylate runs just this.
+  const earlyLateUnit = async ([w, h, phone], browser) => {
+    const tag = `early/late ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    await ctx.route(PHOTOS, (r) => r.abort());
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 90000, polling: 500 }).then(() => true, () => false);
+    const tap = (loc) => (phone ? loc.tap() : loc.click());
+    const openChip = async (key, strip) => {
+      await page.locator('#species').click();
+      const chip = page.locator(`#${strip} [data-season="2026"][data-key="${key}"]`).first();
+      return (await chip.waitFor({ timeout: 60000 }).then(() => true, () => false)) ? chip : null;
+    };
+    // [key, strip, early or late, days, the day it opens on, the bar's peak note]
+    const cases = [
+      ['toxomerus-marginatus', 'sp-odd', 'late', 11, 'Jun 24, 2026', 'peak Jun 13'],
+      ['hippodamia-variegata', 'sp-off', 'early', 8, 'Jul 3, 2026', 'peak Jul 11'],
+    ];
+    try {
+      for (const [key, strip, way, days, date, peakNote] of cases) {
+        // 10 June first: the chip must move the day, not keep it.
+        await page.goto(`${origin}/?noauto&today=2027-01-15&date=06-10`);
+        if (!(await poll(() => !!window.__hatch?.current()))) { fail('the page never loaded'); break; }
+        const chip = await openChip(key, strip);
+        if (!chip) { fail(`${key}: no chip on #${strip}`); continue; }
+        const words = ((await chip.textContent()) ?? '').trim();
+        if (!words.endsWith(`${days} d ${way}`)) fail(`${key}: the chip reads "${words}"`);
+        await tap(chip);
+        if (!(await poll(([k, d]) => {
+          const c = window.__hatch.current();
+          return c.id === `${k}-atlas` && c.mode() === '2026' && document.getElementById('t-date').textContent === d && !!document.querySelector('#bar .shift-note:not([hidden])');
+        }, [key, date]))) {
+          fail(`${key}: never opened on ${date} with its bracket (${await page.locator('#t-date').textContent()}, bracket ${await page.locator('#bar .shift-note:not([hidden])').count()})`);
+          continue;
+        }
+        const got = await page.evaluate(() => {
+          const h = window.__hatch;
+          const rib = document.querySelector('#bar .ribbon').getBoundingClientRect();
+          const thumbW = document.getElementById('t-range').offsetWidth - rib.width;
+          const br = document.querySelector('#bar .ribbon .shift').getBoundingClientRect();
+          const nr = document.querySelector('#bar .shift-note').getBoundingClientRect();
+          return {
+            thumb: rib.left + (h.time.stepIndex / Math.max(1, h.time.steps)) * rib.width, thumbW, perDay: rib.width / Math.max(1, h.time.steps),
+            br: [br.left, br.right], nr: [nr.left, nr.right], note: document.querySelector('#bar .shift-note').textContent,
+            peak: document.querySelector('#bar .wave.peak-note')?.dataset.full ?? '', caption: document.getElementById('countdown').textContent,
+          };
+        });
+        const label = phone ? `${days} d ${way}` : `${days} days ${way}`;
+        if (got.note !== label) fail(`${key}: the bracket reads "${got.note}", not "${label}"`);
+        if (got.peak !== peakNote) fail(`${key}: the bar's note is "${got.peak}", not "${peakNote}"`);
+        const month = new Date(`${peakNote.slice(5)}, 2026`).toLocaleDateString('en-US', { month: 'long' });
+        if (!new RegExp(`^Peak: about ${month}`).test(got.caption)) fail(`${key}: the caption says "${got.caption}", not the bar note's ${month}`);
+        // The slid end under the thumb's centre; at least half a thumb and 8 px wide, else exactly its days.
+        const slid = way === 'late' ? got.br[1] : got.br[0];
+        if (Math.abs(slid - got.thumb) > 2) fail(`${key}: the thumb (${got.thumb.toFixed(1)}) is not on the bracket's slid end (${slid.toFixed(1)})`);
+        const width = got.br[1] - got.br[0], want = Math.max(days * got.perDay, got.thumbW / 2 + 8);
+        if (Math.abs(width - want) > 2) fail(`${key}: the bracket is ${width.toFixed(1)} px wide, not ${want.toFixed(1)} (${days} days at ${got.perDay.toFixed(2)} px)`);
+        if (width - got.thumbW / 2 < 7) fail(`${key}: the thumb hides the bracket (${width.toFixed(1)} px, thumb ${got.thumbW} px)`);
+        if (got.nr[1] > got.thumb - got.thumbW / 2 && got.nr[0] < got.thumb + got.thumbW / 2) fail(`${key}: the thumb covers "${got.note}"`);
+        // A pinned card says it in words, and the Midwest-wide marks step aside for its place.
+        const at = await clearSpotOn(page, [-91, 43.5, -88.5, 45.5]);
+        await (phone ? page.touchscreen.tap(at[0], at[1]) : page.mouse.click(at[0], at[1]));
+        const plain = `and came ${days} days ${way === 'late' ? 'later' : 'earlier'}`;
+        if (!(await poll((t) => (document.getElementById('probe')?.textContent ?? '').includes(t), plain)))
+          fail(`${key}: the card does not say "${plain}": "${await page.locator('#probe').innerText().catch(() => '')}"`);
+        if (/for its warmth/.test((await page.locator('#probe').textContent()) ?? '')) fail(`${key}: the card still says "for its warmth"`);
+        const shown = await page.evaluate(() => ['#bar .ribbon .shift', '#bar .shift-note'].filter((q) => getComputedStyle(document.querySelector(q)).visibility !== 'hidden'));
+        if (shown.length) fail(`${key}: ${shown.join(', ')} still shown under a pinned card`);
+        await page.screenshot({ path: `${out}/earlylate-${phone ? 'phone' : 'desktop'}-${way}.png`, timeout: 60000 }).catch(() => {});
+      }
+      // Warmed: the chip keeps the calendar day and the bar draws no slide.
+      await page.goto(`${origin}/?species=toxomerus-marginatus&noauto&today=2027-01-15&date=06-10&warm=3`);
+      if (!(await poll(() => /earlier|later|hardly/.test(document.getElementById('warm-out')?.textContent ?? '')))) fail('warmed: +3 °F never took');
+      else {
+        const chip = await openChip('toxomerus-marginatus', 'sp-odd');
+        if (!chip) fail('warmed: no chip');
+        else {
+          await tap(chip);
+          if (!(await poll(() => window.__hatch.current().mode() === '2026' && !!document.querySelector('#bar .ribbon svg')))) fail('warmed: the chip did not open 2026');
+          await page.waitForTimeout(4000); // a peak wait would have landed by now (PEAK_WAIT is 3 s)
+          const d = await page.locator('#t-date').textContent();
+          if (d !== 'Jun 10, 2026') fail(`warmed: the chip moved the day to ${d}, not keeping Jun 10`);
+          if (await page.locator('#bar .ribbon .shift, #bar .shift-note').count()) fail('warmed: the bar draws a slide bracket');
+        }
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Small feedback (ideas "UI 4"): the species sheet, the town box, a phone's hex card, the short notes, the held time
   // thumb, the watch star and the species button each move a little, and under reduced motion none of them moves at
   // all (no transition or animation longer than 0). Without reduced motion each does move, so the check can't pass
@@ -2260,7 +2362,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // Is the slider marked held (or let go), within a moment? A finger's touchcancel (and a touchstart with no touch
       // listener to wait for) is not cancelable, so CDP answers once it is sent, not once the page has handled it: a check
       // read straight after can beat the pointer event on a busy machine. The app must still get there, just not instantly.
-      const heldIs = (want) => page.waitForFunction((w) => document.querySelector('#t-range').classList.contains('held') === w, want, { timeout: 2000 })
+      // Polled on a timer, not per frame: a software-GL frame can take seconds, and a frame-polled wait then saw no frame
+      // at all in its 2 s while the class was already there (CI's "not marked held" on main too).
+      const heldIs = (want) => page.waitForFunction((w) => document.querySelector('#t-range').classList.contains('held') === w, want, { timeout: 2000, polling: 100 })
         .then(() => true, () => false);
       await page.mouse.move(r.x + 4, r.y + r.height / 2);
       await page.mouse.down();
@@ -2290,12 +2394,13 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), ...watchCases.map((c) => (b) => trackUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), ...watchCases.map((c) => (b) => trackUnit(c, b)), ...watchCases.map((c) => (b) => earlyLateUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));
   if (process.env.ONLY === 'track') units.splice(0, units.length, ...watchCases.map((c) => (b) => trackUnit(c, b)));
+  if (process.env.ONLY === 'earlylate') units.splice(0, units.length, ...watchCases.map((c) => (b) => earlyLateUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));
