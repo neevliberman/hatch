@@ -1,5 +1,5 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, atlasYearInfo, json, loadAtlasYear, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
+import { atlasKey, atlasYearInfo, fetchOnce, json, loadAtlasYear, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES, searchSpecies } from '../atlas/names';
 import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
@@ -178,12 +178,18 @@ export function mountSpeciesPicker(
   const roomy = (on: boolean) => sheet.classList.toggle('sp-tree-only', on);
   /** A crumb trail scrolled from its start fades in at the left (style.css), so a cut word reads as a scroll. */
   const cutCrumbs = () => crumbs.classList.toggle('sp-cut', crumbs.scrollLeft > 1);
-  /** The tree, once: its data and code load on first open, after the species list. */
+  /** The tree's data and code, fetched alongside the species list rather than after the strips: chained behind them, a
+   * season.bin load cut off by leaving the page would start tree.json from a page that is going (fetchOnce). */
+  const fetchTree = fetchOnce(() =>
+    Promise.all([json<TreeData>('tree.json'), import('./treeOfLife').catch(() => null)]).then(([d, m]) => (d && m ? ([d, m] as const) : null)),
+  );
+  /** The tree, once: its data and code load on first open, and it mounts after the species list. */
   const loadTree = async () => {
     if (treeTried || !all) return;
     treeTried = true;
-    const [data, mod] = await Promise.all([json<TreeData>('tree.json'), import('./treeOfLife').catch(() => null)]);
-    if (!data || !mod) return;
+    const files = await fetchTree();
+    if (!files) return;
+    const [data, mod] = files;
     try {
       tree = mod.mountTree(treeHost, data, all, (i) => pick(keyOf(all![i]!)), (path: TNode[], go) => {
         treeCrumbs = () => {
@@ -378,6 +384,7 @@ export function mountSpeciesPicker(
   const loadAll = () => {
     if (all || fetching) return;
     fetching = true;
+    void fetchTree();
     void loadAtlasYear().then((y) => Promise.all([loadIndex(), loadSurprises(y), loadOffSchedule(y), loadQuiet(y)])).then(([s, u, o, qu]) => {
       fetching = false;
       oddStrip.setAttribute('aria-label', `${oddCaption(surpriseYear())}`);

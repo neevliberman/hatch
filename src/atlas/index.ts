@@ -62,15 +62,30 @@ export const atlasUrl = (f: string) => `${import.meta.env.BASE_URL}atlas/${f}`;
 export const json = <T>(f: string): Promise<T | null> =>
   fetch(atlasUrl(f)).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
 
-let seasons: Promise<Uint8Array | null> | null = null;
+/** How long a failed fetchOnce file stays failed before a caller may fetch it again. */
+const RETRY_MS = 5000;
+/**
+ * A file fetched once and shared by every caller; `load` resolves null when it fails. A failure is shared too: callers
+ * get null until RETRY_MS has passed, and the next call after that fetches afresh. Not at once: a load also fails when
+ * the page is navigating away (a reload, a link), and an immediate retry would start a new load from a page that is
+ * going. WebKit refuses those and logs each as a script error ("Fetch API cannot load … due to access control checks.").
+ */
+export function fetchOnce<T>(load: () => Promise<T | null>): () => Promise<T | null> {
+  let p: Promise<T | null> | null = null;
+  let failed = -Infinity;
+  return () => {
+    if (!p && performance.now() - failed < RETRY_MS) return Promise.resolve(null);
+    return (p ??= load().then((v) => (v === null ? ((p = null), (failed = performance.now()), null) : v)));
+  };
+}
+
 /** season.bin, fetched once (null when missing). */
-function loadSeasons(): Promise<Uint8Array | null> {
-  seasons ??= fetch(atlasUrl('season.bin'))
+const loadSeasons = fetchOnce(() =>
+  fetch(atlasUrl('season.bin'))
     .then((r) => (r.ok ? r.arrayBuffer() : null))
     .catch(() => null)
-    .then((b) => (b ? new Uint8Array(b) : ((seasons = null), null)));
-  return seasons;
-}
+    .then((b) => (b ? new Uint8Array(b) : null)),
+);
 /** A day counts as in a species' season when its expected photos are at least this share of its best day's, so a
  * smaller spring brood counts, not just the bigger summer one. One rule for the map's "Coming out near you" line
  * (atlasLayer's dueHere) and the watch list's chips (seasonDues). */

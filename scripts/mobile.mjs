@@ -520,7 +520,7 @@ if (existsSync(join(distDir, 'radar'))) {
         else {
           const cb = await chip.boundingBox();
           if (!cb || cb.height < 24 || cb.x < 0 || cb.x + cb.width > width + 1) fail('the Watching chip is too small or off-screen');
-          await page.waitForFunction(() => /^out (now|in \d+ days?)$/.test(document.querySelector('#sp-watch .sp-go span')?.textContent ?? ''), null, { timeout: 15000 })
+          await page.waitForFunction(() => /^out (now|in \d+ days?)$/.test(document.querySelector('#sp-watch .sp-go span')?.textContent ?? ''), null, { timeout: 15000, polling: 250 })
             .catch(async () => fail(`the chip's countdown reads "${await chip.locator('span').textContent()}"`));
         }
         await page.screenshot({ path: `${out}/watch-${phone}-${orient}.png` });
@@ -543,6 +543,48 @@ if (existsSync(join(distDir, 'radar'))) {
       await ctx.close();
       console.log(`${tag}: checked`);
     }
+  }
+  // Leaving the page while the species sheet is still loading (a reload, a link): the cut-off fetches fail quietly and
+  // start no new ones from the page that is going. WebKit refuses a load begun by a page mid-navigation and logs it as a
+  // script error ("Fetch API cannot load … due to access control checks."), which Playwright reports as a pageerror:
+  // the watch cases' reloads used to hit it now and then. tree.json and season.bin are held back here so the navigation
+  // always lands mid-load. The smallest phone of each engine, upright. ONLY=leave runs just this.
+  for (const [phone, engine, pw0, ph0, dpr] of small) {
+    if ((process.env.ONLY && process.env.ONLY !== 'leave') || !mine()) continue;
+    const tag = `leave ${phone}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browsers[engine], { viewport: { width: pw0, height: ph0 }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
+    let release;
+    const held = new Promise((r) => (release = r));
+    const asked = new Set();
+    await ctx.route(/\/atlas\/(tree\.json|season\.bin)$/, async (r) => {
+      asked.add(r.request().url().split('/').pop());
+      await held;
+      await r.continue().catch(() => {}); // the page that asked is gone
+    });
+    const page = await ctx.newPage();
+    page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      await page.locator('#species').click({ timeout: 20000 });
+      await page.waitForFunction(() => document.querySelector('#species-sheet') && !document.querySelector('#species-sheet').hidden, null, { timeout: 20000, polling: 250 });
+      // season.bin asked for (the strips need it): the navigation lands while it is in flight.
+      const t0 = Date.now();
+      while (!asked.has('season.bin') && Date.now() - t0 < 20000) await page.waitForTimeout(100);
+      if (!asked.has('season.bin')) fail('the species sheet never asked for season.bin');
+      await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      release();
+      // Errors from the page that left arrive within a few ms of the navigation; give them ample time.
+      await page.waitForTimeout(1500);
+      await page.locator('#species').click({ timeout: 20000 });
+      await page.locator('#sp-watch .sp-none').waitFor({ timeout: 20000 }).catch(() => fail('after leaving mid-load, the next page\'s species sheet never loaded its tree'));
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    release();
+    await ctx.close();
+    console.log(`${tag}: checked`);
   }
   // The "fewer photos than expected" strip (seen-2026.json), over http: it shows in the species sheet with a photo-only caption,
   // its chips read "seen of expected", stay on screen, and one opens its species on 2026. ONLY=quiet runs just this.
