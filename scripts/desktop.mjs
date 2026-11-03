@@ -2619,8 +2619,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // listener to wait for) is not cancelable, so CDP answers once it is sent, not once the page has handled it: a check
       // read straight after can beat the pointer event on a busy machine. The app must still get there, just not instantly.
       // Polled on a timer, not per frame: a software-GL frame can take seconds, and a frame-polled wait then saw no frame
-      // at all in its 2 s while the class was already there (CI's "not marked held" on main too).
-      const heldIs = (want) => page.waitForFunction((w) => document.querySelector('#t-range').classList.contains('held') === w, want, { timeout: 2000, polling: 100 })
+      // at all in its 2 s while the class was already there (CI's "not marked held" on main too). 2 s still ran out now and
+      // then on a loaded CI shard ("motion phone", #178), with nothing over the slider: 5 s, read every 250 ms.
+      const heldIs = (want) => page.waitForFunction((w) => document.querySelector('#t-range').classList.contains('held') === w, want, { timeout: 5000, polling: 250 })
         .then(() => true, () => false);
       await page.mouse.move(r.x + 4, r.y + r.height / 2);
       await page.mouse.down();
