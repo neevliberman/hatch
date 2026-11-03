@@ -5,7 +5,7 @@ import { epoch, isDark, palette } from '../theme';
 import { dayOfYear, TimeAxis, type TimeSpec } from '../core/timeAxis';
 import { OTHERS_MAX, type CaveatCard, type Due, type LegendSpec, type OtherSpecies, type OthersList, type ProbeCard, type SeasonProfile, type SpeciesWords } from '../core/layer';
 import { groupOf, OUT_CHIPS, OUT_GROUPS, outNow, placeCache, placeSeasons, type OutNow, type PlaceSeasons } from '../atlas/outNow';
-import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Seen } from '../atlas/atlas';
+import { ATLAS_YEAR, atlasKey, atlasYearInfo, Field, SEASON, seasonsOf, STEP, type Atlas, type AtlasSpecies, type Dot, type Result, type Seen } from '../atlas/atlas';
 import { nameOf, plural } from '../atlas/names';
 import { TYPICAL, type Mode } from './replayData';
 import { animating, ripples } from './motion';
@@ -562,20 +562,33 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
     },
 
     caveats(): CaveatCard {
-      const test =
-        sp.test === 1
-          ? `Tested on 2026, a season it never saw: it beat ${name}’s own week-by-week calendar.`
-          : sp.test === 0
-            ? `Tested on 2026, a season it never saw: ${name}’s own week-by-week calendar did better. Read this map loosely.`
-            : `Too few 2026 records to test ${name} on its own.`;
+      // Its track record (species.json "rec"): the map against a plain calendar on photos it never learned from, 2026
+      // in the states it learned, then Wisconsin and Minnesota, which it never saw. Each beat, tied or lost, or
+      // untested: under 400 photos to learn from, or under 20 new ones (the gate's rule, track_record.py).
+      const [c, nc, d, nd] = sp.rec ?? [null, 0, null, 0];
+      const RESULT = { 1: 'beat', 0: 'tied', '-1': 'lost' } as const;
+      const row = (r: Result, n: number, what: string) =>
+        r === null ? { result: 'untested' as const, what, count: 'too few new photos' } : { result: RESULT[r], what, count: `${n.toLocaleString()} photos` };
+      const rows = c === null && d === null
+        ? [{ result: 'untested' as const, what: sp.n < 400 ? 'Under 400 photos to learn from: too few to test' : 'Too few new photos (2026, WI & MN) to test' }]
+        : [row(c, nc, '2026, a season it never saw'), row(d, nd, 'WI & MN, states it never saw')];
+      const record = {
+        title: 'Map vs. a plain calendar',
+        rows,
+        act: c === -1 ? 'Read this map loosely.' : d === -1 ? 'Read this map loosely in WI & MN.' : undefined,
+        notes: [
+          ...(c === 0 || d === 0 ? ['Tied: neither was 20× more likely to be right.'] : []),
+          'Calendar: just the weeks it’s usually photographed, 2° of latitude at a time (2015-2025).',
+        ],
+      };
       return {
         title: `${name}: fine print`,
         severity: 'normal',
+        record,
         bullets: [
           `Colors: a model’s expectation, not sightings: of the insect photos taken here on this day, the share that would be ${name}.`,
           `Dots: real iNaturalist photos, each lit ${GLOW_DAYS} days, from ${mode === TYPICAL ? `${FIRST_YEAR}-${ATLAS_YEAR - 1}` : ATLAS_YEAR} (at most 5,000, picked at random).`,
           `One network learns all ${atlas.species.length.toLocaleString()} Midwest insects with 100+ records at once, from 2.1 million iNaturalist photos (2015-2025). ${name}: ${sp.n.toLocaleString()} of them.`,
-          test,
           ...(sp.n < 300 ? [`Only ${sp.n.toLocaleString()} records: this forecast is rough.`] : sp.n >= 5000 ? [`Well recorded (${sp.n.toLocaleString()} records).`] : []),
           ...(mode !== TYPICAL && year && year.ratio !== null && year.ratio < 0.6 && year.expectedPhotos >= 10
             ? ['Fewer photos than expected this year. Seen one? Add it on iNaturalist.']

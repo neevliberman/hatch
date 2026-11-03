@@ -12,6 +12,9 @@ export interface CaveatCard {
   /** 'synthetic' is rendered with a loud warning style; 'normal' is the default. */
   severity: 'normal' | 'synthetic';
   bullets: string[];
+  /** A track record drawn above the bullets: a stamp per test (beat, tied, lost or untested), what it was tested on,
+   * and a plain count. Then `act`, what to do about a loss, and small `notes` (what the stamps are measured against). */
+  record?: { title: string; rows: { result: 'beat' | 'tied' | 'lost' | 'untested'; what: string; count?: string }[]; act?: string; notes?: string[] };
 }
 
 export interface ProbeCard {

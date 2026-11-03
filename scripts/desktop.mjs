@@ -12,7 +12,7 @@
 // Also over http: the radar replays (load nothing until opened from About, then play at La Crosse, the Quad Cities or on Lake Erie and
 // close cleanly), and My area's card: one sparkline of the season there, whose dates are the only ones it and the line
 // under the map give (ONLY=near). And the card's "Out here now": ranked by nearness to each species' best day there,
-// chips that narrow it, short on a phone (ONLY=out).
+// chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -2117,6 +2117,71 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // An Atlas species' track record in "How sure?" (species.json "rec", pipeline/atlas/track_record.py): a stamp per
+  // test of the map against a plain calendar. The common eastern bumble bee beat it in 2026 and in WI & MN; the
+  // Virginian tiger moth tied in 2026 and lost in the states it never saw (so: read loosely in WI & MN, and what tied
+  // means); the stink bug lost 2026; the 17-year cicada (no brood in 2026) was never tested. Every card says what the
+  // calendar is. Each stamp sits on one line beside its words, on screen, and never spills out of the panel. Desktop
+  // and phone. Waits poll on a timer
+  // (a software-GL frame can take 10-25 s). ONLY=track runs just this.
+  const trackUnit = async ([w, h, phone], browser) => {
+    const tag = `track record ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, { viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone });
+    const page = await ctx.newPage();
+    await ctx.route(PHOTOS, (r) => r.abort());
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 90000, polling: 500 }).then(() => true, () => false);
+    const CAL = 'Calendar: just the weeks it’s usually photographed, 2° of latitude at a time (2015-2025).';
+    const TIED = 'Tied: neither was 20× more likely to be right.';
+    // [key, [result, line]...], then the lines under the stamps
+    const cases = [
+      ['bombus-impatiens', [['beat', /^Beat 2026, a season it never saw · 5,660 photos$/], ['beat', /^Beat WI & MN, states it never saw · 3,234 photos$/]], [CAL]],
+      ['spilosoma-virginica', [['tied', /^Tied 2026, a season it never saw · 1,000 photos$/], ['lost', /^Lost WI & MN, states it never saw · 231 photos$/]],
+        ['Read this map loosely in WI & MN.', TIED, CAL]],
+      ['halyomorpha-halys', [['lost', /^Lost 2026, a season it never saw · 998 photos$/], ['beat', /^Beat WI & MN, states it never saw · 116 photos$/]], ['Read this map loosely.', CAL]],
+      ['magicicada-septendecim', [['untested', /^Untested Too few new photos \(2026, WI & MN\) to test$/]], [CAL]],
+    ];
+    try {
+      for (const [key, want, notes] of cases) {
+        await page.goto(`${origin}/?species=${key}&noauto&today=2027-01-15`);
+        if (!(await poll((k) => window.__hatch?.current()?.id === `${k}-atlas`, key))) { fail(`${key}: never opened`); continue; }
+        await (phone ? page.locator('#why').tap() : page.locator('#why').click());
+        // The drawer slides in (0.28 s, or a few slow software-GL frames): wait until it has stopped and every stamp is
+        // on screen, so the checks and the screenshot see it where it rests.
+        if (!(await poll(() => {
+          const d = document.querySelector('#drawer.open');
+          const s = [...(d?.querySelectorAll('[data-track] .stamp') ?? [])];
+          return s.length && !d.getAnimations({ subtree: false }).length && getComputedStyle(d).transform === 'none'
+            && s.every((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; });
+        }))) { fail(`${key}: "How sure?" never showed a track record on screen`); continue; }
+        const lines = await page.locator('#drawer [data-track] p').allInnerTexts();
+        if (lines.join('|') !== notes.join('|')) fail(`${key}: the lines under the stamps read ${JSON.stringify(lines)}, not ${JSON.stringify(notes)}`);
+        if (/Its own calendar|Lost in 2026/.test(await page.locator('#drawer').innerText())) fail(`${key}: an old calendar or loss bullet is still there`);
+        const got = await page.evaluate(() => [...document.querySelectorAll('#drawer [data-track] li')].map((li) => {
+          const s = li.querySelector('.stamp').getBoundingClientRect();
+          const card = li.closest('.cav').getBoundingClientRect();
+          return { result: li.dataset.result, text: li.textContent.replace(/\s+/g, ' ').trim(), stampH: s.height,
+            inside: s.left >= card.left && li.getBoundingClientRect().right <= card.right + 0.5 && li.scrollWidth <= li.clientWidth + 1 };
+        }));
+        if (got.length !== want.length) fail(`${key}: ${got.length} track record lines, not ${want.length}`);
+        want.forEach(([result, text], i) => {
+          const g = got[i];
+          if (!g) return;
+          if (g.result !== result || !text.test(g.text)) fail(`${key}: line ${i + 1} reads "${g.text}" (${g.result}), not ${text} (${result})`);
+          if (g.stampH > 24) fail(`${key}: the "${result}" stamp wraps (${Math.round(g.stampH)} px tall)`);
+          if (!g.inside) fail(`${key}: line ${i + 1} spills out of the panel`);
+        });
+        const old = await page.locator('#drawer').innerText();
+        if (/Tested on 2026|Too few 2026 records/.test(old)) fail(`${key}: the old one-line test result is still there`);
+        await page.screenshot({ path: `${out}/track-${phone ? 'phone' : 'desktop'}-${key}.png`, timeout: 60000 }).catch(() => {});
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Small feedback (ideas "UI 4"): the species sheet, the town box, a phone's hex card, the short notes, the held time
   // thumb, the watch star and the species button each move a little, and under reduced motion none of them moves at
   // all (no transition or animation longer than 0). Without reduced motion each does move, so the check can't pass
@@ -2225,11 +2290,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), ...watchCases.map((c) => (b) => trackUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));
+  if (process.env.ONLY === 'track') units.splice(0, units.length, ...watchCases.map((c) => (b) => trackUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));

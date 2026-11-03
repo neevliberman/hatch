@@ -3,6 +3,9 @@
  */
 import type { Brood, Due } from '../core/layer';
 
+/** One test against the species' own calendar: 1 the network beat it, 0 tied, -1 lost, null not tested. */
+export type Result = 1 | 0 | -1 | null;
+
 /** One output of the network: a species (or, last, every other insect). */
 export interface AtlasSpecies {
   i: number;
@@ -18,8 +21,10 @@ export interface AtlasSpecies {
   credit: string | null;
   /** Its top share in any cell on any day of a typical year: the top of its colour scale. */
   peak: number;
-  /** 2026's test against its own calendar: 1 the network won, 0 it lost, null too few records to test. */
-  test: number | null;
+  /** Its track record against its own calendar (pipeline/atlas/track_record.py): [2026, its photos, Wisconsin and
+   * Minnesota 2026 (states it never saw), their photos]. Each result 1 beat, 0 tied, -1 lost, null not tested (its
+   * count then 0). Absent when neither was tested. */
+  rec?: [Result, number, Result, number];
 }
 
 /**
