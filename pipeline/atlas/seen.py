@@ -34,6 +34,9 @@ MIN_TIMING = 30   # photos before its timing is judged
 Z = 3.0           # a gap counts once it is this many standard errors from expected
 MIN_RATIO = 1.25  # ... and at least this many times more (or fewer) photos than expected
 MIN_DAYS = 3.0    # ... or at least this many days earlier or later
+# A shortfall under this share of expected is a brood's off-year or a gap in the records, not a quiet year: never a
+# surprise (the quiet strip, pickQuiet in src/atlas/index.ts, uses the same floor).
+MIN_SHARE = 0.05
 # Periodical insects: their adults come out only in a brood's year (Magicicada: 13 or 17 years apart, each brood in its
 # own region), and the network has no brood calendar, so it expects some every year. A year with almost none (2026:
 # Cassin's 17-year Cicada at 1%) only says which broods were due, not that the insect did anything odd, so they are never
@@ -111,10 +114,12 @@ def surprises(rows, more=3, fewer=3, timing=2, min_photos=100, skip=frozenset())
     """The year's biggest surprises among species with plenty of photos (seen, or expected when fewer): the most
     photos over expected (in photos, so a widespread species' boom outranks a rare one's few extra), the furthest
     under (as a share: an absent year), and the furthest early or late. Species indices, biggest first, none twice.
-    `skip`: indices never listed (the periodical species: a brood's off-year is not a surprise)."""
+    `skip`: indices never listed (the periodical species: a brood's off-year is not a surprise). A shortfall under
+    MIN_SHARE of expected is never listed either."""
     ok = [i for i in range(len(rows)) if i not in skip]
     over = sorted((i for i in ok if rows[i][2] and rows[i][2] > 1 and rows[i][0] >= min_photos), key=lambda i: rows[i][1] - rows[i][0])
-    under = sorted((i for i in ok if rows[i][2] and rows[i][2] < 1 and rows[i][1] >= min_photos), key=lambda i: rows[i][2])
+    under = sorted((i for i in ok if rows[i][2] and rows[i][2] < 1 and rows[i][1] >= min_photos and rows[i][0] >= MIN_SHARE * rows[i][1]),
+                   key=lambda i: rows[i][2])
     slid = sorted((i for i in ok if rows[i][3] and rows[i][0] >= 2 * min_photos), key=lambda i: -abs(rows[i][3]))
     out = []
     for lst, k in ((over, more), (under, fewer), (slid, timing)):

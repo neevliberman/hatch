@@ -177,7 +177,7 @@ def test_surprises_leave_out_periodical_cicadas():
     assert periodical("Magicicada cassini") and periodical("Magicicada septendecim")
     assert not periodical("Neotibicen tibicen") and not periodical("Danaus plexippus")
     names = ["Danaus plexippus", "Magicicada cassini", "Neotibicen tibicen"]
-    rows = [[500, 100, 5.0, None], [5, 400, 0.01, None], [100, 400, 0.25, None]]
+    rows = [[500, 100, 5.0, None], [40, 400, 0.1, None], [100, 400, 0.25, None]]
     assert surprises(rows) == [0, 1, 2]
     assert surprises(rows, skip=periodicals(names)) == [0, 2]
     # The shipped list (seen.py --repick) has none.
@@ -185,6 +185,19 @@ def test_surprises_leave_out_periodical_cicadas():
     species = json.loads((out / "species.json").read_text())
     picks = json.loads((out / "seen-2026.json").read_text())["surprises"]
     assert picks and not [species[i]["name"] for i in picks if periodical(species[i]["name"])]
+
+
+def test_surprises_leave_out_near_zero_shortfalls():
+    """Under 5% of expected (any species: a brood's off-year or a gap in the records) is never a surprise, as in the
+    quiet strip; 5% itself still is. The shipped list has none."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.seen import surprises
+    rows = [[500, 100, 5.0, None], [4, 400, 0.01, None], [19, 400, 0.05, None], [20, 400, 0.05, None], [100, 400, 0.25, None]]
+    assert surprises(rows) == [0, 3, 4]
+    out = Path(__file__).resolve().parents[2] / "public/atlas"
+    f = json.loads((out / "seen-2026.json").read_text())
+    assert not [i for i in f["surprises"] if f["species"][i][0] < 0.05 * f["species"][i][1]]
 
 
 def test_track_record_matches_the_gate_and_ships():
