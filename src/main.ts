@@ -122,7 +122,7 @@ function start() {
   // The Atlas species kept loaded, the one on screen among them: the least recently shown goes past this many. Each
   // keeps the days of its field worked out (up to ~7 MB when every warmth run of a season was played; ~1 MB a season
   // played once), which a slow graphics card takes seconds to work out again, so a short flip back and forth (the
-  // card's "also out here", the watch list) stays instant while a long browse through the ~1,900 stays near 60 MB.
+  // card's "out here now", the watch list) stays instant while a long browse through the ~1,900 stays near 60 MB.
   // The few hand-built species (SPECIES) always stay.
   const ATLAS_KEPT = 8;
   const keepLoaded = (key: string) => {
@@ -550,7 +550,7 @@ function start() {
     });
   };
   showMark();
-  // "Also out here" on an Atlas card switches to that species.
+  // "Out here now" on an Atlas card switches to that species.
   probeEl.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-species]');
     if (b?.dataset.species) void setSpecies(b.dataset.species);

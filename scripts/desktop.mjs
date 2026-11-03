@@ -11,7 +11,8 @@
 // "Peak likely", hexes go finer when zoomed, the default or stale rules break, or a missing file does anything visible.
 // Also over http: the radar replays (load nothing until opened from About, then play at La Crosse, the Quad Cities or on Lake Erie and
 // close cleanly), and My area's card: one sparkline of the season there, whose dates are the only ones it and the line
-// under the map give (ONLY=near).
+// under the map give (ONLY=near). And the card's "Out here now": ranked by nearness to each species' best day there,
+// chips that narrow it, short on a phone (ONLY=out).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -763,7 +764,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // The Living Atlas (src/atlas/), over http in Chromium: a ?species= link to any Atlas species draws its field and
   // its photos as dots, the network in the page matches PyTorch's numbers (scripts/atlas-net.fixture.json) and the
   // graphics card matches the plain network, the picker finds a species by name and opens it, the season menu offers 2026, and a pinned card's
-  // "also out here" switches species.
+  // "out here now" switches species.
   const atlasFixture = JSON.parse(readFileSync('scripts/atlas-net.fixture.json', 'utf8'));
   const atlasUnit = async (browser) => {
     const tag = 'atlas';
@@ -923,7 +924,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const at = await clearSpot([-89.5, 40.5, -87.75, 42]);
       await page.mouse.click(at[0], at[1]);
       const other = page.locator('#probe .probe-others [data-species]').first();
-      await other.waitFor({ timeout: 8000 }).catch(() => fail('the pinned card lists no "also out here"'));
+      await other.waitFor({ timeout: 60000 }).catch(() => fail('the pinned card lists no "out here now"'));
       await shotA('3-card');
       const want = await other.getAttribute('data-species');
       await other.click();
@@ -1792,6 +1793,143 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // "Out here now" (src/atlas/outNow.ts, src/ui/panels.ts): My area pins the card on Chicago, 10 June, a typical year.
+  // Its list ranks species by how near each is to its own best day there, so a species on its best day comes above a
+  // commoner one well off its own: the page's own network says which is which. At most All and four chips; one
+  // narrows the list to its group, All gives the mix back. Short on a phone: two rows closed and the card no taller
+  // than main's (166 px at 390); opened out it lists up to 20 in a scrolling room of its own, and no map button climbs
+  // over the About button. A row's tap puts that species on the map. A hover card (desktop) has no list (it is only
+  // worked out once pinned). Early March, when hardly anything is near its best, it falls back to the commonest
+  // species under "Also out here". Desktop and phone. Waits poll on a timer (a software-GL frame can take 10-25 s).
+  // ONLY=out runs just this.
+  const outUnit = async ([w, h, phone], browser) => {
+    const tag = `out here now ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ctx = await settledContext(browser, {
+      viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+      geolocation: { latitude: 41.88, longitude: -87.63 }, permissions: ['geolocation'],
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 90000, polling: 500 }).then(() => true, () => false);
+    const T = { timeout: 90000 };
+    // The rows on screen (a phone hides the third while closed).
+    const rows = () => page.evaluate(() => [...document.querySelectorAll('#probe .po-list li')].filter((li) => li.getBoundingClientRect().height > 0).map((li) => ({
+      key: li.querySelector('[data-species]')?.dataset.species, group: li.dataset.group,
+    })));
+    const tap = (loc) => (phone ? loc.tap(T) : loc.click(T));
+    const open = async (query, id) => {
+      await page.goto(`${origin}/?${query}&noauto&today=2027-01-15`, T);
+      if (!(await poll((k) => window.__hatch?.current().id === k, id))) throw new Error(`${id} never loaded`);
+    };
+    try {
+      await open('species=epargyreus-clarus&date=06-10', 'epargyreus-clarus-atlas');
+      if (!phone) {
+        // A card under the pointer, not pinned: no list, and none worked out for it.
+        const at = await clearSpotOn(page, [-90, 40.5, -88, 42]);
+        await page.mouse.move(at[0], at[1]);
+        if (!(await poll(() => !document.getElementById('probe').hidden))) fail('no hover card');
+        else if (await page.locator('#probe .probe-others').count()) fail('a hover card lists the species out here (only a pinned card should)');
+        await page.mouse.move(5, h / 2);
+      }
+      await page.locator('#locate').click(T);
+      if (!(await poll(() => document.querySelectorAll('#probe:not([hidden]) .po-list li [data-species]').length >= 2)))
+        throw new Error(`the pinned card lists no species out here: "${await page.locator('#probe').innerText().catch(() => '')}"`);
+      const title = await page.locator('#probe .po-title').textContent();
+      if (title !== 'Out here now') fail(`on 10 June the list is titled "${title}", not "Out here now"`);
+      // The ranking, by the page's own network over the season at this cell: the first species is near its own best
+      // day, and the commonest species here today, if it is not, does not top the list.
+      const list = await rows();
+      const r = await page.evaluate(async (k) => {
+        const a = await window.__hatch.atlas();
+        const key = (n) => n.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+        const own = a.species.findIndex((s) => s.name === 'Epargyreus clarus');
+        const first = a.species.findIndex((s) => key(s.name) === k);
+        const c = a.cellAt(41.88, -87.63);
+        const S = a.net.nOut;
+        const ls = Array.from({ length: 62 }, (_, j) => a.net.logShares(a.cells[c], 60 + 4 * j, 0));
+        const near = (s) => {
+          const ph = ls.map((x, j) => Math.exp(x[s]) * a.volume[j]);
+          return ph[25] / Math.max(...ph); // day 160, by 10 June
+        };
+        let common = -1;
+        for (let s = 0; s < S - 1; s++) if (s !== own && (common < 0 || ls[25][s] > ls[25][common])) common = s;
+        return { first: near(first), common: key(a.species[common].name), commonNear: near(common), commonShare: Math.exp(ls[25][common]), firstShare: Math.exp(ls[25][first]) };
+      }, list[0].key);
+      if (!(r.first > 0.7)) fail(`the first species (${list[0].key}) is only ${r.first.toFixed(2)} of its best day's photos here`);
+      if (r.commonNear < 0.7 && list[0].key === r.common) fail(`the commonest species here (${r.common}), at ${r.commonNear.toFixed(2)} of its best, tops the list`);
+      if (!(r.commonShare > r.firstShare)) console.log(`${tag}: note: the first species is also the commonest here`);
+      if (list.length !== (phone ? 2 : 3)) fail(`the closed list shows ${list.length} rows, not ${phone ? 2 : 3}`);
+      // At most All and four chips.
+      const chips = await page.locator('#probe .po-chip').allTextContents();
+      if (chips.length > 5) fail(`${chips.length} chips: ${chips.join(', ')}`);
+      // Short on a phone: no taller than main's card (161 px at 390) by more than a few px.
+      const size = await page.evaluate(() => ({
+        card: document.getElementById('probe').getBoundingClientRect().height,
+        head: document.querySelector('#probe .po-head').getBoundingClientRect().height,
+      }));
+      if (phone && (size.card > 166 || size.head > 30)) fail(`the closed card is ${Math.round(size.card)} px (head ${Math.round(size.head)}), over 166`);
+      if (!phone) {
+        // Every chip is in view, none cut off or scrolled away.
+        const cut = await page.evaluate(() => {
+          const box = document.getElementById('probe').getBoundingClientRect();
+          return [...document.querySelectorAll('#probe .po-chip')].filter((c) => {
+            const b = c.getBoundingClientRect();
+            return b.left < box.left || b.right > box.right || document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) !== c;
+          }).map((c) => c.textContent);
+        });
+        if (cut.length) fail(`chips out of view: ${cut.join(', ')}`);
+      }
+      await page.screenshot({ path: `${out}/out-${phone ? 'phone' : 'desktop'}-closed.png`, timeout: 60000 }).catch(() => {});
+      // Opened out: more rows, in a room of their own that scrolls; on a phone, no map button over the About button.
+      const opener = page.locator('#probe .po-more');
+      if ((await opener.textContent())?.trim() !== 'More ▾') fail(`the opener reads "${await opener.textContent()}"`);
+      await tap(opener);
+      if (!(await poll(() => document.querySelectorAll('#probe .po-list li').length > 3))) fail('the opener shows no more rows');
+      const opened = await page.evaluate(() => {
+        const l = document.querySelector('#probe .po-list');
+        const i = document.getElementById('info-btn').getBoundingClientRect();
+        const hit = document.elementFromPoint(i.left + i.width / 2, i.top + i.height / 2);
+        return {
+          n: l.children.length, scrolls: l.scrollHeight > l.clientHeight + 4, room: l.clientHeight, card: document.getElementById('probe').getBoundingClientRect().height,
+          info: !!hit?.closest('#info-btn'), over: hit?.closest('button')?.id ?? hit?.id ?? hit?.tagName, less: document.querySelector('#probe .po-more')?.textContent.trim(),
+        };
+      });
+      if (opened.n < 10 || opened.n > 20) fail(`opened out, the list has ${opened.n} rows, not 10-20`);
+      if (!opened.scrolls) fail(`opened out, ${opened.n} rows don't scroll in a room of their own (${opened.room} px)`);
+      if (phone && opened.room > Math.min(220, h * 0.25) + 1) fail(`opened out, the list's room is ${opened.room} px, over min(220 px, 25vh)`);
+      if (!opened.info) fail(`opened out, ${opened.over} covers the About button`);
+      if (opened.less !== 'Less ▴') fail(`opened out, the opener reads "${opened.less}"`);
+      await page.screenshot({ path: `${out}/out-${phone ? 'phone' : 'desktop'}-open.png`, timeout: 60000 }).catch(() => {});
+      // A chip narrows the list to its group; All brings back the mix.
+      const pick = chips.find((g) => g !== 'All');
+      if (!pick) fail(`no chip but All: ${chips.join(', ')}`);
+      else {
+        await tap(page.locator('#probe .po-chip', { hasText: pick }));
+        if (!(await poll((g) => {
+          const li = [...document.querySelectorAll('#probe .po-list li')];
+          return li.length > 0 && li.every((x) => x.dataset.group === g) && document.querySelector('#probe .po-chip[aria-pressed="true"]')?.textContent === g;
+        }, pick))) fail(`the ${pick} chip did not narrow the list to ${pick}: ${JSON.stringify(await rows())}`);
+        await tap(page.locator('#probe .po-chip', { hasText: 'All' }));
+        if (!(await poll(() => new Set([...document.querySelectorAll('#probe .po-list li')].map((x) => x.dataset.group)).size > 1)))
+          fail('All did not bring back the mixed list');
+      }
+      // One tap puts it on the map.
+      const go = page.locator('#probe .po-list [data-species]').first();
+      const want = await go.getAttribute('data-species', T);
+      await tap(go);
+      if (!(await poll((k) => window.__hatch.current().id.startsWith(`${k}-`), want))) fail(`tapping ${want} did not put it on the map`);
+      // Early March: hardly anything near its best yet, so the commonest species, under the old title.
+      await open('species=nymphalis-antiopa&date=03-05', 'nymphalis-antiopa-atlas');
+      await page.locator('#locate').click(T);
+      if (!(await poll(() => document.querySelector('#probe:not([hidden]) .po-title')?.textContent === 'Also out here' && document.querySelectorAll('#probe .po-list li').length >= 2)))
+        fail(`on 5 March the card does not fall back to "Also out here": "${await page.locator('#probe').innerText().catch(() => '')}"`);
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Memory: only the last ATLAS_KEPT (src/main.ts) Atlas species stay loaded. Flips through more than that from the
   // picker, comes back to the first, and checks it was let go and loaded again: it draws, and its map's colours are
   // the very ones a fresh page draws for it. ONLY=evict runs just this.
@@ -2087,10 +2225,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   // Longest first, so the second worker is never left holding the last big one.
   units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
     screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
+    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
     ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
+  if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));
   if (process.env.ONLY === 'empty') units.splice(0, units.length, ...watchCases.map((c) => (b) => emptyUnit(c, b)));

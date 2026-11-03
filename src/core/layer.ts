@@ -25,11 +25,33 @@ export interface ProbeCard {
   link?: { href: string; label: string };
   /** A downloadable calendar event for the card's peak window (a data: .ics link). */
   calendar?: { href: string; filename: string; label: string };
-  /** Other species to switch to (the Atlas's "also out here"): each a thumbnail, a name and a short note; `key` is its
-   * ?species= value. */
-  others?: { title: string; list: { key: string; label: string; note: string; img?: string }[] };
+  /** Other species to switch to (the Atlas's "out here now"): each a thumbnail, a name and a short note; `key` is its
+   * ?species= value. Best first; the card shows the first few, or up to OTHERS_MAX when opened out. */
+  others?: OthersList;
   /** The season at this place, drawn as a one-line sparkline with its first, best and last days (ui/sparkline.ts). */
   season?: PlaceSeason;
+}
+
+/** The card's list of other species: this many rows until it is opened out (two on a phone), then up to OTHERS_MAX
+ * (it scrolls). */
+export const OTHERS_FEW = 3;
+export const OTHERS_MAX = 20;
+/** The card's list of other species here (ui/panels.ts draws it). */
+export interface OthersList {
+  title: string;
+  list: OtherSpecies[];
+  /** Chips to narrow the list (each a `group` some of the list has), in order; none: no chips. */
+  groups?: readonly string[];
+  /** Still being worked out (the plain network, while "Warm the spring" is dragged): the card keeps the list's room. */
+  pending?: boolean;
+}
+export interface OtherSpecies {
+  key: string;
+  label: string;
+  note: string;
+  img?: string;
+  /** Its chip (OthersList.groups). */
+  group?: string | null;
 }
 
 /** A place's season for the card's sparkline. One set of numbers: the "Coming out near you" line counts down to the
