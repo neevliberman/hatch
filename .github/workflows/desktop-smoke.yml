@@ -41,7 +41,7 @@ jobs:
       ENGINES: ${{ matrix.engine }}
       SHARD: ${{ matrix.shard && format('{0}/{1}', matrix.shard, matrix.of) || '1/1' }}   # the slow Chromium legs are split (the radar section runs alone in desktop shard 1)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4   # the image's own Node; this only restores the npm cache

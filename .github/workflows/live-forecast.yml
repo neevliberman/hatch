@@ -35,7 +35,7 @@ jobs:
           else
             echo "off-season ($MD): nothing to do"
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.run == '1'
         with:
           persist-credentials: false

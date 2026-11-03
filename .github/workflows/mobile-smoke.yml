@@ -34,7 +34,7 @@ jobs:
       ENGINES: ${{ matrix.engine }}
       SHARD: ${{ matrix.engine == 'chromium' && format('{0}/2', matrix.shard) || '1/1' }}   # Chromium is split two ways: it is most of the wait
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4   # the image's own Node; this only restores the npm cache
