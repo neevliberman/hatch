@@ -187,6 +187,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   let nudge = 0;
   let overSighting = false;
   let redrawQueued = false;
+  let lastViewAt = -Infinity; // when the view last moved
+  let refreshedAt = NaN; // the zoom the layers were last built for
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   // While the camera glides, the frames in between say nothing about whether the reader moved the map.
   // Each glide gets a number: a glide that starts before the last one ends must not have its flag cleared by it.
@@ -303,7 +305,8 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     useDevicePixels: Math.min(window.devicePixelRatio || 1, 2),
     initialViewState: initial,
     // No rotate/tilt: flat data map. Keyboard off so arrow keys drive the time scrubber.
-    controller: { dragRotate: false, touchRotate: false, keyboard: false, doubleClickZoom: true },
+    // Inertia: let go mid-drag and the map coasts to a stop (about 0.6 s), the way Google Maps does.
+    controller: { dragRotate: false, touchRotate: false, keyboard: false, doubleClickZoom: true, inertia: 600 },
     // Pointer only over sightings (they open an iNaturalist photo); a hex just shows its card, so it keeps the arrow.
     getCursor: ({ isDragging, isHovering }) => (isDragging ? 'grabbing' : isHovering ? (overSighting ? 'pointer' : 'default') : 'grab'),
     layers: [],
@@ -316,6 +319,13 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         requestAnimationFrame(() => land(back));
         return { ...viewState, ...back }; // deck draws what this returns
       }
+      lastViewAt = performance.now();
+      // The map moved under a still mouse (a coast): the hovered hexagon and its card are no longer under it.
+      if (hovered) {
+        hovered = null;
+        onProbe(null, false);
+        refresh();
+      }
       zoom = viewState.zoom;
       // Only the view, not deck's whole viewState: that carries a stale width/height that would skew center().
       current = { longitude: viewState.longitude, latitude: viewState.latitude, zoom: viewState.zoom };
@@ -325,10 +335,12 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
         Math.abs(viewState.longitude - fitted.longitude) > scale * 0.1 || Math.abs(viewState.latitude - fitted.latitude) > scale * 0.08);
       if (onView) requestAnimationFrame(onView); // after deck has drawn the new view
       // Layers can depend on zoom (finer hexagons when zoomed in): redraw once per frame while the view moves.
-      if (!redrawQueued) {
+      // A pure pan changes no layer (deck moves the camera itself), so rebuilding them all per frame is wasted work.
+      if (!redrawQueued && viewState.zoom !== refreshedAt) {
         redrawQueued = true;
         requestAnimationFrame(() => {
           redrawQueued = false;
+          refreshedAt = zoom;
           refresh();
         });
       }
@@ -346,10 +358,29 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
       if (!drawn) firstDraw();
       const vp = deck.isInitialized ? (deck.getViewports()[0] as WebMercatorViewport) : undefined;
       placeRings(vp); // the drawn view, so the rings ride along with glides and resizes
-      labels?.update(vp, padding(),
-        registry.activeLayers().map((l) => l.points?.(time.cursor) ?? []), covers?.() ?? []);
+      if (labels) placeNames(vp);
     },
   });
+
+  // Place names: working out which fit is the costliest thing a frame does besides drawing. While the map pans, names are
+  // placed about 10 times a second and slid with the map in between (a pan is a pure shift at a fixed zoom); at rest,
+  // and whenever the zoom changes, they are placed afresh. A trailing placement lands the exact layout once it stops.
+  let namesAt: { lng: number; lat: number; zoom: number; x: number; y: number; t: number } | null = null;
+  let namesTimer = 0;
+  const placeNames = (vp?: WebMercatorViewport) => {
+    if (!vp || !labels) return;
+    const now = performance.now();
+    clearTimeout(namesTimer);
+    if (namesAt && vp.zoom === namesAt.zoom && now - namesAt.t < 100) {
+      const [x, y] = vp.project([namesAt.lng, namesAt.lat]) as [number, number];
+      labels.shift(x - namesAt.x, y - namesAt.y);
+      namesTimer = window.setTimeout(() => placeNames(deck.isInitialized ? (deck.getViewports()[0] as WebMercatorViewport) : undefined), 110);
+      return;
+    }
+    labels.update(vp, padding(), registry.activeLayers().map((l) => l.points?.(time.cursor) ?? []), covers?.() ?? []);
+    const [x, y] = vp.project([vp.longitude, vp.latitude]) as [number, number];
+    namesAt = { lng: vp.longitude, lat: vp.latitude, zoom: vp.zoom, x, y, t: now };
+  };
 
   // While paused, today's newest dots breathe: a paper ring over each swells and settles by about half a pixel every
   // 2.4 s. CSS draws it (src/style.css, .breath), so the map itself never redraws for it. It rests after 15 s without
@@ -391,6 +422,12 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   for (const type of ['pointerdown', 'wheel']) container.addEventListener(type, () => (grabbed = true), { capture: true, passive: true });
   container.addEventListener('pointerdown', () => down++, { capture: true });
   for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => (down = Math.max(0, down - 1)), { capture: true });
+  // A press while the map is still coasting stops it, and is not a tap: the reader meant "stop", not "pin what slides under me".
+  container.addEventListener('pointerdown', () => {
+    if (performance.now() - lastViewAt > 120) return;
+    touchDown = null;
+    land({ ...current }); // a fresh view stops deck's coast where it is
+  });
   // A phone can take the graphics context back to save memory, which leaves only plain water. Ask for it back
   // (preventDefault is what lets the browser offer a restore), then redraw by reloading: the link in the address bar
   // keeps the place, zoom and day (main.ts writes it on pagehide). Automatic reloads are capped at one a minute and
@@ -527,6 +564,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
 
   let drawnLayers: Layer[] = [];
   const refresh = () => {
+    refreshedAt = zoom;
     const { under, mid } = basemapLayers(zoom);
     // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
     const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }).map(recoloured))

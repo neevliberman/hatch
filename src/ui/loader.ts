@@ -1,50 +1,85 @@
 import { loop, pen as fullPen, type P } from './sketch';
 
-// The About panel's pen, with fewer samples per span: at this size more would only add bytes to the page.
+// The loading note: a monarch caterpillar inching along a milkweed leaf, pen and watercolour like Exo, beside "Warming up the map…".
+// Drawn once at build time (see vite.config.ts) and written into index.html, so it shows while the map's code is still
+// downloading. It must keep moving while the page is busy (parsing the map's code, setting up WebGL), so it is a flip
+// book: 12 hand-drawn frames side by side in one strip, and CSS steps the strip along (#loader .strip in src/style.css).
+// A transform animation on an HTML element runs on the compositor, off the main thread, so it never stalls the way a
+// filter or an SVG animation does. The ink "boils" because every frame is its own set of takes.
+
 const pen = (pts: P[], w: number, seed: number, twice = true) => fullPen(pts, w, seed, twice, 2);
 
-// The loading note: a pen-drawn caterpillar inching round a pencilled circle, beside "Warming up the map…".
-// Drawn once at build time (see vite.config.ts) and written into index.html, so it shows while the map's code is
-// still downloading. The inching is CSS only (#loader in src/style.css): each segment sits at its own share of the
-// body (--k), and the middle ones lift (--b) as the tail catches up with the head.
+const FRAMES = 12;
+const W = 100; // one frame is W x H units
+const H = 56;
+const N = 8; // body segments; the last is the head
+const GROUND = 40; // the leaf's edge
+const STEP = 14; // how far one inch carries it, and the spacing of the leaf's veins
+const D0 = 42; // tail-to-head when stretched
+const D1 = D0 - STEP; // when bunched
+const TAKES = 3;
+const CREAM = '#f7f3e6';
 
-const R = 24; // where the segments' centres ride (src/style.css moves them there)
-const N = 7;
-const BODY = 6.6;
-const TRACK = R - BODY - 2; // where the feet land: the pencilled circle the caterpillar inches round
+const f1 = (v: number) => +v.toFixed(1);
+const smooth = (p: number) => p * p * (3 - 2 * p);
 
-/** One body segment drawn around (0, 0), facing +x (the way it walks), with two feet reaching in to the track. */
-const segment = (seed: number, head = false): string => {
-  const r = head ? BODY + 1 : BODY;
-  const k = r / 5.4; // the face was drawn for a 5.4 head
-  const feet: P[][] = head ? [] : [[[-2.2, r * 0.78], [-2.9, r + 2]], [[2, r * 0.8], [1.4, r + 2]]];
-  const face = head
-    ? pen([[1.5 * k, -4.6 * k], [3.4 * k, -7.4 * k], [5.6 * k, -8.6 * k]], 0.8, seed + 5, false) +
-      pen([[-0.6 * k, -5 * k], [0, -8.2 * k], [1.4 * k, -9.8 * k]], 0.8, seed + 6, false) + pen(loop(2.4 * k, -1.2 * k, 1, 1, 0, 1.2), 1, seed + 7, false)
-    : '';
-  return `<ellipse class="wash" cx=".8" cy=".7" rx="${+(r - 0.5).toFixed(1)}" ry="${+(r * 0.85).toFixed(1)}"/><path class="pen" d="${
-    pen(loop(0, 0, r, r * 0.9, 0.3, 1.15, seed), head ? 1.5 : 1.3, seed, head) + feet.map((f, i) => pen(f, 0.8, seed + 2 + i, false)).join('') + face
-  }"/>`;
-};
+/** The drawings reused by every frame: three takes of a segment's bands, of the head, and of the tail filament. */
+function defs(): string {
+  let d = '';
+  for (let t = 0; t < TAKES; t++) {
+    const seed = 11 + t * 7;
+    // One segment's bands: a black band with a cream one either side, and two prolegs. The body itself is one wash (see frame()).
+    d += `<g id="b${t}"><path style="fill:${CREAM}" d="${pen([[-1.9, -4.4], [-2.2, 0], [-1.9, 4.4]], 0.7, seed, false)}${pen([[1.9, -4.5], [2.2, 0], [1.9, 4.4]], 0.7, seed + 1, false)}"/>` +
+      `<path style="fill:var(--text)" d="${pen([[0, -4.8], [0.3, 0], [0, 4.8]], 1.3, seed + 2, false)}${pen([[-1.2, 4.8], [-1.6, 6.4]], 0.5, seed + 3, false)}${pen([[1.4, 4.9], [1.9, 6.4]], 0.5, seed + 4, false)}"/></g>`;
+    // The head: black, with cream face stripes, an eye, and the two filaments that curl up and forward.
+    d += `<g id="h${t}"><ellipse style="fill:#26201a" cx=".5" cy=".6" rx="4.8" ry="5.2"/>` +
+      `<path style="fill:${CREAM}" d="${pen([[0.8, -4], [2.4, -1.4], [2.2, 2.4]], 0.9, 50 + t, false)}${pen([[-1.4, -4.2], [-0.8, 0], [-1.2, 3.6]], 0.7, 53 + t, false)}"/>` +
+      `<circle style="fill:${CREAM}" cx="3" cy="-1" r=".9"/>` +
+      `<path style="fill:var(--text)" d="${pen(loop(0, 0, 5, 5.4, 0.2, 1.15, 40 + t), 0.8, 40 + t, true)}${pen([[-0.5, -4.6], [1, -9.4], [5.2, -13.4]], 0.6, 60 + t, false)}"/></g>`;
+    d += `<path id="f${t}" style="fill:var(--text)" d="${pen([[-1, -4.6], [-2.6, -8.2], [-5.4, -9.8]], 0.6, 70 + t, false)}"/>`;
+  }
+  return d;
+}
 
-/** The track: a pencilled circle in short dashes, so it reads as a path walked round, not a ball. */
-const track = () =>
-  Array.from({ length: 16 }, (_, i) => {
-    const a = (i / 16) * 2 * Math.PI;
-    return pen([0, 0.07, 0.14].map((d): P => [TRACK * Math.cos(a + d), TRACK * Math.sin(a + d)]), 0.7, 3 + i, false);
-  }).join('');
+/** One frame of the cycle: the tail planted while the head reaches, then the head planted while the tail draws up. */
+function frame(f: number): string {
+  const t = f / FRAMES;
+  const [tail, head] = t < 0.5 ? [0, D1 + STEP * smooth(t * 2)] : [STEP * smooth((t - 0.5) * 2), D0];
+  const mid = (tail + head) / 2;
+  const bunch = (D0 - (head - tail)) / STEP; // 0 stretched, 1 bunched
+  const take = f % TAKES;
+  const ox = W / 2 - mid; // ground x -> frame x
+  // The leaf: a wash with a slightly curved edge, a drawn edge and midrib, and veins that differ in length and slant.
+  let g = `<path style="fill:var(--wash-leaf);opacity:.65" d="M-8 ${GROUND + 1.8}Q50 ${GROUND + 0.4} 108 ${GROUND + 2.4}L108 ${GROUND + 12}Q50 ${GROUND + 15} -8 ${GROUND + 11}Z"/>`;
+  g += `<path style="fill:var(--text)" d="${pen([[-8, GROUND + 1.6], [W / 2, GROUND + 0.7], [W + 8, GROUND + 1.8]], 0.7, 80 + take, true)}"/>`;
+  g += `<path style="fill:var(--line-strong)" d="${pen([[-8, GROUND + 7], [W / 2, GROUND + 6.4], [W + 8, GROUND + 7.2]], 0.6, 90 + take, false)}`;
+  for (let n = -2; n <= 9; n++) {
+    const x = n * STEP + ox;
+    if (x < -10 || x > W + 10) continue;
+    const j = (n * 37 + 11) % 5; // a fixed wobble per vein, so the leaf is not a ruler
+    g += pen([[x, GROUND + 6.8], [x + 2.6 + j * 0.3, GROUND + 9 + j * 0.2], [x + 5 + j * 0.5, GROUND + 10.6 + j * 0.2]], 0.5, 100 + n + take * 5, false);
+  }
+  g += '"/>';
+  const c = Array.from({ length: N }, (_, i): P => {
+    const k = i / (N - 1);
+    return [tail + (head - tail) * k + ox, GROUND - 5 - 13 * bunch * Math.sin(Math.PI * k)];
+  });
+  // The body is one continuous wash, with a soft yellow bloom a little off it (the watercolour not quite on the lines),
+  // inked along its top and underside; the bands and the head go over it.
+  const line = c.map(([x, y]) => `${f1(x)} ${f1(y)}`).join('L');
+  let body = `<path d="M${line}" style="fill:none;stroke:#e6b93c;stroke-width:10;stroke-linecap:round;stroke-linejoin:round"/>`;
+  body += `<path d="M${c.map(([x, y]) => `${f1(x + 0.8)} ${f1(y + 0.9)}`).join('L')}" style="fill:none;stroke:#f2cf5a;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;opacity:.35"/>`;
+  body += `<path style="fill:var(--text)" d="${pen(c.map(([x, y]): P => [x, y - 5.1]), 0.7, 120 + take, true)}${pen(c.slice(0, -1).map(([x, y]): P => [x, y + 5.2]), 0.7, 125 + take, true)}"/>`;
+  c.forEach(([x, y], i) => {
+    if (i === N - 1) return;
+    body += `<use href="#b${(take + i) % TAKES}" x="${f1(x)}" y="${f1(y)}"/>`;
+    if (i === 1) body += `<use href="#f${take}" x="${f1(x)}" y="${f1(y)}"/>`;
+  });
+  body += `<use href="#h${take}" x="${f1(c[N - 1]![0])}" y="${f1(c[N - 1]![1])}"/>`;
+  return `<svg x="${f * W}" y="0" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${g}${body}</svg>`;
+}
 
 export function loaderHtml(): string {
-  // Two body drawings used in turn, so the segments don't look stamped; the head is drawn on its own.
-  const segs = Array.from({ length: N }, (_, i) => {
-    const k = i / (N - 1);
-    const look = i === N - 1 ? segment(37, true) : `<use href="#cat-${'ab'[i % 2]}"/>`;
-    return `<g style="--k:${+k.toFixed(3)};--b:${+Math.sin(Math.PI * k).toFixed(2)}">${look}</g>`;
-  }).join('');
-  return `<div id="loader"><svg viewBox="-40 -40 80 80" width="120" height="120" aria-hidden="true">
-    <filter id="cat-boil" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="2"/>
-    <feDisplacementMap in="SourceGraphic" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter>
-    <defs><g id="cat-a">${segment(11)}</g><g id="cat-b">${segment(23)}</g></defs>
-    <g filter="url(#cat-boil)"><path class="cat-path" d="${track()}"/><g class="walk">${segs}</g></g>
-  </svg><p>Warming up the map…</p></div>`;
+  const frames = Array.from({ length: FRAMES }, (_, f) => frame(f)).join('');
+  return `<div id="loader"><div class="cat" aria-hidden="true"><svg class="strip" width="${FRAMES * 150}" height="84" viewBox="0 0 ${FRAMES * W} ${H}"><defs>${defs()}</defs>${frames}</svg></div><p>Warming up the map…</p></div>`;
 }

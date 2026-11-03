@@ -46,7 +46,7 @@ jobs:
       - run: npm run mobile
       # The first seconds of load, which the step above skips: fails on a stretched or misplaced first map frame, and
       # films each screen for the visual review in CONTRIBUTING.md. Runs once scripts/firstframes.mjs exists (PR #41).
-      - if: ${{ !cancelled() && steps.build.outcome == 'success' && hashFiles('scripts/firstframes.mjs') != '' }}
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' && hashFiles('scripts/firstframes.mjs') != '' && matrix.shard == 1 }}
         run: npm run firstframes
       - if: always()
         uses: actions/upload-artifact@v4

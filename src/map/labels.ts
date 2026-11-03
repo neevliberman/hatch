@@ -61,6 +61,9 @@ export function createLabels(container: HTMLElement) {
   layer.className = 'map-labels';
   layer.setAttribute('aria-hidden', 'true');
   container.appendChild(layer);
+  // The names ride in a holder inside the clipped layer, so a pan between two placements can slide them all at once.
+  const holder = document.createElement('div');
+  layer.appendChild(holder);
   const ctx = document.createElement('canvas').getContext('2d');
   const widths = new Map<string, number>();
   const nodes = new Map<string, HTMLSpanElement>();
@@ -95,13 +98,17 @@ export function createLabels(container: HTMLElement) {
       n.className = `place place-${l[4]}`;
       n.style.transformOrigin = '0 0';
       n.textContent = t;
-      layer.appendChild(n);
+      holder.appendChild(n);
       nodes.set(key, n);
     }
     return n;
   };
 
   return {
+    /** Slide every name by (dx, dy) px from where `update` put them: a pan costs no re-placing, only this. */
+    shift(dx: number, dy: number) {
+      holder.style.transform = dx || dy ? `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)` : '';
+    },
     /** New names arrived (the detail file loaded): re-sort the list. */
     setLabels(all: Label[]) {
       const rank = (l: Label) => (isGreat(l) ? -1 : KIND_ORDER[l[4]]); // the Great Lakes first of all
@@ -114,6 +121,7 @@ export function createLabels(container: HTMLElement) {
     update(vp: WebMercatorViewport | undefined, free: { top: number; bottom: number; right?: number }, dots: [number, number][][],
       covers: Element[]) {
       if (!vp) return;
+      holder.style.transform = ''; // placed afresh for this view
       // Names fade in with the map (this runs after a frame is drawn), once there are names to show.
       if (sorted.length) layer.classList.add('ready');
       // Panels floating over the map (the header's buttons, the legend, a card) count as taken space too.

@@ -125,29 +125,22 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #map-lost button { min-height: 32px; margin-left: 6px; padding: 0 12px; font: inherit; }
 #no-webgl, #map-lost { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); margin: 0;
   padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
-/* While the map's code downloads and draws, a pen caterpillar inches round a circle (src/ui/loader.ts). It fades on
+/* While the map's code downloads and draws, a pen caterpillar inches along a leaf (src/ui/loader.ts). It fades on
    the map's first frame (map.ts), and goes away if the no-WebGL message shows instead. */
 #loader { position: absolute; top: 34%; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
   pointer-events: none; transition: opacity 0.2s; }
 #loader.done { opacity: 0; }
 #no-webgl ~ #loader { display: none; }
 #loader p { margin: 0; font: 600 22px var(--font-note); color: var(--text); }
-#loader svg { overflow: visible; }
-#loader .pen { fill: var(--text); }
-#loader .wash { fill: var(--wash-leaf); opacity: 0.6; }
-#loader .cat-path { fill: var(--line-strong); }
-/* Each segment's place along the body: stretched (120deg of the circle), then bunched with the middle lifted as the
-   tail catches up, then stretched again a step on. The lap turns 60deg a step, in time, so the loop never jumps. */
-#loader .walk > g { transform: rotate(calc(var(--k) * 120deg)) translateY(-24px); }
+#loader .cat { width: 150px; height: 84px; overflow: hidden; }
+#loader .strip { display: block; will-change: transform; transform: translateX(-750px); }
+#loader .rib { fill: var(--line-strong); }
+#loader .leaf { fill: var(--wash-leaf); opacity: 0.7; }
+/* The flip book: the strip steps one frame at a time, on the compositor, so it keeps going while the page is busy. */
 @media (prefers-reduced-motion: no-preference) {
-  #loader .walk { animation: cat-lap 7.2s steps(6) infinite; }
-  #loader .walk > g { animation: cat-inch 1.2s ease-in-out infinite; }
+  #loader .strip { animation: cat-walk 1.2s steps(12) infinite; }
 }
-@keyframes cat-lap { to { transform: rotate(360deg); } }
-@keyframes cat-inch {
-  50% { transform: rotate(calc(60deg + var(--k) * 60deg)) translateY(calc(-24px - var(--b) * 9px)); }
-  100% { transform: rotate(calc(60deg + var(--k) * 120deg)) translateY(-24px); }
-}
+@keyframes cat-walk { from { transform: translateX(0); } to { transform: translateX(-1800px); } }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .muted { color: var(--muted); }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }

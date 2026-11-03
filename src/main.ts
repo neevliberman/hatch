@@ -372,7 +372,7 @@ function start() {
     // The counts are sightings (photos) of the species' own kind (cur.words.countedAs, e.g. first-wave moths), so the
     // menu says "seen", not a number of animals. "All years" goes without one so the closed menu fits a small phone.
     // A species the nightly file has no forecast for (yet): say so at the top of the list rather than drop it silently.
-    picker.innerHTML = (__BASEMAP__ && liveFile && !cur.live() ? `<option disabled>${liveFile.season}: not for ${cur.words.plural} yet</option>` : '') +
+    picker.innerHTML = (__BASEMAP__ && liveFile && !cur.live() ? `<option disabled>${String(liveFile.season).replace(/[^\w .-]/g, '')}: not for ${cur.words.plural} yet</option>` : '') +
       (cur.seasons?.() ?? [...live, TYPICAL, ...[...years].reverse().filter((y) => !cur.tracker || cur.seasonCount(y) > 0)])
         .map((m) => `<option value="${m}">${m === LIVE ? label(LIVE) : m === TYPICAL ? (cur.seasons ? 'Typical year' : 'All years') : cur.seasons ? m : `${m} (${cur.seasonCount(m).toLocaleString()} seen)`}</option>`)
         .join('');
