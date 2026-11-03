@@ -2303,9 +2303,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     console.log(`${tag}: checked`);
   };
   // A published count trend in "How sure?" (species.json "trend", pipeline/atlas/ohio_published.py): the Red-spotted
-  // Purple's Ohio counts fell (its interval clear of 0), the eastern tiger swallowtail's show no clear trend, and a
+  // Purple's and the wood-nymph's Ohio counts fell (their intervals clear of 0; the wood-nymph's −9.47 rounds once, to −9), the eastern tiger swallowtail's show no clear trend, and a
   // bumble bee (no Ohio counts) has no line at all. The line says Ohio only and a past baseline, and links the paper.
-  // Desktop only, light: one page, three species. Waits poll on a timer. ONLY=ohio runs just this.
+  // Desktop only, light: one page, four species. Waits poll on a timer. ONLY=ohio runs just this.
   const ohioUnit = async ([w, h], browser) => {
     const tag = 'ohio trend desktop';
     const fail = (m) => problems.push(`${tag}: ${m}`);
@@ -2315,8 +2315,9 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 90000, polling: 400 }).then(() => true, () => false);
     const cases = [
-      ['limenitis-astyanax', 'Ohio counts 1996–2016: −6%/yr (−10 to −3)'],
-      ['papilio-glaucus', 'Ohio counts 1996–2016: no clear trend'],
+      ['limenitis-astyanax', 'Ohio trend, 1996–2016: −6%/yr (likely −10 to −3)'],
+      ['cercyonis-pegala', 'Ohio trend, 1996–2016: −7%/yr (likely −9 to −5)'],
+      ['papilio-glaucus', 'Ohio trend, 1996–2016: no clear trend'],
       ['bombus-impatiens', null],
     ];
     try {
@@ -2341,7 +2342,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         }
         if (!got) { fail(`${key}: no count trend line`); continue; }
         if (got.line !== want) fail(`${key}: the line reads "${got.line}", not "${want}"`);
-        if (!/Ohio only/.test(got.note) || !/past baseline/.test(got.note) || !/Wepprich et al\. 2019/.test(got.note)) fail(`${key}: the small print reads "${got.note}"`);
+        if (!/^Past, Ohio only; not today’s status\. /.test(got.note) || !/Wepprich et al\. 2019/.test(got.note)) fail(`${key}: the small print reads "${got.note}"`);
         if (got.href !== 'https://doi.org/10.1371/journal.pone.0216270') fail(`${key}: the credit links ${got.href}`);
         if (!got.inside) fail(`${key}: the trend spills out of the panel`);
         await page.screenshot({ path: `${out}/ohio-desktop-${key}.png`, timeout: 60000 }).catch(() => {});

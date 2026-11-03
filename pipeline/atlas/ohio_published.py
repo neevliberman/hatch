@@ -8,7 +8,8 @@ volunteers, 1996-2016. These are the published, peer-reviewed estimates, used as
 
 trend = [source, pct, lo, hi, n_sites, n_years]: source "oh" (the app maps it to "Ohio counts 1996-2016" and the
 credit); the year coefficient β of the paper's GLMM as an annual % change, 100·(e^β − 1), with its 95% interval
-β ± 1.96·SE; how many sites and years the paper's model used. One decimal.
+β ± 1.96·SE; how many sites and years the paper's model used. Each value is rounded once, here, to
+exactly what the card writes (shown()), so the app's pctWord never rounds a rounded value again.
 "Declining" or "increasing" only when that interval excludes 0; otherwise "no clear trend" (the app reads the sign
 of lo and hi). Species at under 10 sites (the paper itself warns about those) or 10 years get nothing.
 
@@ -32,8 +33,9 @@ MIN_SITES, MIN_YEARS = 10, 10
 Z = 1.959964
 # Matched by name but left out on purpose, with why.
 EXCLUDE = {
-    # The Atlas names Lethe eurydice "Appalachian Brown", the sibling species (L. appalachia) the deposit counts
-    # separately; the two are often confused in the field and in photos, so the line could land on the wrong one.
+    # The Atlas row "Lethe eurydice" carries iNaturalist taxon 132227, which is L. appalachia (Appalachian Brown), the
+    # sibling species the deposit counts separately; its name and its photos disagree, and the two are often confused
+    # in the field. So the eyed brown's trend could land on the wrong species. (The Atlas row is not fixed here.)
     "Northern Eyed Brown": "sibling-species confusion and an Atlas common-name mismatch",
 }
 
@@ -42,6 +44,16 @@ def convert(beta: float, se: float) -> tuple[float, float, float]:
     """A log-scale annual coefficient and its SE -> (% per year, lower, upper) of the 95% Wald interval."""
     pct = lambda b: 100 * math.expm1(b)  # noqa: E731
     return pct(beta), pct(beta - Z * se), pct(beta + Z * se)
+
+
+def shown(v: float) -> float:
+    """v rounded once, to exactly what the card writes (src/atlas/index.ts pctWord): whole numbers from 1, one decimal
+    below, two below 0.05, more if needed to keep it off 0. pctWord then leaves it as it is: no double rounding."""
+    d = 0 if abs(v) >= 1 else 1 if abs(v) >= 0.05 else 2
+    while round(v, d) == 0 and v != 0 and d < 6:
+        d += 1
+    r = round(v, d)
+    return int(r) if d == 0 else r
 
 
 def verdict(lo: float, hi: float) -> str:
@@ -61,7 +73,7 @@ def records(paper: pd.DataFrame, atlas: set) -> tuple[dict, pd.DataFrame]:
                else f"under {MIN_SITES} sites" if r.nsite < MIN_SITES
                else f"under {MIN_YEARS} years" if r.yrs < MIN_YEARS else "")
         if not why:
-            out[name] = [SOURCE, round(pct, 1), round(lo, 1), round(hi, 1), int(r.nsite), int(r.yrs)]
+            out[name] = [SOURCE, shown(pct), shown(lo), shown(hi), int(r.nsite), int(r.yrs)]
         rows.append({"CommonName": r.CommonName, "Latin": r.Latin, "atlas": name, "pct": round(pct, 2),
                      "lo": round(lo, 2), "hi": round(hi, 2), "nsite": r.nsite, "yrs": r.yrs,
                      "verdict": verdict(lo, hi), "shipped": not why, "why_not": why})

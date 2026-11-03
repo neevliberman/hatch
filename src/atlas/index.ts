@@ -31,20 +31,28 @@ export interface AtlasSpecies {
 }
 
 /** Where a species' `trend` comes from: the line's label, its credit and the link. */
-export const TREND_SOURCES: Record<string, { label: string; credit: string; href: string }> = {
-  oh: { label: 'Ohio counts 1996–2016', credit: 'Ohio Lepidopterists / Wepprich et al. 2019', href: 'https://doi.org/10.1371/journal.pone.0216270' },
+export const TREND_SOURCES: Record<string, { label: string; note: string; credit: string; creditLine: string; href: string }> = {
+  oh: {
+    label: 'Ohio trend, 1996–2016',
+    note: 'Past, Ohio only; not today’s status.',
+    credit: 'Ohio Lepidopterists / Wepprich et al. 2019',
+    creditLine: 'Ohio butterfly trends, 1996–2016: Ohio Lepidopterists’ volunteer monitoring, trends from Wepprich et al. 2019, PLoS ONE (data CC0).',
+    href: 'https://doi.org/10.1371/journal.pone.0216270',
+  },
 };
 
-/** A trend's % per year as written: whole numbers, one decimal under 1 (never a bare 0), a true minus sign. */
+/** A trend's % per year as written: whole numbers, one decimal under 1 (never a bare 0), a true minus sign. species.json
+ * stores each value already rounded this way (ohio_published.py shown()), so this never rounds twice. */
 export const pctWord = (v: number) => {
   const a = Math.abs(v);
   const t = a >= 1 ? String(Math.round(a)) : a.toFixed(a >= 0.05 ? 1 : 2);
   return `${v < 0 ? '−' : '+'}${t}`;
 };
 
-/** A species' trend in a few words: "−7%/yr (−11 to −3)" when its interval keeps clear of 0, else "no clear trend". */
+/** A species' trend in a few words: "−7%/yr (likely −11 to −2)" when its interval keeps clear of 0, else "no clear
+ * trend". */
 export const trendWords = ([, pct, lo, hi]: NonNullable<AtlasSpecies['trend']>) =>
-  lo > 0 || hi < 0 ? `${pctWord(pct)}%/yr (${pctWord(lo)} to ${pctWord(hi)})` : 'no clear trend';
+  lo > 0 || hi < 0 ? `${pctWord(pct)}%/yr (likely ${pctWord(lo)} to ${pctWord(hi)})` : 'no clear trend';
 
 /**
  * The year whose real warmth ships (ahead-YEAR.bin), and whose photos are set against the network (seen-YEAR). main's

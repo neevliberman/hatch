@@ -43,6 +43,7 @@ SYNONYMS = {
     "Northern Broken-Dash": "Polites egeremet", "Northern Eyed Brown": "Lethe eurydice",
     "Northern Pearly-Eye": "Lethe anthedon", "Olive Hairstreak": "Mitoura gryneus",
     "Sleepy Orange": "Abaeis nicippe", "Southern Dogface": "Zerene cesonia", "Mustard White": "Pieris oleracea",
+    "Peck's Skipper": "Polites coras", "Delaware Skipper": "Atrytone delaware",
     "Red-spotted Purple": "Limenitis astyanax",  # the deposit files it under Limenitis arthemis with White Admiral
 }
 COMPLEXES = {"Azures"}  # spring + summer azure combined: no single Atlas species

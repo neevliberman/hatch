@@ -97,6 +97,8 @@ PUBLISHED = pd.DataFrame([
     ["Eastern Tiger Swallowtail", "Papilio glaucus", 29299, 101, 21, 996, -0.0103721528938899, 0.0147821243533328, 0.482885842815634],
     ["Least Skipper", "Ancyloxypha numitor", 27506, 84, 21, 844, 0.0529930718469354, 0.0151674528964492, 0.00047607710653368],
     ["Gemmed Satyr", "Cyllopsis gemma", 1059, 6, 16, 81, 0.227739836170602, 0.0519625139394471, 1.17178883071611e-05],
+    ["Monarch", "Danaus plexippus", 46070, 104, 21, 1005, -0.0701154108642979, 0.0228642111859387, 0.00216507713532567],
+    ["Peck's Skipper", "Polites peckius", 1, 90, 21, 1, 0.0, 0.01, 1.0],
     ["Azures", "Celastrina ladon", 30000, 103, 21, 999, -0.01, 0.01, 0.3],
 ], columns=["CommonName", "Latin", "Total", "nsite", "yrs", "sy", "estimate", "std.error", "p.value"])
 
@@ -115,12 +117,22 @@ def test_published_trend_conversion_and_verdicts():
         assert (verdict(lo, hi) != "no clear trend") == (r._9 < 0.05)
 
 
+def test_values_are_rounded_once_to_what_the_card_writes():
+    from pipeline.atlas.ohio_published import convert, shown
+    _, _, hi = convert(-0.0701154108642979, 0.0228642111859387)  # the monarch's upper end
+    # One decimal first gives -2.5, which the card (Math.round on the size, halves up) writes as 3: the old bug.
+    assert -2.5 < hi < -2.49 and round(hi, 1) == -2.5 and shown(hi) == -2
+    assert [shown(v) for v in (-9.47, 13.01, 0.19, -0.06, 0.004, 0.96)] == [-9, 13, 0.2, -0.1, 0.004, 1.0]
+
+
 def test_published_records_match_thresholds_and_names():
     from pipeline.atlas.ohio_published import records
     atlas = {s["name"] for s in json.loads((ROOT / "public/atlas/species.json").read_text())}
     ship, table = records(PUBLISHED, atlas)
-    assert ship == {"Limenitis astyanax": ["oh", -6.2, -9.6, -2.7, 87, 21], "Tharsalea hyllus": ["oh", -6.1, -12.9, 1.3, 23, 21],
-                    "Papilio glaucus": ["oh", -1.0, -3.9, 1.9, 101, 21], "Ancyloxypha numitor": ["oh", 5.4, 2.4, 8.6, 84, 21]}
+    assert ship == {"Limenitis astyanax": ["oh", -6, -10, -3, 87, 21], "Tharsalea hyllus": ["oh", -6, -13, 1, 23, 21],
+                    "Papilio glaucus": ["oh", -1, -4, 2, 101, 21], "Ancyloxypha numitor": ["oh", 5, 2, 9, 84, 21],
+                    # Monarch: -6.77 (-10.86 to -2.4998). Rounded once: -7 (-11 to -2), never -2.5 and then -3.
+                    "Danaus plexippus": ["oh", -7, -11, -2, 104, 21], "Polites coras": ["oh", 0.0, -2, 2, 90, 21]}
     why = dict(zip(table.CommonName, table.why_not))
     assert why["Gemmed Satyr"] == "not in the Atlas" and why["Azures"].startswith("complex")
 
@@ -133,5 +145,6 @@ def test_shipped_trends_are_butterflies_and_well_formed():
         src, pct, lo, hi, n_sites, n_years = s["trend"]
         assert src == "oh" and s["order"] == "Lepidoptera" and lo <= pct <= hi and n_sites >= 10 and n_years >= 10
     t = {s["name"]: s["trend"] for s in with_trend}
-    assert t["Limenitis astyanax"] == ["oh", -6.2, -9.6, -2.7, 87, 21] and t["Papilio glaucus"][2] < 0 < t["Papilio glaucus"][3]
+    assert t["Limenitis astyanax"] == ["oh", -6, -10, -3, 87, 21] and t["Danaus plexippus"] == ["oh", -7, -11, -2, 104, 21]
+    assert "Polites coras" in t and "Atrytone delaware" in t and t["Papilio glaucus"][2] < 0 < t["Papilio glaucus"][3]
     assert "Bombus impatiens" not in t and "Lethe eurydice" not in t and "Celastrina ladon" not in t

@@ -631,10 +631,10 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         ],
       };
       // A published long-term count trend, where one exists (species.json "trend", pipeline/atlas/ohio_published.py):
-      // a past baseline from one state, never today's numbers.
+      // a past baseline from one state, never today's numbers. Its words and credit live in TREND_SOURCES.
       const src = sp.trend && TREND_SOURCES[sp.trend[0]];
       const trend = sp.trend && src
-        ? { label: src.label, value: trendWords(sp.trend), note: 'Ohio only; a past baseline, not today’s status.', credit: src.credit, href: src.href }
+        ? { label: src.label, value: trendWords(sp.trend), note: src.note, credit: src.credit, href: src.href }
         : undefined;
       return {
         title: `${name}: fine print`,
@@ -686,7 +686,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         ...(atlasYearInfo.warmThrough ? [{ text: 'This week’s warmth forecast: Open-Meteo (CC BY 4.0).', href: 'https://open-meteo.com/' }] : []),
       ];
       const ts = sp.trend && TREND_SOURCES[sp.trend[0]];
-      if (ts) out.push({ text: `${ts.label}: Ohio Lepidopterists’ volunteer butterfly monitoring, trends from Wepprich et al. 2019, PLoS ONE (data CC0).`, href: ts.href });
+      if (ts) out.push({ text: ts.creditLine, href: ts.href });
       if (sp.photo && sp.credit && sp.taxon) out.push({ text: `${name} photo: ${sp.credit}, via iNaturalist.`, href: `https://www.inaturalist.org/taxa/${sp.taxon}` });
       if (sp.taxon) {
         out.push({ text: `Recent ${name} sightings on iNaturalist.`, href: `https://www.inaturalist.org/observations?taxon_id=${sp.taxon}&order_by=observed_on` });
