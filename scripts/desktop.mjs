@@ -14,7 +14,7 @@
 // under the map give (ONLY=near). And the card's "Out here now": ranked by nearness to each species' best day there,
 // chips that narrow it, short on a phone (ONLY=out). And an Atlas species' track record in "How sure?" (ONLY=track).
 // And an early or late chip: opens where its slid 2026 season peaks, with the slide as a bracket on the time bar and
-// plain words on the card (ONLY=earlylate).
+// plain words on the card (ONLY=earlylate). And Share's link reopening the pinned card (ONLY=sharepin).
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -61,10 +61,26 @@ const units = [];
 // Each worker drives its own browser process: contexts of one browser share its single software-GL process, and two
 // pages drawing through it starve each other into load timeouts.
 const [shardNo, shardOf] = (process.env.SHARD ?? '1/1').split('/').map(Number);
+// A section's `w` is its rough cost in seconds on a CI runner with two sections running at once (from the timestamps of
+// desktop-smoke runs 41637536187 and 41648610818, the slower of the two where both ran); one without counts as a minute.
 const runUnits = async (n) => {
-  // The first section (the radar replays, as long as all the others put together over a pair of workers) gets shard 1 to itself;
-  // the rest are dealt out round robin over the other shards.
-  const queue = units.filter((_, i) => (shardOf === 1 ? true : i === 0 ? shardNo === 1 : (i - 1) % (shardOf - 1) === shardNo - 2));
+  // Longest first, each to whichever of all the shards' workers (n a shard) is free soonest, so every shard ends at about
+  // the same time (round robin left one shard with both ~7-minute "watch" sections and twice another's work). Every
+  // shard works the same split out, and each section lands in exactly one of them.
+  const workers = Array.from({ length: shardOf * n }, (_, k) => ({ shard: Math.floor(k / n) + 1, at: 0 }));
+  const shards = Array.from({ length: shardOf }, () => []);
+  for (const [u, i] of units.map((u, i) => [u, i]).sort(([a, i], [b, j]) => (b.w ?? 60) - (a.w ?? 60) || i - j)) {
+    const w = workers.reduce((a, b) => (b.at < a.at ? b : a));
+    w.at += u.w ?? 60;
+    shards[w.shard - 1].push(u);
+  }
+  const all = shards.flat();
+  if (all.length !== units.length || new Set(all).size !== units.length || units.some((u) => !all.includes(u))) throw new Error('the shards do not cover every section exactly once');
+  const queue = shards[shardNo - 1];
+  if (shardOf > 1) {
+    const est = Math.max(...workers.filter((w) => w.shard === shardNo).map((w) => w.at));
+    console.log(`shard ${shardNo}/${shardOf}: ${queue.length} of ${units.length} sections, ~${Math.round(est / 60)} min: ${queue.map((u) => u.label ?? '?').join(', ')}`);
+  }
   await Promise.all(Array.from({ length: n }, async (_, i) => {
     const own = i === 0 ? null : await pw.chromium.launch(chromiumLaunch);
     for (let u; (u = queue.shift()); ) await u(own ?? browsers.chromium);
@@ -2284,6 +2300,144 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     await ctx.close();
     console.log(`${tag}: checked`);
   };
+  // Shared links reopen the pinned card (?pin=lat,lng): a hexagon pinned by a tap, for luna, the firefly (forecasts) and
+  // an Atlas species, then Share. Its link names the hexagon's centre to 2 decimals; that link in a fresh page pins the
+  // same card (title, hexagon and season line), and one press of its × drops pin= from the address bar. A card pinned
+  // from My area shares its hexagon, and no part of its link (pin=, at=) gives the reader's own spot. A malformed,
+  // partial or far-off pin, a pin on no hexagon, or one for a species that never loads opens with no card and no error,
+  // and leaves the address bar. Desktop and phone (luna and the Atlas). Waits poll on a timer (a software-GL frame can
+  // take 10-25 s). ONLY=sharepin runs just this.
+  const sharePinUnit = async ([w, h, phone], browser) => {
+    const tag = `share pin ${phone ? 'phone' : 'desktop'}`;
+    const fail = (m) => problems.push(`${tag}: ${m}`);
+    const ME = { latitude: 41.8812, longitude: -87.6298 }; // Chicago's Loop: My area's fix
+    const ctx = await settledContext(browser, {
+      viewport: { width: w, height: h }, deviceScaleFactor: phone ? 2 : 1, hasTouch: phone, isMobile: phone,
+      geolocation: ME, permissions: ['geolocation'],
+    });
+    await ctx.route(PHOTOS, (r) => r.abort());
+    const watch = (pg) => pg.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
+    const poll = (pg, fn, arg, timeout = 90000) => pg.waitForFunction(fn, arg, { timeout, polling: 500 }).then(() => true, () => false);
+    const tap = (pg, loc) => (phone ? loc.tap() : loc.click());
+    // The pinned card as a reader sees it: its title, its hexagon, its season line.
+    const card = (pg) => pg.evaluate(() => {
+      const p = document.getElementById('probe');
+      if (!p || p.hidden || !p.querySelector('.probe-close')) return null;
+      return { title: p.querySelector('.probe-title')?.textContent ?? '', cell: (p.dataset.key ?? '').split('|')[0], season: p.querySelector('.probe-season')?.textContent ?? '' };
+    });
+    const same = (a, b) => !!a && !!b && a.title === b.title && a.cell === b.cell && a.season === b.season;
+    // Share's link, as mobile.mjs reads it: whichever of the share sheet or the clipboard the browser offers.
+    const share = async (pg) => {
+      await pg.evaluate(() => {
+        window.__shared = null;
+        const grab = async (d) => void (window.__shared = typeof d === 'string' ? d : d.url);
+        if (navigator.share) navigator.share = grab;
+        else Object.defineProperty(navigator, 'clipboard', { value: { writeText: grab } });
+      });
+      await tap(pg, pg.locator('#share'));
+      return (await poll(pg, () => !!window.__shared, null, 30000)) ? pg.evaluate(() => window.__shared) : null;
+    };
+    const pinOf = (url) => new URL(url).searchParams.get('pin');
+    // Opens a link in a fresh page and waits for its card to match `want`; screenshots it as `shot` if given.
+    const reopen = async (what, url, want, shot) => {
+      const pg = await ctx.newPage();
+      watch(pg);
+      try {
+        await pg.goto(url);
+        if (!(await poll(pg, () => !!window.__hatch?.current()))) return fail(`${what}: the shared link never loaded`);
+        let got = null;
+        const until = Date.now() + 90000;
+        while (Date.now() < until && !same((got = await card(pg)), want)) await pg.waitForTimeout(500);
+        if (!same(got, want)) return fail(`${what}: the shared link pinned ${JSON.stringify(got)}, not ${JSON.stringify(want)}`);
+        if (shot) {
+          for (const scheme of ['light', 'dark']) {
+            await pg.emulateMedia({ colorScheme: scheme });
+            await poll(pg, (d) => document.documentElement.classList.contains('dark') === d || document.documentElement.dataset.theme === (d ? 'dark' : 'light'), scheme === 'dark', 10000);
+            await pg.waitForTimeout(1500); // a software-GL frame in the new colours
+            await pg.screenshot({ path: `${out}/sharepin-${phone ? 'phone' : 'desktop'}-${shot}-${scheme}.png`, timeout: 60000 }).catch(() => {});
+          }
+          await pg.emulateMedia({ colorScheme: 'light' });
+        }
+        // Closing the card takes pin= out of the address bar (it keeps the rest of the view). One press, even while the
+        // card is rebuilt under it (src/ui/panels.ts keeps the same ×).
+        await tap(pg, pg.locator('#probe .probe-close'));
+        if (!(await poll(pg, () => !/[?&]pin=/.test(location.search) && /[?&]date=/.test(location.search), null, 30000))) fail(`${what}: closing the card left ${await pg.evaluate(() => location.search)} (card: ${JSON.stringify(await card(pg))})`);
+      } finally {
+        await pg.close();
+      }
+    };
+    const page = await ctx.newPage();
+    watch(page);
+    try {
+      // [what, link, the species' layer id, where to tap]
+      const cases = [
+        ['luna', '/?noauto&today=2027-01-15&date=06-10', 'luna-replay', [-91, 40, -87, 43]],
+        ['firefly', '/?species=firefly&noauto&today=2027-01-15&date=07-01', 'firefly-replay', [-91, 40, -87, 43]],
+        ['atlas', '/?species=papilio-glaucus&noauto&today=2027-01-15&date=06-20', 'papilio-glaucus-atlas', [-91, 40, -87, 43]],
+      ];
+      // A phone runs luna and the Atlas (the touch and docked-card side); the firefly and the bad pins below go through
+      // the very same code, so the desktop alone covers them (CI time: see runUnits).
+      for (const [what, link, id, box] of cases.filter(([what]) => !phone || what !== 'firefly')) {
+        await page.goto(origin + link);
+        if (!(await poll(page, (i) => window.__hatch?.current()?.id === i && window.__hatch.current().cellAt([-89.2, 40.1]) != null, id))) { fail(`${what}: never loaded`); continue; }
+        await page.waitForTimeout(1500); // the first frame, so a tap lands on a drawn hexagon
+        const at = await clearSpotOn(page, box);
+        await (phone ? page.touchscreen.tap(at[0], at[1]) : page.mouse.click(at[0], at[1]));
+        if (!(await poll(page, () => !!document.querySelector('#probe:not([hidden]) .probe-close')))) { fail(`${what}: a tapped hexagon pinned no card`); continue; }
+        // The Atlas card's season line arrives a pass later: read the card once it has settled.
+        await poll(page, () => !!document.querySelector('#probe .probe-season') || !document.querySelector('#probe .probe-title'), null, 30000);
+        await page.waitForTimeout(1000);
+        const want = await card(page);
+        if (!(await poll(page, () => /[?&]pin=/.test(location.search), null, 30000))) fail(`${what}: the address bar never named the pin`);
+        const url = await share(page);
+        if (!url) { fail(`${what}: Share gave no link`); continue; }
+        const pin = pinOf(url);
+        if (!/^-?\d{1,2}\.\d{2},-?\d{1,3}\.\d{2}$/.test(pin ?? '')) { fail(`${what}: the shared link's pin is ${JSON.stringify(pin)} (${url})`); continue; }
+        await reopen(what, url, want, what);
+        await tap(page, page.locator('#probe .probe-close'));
+      }
+      // My area: the link gives the card's hexagon, never the reader's own spot (to any rounding).
+      await page.goto(origin + '/?noauto&today=2027-01-15&date=06-10');
+      await poll(page, () => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null);
+      await tap(page, page.locator('#locate'));
+      if (!(await poll(page, () => !!document.querySelector('#probe:not([hidden]) .probe-close'), null, 30000))) fail('My area pinned no card');
+      else {
+        const want = await card(page);
+        const url = await share(page);
+        const pin = url && pinOf(url);
+        if (!pin) fail(`My area: the shared link has no pin (${url})`);
+        else {
+          // My area zooms in, so the link has an at= (the view's centre): that must not give the spot away either.
+          if (!new URL(url).searchParams.get('at')) fail(`My area: the shared link has no at= to check (${url})`);
+          // Nowhere in the link (pin=, at= or anything else), at any rounding, as text or as numbers.
+          const nums = (decodeURIComponent(new URL(url).search).match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+          for (const d of [2, 3, 4]) {
+            const [la, ln] = [ME.latitude.toFixed(d), ME.longitude.toFixed(d)];
+            if (url.includes(la) || url.includes(ln) || nums.includes(+la) || nums.includes(+ln)) fail(`My area: the link gives the reader's own spot to ${d} decimals (${url})`);
+          }
+          // Compared as for a tapped hexagon: title, hexagon and season line ("Near you" is the sharer's own and isn't
+          // read by card()), so the reopened card need not name a place.
+          await reopen('My area', url, { ...want }, null);
+        }
+      }
+      // Pins to ignore: not numbers, one number, three, far from the Midwest, empty parts. No card, no error, and the
+      // address bar lets them go. A pin in Lake Michigan is in range but on no hexagon: no card, and it goes once the map
+      // has loaded. A species that never loads (an unknown key) leaves luna on screen: its pin goes too, unpinned.
+      for (const bad of phone ? [] : ['abc,-89', '41.9', '41.88,-87.63,5', '10,10', ',', '41.88,', '1e400,-89', '43.0,-87.0', '40.12,-89.20&species=no-such-bug']) {
+        const [pinPart, extra = ''] = bad.split('&');
+        await page.goto(`${origin}/?noauto&today=2027-01-15&date=06-10&pin=${encodeURIComponent(pinPart)}${extra && `&${extra}`}`);
+        if (!(await poll(page, () => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null))) { fail(`pin=${bad}: never loaded`); continue; }
+        await page.waitForTimeout(2500);
+        if (await card(page)) fail(`pin=${bad} pinned a card`);
+        if (!(await poll(page, () => !/[?&]pin=/.test(location.search) && /[?&]date=/.test(location.search), null, 30000)))
+          fail(`pin=${bad} stayed in the address bar: ${await page.evaluate(() => location.search)}`);
+      }
+    } catch (e) {
+      fail(`stopped: ${e.message.split('\n')[0]}`);
+    }
+    await ctx.close();
+    console.log(`${tag}: checked`);
+  };
   // Small feedback (ideas "UI 4"): the species sheet, the town box, a phone's hex card, the short notes, the held time
   // thumb, the watch star and the species button each move a little, and under reduced motion none of them moves at
   // all (no transition or animation longer than 0). Without reduced motion each does move, so the check can't pass
@@ -2390,16 +2544,29 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
   };
   const motionCases = [[1280, 800, false, true], [390, 844, true, true], [1280, 800, false, false], [390, 844, true, false]];
   const watchCases = [[1280, 800, false], [390, 844, true]];
+  const sharePinCases = watchCases;
   const screenFor = (...k) => (b) => screenUnit(screens.find((s) => s.join() === k.join()), b);
-  // Longest first, so the second worker is never left holding the last big one.
-  units.push(radarUnit, screenFor('chromium', 2560, 1440), screenFor('chromium', 1920, 1080), screenFor('chromium', 1280, 720),
-    screenFor('chromium', 900, 700), ...speciesCases.map((c) => (b) => speciesUnit(c, b)),
-    ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)), atlasUnit, searchUnit, seasonsUnit, ...watchCases.map((c) => (b) => watchUnit(c, b)), ...watchCases.map((c) => (b) => emptyUnit(c, b)), ...watchCases.map((c) => (b) => quietUnit(c, b)), ...watchCases.map((c) => (b) => twinsUnit(c, b)), (b) => bandUnit([1280, 800, false], b), thisYearUnit, ...watchCases.map((c) => (b) => nearUnit(c, b)), ...watchCases.map((c) => (b) => outUnit(c, b)), ...watchCases.map((c) => (b) => trackUnit(c, b)), ...watchCases.map((c) => (b) => earlyLateUnit(c, b)), evictUnit, ...motionCases.map((c) => (b) => motionUnit(c, b)), ...cases.map((c) => (b) => liveUnit(c, b)), noWebglUnit,
-    ...screens.filter((s) => s[0] !== 'chromium').map((s) => (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined)));
+  // Each with its label and rough cost (see runUnits): runUnits starts the longest first, so no worker is left holding
+  // the last big one, and splits them over SHARD by cost.
+  const W = (label, w, fn) => Object.assign(fn, { label, w });
+  const per = (cases, label, w, fn) => cases.map((c, k) => W(`${label} ${c[2] ? 'phone' : 'desktop'}`, Array.isArray(w) ? w[k] : w, (b) => fn(c, b)));
+  const liveCost = { 'in-season default': 120, 'off-season pick': 55, 'late file': 65, 'small phone': 50, rerun: 80, 'stub on request': 70, 'no file': 30, phone: 70 };
+  units.push(W('radar', 430, radarUnit), W('screen 2560', 165, screenFor('chromium', 2560, 1440)), W('screen 1920', 120, screenFor('chromium', 1920, 1080)),
+    W('screen 1280', 110, screenFor('chromium', 1280, 720)), W('screen 900', 100, screenFor('chromium', 900, 700)),
+    ...speciesCases.map((c) => W(`species ${c[0]}`, 85, (b) => speciesUnit(c, b))),
+    ...per([[1366, 768, false], [390, 844, true]], 'find', 75, findUnit), W('atlas', 240, atlasUnit), W('search', 15, searchUnit), W('seasons', 10, seasonsUnit),
+    ...per(watchCases, 'watch', [420, 455], watchUnit), ...per(watchCases, 'empty', 25, emptyUnit), ...per(watchCases, 'quiet', 30, quietUnit),
+    ...per(watchCases, 'twins', 30, twinsUnit), W('band', 160, (b) => bandUnit([1280, 800, false], b)), W('this year', 80, thisYearUnit),
+    ...per(watchCases, 'near', 145, nearUnit), ...per(watchCases, 'out', 80, outUnit), ...per(watchCases, 'track', [165, 200], trackUnit),
+    ...per(watchCases, 'early/late', 150, earlyLateUnit), ...per(sharePinCases, 'share pin', [360, 240], sharePinUnit), W('evict', 125, evictUnit),
+    ...motionCases.map((c) => W(`motion ${c[2] ? 'phone' : 'desktop'}${c[3] ? ' reduced' : ''}`, c[2] ? 35 : 15, (b) => motionUnit(c, b))),
+    ...cases.map((c) => W(`live ${c[0]}`, liveCost[c[0]] ?? 60, (b) => liveUnit(c, b))), W('no WebGL', 15, noWebglUnit),
+    ...screens.filter((s) => s[0] !== 'chromium').map((s) => W(`screen ${s.join(' ')}`, 90, (b) => screenUnit(s, s[0] === 'chromium' ? b : undefined))));
   if (process.env.ONLY === 'twins') units.splice(0, units.length, ...watchCases.map((c) => (b) => twinsUnit(c, b)));
   if (process.env.ONLY === 'near') units.splice(0, units.length, ...watchCases.map((c) => (b) => nearUnit(c, b)));
   if (process.env.ONLY === 'out') units.splice(0, units.length, ...watchCases.map((c) => (b) => outUnit(c, b)));
   if (process.env.ONLY === 'track') units.splice(0, units.length, ...watchCases.map((c) => (b) => trackUnit(c, b)));
+  if (process.env.ONLY === 'sharepin') units.splice(0, units.length, ...sharePinCases.map((c) => (b) => sharePinUnit(c, b)));
   if (process.env.ONLY === 'earlylate') units.splice(0, units.length, ...watchCases.map((c) => (b) => earlyLateUnit(c, b)));
   if (process.env.ONLY === 'band') units.splice(0, units.length, (b) => bandUnit([1280, 800, false], b));
   if (process.env.ONLY === 'find') units.splice(0, units.length, ...[[1366, 768, false], [390, 844, true]].map((c) => (b) => findUnit(c, b)));

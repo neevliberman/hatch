@@ -195,6 +195,9 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
   const had = same && root.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
   const focused = had ? (keyOf(had) ?? focusables().indexOf(had)) : null;
   let fold = 0;
+  // The × stays the same element across rebuilds: one landing between a press and its release (a playback tick, a late
+  // file) would otherwise leave the click on a button no longer in the card, and it would do nothing.
+  const oldClose = pinned ? root.querySelector('.probe-close') : null;
   root.innerHTML = (pinned ? '<button type="button" class="probe-close" aria-label="Close this card">&times;</button>' : '') +
     (hit?.label ? `<div class="probe-cell">Near ${esc(hit.label)}</div>` : hit?.note ? `<div class="probe-cell">${esc(hit.note)}</div>` : '') +
     cards
@@ -219,6 +222,7 @@ export function showProbe(root: HTMLElement, registry: LayerRegistry, hit: Probe
         }</div>`,
     )
     .join('');
+  if (oldClose) root.querySelector('.probe-close')?.replaceWith(oldClose);
   root.hidden = false;
   const chips = root.querySelector('.po-chips');
   if (chips) chips.scrollLeft = chipsLeft;
