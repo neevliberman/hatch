@@ -170,8 +170,22 @@ def test_a_short_page_does_not_end_the_stream():
 
 def test_a_stream_that_comes_up_short_fails():
     data = {("2026-01-01", None, "research"): [obs(i) for i in range(1, 101)]}
+    log = []
     with pytest.raises(W.Incomplete):
-        W.stream(W.query(2026), W.Limiter(0), getter=pager(data, total=200))
+        W.stream(W.query(2026), W.Limiter(0), getter=pager(data, log, total=200))
+    assert [p["id_above"] for p in log] == [0, 100, 0, 100]       # tried twice from the start, then failed
+
+
+def test_a_stream_short_once_is_tried_again():
+    data = [obs(i) for i in range(1, 101)]
+    calls = []
+
+    def getter(params, limiter):
+        calls.append(params["id_above"])
+        lie = len(calls) <= 2                                       # the first try's count is off; the second's is not
+        return {"total_results": 200 if lie else 100, "results": [o for o in data if o["id"] > params["id_above"]][:200]}
+    rows, _, _ = W.stream(W.query(2026), W.Limiter(0), getter=getter)
+    assert len(rows) == 100 and calls == [0, 100, 0, 100]
 
 
 def test_months_split_the_year_to_date():
@@ -459,3 +473,26 @@ def test_overlay_swaps_this_years_dots_and_restamps_the_worker(run_2026, tmp_pat
     # the same overlay again changes nothing but proves it is repeatable (dots swapped, not appended)
     overlay(node, out, site)
     assert (site / "dots" / "0.bin").read_bytes() == now0
+
+
+def test_overlay_skips_a_release_it_cannot_read(run_2026, tmp_path):
+    """A bad release keeps main's files and lets the deploy go on (exit 0); only a broken sw.js fails it."""
+    node = node_or_skip()
+    _, out = run_2026
+    dist, site = site_copy(tmp_path)
+    before = {p: p.read_bytes() for p in site.rglob("*") if p.is_file()}
+    bad_json = tmp_path / "bad-json"
+    shutil.copytree(out, bad_json)
+    (bad_json / "year.json").write_text('{"year": 2026, "files": {')            # cut off mid-write
+
+    def folder(y, o):                                                            # a manifest entry that is a folder
+        (o / "dots-year" / "odd").mkdir()
+        y["files"]["dots-year/odd"] = "0" * 64
+    for src in (bad_json, edited(out, tmp_path, "folder", folder)):
+        said = overlay(node, src, site)
+        assert "::warning::atlas overlay skipped" in said, said
+    assert {p: p.read_bytes() for p in site.rglob("*") if p.is_file()} == before
+
+    (dist / "sw.js").write_text("self.addEventListener('fetch', () => {});\n")   # no VERSION to restamp
+    r = subprocess.run([node, str(ROOT / "scripts/atlas-overlay.mjs"), str(out), str(site)], capture_output=True, text=True)
+    assert r.returncode == 1 and "no VERSION" in r.stderr

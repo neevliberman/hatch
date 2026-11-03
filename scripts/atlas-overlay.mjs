@@ -9,8 +9,10 @@
 // Then it copies only the manifest's files, and swaps this year's dots (dots-year/<i>.bin) into main's own
 // dots/<i>.bin in place of that year's rows, so older years' dots always come from main. Last, it restamps dist/sw.js:
 // its VERSION was hashed over dist/ before the overlay, and the worker serves atlas files cache-first, so without a
-// new VERSION returning visitors would keep last week's data. Exit 1 only on a file it cannot read or write.
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+// new VERSION returning visitors would keep last week's data. A release it cannot read (bad year.json, truncated
+// files, a manifest entry that is a folder) is skipped with a warning too, so a bad release never fails a deploy.
+// Exit 1 only when writing into the site or restamping sw.js fails.
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join, relative, sep } from 'node:path';
 
@@ -89,24 +91,38 @@ export function restamp(swPath, atlasDir) {
   return v;
 }
 
-export function overlay(src, dest) {
-  if (!existsSync(join(src, 'year.json'))) return { skipped: `no year.json in ${src}` };
-  const why = mismatch(src, dest);
-  if (why) return { skipped: why };
+/** Every file the overlay would write ({site path: bytes}), read and checked in memory; throws on an unreadable
+ * release (bad year.json, a truncated file, a manifest entry that is a folder). Nothing is written yet. */
+function plan(src, dest) {
   const year = JSON.parse(readFileSync(join(src, 'year.json'), 'utf8'));
-  let dots = 0;
+  const out = new Map();
   for (const f of [...Object.keys(year.files), 'year.json']) {
+    if (!statSync(join(src, f)).isFile()) throw new Error(`${f} is not a file`);
     if (f.startsWith('dots-year/')) {
-      const name = f.slice('dots-year/'.length);
-      const at = join(dest, 'dots', name);
+      const at = join(dest, 'dots', f.slice('dots-year/'.length));
       const main = existsSync(at) ? readFileSync(at) : Buffer.alloc(0);
-      mkdirSync(dirname(at), { recursive: true });
-      writeFileSync(at, swapYear(main, readFileSync(join(src, f)), year.year));
-      dots++;
-      continue;
-    }
-    mkdirSync(dirname(join(dest, f)), { recursive: true });
-    cpSync(join(src, f), join(dest, f));
+      out.set(at, swapYear(main, readFileSync(join(src, f)), year.year));
+    } else out.set(join(dest, f), readFileSync(join(src, f)));
+  }
+  return { year, out };
+}
+
+export function overlay(src, dest) {
+  let year, out;
+  try {
+    // A bad release must never fail the deploy: any trouble reading or checking it keeps main's files.
+    if (!existsSync(join(src, 'year.json'))) return { skipped: `no year.json in ${src}` };
+    const why = mismatch(src, dest);
+    if (why) return { skipped: why };
+    ({ year, out } = plan(src, dest));
+  } catch (e) {
+    return { skipped: `the release could not be read (${e.message})` };
+  }
+  let dots = 0;
+  for (const [at, buf] of out) {
+    mkdirSync(dirname(at), { recursive: true });
+    writeFileSync(at, buf);
+    if (dirname(at) === join(dest, 'dots')) dots++;
   }
   const sw = join(dirname(dest), 'sw.js');
   const version = existsSync(sw) && statSync(sw).isFile() ? restamp(sw, dest) : null;

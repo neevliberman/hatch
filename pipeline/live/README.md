@@ -145,11 +145,12 @@ One run:
    (Retry-After, else 5 s doubling). The cache (`notebooks/data/atlas/weekly/obs-YYYY.parquet`, an Actions cache
    between runs) is updated with everything in the box that changed since the last run's start (`updated_since`, one
    day of overlap), asked for **without** grade, licence or photo filters, so an observation that lost research
-   grade, changed licence, lost its open photos or went private comes back and is dropped (the code checks each row
-   against the same rules). Every 14 days (by the hour, from the run's start, 12 h slack), or when the cache is gone,
+   grade, changed licence or lost its open photos comes back and is dropped (the code checks each row against the
+   same rules). One whose location was made private probably does not come back (the box filter can't match hidden
+   coordinates); it is removed, like a deletion, at the next full pull, within 14 days. Every 14 days (by the hour, from the run's start, 12 h slack), or when the cache is gone,
    it pulls the whole year again (month by month, side by side), which also clears deletions and photos that left
-   the box or Insecta. A stream ends only on an empty page and must reach its first page's `total_results`, or the
-   run fails; a cached year that shrinks by more than 20% since the last run also fails (rerun with `--full`). Then
+   the box or Insecta. A stream ends only on an empty page and must reach its first page's `total_results`; a stream
+   that comes up short is tried once more from the start, then the run fails; a cached year that shrinks by more than 20% since the last run also fails (rerun with `--full`). Then
    `data.load_records`' burst filter (one per observer, taxon, cell and day).
 3. **Expected vs seen.** `net_reference.NumpyAtlas` runs the exported float16 network in numpy (no torch; it matches
    torch's fixture to 1e-5), sums every photo's shares into each species' expected photos, and `seen.py`'s own
@@ -158,7 +159,8 @@ One run:
    **year.json**: year, last day, photos, `warm_through`, the species-list hash, `model.bin` and `cells.json` hashes,
    `dry_run`, sources, timings, and `files`, a manifest of every file's sha256.
 
-The overlay at deploy refuses (a warning, main's files stay) a dry run, a year older than main's `year.json`, another
+The overlay at deploy refuses (a warning, main's files stay, the deploy goes on) an unreadable release (bad
+`year.json`, a truncated tarball, a manifest entry that is not a file), a dry run, a year older than main's `year.json`, another
 species list, `model.bin` or `cells.json`, and any folder that does not match its manifest exactly. It copies only
 the manifest's files, swaps `dots-year/<i>.bin` into main's `dots/<i>.bin` in place of that year's rows (older years
 always come from main), and restamps `dist/sw.js`'s `VERSION` (a hash of the old one and every atlas file), since the

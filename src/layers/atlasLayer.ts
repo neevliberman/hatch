@@ -35,6 +35,8 @@ const MIN_BAND = 3;
 /** While the year is still coming in, fewer photos than this (seen and expected) are "too few yet to judge": seen.py's
  * MIN_TIMING, the count it wants before it judges a season's timing. */
 const SO_FAR_MIN = 30;
+// The "typical weather after that" note matters only while much of the season is still ahead (day 250, about 7 September).
+const WARM_NOTE_UNTIL = 250;
 /** The last year of photos behind the band: the network's training years (spread.py LAST; 2025 is its test year). */
 const BAND_LAST_YEAR = 2024;
 
@@ -524,7 +526,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
             : []),
           mode === TYPICAL
             ? 'A typical year: the season as it usually runs.'
-            : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.${atlasYearInfo.warmThrough ? ` Real warmth and the week’s forecast run through ${fmt(ATLAS_YEAR, atlasYearInfo.warmThrough)}; after that, a typical spring.` : ''}`,
+            : `${ATLAS_YEAR}: each day’s real warmth slides the season earlier or later, as far as this species follows warmth.${atlasYearInfo.soFar && atlasYearInfo.warmThrough && atlasYearInfo.warmThrough < WARM_NOTE_UNTIL ? ` Real warmth and the week’s forecast run through ${fmt(ATLAS_YEAR, atlasYearInfo.warmThrough)}; typical weather after that.` : ''}`,
           ...(mode !== TYPICAL && year
             ? [`On the time bar, the line is the ${ATLAS_YEAR} photos the network expected (from that year’s own photos, through ${fmt(ATLAS_YEAR, year.lastDay)}), the green the ones seen: ${yearWords(year)}. Recent photos are still being named, so hard-to-name species can come up short.${year.soFar ? ` ${ATLAS_YEAR} is still coming in: these are its photos so far, rebuilt every week, and the latest weeks run short until their photos are identified.` : ''}`]
             : []),

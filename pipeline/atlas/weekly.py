@@ -144,8 +144,10 @@ def query(year, taxa=None):
 
 def changes(year, taxa=None):
     """The incremental query: every insect observation of the year in the box, whatever its grade, licence or photos,
-    so one that stopped qualifying (lost research grade, licence or photo licence changed, photos deleted, location
-    made private) comes back too, and rows_of() decides. The caller adds updated_since."""
+    so one that stopped qualifying (lost research grade, licence or photo licence changed, photos deleted) comes back
+    too, and rows_of() decides. The caller adds updated_since. An observation whose location was made private (or
+    obscured) probably does not: the box filter can't match hidden coordinates. Those, like deletions, leave the cache
+    at the next full pull, within 14 days."""
     q = query(year, taxa)
     for k in ("quality_grade", "license", "photo_license", "photos"):
         del q[k]
@@ -190,6 +192,16 @@ class Incomplete(RuntimeError):
 
 
 def stream(params, limiter, max_pages=None, getter=get, year=None):
+    """stream_once(), tried a second time from the start if it comes up short (an index catching up mid-pull);
+    a second shortfall fails the run. -> (usable rows, ids that no longer qualify, pages over both tries)."""
+    try:
+        return stream_once(params, limiter, max_pages, getter, year)
+    except Incomplete as e:
+        print(f"  {e}; trying that stream once more", flush=True)
+    return stream_once(params, limiter, max_pages, getter, year)
+
+
+def stream_once(params, limiter, max_pages=None, getter=get, year=None):
     """Every page of one query, by id (id_above), so no deep-offset limit. A page shorter than asked for does not end it;
     only an empty one does, and then the count must match the first page's total_results (observations added during
     the pull may push it over, never under). -> (usable rows, ids that no longer qualify, pages)."""
