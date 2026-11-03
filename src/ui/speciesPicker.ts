@@ -152,6 +152,7 @@ export function mountSpeciesPicker(
       void seasonDues().then((c) => {
         curves = c;
         if (c) renderWatch();
+        else curvesTried = false; // a failed fetch tries again on the next redraw
       });
     }
   };
@@ -179,16 +180,17 @@ export function mountSpeciesPicker(
   /** A crumb trail scrolled from its start fades in at the left (style.css), so a cut word reads as a scroll. */
   const cutCrumbs = () => crumbs.classList.toggle('sp-cut', crumbs.scrollLeft > 1);
   /** The tree's data and code, fetched alongside the species list rather than after the strips: chained behind them, a
-   * season.bin load cut off by leaving the page would start tree.json from a page that is going (fetchOnce). */
+   * season.bin load cut off by leaving the page would start tree.json from a page that is going (see fetchOnce). */
   const fetchTree = fetchOnce(() =>
     Promise.all([json<TreeData>('tree.json'), import('./treeOfLife').catch(() => null)]).then(([d, m]) => (d && m ? ([d, m] as const) : null)),
   );
-  /** The tree, once: its data and code load on first open, and it mounts after the species list. */
+  /** The tree, once: its data and code load on first open, and it mounts after the species list. A failed fetch tries
+   * again on the sheet's next open. */
   const loadTree = async () => {
     if (treeTried || !all) return;
     treeTried = true;
     const files = await fetchTree();
-    if (!files) return;
+    if (!files) return void (treeTried = false);
     const [data, mod] = files;
     try {
       tree = mod.mountTree(treeHost, data, all, (i) => pick(keyOf(all![i]!)), (path: TNode[], go) => {
@@ -378,6 +380,7 @@ export function mountSpeciesPicker(
     // Touch screens: land on the close button instead, so the keyboard doesn't cover the tree until search is tapped.
     (matchMedia('(pointer: fine)').matches ? input : sheet.querySelector<HTMLElement>('.sp-x')!).focus();
     loadAll();
+    void loadTree(); // a no-op until the species list is in, or once the tree is
   };
   /** The Atlas's list and its strips, on first open (and again from "Try again" after a failed load). */
   let fetching = false;

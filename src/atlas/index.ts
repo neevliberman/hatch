@@ -62,20 +62,34 @@ export const atlasUrl = (f: string) => `${import.meta.env.BASE_URL}atlas/${f}`;
 export const json = <T>(f: string): Promise<T | null> =>
   fetch(atlasUrl(f)).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
 
-/** How long a failed fetchOnce file stays failed before a caller may fetch it again. */
-const RETRY_MS = 5000;
 /**
- * A file fetched once and shared by every caller; `load` resolves null when it fails. A failure is shared too: callers
- * get null until RETRY_MS has passed, and the next call after that fetches afresh. Not at once: a load also fails when
- * the page is navigating away (a reload, a link), and an immediate retry would start a new load from a page that is
- * going. WebKit refuses those and logs each as a script error ("Fetch API cannot load … due to access control checks.").
+ * True while the page is navigating away (a reload, a link). Its loads are cut off then, and a load started in their
+ * place is refused by WebKit and logged as a script error ("Fetch API cannot load … due to access control checks.").
+ * Set on beforeunload: WebKit cuts the loads off right after it, and pagehide comes only once the page's own handlers
+ * have already reacted. Cleared when the page shows again (back/forward cache), or a second later if the page is still
+ * here (a navigation that never happened, such as a download link).
+ */
+let leaving = false;
+let stayed = 0;
+if (typeof addEventListener === 'function') {
+  const leave = () => {
+    leaving = true;
+    clearTimeout(stayed);
+    stayed = setTimeout(() => (leaving = false), 1000) as unknown as number;
+  };
+  addEventListener('beforeunload', leave);
+  addEventListener('pagehide', leave);
+  addEventListener('pageshow', () => ((leaving = false), clearTimeout(stayed)));
+}
+/**
+ * A file fetched once and shared by every caller; `load` resolves null when it fails. A failure is dropped, so the next
+ * call fetches afresh, except while the page is leaving: then the call resolves null without fetching.
  */
 export function fetchOnce<T>(load: () => Promise<T | null>): () => Promise<T | null> {
   let p: Promise<T | null> | null = null;
-  let failed = -Infinity;
   return () => {
-    if (!p && performance.now() - failed < RETRY_MS) return Promise.resolve(null);
-    return (p ??= load().then((v) => (v === null ? ((p = null), (failed = performance.now()), null) : v)));
+    if (!p && leaving) return Promise.resolve(null);
+    return (p ??= load().then((v) => (v === null && (p = null), v)));
   };
 }
 

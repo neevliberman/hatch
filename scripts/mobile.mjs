@@ -556,9 +556,7 @@ if (existsSync(join(distDir, 'radar'))) {
     const ctx = await settledContext(browsers[engine], { viewport: { width: pw0, height: ph0 }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
     let release;
     const held = new Promise((r) => (release = r));
-    const asked = new Set();
     await ctx.route(/\/atlas\/(tree\.json|season\.bin)$/, async (r) => {
-      asked.add(r.request().url().split('/').pop());
       await held;
       await r.continue().catch(() => {}); // the page that asked is gone
     });
@@ -567,12 +565,11 @@ if (existsSync(join(distDir, 'radar'))) {
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     try {
       await page.goto(`${origin}/?noauto&today=2027-01-15`);
+      // season.bin asked for (the strips need it): the navigation lands while it is in flight.
+      const season = page.waitForRequest(/\/atlas\/season\.bin$/, { timeout: 20000 }).catch(() => fail('the species sheet never asked for season.bin'));
       await page.locator('#species').click({ timeout: 20000 });
       await page.waitForFunction(() => document.querySelector('#species-sheet') && !document.querySelector('#species-sheet').hidden, null, { timeout: 20000, polling: 250 });
-      // season.bin asked for (the strips need it): the navigation lands while it is in flight.
-      const t0 = Date.now();
-      while (!asked.has('season.bin') && Date.now() - t0 < 20000) await page.waitForTimeout(100);
-      if (!asked.has('season.bin')) fail('the species sheet never asked for season.bin');
+      await season;
       await page.goto(`${origin}/?noauto&today=2027-01-15`);
       release();
       // Errors from the page that left arrive within a few ms of the navigation; give them ample time.
