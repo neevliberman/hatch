@@ -20,7 +20,10 @@ const PLAIN = { id: '', transitions: undefined };
 // in a touch slower, like watercolour settling into paper. Only on a change, so a still map costs nothing extra.
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
 const SOFT = { id: '-soft', transitions: { getFillColor: { duration: 260, easing: easeOut }, getLineColor: { duration: 420, easing: easeOut } } };
-export const hexFade = (anim: boolean) => (anim ? BLEND : still.matches ? PLAIN : SOFT);
+// `quiet` (the first frame's wash, which is its own animation): plain hexes, no fade. Each start of a fade reads the
+// hexes' colours back from the graphics card (deck.gl's transitions), which on a slow software-drawn phone blocked the
+// page for seconds a frame all through the wash.
+export const hexFade = (anim: boolean, quiet?: boolean) => (quiet ? PLAIN : anim ? BLEND : still.matches ? PLAIN : SOFT);
 
 type Ring<T> = { s: T; at: number };
 

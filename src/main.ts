@@ -290,6 +290,8 @@ function start() {
       $('recenter').hidden = !moved;
       document.querySelector('.brand')!.classList.toggle('over-map', moved);
     },
+    // A ?species= link opens on its own species: luna is not drawn while that one loads (see map.ts standIn).
+    standIn: () => (speciesPending !== null && cur === luna ? luna.id : null),
     // The loading caterpillar bows out as the first frame lands.
     onFirstDraw: () => {
       firstDrawn = true;
@@ -607,9 +609,16 @@ function start() {
   // ?species=<key> opens on that species (?species=firefly links from before the list still work).
   const askedSpecies = params.get('species');
   if (askedSpecies && askedSpecies !== 'luna') {
+    // An Atlas species (none of the hand-built ones): its code and files start loading now, beside the map's first frame,
+    // not once the species list has been read and parsed; a link to the Atlas year fetches its days ahead too.
+    if (__BASEMAP__ && !SPECIES.some((e) => e.key === askedSpecies || (e.sci && atlasKey(e.sci) === askedSpecies))) {
+      void import('./atlas/atlas').then((m) => m.loadAtlas()).then((a) => { if (asked === String(ATLAS_YEAR)) void a?.ahead(ATLAS_YEAR); }).catch(() => {});
+      void import('./layers/atlasLayer').catch(() => {});
+    }
     speciesPending = askedSpecies;
     void setSpecies(askedSpecies).finally(() => {
       speciesPending = null;
+      if (cur === luna) map.refresh(); // it never loaded: luna stays, drawn now
       // A species that never loaded (an unknown key, a failed file) leaves luna on screen: not the card the link meant.
       // (Checked by layer, not key: a link may name a species by another key, as ?species=photinus-pyralis.)
       if (cur === luna) askedPin = null;

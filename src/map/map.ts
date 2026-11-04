@@ -93,9 +93,13 @@ interface Opts {
   covers?: () => Element[];
   /** Called once, when the map has drawn its first frame. */
   onFirstDraw?: () => void;
+  /** The id of a layer that is active only as a stand-in, not drawn (luna while a ?species= link's species loads), or
+   * null. On a slow phone drawing it cost most of the link's wait: its layers took the graphics card for seconds, and
+   * the link's own species waited behind them. The map shows its paper and places meanwhile. */
+  standIn?: () => string | null;
 }
 
-export function createMap({ container, registry, time, onProbe, padding, onMove, onView, covers, onFirstDraw }: Opts): MapHandle {
+export function createMap({ container, registry, time, onProbe, padding, onMove, onView, covers, onFirstDraw, standIn }: Opts): MapHandle {
   // deck.gl 9 needs WebGL2. Without it (GPU blocklisted, hardware acceleration off) say so, instead of an empty map.
   const gl = document.createElement('canvas').getContext('webgl2');
   gl?.getExtension('WEBGL_lose_context')?.loseContext(); // only a test: give the context back
@@ -589,7 +593,10 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     refreshedAt = zoom;
     const { under, mid } = basemapLayers(zoom);
     // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
-    const dataLayers: Layer[] = registry.activeLayers().flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac }).map(recoloured))
+    const quiet = wash !== undefined;
+    const skip = standIn?.();
+    const dataLayers: Layer[] = registry.activeLayers().filter((l) => l.id !== skip)
+      .flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac, quiet }).map(recoloured))
       .map((l) => (l.props.autoHighlight ? l.clone({ highlightedObjectIndex: hovered?.id === l.id ? hovered.index : -1 }) : l));
     // Lakes, rivers, roads and state lines go over the hexagons (and their shore copies) but under the sighting dots.
     const on = overlay.length > 0;

@@ -250,8 +250,9 @@ export interface HatchLayer {
   words: SpeciesWords;
   /** `wash`: ms since the map's first frame while the forecast washes in (south first, 900 ms in all), else undefined.
    * `playing` (playback is gliding: not under reduced motion or on a slow device) and `frac` (how far into the next
-   * step, 0 at rest) let a layer draw in-between frames during playback. */
-  render(ctx: { t: number; zoom: number; theme: Theme; wash?: number; playing?: boolean; frac?: number }): Layer[];
+   * step, 0 at rest) let a layer draw in-between frames during playback. `quiet`: no colour fades now (during the wash):
+   * see motion.ts hexFade. */
+  render(ctx: { t: number; zoom: number; theme: Theme; wash?: number; playing?: boolean; frac?: number; quiet?: boolean }): Layer[];
   /** Is the season in full swing on day t (e.g. any hexagon starting or at peak)? Playback slows down for those days. */
   busy?(t: number): boolean;
   /** The note shown beside the replay button when playback reaches the last day: a headline and a nudge to replay. */
