@@ -1,0 +1,239 @@
+{
+ "folds": [
+  "N",
+  "E",
+  "S"
+ ],
+ "variants": {
+  "L": {
+   "region": {
+    "wins": 844,
+    "scored": 1630,
+    "win_share": 0.5177914110429448,
+    "win_share_95": [
+     0.49351995683677,
+     0.5419792004866818
+    ],
+    "loglik_per_record": -5.6657023026513675,
+    "cal_loglik_per_record": -5.812666197391373,
+    "median_days": 4.9250823877721785,
+    "cal_median_days": 5.746754887995358,
+    "by_fold": {
+     "E": {
+      "wins": 227,
+      "scored": 527,
+      "win_share": 0.4307400379506641,
+      "median_days": 4.507828637704904,
+      "cal_median_days": 5.383382837581209
+     },
+     "N": {
+      "wins": 391,
+      "scored": 554,
+      "win_share": 0.7057761732851986,
+      "median_days": 4.725577597482996,
+      "cal_median_days": 5.198613839768086
+     },
+     "S": {
+      "wins": 226,
+      "scored": 549,
+      "win_share": 0.4116575591985428,
+      "median_days": 5.687070298039899,
+      "cal_median_days": 6.81621832906805
+     }
+    }
+   },
+   "inyear": {
+    "wins": 1825,
+    "scored": 1875,
+    "win_share": 0.9733333333333334,
+    "win_share_95": [
+     0.9650165771025606,
+     0.9797144742005403
+    ],
+    "loglik_per_record": -5.323168879563364,
+    "cal_loglik_per_record": -5.603884154633767,
+    "median_days": 4.088080691510598,
+    "cal_median_days": 4.6301125607474205,
+    "by_fold": {
+     "E": {
+      "wins": 519,
+      "scored": 532,
+      "win_share": 0.9755639097744361,
+      "median_days": 4.31972955657206,
+      "cal_median_days": 4.926480208420671
+     },
+     "N": {
+      "wins": 629,
+      "scored": 653,
+      "win_share": 0.9632465543644717,
+      "median_days": 4.223837953230671,
+      "cal_median_days": 4.664425477523423
+     },
+     "S": {
+      "wins": 677,
+      "scored": 690,
+      "win_share": 0.981159420289855,
+      "median_days": 3.644873371803314,
+      "cal_median_days": 4.219336802749325
+     }
+    }
+   }
+  },
+  "E": {
+   "region": {
+    "wins": 1121,
+    "scored": 1630,
+    "win_share": 0.6877300613496933,
+    "win_share_95": [
+     0.6648131783923641,
+     0.7097641368137122
+    ],
+    "loglik_per_record": -5.5621416144341325,
+    "cal_loglik_per_record": -5.812666197391373,
+    "median_days": 4.560446422283519,
+    "cal_median_days": 5.746754887995358,
+    "by_fold": {
+     "E": {
+      "wins": 311,
+      "scored": 527,
+      "win_share": 0.5901328273244781,
+      "median_days": 4.191420035039869,
+      "cal_median_days": 5.383382837581209
+     },
+     "N": {
+      "wins": 405,
+      "scored": 554,
+      "win_share": 0.7310469314079422,
+      "median_days": 4.265626796040365,
+      "cal_median_days": 5.198613839768086
+     },
+     "S": {
+      "wins": 405,
+      "scored": 549,
+      "win_share": 0.7377049180327869,
+      "median_days": 5.5190674396151564,
+      "cal_median_days": 6.81621832906805
+     }
+    }
+   },
+   "inyear": {
+    "wins": 1828,
+    "scored": 1875,
+    "win_share": 0.9749333333333333,
+    "win_share_95": [
+     0.9668270478955506,
+     0.9810974604823776
+    ],
+    "loglik_per_record": -5.36230189537938,
+    "cal_loglik_per_record": -5.603884154633767,
+    "median_days": 4.1159520337808,
+    "cal_median_days": 4.6301125607474205,
+    "by_fold": {
+     "E": {
+      "wins": 520,
+      "scored": 532,
+      "win_share": 0.9774436090225563,
+      "median_days": 4.60437836608995,
+      "cal_median_days": 4.926480208420671
+     },
+     "N": {
+      "wins": 628,
+      "scored": 653,
+      "win_share": 0.9617151607963247,
+      "median_days": 4.164450219141472,
+      "cal_median_days": 4.664425477523423
+     },
+     "S": {
+      "wins": 680,
+      "scored": 690,
+      "win_share": 0.9855072463768116,
+      "median_days": 3.675283319052049,
+      "cal_median_days": 4.219336802749325
+     }
+    }
+   }
+  },
+  "EP": {
+   "region": {
+    "wins": 1152,
+    "scored": 1630,
+    "win_share": 0.7067484662576687,
+    "win_share_95": [
+     0.6841818424545179,
+     0.7283428478214551
+    ],
+    "loglik_per_record": -5.543630432119297,
+    "cal_loglik_per_record": -5.812666197391373,
+    "median_days": 4.445505395733903,
+    "cal_median_days": 5.746754887995358,
+    "by_fold": {
+     "E": {
+      "wins": 319,
+      "scored": 527,
+      "win_share": 0.6053130929791272,
+      "median_days": 3.711977299744362,
+      "cal_median_days": 5.383382837581209
+     },
+     "N": {
+      "wins": 417,
+      "scored": 554,
+      "win_share": 0.7527075812274369,
+      "median_days": 4.099921794098503,
+      "cal_median_days": 5.198613839768086
+     },
+     "S": {
+      "wins": 416,
+      "scored": 549,
+      "win_share": 0.7577413479052824,
+      "median_days": 5.616295142904946,
+      "cal_median_days": 6.81621832906805
+     }
+    }
+   },
+   "inyear": {
+    "wins": 1834,
+    "scored": 1875,
+    "win_share": 0.9781333333333333,
+    "win_share_95": [
+     0.970470797264997,
+     0.9838406252625859
+    ],
+    "loglik_per_record": -5.360050950498956,
+    "cal_loglik_per_record": -5.603884154633767,
+    "median_days": 4.122089030493925,
+    "cal_median_days": 4.6301125607474205,
+    "by_fold": {
+     "E": {
+      "wins": 523,
+      "scored": 532,
+      "win_share": 0.9830827067669173,
+      "median_days": 4.585553607052965,
+      "cal_median_days": 4.926480208420671
+     },
+     "N": {
+      "wins": 635,
+      "scored": 653,
+      "win_share": 0.9724349157733537,
+      "median_days": 4.201925606236657,
+      "cal_median_days": 4.664425477523423
+     },
+     "S": {
+      "wins": 676,
+      "scored": 690,
+      "win_share": 0.9797101449275363,
+      "median_days": 3.614176480611537,
+      "cal_median_days": 4.219336802749325
+     }
+    }
+   }
+  }
+ },
+ "checks": {
+  "1_region_win_share_plus_5": true,
+  "2_beats_L_in_2_of_3_folds": true,
+  "3_region_loglik_better": true,
+  "4_region_days_within_1": true,
+  "5_inyear_within_3pts_and_0.02": false
+ },
+ "pass": false
+}
