@@ -89,15 +89,44 @@ export const atlasUrl = (f: string) => `${import.meta.env.BASE_URL}atlas/${f}`;
 export const json = <T>(f: string): Promise<T | null> =>
   fetch(atlasUrl(f)).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
 
-let seasons: Promise<Uint8Array | null> | null = null;
+/**
+ * True while the page is navigating away (a reload, a link). Its loads are cut off then, and a load started in their
+ * place is refused by WebKit and logged as a script error ("Fetch API cannot load … due to access control checks.").
+ * Set on beforeunload: WebKit cuts the loads off right after it, and pagehide comes only once the page's own handlers
+ * have already reacted. Cleared when the page shows again (back/forward cache), or a second later if the page is still
+ * here (a navigation that never happened, such as a download link).
+ */
+let leaving = false;
+let stayed = 0;
+if (typeof addEventListener === 'function') {
+  const leave = () => {
+    leaving = true;
+    clearTimeout(stayed);
+    stayed = setTimeout(() => (leaving = false), 1000) as unknown as number;
+  };
+  addEventListener('beforeunload', leave);
+  addEventListener('pagehide', leave);
+  addEventListener('pageshow', () => ((leaving = false), clearTimeout(stayed)));
+}
+/**
+ * A file fetched once and shared by every caller; `load` resolves null when it fails. A failure is dropped, so the next
+ * call fetches afresh, except while the page is leaving: then the call resolves null without fetching.
+ */
+export function fetchOnce<T>(load: () => Promise<T | null>): () => Promise<T | null> {
+  let p: Promise<T | null> | null = null;
+  return () => {
+    if (!p && leaving) return Promise.resolve(null);
+    return (p ??= load().then((v) => (v === null && (p = null), v)));
+  };
+}
+
 /** season.bin, fetched once (null when missing). */
-function loadSeasons(): Promise<Uint8Array | null> {
-  seasons ??= fetch(atlasUrl('season.bin'))
+const loadSeasons = fetchOnce(() =>
+  fetch(atlasUrl('season.bin'))
     .then((r) => (r.ok ? r.arrayBuffer() : null))
     .catch(() => null)
-    .then((b) => (b ? new Uint8Array(b) : ((seasons = null), null)));
-  return seasons;
-}
+    .then((b) => (b ? new Uint8Array(b) : null)),
+);
 /** A day counts as in a species' season when its expected photos are at least this share of its best day's, so a
  * smaller spring brood counts, not just the bigger summer one. One rule for the map's "Coming out near you" line
  * (atlasLayer's dueHere) and the watch list's chips (seasonDues). */
