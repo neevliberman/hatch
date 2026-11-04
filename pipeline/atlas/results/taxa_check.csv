@@ -1,0 +1,31 @@
+i,name,gbif,common,taxon,inat_name,inat_rank,inat_common,active,n,flags
+11,Phyciodes tharos,Phyciodes tharos,Pearl Crescent,52925,Phyciodes tharos,species,Pearl Crescent,True,15448,mixed:Phyciodes tharos 87%;Phyciodes cocyta 13%
+13,Pieris rapae,Pieris rapae,Small White,55626,Pieris rapae,species,Cabbage White,True,14396,common-us:Cabbage White
+26,Limenitis arthemis astyanax,Limenitis astyanax,Red-spotted Purple,58585,Limenitis arthemis astyanax,subspecies,Red-spotted Purple,True,9540,rank:subspecies
+60,Actias luna,Actias luna,North American Luna Moth,47916,Actias luna,species,Luna Moth,True,5818,common-us:Luna Moth
+70,Limenitis arthemis,Limenitis arthemis,Red-spotted Admiral,60607,Limenitis arthemis,species,Red-spotted Admiral,True,5180,into:Limenitis arthemis astyanax
+85,Hemaris diffinis,Hemaris diffinis,Snowberry Clearwing,358549,Hemaris diffinis,species,Snowberry Clearwing,True,4582,mixed:Hemaris diffinis 94%;Hemaris aethra 6%
+184,Agrotis ipsilon,Agrotis ipsilon,Ipsilon Dart Moth,126276,Agrotis ipsilon,species,Ipsilon Dart,True,2173,common-us:Ipsilon Dart
+193,Idia aemula,Idia aemula,Common Idia Moth,127460,Idia aemula,species,Common Idia Moth,True,2117,mixed:Idia aemula 95%;Idia concisa 5%
+195,Anavitrinella pampinaria,Anavitrinella pampinaria,North American Common Gray,63750,Anavitrinella pampinaria,species,Common Gray,True,2087,common-us:Common Gray
+225,Thymelicus lineola,Thymelicus lineola,Essex Skipper,58484,Thymelicus lineola,species,European Skipper,True,1837,common-us:European Skipper
+242,Lethe (Satyrodes),Lethe eurydice,Eyed and Appalachian Browns,1265201,Satyrodes,subgenus,,True,1659,group:Lethe eurydice;Lethe appalachia
+254,Amphipyra pyramidoides,Amphipyra pyramidoides,American Copper Underwing,119340,Amphipyra pyramidoides,species,Copper Underwing,True,1562,common-us:Copper Underwing
+384,Syritta pipiens,Syritta pipiens,Thick-legged Hover Fly,81979,Syritta pipiens,species,Common Compost Fly,True,983,common-us:Common Compost Fly
+429,Xanthorhoe ferrugata,Xanthorhoe ferrugata,Dark-barred Twin-spot Carpet,143485,Xanthorhoe ferrugata,species,Red Twin-spot Carpet,True,839,common-us:Red Twin-spot Carpet
+482,Meconema thalassinum,Meconema thalassinum,Oak Bush-cricket,119170,Meconema thalassinum,species,Drumming Katydid,True,738,common-us:Drumming Katydid
+535,Dioctria hyalipennis,Dioctria hyalipennis,Stripe-legged Robber Fly,135239,Dioctria hyalipennis,species,European Longhorn Robber,True,651,common-us:European Longhorn Robber
+656,Desmia funeralis,Desmia funeralis,Grape Leaffolder Moth,118788,Desmia funeralis,species,Grape Leaffolder Moth,True,514,mixed:Desmia funeralis 77%;Desmia maculalis 22%
+854,Phaeoura quernaria,Phaeoura quernaria,American Oak Beauty,130003,Phaeoura quernaria,species,Oak Beauty,True,371,common-us:Oak Beauty
+880,Polistes carolina / rubiginosus,Polistes carolina,Fine- and Coarse-backed Red Paper Wasps,370906,Polistes rubiginosus,species,Coarse-backed Red Paper Wasp,True,352,group:Polistes carolina;Polistes rubiginosus
+893,Neokolla hieroglyphica / Amphigonalia gothica,Neokolla hieroglyphica,,225650,Neokolla hieroglyphica,species,,True,347,group:Neokolla hieroglyphica;Amphigonalia gothica
+1110,Mallota bautias,Imatisma bautias,Bare-eyed Bee-mimic Fly,495176,Mallota bautias,species,Bare-eyed Mimic Fly,True,260,common-us:Bare-eyed Mimic Fly
+1170,Symmerista albifrons,Symmerista albifrons,White-headed Prominent and Allies,1391477,Symmerista albifrons,section,White-headed Prominent and Allies,True,241,rank:section
+1250,Cimbex americanus,Cimbex americana,North American Elm Sawfly,1028452,Cimbex americanus,species,Elm Sawfly,True,218,common-us:Elm Sawfly
+1253,Euphyia intermediata,Euphyia intermediata,American Sharp-angled Carpet,120275,Euphyia intermediata,species,Sharp-angled Carpet,True,217,common-us:Sharp-angled Carpet
+1311,Mallota posticata,Imatisma posticata,Hairy-eyed Bee-mimic Fly,418601,Mallota posticata,species,Hairy-eyed Mimic Fly,True,200,common-us:Hairy-eyed Mimic Fly
+1341,Epiblema strenuana,Epiblema strenuana,Ragweed Borer Moth,219298,Epiblema strenuana,species,Ragweed Borer Moth,True,193,mixed:Epiblema strenuana 81%;Epiblema minutana 19%
+1576,Prionus imbricornis,Prionus imbricornis,Tile-horned Prionus,228714,Prionus imbricornis,species,Tile-horned Prionus,True,148,mixed:Prionus imbricornis 93%;Prionus cuneatus 7%
+1668,Epirrhoe alternata,Epirrhoe alternata,Common Carpet Moth,127618,Epirrhoe alternata,species,White-banded Toothed Carpet,True,136,common-us:White-banded Toothed Carpet
+1696,Plagiodera versicolora,Plagiodera versicolora,Willow Leaf Beetle,83839,Plagiodera versicolora,species,Imported Willow Leaf Beetle,True,131,common-us:Imported Willow Leaf Beetle
+1761,Meganola minuscula / phylla,Meganola minuscula,Confused and Coastal Plain Meganola Moths,332250,Meganola phylla,species,Coastal Plain Meganola Moth,True,123,group:Meganola minuscula;Meganola phylla

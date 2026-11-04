@@ -22,6 +22,7 @@ Anything else check_taxa.py flags is left as it is, and listed (AMBIGUOUS, and t
 """
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +40,8 @@ GROUPS = {
                           "taxon": 370906, "taxa": [121792, 370906]},  # 109 P. carolina, 202 P. rubiginosus
     "Meganola minuscula": {"name": "Meganola minuscula / phylla", "common": "Confused and Coastal Plain Meganola Moths",
                            "taxon": 332250, "taxa": [224526, 332250]},  # 34 M. minuscula, 65 M. phylla
+    "Neokolla hieroglyphica": {"name": "Neokolla hieroglyphica / Amphigonalia gothica", "common": None, "taxon": 225650,
+                               "taxa": [225650, 1422830]},  # 198 N. hieroglyphica, 157 A. gothica
 }
 # GBIF's name -> GBIF's name of the row shown in its place.
 INTO = {"Limenitis arthemis": "Limenitis astyanax"}
@@ -95,8 +98,13 @@ def reconcile(rows, log=print):
     return done
 
 
-def prune_tree(tree, drop):
-    """tree.json without the leaves in `drop` (rows not listed): a branch left with one child becomes that child."""
+def prune_tree(tree, drop, genus=None):
+    """tree.json without the leaves in `drop` (rows not listed): a branch left with one child becomes that child. With
+    `genus` ({row: genus}), a genus branch takes its species' genus as renamed, or loses its name when they now differ
+    (build_tree.py names a branch only when it is exactly one group)."""
+    def tips(n):
+        return [n] if isinstance(n, int) else [i for c in n[2:] for i in tips(c)]
+
     def walk(n):
         if isinstance(n, int):
             return None if n in drop else n
@@ -105,8 +113,39 @@ def prune_tree(tree, drop):
             return None
         if len(kids) == 1 and not n[0]:
             return kids[0]
-        return [n[0], n[1], *kids]
-    return {**tree, "t": walk(tree["t"]), "g": [i for i in tree["g"] if i not in drop]}
+        label, rank = n[0], n[1]
+        if genus is not None and rank == "g":
+            gs = Counter(genus.get(i) for k in kids for i in tips(k))
+            if len(gs) == 1:
+                return [next(iter(gs)) or "", "g" if next(iter(gs)) else "", *kids]
+            # Some moved genus: the commonest keeps the branch, the others hang beside it.
+            top = gs.most_common(1)[0][0]
+            moved = [i for k in kids for i in tips(k) if genus.get(i) != top]
+            rest = walk_without([label, rank, *kids], set(moved))
+            return ["", "", [top, "g", *rest[2:]], *moved]
+        return [label, rank, *kids]
+
+    def walk_without(n, gone):
+        if isinstance(n, int):
+            return None if n in gone else n
+        kids = [k for k in (walk_without(c, gone) for c in n[2:]) if k is not None]
+        if not kids:
+            return None
+        return kids[0] if len(kids) == 1 and not n[0] else [n[0], n[1], *kids]
+
+    t = walk(tree["t"])
+    labels = set()
+
+    def named(n):
+        if not isinstance(n, int):
+            labels.add(n[0])
+            for c in n[2:]:
+                named(c)
+    named(t)
+    out = {**tree, "t": t, "g": [i for i in tree["g"] if i not in drop]}
+    if "c" in tree:
+        out["c"] = {k: v for k, v in tree["c"].items() if k in labels}
+    return out
 
 
 def main():
@@ -116,7 +155,8 @@ def main():
     path.write_text(json.dumps(rows, separators=(",", ":"), ensure_ascii=False))
     drop = {r["i"] for r in rows if "into" in r}
     tp = OUT / "tree.json"
-    tp.write_text(json.dumps(prune_tree(json.loads(tp.read_text()), drop), separators=(",", ":")))  # as build_tree.py
+    genus = {r["i"]: r.get("genus") for r in rows}
+    tp.write_text(json.dumps(prune_tree(json.loads(tp.read_text()), drop, genus), separators=(",", ":")))  # as build_tree.py
     print(f"{len(done)} rows changed; tree.json without rows {sorted(drop)}")
 
 

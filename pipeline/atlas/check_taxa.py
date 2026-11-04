@@ -13,7 +13,8 @@ For each row this asks:
             move, a synonym), "other" when the row's name is a different iNaturalist taxon (the id belongs to another
             species: the serious one), "unknown" when iNaturalist knows no such name;
   rank      the taxon is not a species (a subspecies standing in for GBIF's species, a genus, a complex);
-  common    iNaturalist's common name is not the row's;
+  common    iNaturalist's English name (no place preferred, as export.py asks) is not the row's; "common-us" only
+            notes where iNaturalist's US name differs from that (Small White / Cabbage White);
 - across rows: shared (two rows, one taxon) and nested (one row's taxon is an ancestor of another's);
 - GBIF (one match and one facet call per row, records in the Atlas box 2015-2024): mixed, when the records under the
   row's name hold more than one iNaturalist species, each at 3% or more.
@@ -51,7 +52,9 @@ def cached(key, fetch):
         return json.loads(f.read_text())
     out = fetch()
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(out))
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(out))
+    tmp.replace(f)  # atomic: a killed run never leaves half a file
     return out
 
 
@@ -66,6 +69,18 @@ def inat_records(ids):
                                     "preferred_common_name", "parent_id")}
             for r in get(INAT + "taxa/" + ",".join(map(str, chunk)) + "?locale=en&preferred_place_id=1")["results"]])
         out.update({r["id"]: r for r in res})
+    return out
+
+
+def global_names(ids):
+    """{id: iNaturalist's English name with no place preferred}: the one export.py ships (its taxa search asks for none)."""
+    out = {}
+    ids = sorted(set(ids))
+    for k in range(0, len(ids), 30):
+        chunk = ids[k:k + 30]
+        res = cached(f"inatg_{chunk[0]}_{chunk[-1]}_{len(chunk)}", lambda: [
+            [r["id"], r.get("preferred_common_name")] for r in get(INAT + "taxa/" + ",".join(map(str, chunk)) + "?locale=en")["results"]])
+        out.update(dict(res))
     return out
 
 
@@ -117,6 +132,7 @@ def check(rows, gbif=True, log=print):
     checked species by species; a row shown under another ("into") only says so."""
     rows = [r for r in rows if r.get("name") != "(other)"]
     tax = inat_records([t for r in rows for t in [r.get("taxon"), *r.get("taxa", [])] if t])
+    world = global_names([r["taxon"] for r in rows if r.get("taxon")])
     listed = [r for r in rows if "into" not in r]
     by_taxon = defaultdict(list)
     for r in listed:
@@ -147,9 +163,11 @@ def check(rows, gbif=True, log=print):
                     flags.append("row-name-is:" + ";".join(r_inat))
             if not group and t["rank"] != "species":
                 flags.append("rank:" + t["rank"])
-            ic, rc = t.get("preferred_common_name"), r.get("common")
-            if not group and ic and (rc or "").lower() != ic.lower():
+            ic, us, rc = world.get(t["id"]), t.get("preferred_common_name"), (r.get("common") or "").lower()
+            if not group and ic and rc != ic.lower():
                 flags.append("common")
+            elif not group and us and rc != us.lower():
+                flags.append(f"common-us:{us}")  # iNaturalist's name in the US differs from its global English one
             if len(by_taxon[r.get("taxon")]) > 1:
                 flags.append("shared:" + ";".join(n for n in by_taxon[r.get("taxon")] if n != r["name"]))
             anc = set(t.get("ancestor_ids") or []) - {t["id"]}

@@ -34,10 +34,10 @@ MIN_SITES, MIN_YEARS = 10, 10
 Z = 1.959964
 # Matched by name but left out on purpose, with why.
 EXCLUDE = {
-    # The Atlas row "Lethe eurydice" carries iNaturalist taxon 132227, which is L. appalachia (Appalachian Brown), the
-    # sibling species the deposit counts separately; its name and its photos disagree, and the two are often confused
-    # in the field. So the eyed brown's trend could land on the wrong species. (The Atlas row is not fixed here.)
-    "Northern Eyed Brown": "sibling-species confusion and an Atlas common-name mismatch",
+    # GBIF files L. appalachia (Appalachian Brown) under Lethe eurydice, so the Atlas row by that name holds both browns
+    # (reconcile.py names it for both), while the deposit counts the two separately and they are often confused in the
+    # field. The eyed brown's trend alone would land on a row that is mostly Appalachian Browns.
+    "Northern Eyed Brown": "sibling-species confusion: the Atlas row holds both browns",
 }
 
 

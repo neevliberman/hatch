@@ -74,14 +74,14 @@ const BY_NAME: Record<string, Song> = {
   'Neotibicen canicularis': { ...CICADA, hz: 6500, rate: 210 },
   'Neotibicen linnei': { ...CICADA, hz: 6000 },
   'Neotibicen robinsonianus': { ...CICADA, hz: 6200 },
-  'Neotibicen aurifer': { ...CICADA, hz: 6400 },
+  'Neotibicen auriferus': { ...CICADA, hz: 6400 },
   'Megatibicen pronotalis': { ...CICADA, hz: 5600, rate: 170 },
   'Megatibicen dorsatus': { ...CICADA, hz: 5400, rate: 160 },
-  'Diceroprocta grossa': { ...CICADA, hz: 6800, hours: [17, 22], minC: 20 },
+  'Megatibicen grossus': { ...CICADA, hz: 6800, hours: [17, 22], minC: 20 },
   'Magicicada septendecim': { ...CICADA, hz: 1400, rate: 120, minC: 20, hours: [9, 20] },
   'Magicicada tredecassini': { ...CICADA, hz: 1500, rate: 130, minC: 20, hours: [9, 20] },
   'Magicicada neotredecim': { ...CICADA, hz: 1500, rate: 130, minC: 20, hours: [9, 20] },
-  'Magicicada cassini': { ...CICADA, hz: 7000, rate: 150, minC: 20, hours: [9, 20] },
+  'Magicicada cassinii': { ...CICADA, hz: 7000, rate: 150, minC: 20, hours: [9, 20] },
   'Magicicada septendecula': { ...CICADA, hz: 7200, rate: 150, minC: 20, hours: [9, 20] },
 };
 

@@ -91,7 +91,7 @@ def test_tree_holds_every_species_once_and_names_whole_groups():
         return [n] if isinstance(n, int) else [i for c in n[2:] for i in tips(c)]
 
     got = tips(tree)
-    assert sorted(got) == list(range(len(species)))
+    assert sorted(got) == [i for i, s in enumerate(species) if "into" not in s]  # a row shown under another: no tip
     key = {"o": "order", "f": "family", "g": "genus"}
 
     def check(n):
@@ -205,6 +205,7 @@ def test_track_record_matches_the_gate_and_ships():
     exactly what per_species.csv says. The gate's 753 wins of 798 in 2026 are 743 beats and 10 of the 22 ties."""
     import json
     from pathlib import Path
+    from pipeline.atlas.config import records_name
     from pipeline.atlas.track_record import outcome, track_record
     assert [outcome(g, 50, 500) for g in (10, 2.9, -2.9, -10)] == [1, 0, 0, -1]
     assert outcome(500, 19, 500) is None and outcome(500, 50, 399) is None
@@ -214,7 +215,7 @@ def test_track_record_matches_the_gate_and_ships():
     assert rec["Bombus impatiens"] == [1, 5660, 1, 3234] and rec["Spilosoma virginica"] == [0, 1000, -1, 231]
     assert "Magicicada septendecim" not in rec  # no brood in 2026: too few photos to test
     species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
-    assert {s["name"]: s["rec"] for s in species if "rec" in s} == rec and not any("test" in s for s in species)
+    assert {records_name(s): s["rec"] for s in species if "rec" in s} == rec and not any("test" in s for s in species)
 
 
 def test_names_fill_in_english_from_the_other_sources():
@@ -380,6 +381,10 @@ def test_reconcile_names_rows_as_their_records():
     tree = {"g": [3, 4], "t": ["Insecta", "", ["", "", 1, 4], ["Lethe", "g", 2, 3]]}
     assert prune_tree(tree, {4}) == {"g": [3], "t": ["Insecta", "", 1, ["Lethe", "g", 2, 3]]}
     assert prune_tree(tree, {2, 3}) == {"g": [4], "t": ["Insecta", "", ["", "", 1, 4]]}
+    moved = {"g": [], "c": {"Lethe": "Pearly-eyes"}, "t": ["Insecta", "", 1, ["Lethe", "g", ["", "", 2, 3], 4]]}
+    assert prune_tree(moved, set(), {1: "Danaus", 2: "Lethe", 3: "Lethe", 4: "Enodia"}) == {
+        "g": [], "c": {"Lethe": "Pearly-eyes"}, "t": ["Insecta", "", 1, ["", "", ["Lethe", "g", ["", "", 2, 3]], 4]]}
+    assert prune_tree(moved, set(), {1: "Danaus", 2: "Enodia", 3: "Enodia", 4: "Enodia"})["c"] == {}
 
     species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
     by = {records_name(s): s for s in species}
@@ -392,7 +397,7 @@ def test_reconcile_names_rows_as_their_records():
     listed = [s for s in species if "into" not in s]
     assert len({s["taxon"] for s in listed}) == len(listed)
     assert len({s["name"] for s in species}) == len(species) and all(s["gbif"] != s["name"] for s in species if "gbif" in s)
-    assert by["Polites coras"]["name"] == "Polites peckius" and by["Polites coras"]["taxon"] == 39816 or True
+    assert by["Polites coras"]["name"] == "Polites peckius" and by["Polites coras"]["taxon"] == 133631
     tree = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/tree.json").read_text())
 
     def leaves(n):
