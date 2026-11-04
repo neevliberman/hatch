@@ -161,7 +161,9 @@ class Fold:
     def __init__(self, df, fold, out):
         held = df.state.isin(FOLDS[fold]).to_numpy()
         self.tr = df[~held & (df.year < TEST_YEAR)]
-        trained = set(self.tr.cell.unique())
+        # a training cell: more than half of its records (all years) are outside the held-out pair (amendment 1)
+        share = pd.Series(~held).groupby(df.cell.to_numpy()).mean()
+        trained = set(share[share > 0.5].index)
         border = {k for c in trained for k in h3.grid_disk(c, 1)}
         reg = df[held]
         self.tests = {"region_buf": reg[~reg.cell.isin(border).to_numpy()], "region_all": reg,

@@ -132,4 +132,13 @@ Written 4 Nov 2026 ~20:45 UTC, after the smoke run and before the full run start
   network per worker, ~15 min effective, ~8.5-9 h for all 33 networks.
 
 ## Amendments
-(none)
+1. **Border buffer definition (4 Nov 2026, ~20:55 UTC, before any network had finished; no score of any network or of
+   the calendar was looked at).** As written, a cell was a "training cell" if it held *any* training record. On the
+   full data, a few hundred training-labelled records sit inside cells that are >= 90% held-out (records whose state
+   field is missing, or that sit right on a state line), and each one blacked out its cell and the ring around it:
+   the rule dropped 83% of fold N's region records and 74% of fold E's, so it no longer meant "within one ring of a
+   training state". Amended rule: a res-4 cell is a training cell if **more than half of its records (all years)
+   carry a state other than the fold's held-out pair**; border cells are those within one ring of a training cell,
+   as before. This drops 13.5% (N), 28.2% (E) and 48.3% (S) of held-out records. The run that showed the problem was
+   stopped about 2 minutes into its first networks; its two calendar files (computed under the old rule, never read)
+   were deleted and everything was restarted. The buffered test stays primary; the unbuffered one is still reported.
