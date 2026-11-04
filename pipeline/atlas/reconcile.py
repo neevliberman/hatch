@@ -32,18 +32,20 @@ from pipeline.atlas import check_taxa as C  # noqa: E402
 from pipeline.atlas.config import OUT, records_name  # noqa: E402
 from pipeline.atlas.names import INAT, get  # noqa: E402
 
-# GBIF's name -> what the row shows: both Latin names joined by " / ", and a common name short enough for the header.
+# GBIF's name -> what the row shows: both Latin names joined by " / ", and a common name short enough for a phone's species button
+# (two lines on an iPhone SE): the Latin pair says which two.
 # "taxon": the iNaturalist taxon for its photo and page (one holding exactly the group when iNaturalist has one, else the
 # commonest species); "taxa": every iNaturalist species in the records; "aka": other names search should find.
 GROUPS = {
-    "Lethe eurydice": {"name": "Lethe eurydice / appalachia", "common": "Eyed & Appalachian Browns", "taxon": 1265201,
-                       "taxa": [141531, 132227], "aka": ["Satyrodes eurydice", "Satyrodes appalachia", "Lethe (Satyrodes)"]},
+    "Lethe eurydice": {"name": "Lethe eurydice / appalachia", "common": "Eyed Browns", "taxon": 1265201,
+                       "taxa": [141531, 132227], "aka": ["Satyrodes eurydice", "Satyrodes appalachia", "Lethe (Satyrodes)",
+                                                         "Eyed Brown", "Appalachian Brown"]},
     # 731 Eyed, 1,219 Appalachian (GBIF, the box, 2015-2024); the taxon is the subgenus Satyrodes, exactly the two.
     "Polistes carolina": {"name": "Polistes carolina / rubiginosus", "common": "Red Paper Wasps", "taxon": 370906,
                           "taxa": [121792, 370906]},  # 109 P. carolina, 202 P. rubiginosus
-    "Meganola minuscula": {"name": "Meganola minuscula / phylla", "common": "Confused & Coastal Meganolas",
+    "Meganola minuscula": {"name": "Meganola minuscula / phylla", "common": "Meganola Moths",
                            "taxon": 332250, "taxa": [224526, 332250]},  # 34 M. minuscula, 65 M. phylla
-    "Neokolla hieroglyphica": {"name": "Neokolla hieroglyphica / Amphigonalia gothica", "common": "Sharpshooter Leafhoppers",
+    "Neokolla hieroglyphica": {"name": "Neokolla hieroglyphica / Amphigonalia gothica", "common": "Sharpshooter Hoppers",
                                "taxon": 225650, "taxa": [225650, 1422830]},  # 198 N. hieroglyphica, 157 A. gothica
 }
 # GBIF's name -> GBIF's name of the row shown in its place.

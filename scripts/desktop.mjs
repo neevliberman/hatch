@@ -2218,7 +2218,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         const [key, name] = await top.evaluate((b) => [b.dataset.key, b.querySelector('.sp-name').firstChild.textContent]).catch(() => [null, null]);
         if (typeof want === 'string' ? key !== want : !want.test(name ?? '')) fail(`searching "${q}" puts "${name}" (${key}) first`);
         if (q === 'red-spotted purple' && name !== 'Red-spotted Purple') fail(`Limenitis arthemis astyanax is listed as "${name}"`);
-        if (q === 'appalachian brown' && name !== 'Eyed & Appalachian Browns') fail(`Lethe eurydice / appalachia is listed as "${name}"`);
+        if (q === 'appalachian brown' && name !== 'Eyed Browns') fail(`Lethe eurydice / appalachia is listed as "${name}"`);
         // A featured species shows its own label, as on the featured strip.
         if (q === 'luna' && name !== 'Luna moth') fail(`searching "luna" lists the luna moth as "${name}"`);
       }

@@ -821,8 +821,8 @@ if (existsSync(join(distDir, 'radar'))) {
         await page.waitForTimeout(1500);
         for (const [want, pick] of [['Luna moth', null], ['Lunate Zale Moth', ['lunate zale', 'zale-lunata']], ['Red-spotted Purple', ['red-spotted purple', 'limenitis-arthemis-astyanax']],
           // The groups reconcile.py names for two species: short enough for the button too.
-          ['Eyed & Appalachian Browns', ['appalachian brown', 'lethe-eurydice-appalachia']], ['Red Paper Wasps', ['red paper wasps', 'polistes-carolina-rubiginosus']],
-          ['Confused & Coastal Meganolas', ['meganolas', 'meganola-minuscula-phylla']], ['Sharpshooter Leafhoppers', ['sharpshooter leafhoppers', 'neokolla-hieroglyphica-amphigonalia-gothica']]]) {
+          ['Eyed Browns', ['eyed browns', 'lethe-eurydice-appalachia']], ['Red Paper Wasps', ['red paper wasps', 'polistes-carolina-rubiginosus']],
+          ['Meganola Moths', ['meganola moths', 'meganola-minuscula-phylla']], ['Sharpshooter Hoppers', ['sharpshooter hoppers', 'neokolla-hieroglyphica-amphigonalia-gothica']]]) {
           if (pick) {
             await page.locator('#species').click({ timeout: 60000 });
             await page.locator('#sp-q').fill(pick[0], { timeout: 60000 });
