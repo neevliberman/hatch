@@ -142,7 +142,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #loader.small p { display: none; }
 #loader.small .cat { width: 150px; height: 84px; transform: scale(0.42); transform-origin: 0 100%; margin: -49px 0 0; }
 .linking #legend, .linking #strip, .linking #asleep, .linking #end-note, .linking .breath { visibility: hidden; }
-.linking #bar .track { opacity: 0.3; }
+.linking #bar .track, .linking.unnamed #species .sp-face, .linking #season { opacity: 0.3; }
 #loader p { margin: 0; font: 600 22px var(--font-note); color: var(--text); }
 #loader .cat { width: 150px; height: 84px; overflow: hidden; }
 #loader .strip { display: block; will-change: transform; transform: translateX(-750px); }

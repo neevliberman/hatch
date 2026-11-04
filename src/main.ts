@@ -116,10 +116,11 @@ function start() {
   let curKey = 'luna';
   /** A ?species= link's species, until it has loaded (the address bar keeps asking for it meanwhile). */
   let speciesPending: string | null = null;
-  /** The link's species is known (a real species other than luna, with a load): its name is up, luna is not drawn for
-   * the first STAND_IN ms (until standInUntil), and the key, caption and ribbon step back until its field draws. */
+  /** A ?species= link other than luna, from the start: luna is not drawn until STAND_IN ms after the map's first frame
+   * (standInUntil), and the header, key, caption and ribbon step back until its field draws; its name goes up once the
+   * species list knows it. A key that names no species (a typo, luna's own) ends it at once. */
   let linkCue = false;
-  let standInUntil = 0;
+  let standInUntil = Infinity;
   const STAND_IN = 8000;
   /** The loading caterpillar bows out (on the first frame, or a link's species' first field). */
   const loaderOut = () => {
@@ -312,6 +313,7 @@ function start() {
       // A ?species= link's caterpillar stays, small, where the key sits, until that species' field draws.
       if (speciesPending) document.getElementById('loader')?.classList.add('small');
       else loaderOut();
+      if (linkCue) armStandIn();
     },
     onView: () => {
       if (pinned) placeProbe();
@@ -627,13 +629,21 @@ function start() {
     // The time bar and the keyboard explorer would act on a map that is not up yet.
     for (const id of ['bar', 'explore']) $(id).inert = on;
   };
-  const startCue = (key: string, name: string) => {
+  const startCue = () => {
     linkCue = true;
-    standInUntil = performance.now() + STAND_IN;
-    speciesPick.show(key, name);
     cueOn(true);
-    cueTimer = window.setTimeout(refresh, STAND_IN); // luna again under the name, if its species is still not here
-    refresh();
+    $('app').classList.add('unnamed'); // the header (still luna's) steps back too until the list names the species
+    srSummary.textContent = '';
+  };
+  /** From the map's first frame: luna again under the cue after STAND_IN ms, if the species is still not here. */
+  function armStandIn() {
+    standInUntil = performance.now() + STAND_IN;
+    clearTimeout(cueTimer);
+    cueTimer = window.setTimeout(refresh, STAND_IN);
+  }
+  const nameCue = (key: string, name: string) => {
+    speciesPick.show(key, name);
+    $('app').classList.remove('unnamed');
   };
   const endCue = () => {
     clearTimeout(cueTimer);
@@ -641,6 +651,7 @@ function start() {
     if (!linkCue) return refresh();
     linkCue = false;
     cueOn(false);
+    $('app').classList.remove('unnamed');
     if (cur === luna) speciesPick.show(curKey, curLabel);
     refresh();
   };
@@ -658,14 +669,16 @@ function start() {
   const askedSpecies = params.get('species');
   if (askedSpecies && askedSpecies !== 'luna') {
     speciesPending = askedSpecies;
-    // Once the link's species is known to be one (not a typo, an old key, or luna by another name), its wait is
-    // shown for what it is: its name in the header, no luna under it (on a slow phone drawing luna held the species
-    // back by seconds), and the key, caption and ribbon stepping back. Anything else shows luna at once.
+    // The link's wait is shown for what it is from the start: no luna drawn (on a slow phone drawing it held the
+    // species back by seconds, and flashed the wrong species before the right one), the page stepping back, the small
+    // caterpillar up. Its name goes up once the list knows it; a key it doesn't know (a typo, an old key, luna by
+    // another name) brings luna back at once, and nothing of the Atlas loads for it.
+    startCue();
     void findSpecies(askedSpecies)
       .then((e) => {
         if (speciesPending === null) return;
         if (!e || e.key === 'luna' || !e.load) return endCue();
-        startCue(e.key, e.label);
+        nameCue(e.key, e.label);
       })
       .catch(() => speciesPending !== null && endCue());
     void setSpecies(askedSpecies).finally(() => {

@@ -872,18 +872,36 @@ if (existsSync(join(distDir, 'radar'))) {
       console.log(`${tag}: checked`);
     }
   }
-  // A ?species= link while its species loads (main.ts linkCue): a key that names no Atlas species (a typo, luna's own
-  // Latin key) shows luna at once and downloads no network; a real one has its name in the header before its field
-  // draws (its network held back here), luna not drawn, the key stepped back and the small caterpillar up, all gone
-  // once its field draws. The smallest phone of each engine, upright. ONLY=link runs just this.
+  // A ?species= link while its species loads (main.ts linkCue): every link other than luna starts with the cue (header
+  // dimmed, key stepped back, small caterpillar) and no luna drawn. A key that names no Atlas species (a typo, luna's own
+  // Latin key) ends it with luna once the list says so, downloading no network; a real one names itself once the list
+  // lands (held back here), and the cue lasts until its field draws (its network held back too), luna never drawn. The smallest phone of each engine, upright. ONLY=link runs just this.
   for (const [phone, engine, width, height, dpr] of small) {
     if ((process.env.ONLY && process.env.ONLY !== 'link') || !mine()) continue;
     const tag = `link ${phone}`;
     const fail = (m) => problems.push(`${tag}: ${m}`);
     const lunaDrawn = () => window.__hatch?.map.drawn().some((id) => id.startsWith('luna-forecast'));
+    // Every frame from the start: was the cue ever up, when did the map first draw, and when (if ever) was luna drawn
+    // while the cue was up? (Luna may come back under the cue STAND_IN = 8 s after the first frame, not before.)
+    const watch = () => {
+      window.__cueSeen = false;
+      window.__lunaSeen = null;
+      window.__drawnAt = null;
+      const tick = () => {
+        const app = document.getElementById('app');
+        const cue = !!app?.classList.contains('linking');
+        if (cue) window.__cueSeen = true;
+        if (window.__drawnAt === null && document.querySelector('#map.drawn')) window.__drawnAt = performance.now();
+        if (cue && window.__lunaSeen === null && window.__hatch?.map.drawn().some((id) => id.startsWith('luna-forecast')))
+          window.__lunaSeen = performance.now() - (window.__drawnAt ?? 0);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
     for (const key of ['no-such-bug-at-all', 'actias-luna']) {
       const ctx = await settledContext(browsers[engine], { viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
       const page = await ctx.newPage();
+      await page.addInitScript(watch);
       const asked = [];
       page.on('request', (r) => asked.push(r.url()));
       page.on('pageerror', (e) => fail(`${key}: pageerror: ${e.message}`));
@@ -892,7 +910,10 @@ if (existsSync(join(distDir, 'radar'))) {
         await page.waitForFunction(lunaDrawn, null, { timeout: 60000, polling: 400 }).catch(() => fail(`?species=${key} did not draw luna`));
         await page.waitForTimeout(1500);
         if (asked.some((u) => /atlas\/model\.bin/.test(u))) fail(`?species=${key} downloaded the network (atlas/model.bin)`);
-        const st = await page.evaluate(() => ({ face: document.querySelector('#species .sp-face').textContent, linking: document.getElementById('app').classList.contains('linking'), loader: !!document.querySelector('#loader:not(.done)') }));
+        const st = await page.evaluate(() => ({ face: document.querySelector('#species .sp-face').textContent, linking: document.getElementById('app').classList.contains('linking'), loader: !!document.querySelector('#loader:not(.done)'), cue: window.__cueSeen, luna: window.__lunaSeen }));
+        // luna's Latin key is known without the list, before the first frame; a typo waits for the list under the cue.
+        if (key !== 'actias-luna' && !st.cue) fail(`?species=${key}: no loading cue before the list said it names no species`);
+        if (st.luna !== null) fail(`?species=${key}: luna drawn while the cue was up`);
         if (st.face !== 'Luna moth') fail(`?species=${key}: the header reads "${st.face}"`);
         if (st.linking || st.loader) fail(`?species=${key}: still shown as loading a species`);
       } catch (e) {
@@ -902,6 +923,7 @@ if (existsSync(join(distDir, 'radar'))) {
     }
     const ctx = await settledContext(browsers[engine], { viewport: { width, height }, deviceScaleFactor: dpr, hasTouch: true, isMobile: true });
     const page = await ctx.newPage();
+    await page.addInitScript(watch);
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     let release = () => {};
     const gate = new Promise((r) => (release = r));
@@ -909,10 +931,36 @@ if (existsSync(join(distDir, 'radar'))) {
       await gate;
       await route.continue();
     });
+    let releaseList = () => {};
+    const listGate = new Promise((r) => (releaseList = r));
+    await page.route('**/atlas/species.json', async (route) => {
+      await listGate;
+      await route.continue();
+    });
     try {
       await page.goto(`${origin}/?species=papilio-glaucus&noauto&date=06-15`);
       const name = 'Eastern Tiger Swallowtail';
-      await page.waitForFunction((n) => document.querySelector('#species .sp-face')?.textContent === n && document.querySelector('#map.drawn'), name, { timeout: 60000, polling: 250 })
+      // Before the list lands: the cue is up with no name yet, and nothing drawn but the basemap.
+      await page.waitForFunction(() => document.querySelector('#map.drawn') && document.querySelector('#loader.small'), null, { timeout: 60000, polling: 250 })
+        .catch(() => fail('the map never drew while the link\'s species was looked up'));
+      const pre = await page.evaluate(() => ({
+        linking: document.getElementById('app').classList.contains('linking'),
+        unnamed: document.getElementById('app').classList.contains('unnamed'),
+        face: document.querySelector('#species .sp-face')?.textContent,
+        faceOpacity: getComputedStyle(document.querySelector('#species .sp-face')).opacity,
+        drawn: window.__hatch.map.drawn().filter((id) => /-forecast-/.test(id)),
+        loader: document.querySelector('#loader.small:not(.done)') ? getComputedStyle(document.querySelector('#loader')).visibility : null,
+        legend: getComputedStyle(document.getElementById('legend')).visibility,
+      }));
+      if (!pre.linking) fail('no loading cue before the link\'s species is known');
+      if (!pre.unnamed || pre.face === name) fail(`the header is not marked as still looking up (face "${pre.face}")`);
+      if (!(Number(pre.faceOpacity) < 1)) fail(`the header is not dimmed while the link's species is looked up (opacity ${pre.faceOpacity})`);
+      if (pre.drawn.length) fail(`hexagons drawn before the link's species is known: ${pre.drawn.join(', ')}`);
+      if (pre.loader !== 'visible') fail('no small caterpillar while the link\'s species is looked up');
+      if (pre.legend !== 'hidden') fail('the key shows while the link\'s species is looked up');
+      await page.screenshot({ path: `${out}/link-${phone}-lookup.png` });
+      releaseList();
+      await page.waitForFunction((n) => document.querySelector('#species .sp-face')?.textContent === n, name, { timeout: 60000, polling: 250 })
         .catch(() => fail(`the header never read "${name}" while its map loaded`));
       const st = await page.evaluate(() => ({
         aria: document.getElementById('species').getAttribute('aria-label'),
@@ -923,7 +971,8 @@ if (existsSync(join(distDir, 'radar'))) {
       }));
       if (!st.aria?.includes(name)) fail(`the species button's label is "${st.aria}" while its map loads`);
       if (!st.linking) fail('the page is not marked as loading the link\'s species');
-      if (st.drawn.length) fail(`hexagons drawn before the link's field: ${st.drawn.join(', ')}`);
+      const early = await page.evaluate(() => performance.now() - window.__drawnAt < 7500);
+      if (early && st.drawn.length) fail(`hexagons drawn before the link's field: ${st.drawn.join(', ')}`);
       if (st.loader !== 'visible') fail('no small caterpillar while the link\'s species loads');
       if (st.legend !== 'hidden') fail('the key shows while the link\'s species loads');
       await page.screenshot({ path: `${out}/link-${phone}-waiting.png` });
@@ -932,10 +981,13 @@ if (existsSync(join(distDir, 'radar'))) {
         .catch(() => fail('the link\'s field never drew'));
       await page.waitForFunction(() => !document.getElementById('app').classList.contains('linking') && !document.getElementById('loader'), null, { timeout: 15000, polling: 400 })
         .catch(() => fail('the loading cue stayed after the link\'s field drew'));
+      const luna = await page.evaluate(() => window.__lunaSeen);
+      if (luna !== null && luna < 7900) fail(`luna drawn ${Math.round(luna)} ms after the first frame, before the link's field`);
       await page.screenshot({ path: `${out}/link-${phone}-drawn.png` });
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
+    releaseList();
     release();
     await ctx.close();
     console.log(`${tag}: checked`);
