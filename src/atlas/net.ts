@@ -155,6 +155,33 @@ export class AtlasNet {
     }
     return logSoftmax(z);
   }
+
+  /**
+   * As logShares, split where species part ways (as AtlasGpu.basis): the place's trunk features at each of `m` clocks
+   * (1: a typical year; else one per lambda) written to `h` from `at`, and the log of the softmax's denominator, returned.
+   */
+  basisAt(p: Place, day: number, ahead: number, m: number, h: Float32Array, at: number): number {
+    const place = this.placeFeatures(p);
+    const W = this.get('head.weight');
+    const H = this.hidden;
+    const z = Float32Array.from(this.get('head.bias'));
+    for (let k = 0; k < m; k++) {
+      const t = m === 1 ? day : day + this.meta.lambdas[k]! * ahead;
+      if (k === 0 || t !== day) this.trunk(place, t, h.subarray(at + k * H, at + (k + 1) * H));
+      else h.copyWithin(at + k * H, at, at + H); // this clock at the first one's time: one pass of the trunk does both
+      for (let s = 0; s < this.nOut; s++) {
+        let acc = 0;
+        const row = s * H;
+        for (let j = 0; j < H; j++) acc += W[row + j]! * h[at + k * H + j]!;
+        z[s] = z[s]! + (m === 1 ? 1 : this.clockMix[s * m + k]!) * acc;
+      }
+    }
+    let mx = -Infinity;
+    for (const v of z) mx = Math.max(mx, v);
+    let s = 0;
+    for (const v of z) s += Math.exp(v - mx);
+    return mx + Math.log(s);
+  }
 }
 
 function silu(v: number): number {

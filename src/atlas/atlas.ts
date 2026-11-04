@@ -70,6 +70,16 @@ export interface AtlasCell extends Place {
   h: string;
 }
 
+/** One day's species-independent network for every cell (AtlasGpu.basis): trunk features [cell * m + clock] of
+ * `hidden` numbers, and each cell's log softmax denominator. */
+export interface Basis {
+  h: Float32Array;
+  lse: Float32Array;
+  m: number;
+}
+/** Days of bases kept (about 1.2 MB each for a typical year, three times that for a year with its warmth). */
+const BASES = 6;
+
 export class Atlas {
   readonly cellIndex: Map<string, number>;
   /** Every cell's place inputs, back to back (net.placeFeatures). */
@@ -220,6 +230,58 @@ export class Atlas {
       });
   }
 
+  /**
+   * The network's species-independent part for every cell on a day of one run (AtlasGpu.basis), by `${run}|${day}`:
+   * worked out (by `make`) for whichever species asked first, then shared, as is one still being worked out, so
+   * switching species on a day already seen costs one small sum a cell instead of the whole network. The last BASES kept.
+   */
+  work(key: string, make: () => Promise<Basis | null>): Promise<Basis | null> {
+    const have = this.bases.get(key);
+    if (have) {
+      this.bases.delete(key);
+      this.bases.set(key, have); // most recently used last
+      return Promise.resolve(have);
+    }
+    let p = this.working.get(key);
+    if (!p) {
+      const drop = () => this.working.delete(key);
+      p = make().then((b) => {
+        drop();
+        if (b) {
+          this.bases.set(key, b);
+          if (this.bases.size > BASES) this.bases.delete(this.bases.keys().next().value!);
+        }
+        return b;
+      }, (e) => (drop(), Promise.reject(e)));
+      this.working.set(key, p);
+    }
+    return p;
+  }
+  private bases = new Map<string, Basis>();
+  private working = new Map<string, Promise<Basis | null>>();
+
+  /** Species `sp`'s share (0-1) in every cell from a basis: its own score from the trunk features, less the
+   * denominator. */
+  shares({ h, lse, m }: Basis, sp: number): Float32Array {
+    const { net } = this;
+    const H = net.hidden;
+    const w = net.get('head.weight').subarray(sp * H, (sp + 1) * H);
+    const bias = net.get('head.bias')[sp]!;
+    const mix = net.clockMix.subarray(sp * net.meta.lambdas.length);
+    const out = new Float32Array(lse.length);
+    for (let r = 0; r < lse.length; r++) {
+      let z = bias;
+      for (let k = 0; k < m; k++) {
+        const at = (r * m + k) * H;
+        let acc = 0;
+        for (let j = 0; j < H; j++) acc += w[j]! * h[at + j]!;
+        z += (m === 1 ? 1 : mix[k]!) * acc;
+      }
+      out[r] = Math.exp(z - lse[r]!);
+    }
+    return out;
+  }
+
   /** The cell a point falls in (null outside the map). */
   cellAt(lat: number, lng: number): number | null {
     return this.cellIndex.get(latLngToCell(lat, lng, ATLAS_RES)) ?? null;
@@ -247,7 +309,8 @@ export function loadAtlas(): Promise<Atlas | null> {
  * One species' field over the map, day by day, worked out on demand and kept. `get` never blocks the frame: a day
  * not worked out yet is queued, the nearest day already done stands in meanwhile, and `onReady` asks for a redraw
  * when it lands. The graphics card does a day in milliseconds; without one, the plain network does it a slice of
- * cells at a time so the page stays responsive.
+ * cells at a time so the page stays responsive. Either way the species-independent part is kept (Atlas.work), so
+ * the next species on that day needs only its own small sum.
  */
 export class Field {
   private done = new Map<number, Float32Array>();
@@ -261,6 +324,8 @@ export class Field {
     /** Every cell's days ahead on a day; null: a typical year. */
     private readonly aheadOn: ((day: number) => Float32Array) | null,
     private readonly onReady: () => void,
+    /** The run's own key (mode and warmth): the same days ahead for every species, so their bases are shared. */
+    private readonly run: string,
   ) {}
 
   /** Shares (0-1) per cell on `day`, or the nearest day worked out so far (undefined before the first). */
@@ -288,35 +353,46 @@ export class Field {
       this.onReady();
       this.pump();
     };
+    const retry = () => {
+      this.doing = null;
+      this.queue.unshift(d);
+      this.pump();
+    };
+    // Another species (or this one, earlier) worked this day out already, or is working it out now: only this
+    // species' own sum on top.
+    setTimeout(() => {
+      this.atlas.work(`${this.run}|${d}`, () => this.basis(d)).then((b) => (b ? finish(this.atlas.shares(b, this.sp)) : retry()), retry);
+    }, 0);
+  }
+
+  /** The day's basis (Atlas.work) for every cell: on the graphics card, unless its context was lost (it would read
+   * back zeros); then the plain network, a slice of cells at a time. Null when the graphics card failed. */
+  private basis(d: number): Promise<Basis | null> {
     const { gpu, net, cells, places } = this.atlas;
     const ahead = this.aheadOn?.(d) ?? null;
-    // The graphics card, unless its context was lost (it would read back zeros); then the plain network.
     if (gpu && !gpu.lost) {
-      setTimeout(() => {
-        let v: Float32Array | null = null;
-        try {
-          v = gpu.run(places, d, ahead, [this.sp])[0]!.map(Math.exp);
-        } catch {
-          /* falls through to the plain network */
-        }
-        if (v && !gpu.lost) return finish(v);
-        this.doing = null;
-        this.queue.unshift(d);
-        this.pump();
-      }, 0);
-      return;
-    }
-    const out = new Float32Array(cells.length);
-    let c = 0;
-    const slice = () => {
-      const until = performance.now() + 12;
-      while (c < cells.length && performance.now() < until) {
-        out[c] = Math.exp(net.logShares(cells[c]!, d, ahead ? ahead[c]! : 0)[this.sp]!);
-        c++;
+      try {
+        const b = gpu.basis(places, d, ahead);
+        return Promise.resolve(gpu.lost ? null : b);
+      } catch {
+        return Promise.resolve(null);
       }
-      if (c < cells.length) setTimeout(slice, 0);
-      else finish(out);
-    };
-    setTimeout(slice, 0);
+    }
+    const m = ahead ? net.meta.lambdas.length : 1;
+    const H = net.hidden;
+    const b: Basis = { h: new Float32Array(cells.length * m * H), lse: new Float32Array(cells.length), m };
+    let c = 0;
+    return new Promise((done) => {
+      const slice = () => {
+        const until = performance.now() + 12;
+        while (c < cells.length && performance.now() < until) {
+          b.lse[c] = net.basisAt(cells[c]!, d, ahead ? ahead[c]! : 0, m, b.h, c * m * H);
+          c++;
+        }
+        if (c < cells.length) setTimeout(slice, 0);
+        else done(b);
+      };
+      slice();
+    });
   }
 }
