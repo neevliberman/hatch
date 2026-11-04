@@ -93,7 +93,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
   }
   const keyOf = (m: Mode, w: number) => `${m}|${w}`;
   const BASE = keyOf(TYPICAL, 0);
-  const runs = new Map<string, Run>([[BASE, { key: BASE, mode: TYPICAL, warm: 0, field: new Field(atlas, sp.i, null, onData), on: null, base: null }]]);
+  const runs = new Map<string, Run>([[BASE, { key: BASE, mode: TYPICAL, warm: 0, field: new Field(atlas, sp.i, null, onData, BASE), on: null, base: null }]]);
   const pending = new Set<string>();
   const run = (): Run => runs.get(keyOf(mode, warm)) ?? runs.get(keyOf(mode, 0)) ?? runs.get(BASE)!;
   const ensure = (m: Mode, w: number) => {
@@ -106,9 +106,11 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       const on = w === 0 ? base : await atlas.warmed(year, w);
       pending.delete(k);
       if ((m !== TYPICAL && !year) || (w !== 0 && !on)) return;
-      runs.set(k, { key: k, mode: m, warm: w, field: new Field(atlas, sp.i, on, onData), on, base });
+      runs.set(k, { key: k, mode: m, warm: w, field: new Field(atlas, sp.i, on, onData, k), on, base });
       // Keep the last few: a drag across the slider makes a run per notch.
-      for (const old of runs.keys()) if (runs.size > 6 && old !== BASE && old !== k && old !== keyOf(mode, 0) && old !== keyOf(mode, warm)) runs.delete(old);
+      for (const old of runs.keys()) {
+        if (runs.size > 6 && old !== BASE && old !== k && old !== keyOf(mode, 0) && old !== keyOf(mode, warm)) (runs.delete(old), atlas.dropRun(old));
+      }
       onData();
     })();
   };

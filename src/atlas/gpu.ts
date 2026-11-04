@@ -82,9 +82,10 @@ void main() {
   o = z + texelFetch(uB, ivec2(c, 0), 0);
 }`;
 
-// log of the softmax's denominator per row, over the first uN scores; then the asked species' log-shares.
+// log of the softmax's denominator per row, over the first uN scores; then the asked species' log-shares (uLse: the
+// denominator itself).
 const PICK = `${HEAD}
-uniform sampler2D uZ; uniform int uZPer; uniform int uZWidth; uniform int uN; uniform ivec4 uSp;
+uniform sampler2D uZ; uniform int uZPer; uniform int uZWidth; uniform int uN; uniform ivec4 uSp; uniform int uLse;
 float z(int r, int s) { vec4 v = texelFetch(uZ, at(r, s / 4, uZPer, uZWidth), 0); int k = s % 4; return k == 0 ? v.x : k == 1 ? v.y : k == 2 ? v.z : v.w; }
 void main() {
   int r, c; here(r, c);
@@ -99,7 +100,7 @@ void main() {
     for (int k = 0; k < 4; k++) if (4 * i + k < uN) s += exp(v[k] - mx);
   }
   float lse = mx + log(s);
-  o = vec4(z(r, uSp.x), z(r, uSp.y), z(r, uSp.z), z(r, uSp.w)) - lse;
+  o = uLse == 1 ? vec4(lse) : vec4(z(r, uSp.x), z(r, uSp.y), z(r, uSp.z), z(r, uSp.w)) - lse;
 }`;
 
 export class AtlasGpu {
@@ -251,7 +252,7 @@ export class AtlasGpu {
     const sp = [0, 1, 2, 3].map((k) => species[k] ?? species[0] ?? 0);
     gl.useProgram(this.prog.pick);
     gl.uniform4i(gl.getUniformLocation(this.prog.pick, 'uSp'), sp[0]!, sp[1]!, sp[2]!, sp[3]!);
-    this.pass('pick', p, { uZPer: z.l.perLine, uZWidth: z.l.width, uN: this.net.nOut }, { uZ: z.t });
+    this.pass('pick', p, { uZPer: z.l.perLine, uZWidth: z.l.width, uN: this.net.nOut, uLse: 0 }, { uZ: z.t });
     const outPx = new Float32Array(p.l.w * p.l.h * 4);
     gl.readPixels(0, 0, p.l.w, p.l.h, gl.RGBA, gl.FLOAT, outPx);
     return species.slice(0, 4).map((_, k) => {
@@ -259,6 +260,37 @@ export class AtlasGpu {
       for (let r = 0; r < rows; r++) v[r] = outPx[r * 4 + k]!;
       return v;
     });
+  }
+
+  /**
+   * The part of the network every species shares, for each row: its trunk features at each clock (h, [row * m + clock]
+   * of `hidden` numbers; m is 1 for a typical year) and the log of its softmax's denominator (lse). A species' log-share
+   * at a row is then its own score from h less lse (Atlas.shares), a few hundred multiplications a row: so a species switch
+   * on a day already worked out needs no graphics card at all.
+   */
+  basis(places: Float32Array, day: number | Float32Array, ahead: Float32Array | null): { h: Float32Array; lse: Float32Array; m: number } {
+    const gl = this.gl;
+    const H = this.net.hidden;
+    const rows = places.length / this.net.placeDim;
+    const m = ahead ? this.net.meta.lambdas.length : 1;
+    const tex = this.scores(places, day, ahead);
+    const z = tex.get('z')!;
+    const p = tex.get('p')!;
+    this.pass('pick', p, { uZPer: z.l.perLine, uZWidth: z.l.width, uN: this.net.nOut, uLse: 1 }, { uZ: z.t });
+    const px = new Float32Array(p.l.w * p.l.h * 4);
+    gl.readPixels(0, 0, p.l.w, p.l.h, gl.RGBA, gl.FLOAT, px);
+    const lse = new Float32Array(rows);
+    for (let r = 0; r < rows; r++) lse[r] = px[r * 4]!;
+    const a = tex.get('a')!;
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, a.t, 0);
+    const ap = new Float32Array(a.l.w * a.l.h * 4);
+    gl.readPixels(0, 0, a.l.w, a.l.h, gl.RGBA, gl.FLOAT, ap);
+    const h = new Float32Array(rows * m * H);
+    for (let rr = 0; rr < rows * m; rr++) {
+      const at = (Math.floor(rr / a.l.perLine) * a.l.w + (rr % a.l.perLine) * a.l.width) * 4;
+      h.set(ap.subarray(at, at + H), rr * H);
+    }
+    return { h, lse, m };
   }
 
   /**

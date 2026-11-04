@@ -1,4 +1,5 @@
-// Checks the graphics-card Atlas (src/atlas/gpu.ts) against the plain one (src/atlas/net.ts) in Chromium, and times it.
+// Checks the graphics-card Atlas (src/atlas/gpu.ts: run, basis + Atlas.shares, all) against the plain one
+// (src/atlas/net.ts) in Chromium, and times it.
 //   node scripts/atlas-gpu-check.mjs
 import { readFileSync } from 'node:fs';
 import { buildSync } from 'esbuild';
@@ -7,6 +8,7 @@ import { chromium } from 'playwright';
 const entry = `
 import { AtlasNet } from './src/atlas/net.ts';
 import { AtlasGpu } from './src/atlas/gpu.ts';
+import { Atlas } from './src/atlas/atlas.ts';
 window.check = (meta, b64, cells) => {
   const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
   const net = new AtlasNet(meta, raw);
@@ -30,6 +32,33 @@ window.check = (meta, b64, cells) => {
     }
     out[name] = { ms, worst };
   }
+  // basis() + Atlas.shares: the species-independent part kept per day, then one species' own sum (Field's path), against
+  // net.ts, with and without days ahead.
+  const atlas = new Atlas(net, gpu, [], cells.map((c, i) => ({ ...c, h: String(i) })), new Uint8Array(0), []);
+  for (const [name, a] of [['basis typical', null], ['basis ahead', ahead]]) {
+    const t0 = performance.now();
+    const b = gpu.basis(places, 160, a);
+    const ms = performance.now() - t0;
+    let worst = 0;
+    for (const s of sp) {
+      const got = atlas.shares(b, s);
+      for (let i = 0; i < cells.length; i += 97) worst = Math.max(worst, Math.abs(net.logShares(cells[i], 160, a ? a[i] : 0)[s] - Math.log(got[i])));
+    }
+    out[name] = { ms, worst };
+  }
+  // The plain network's own split (net.basisAt, the CPU fallback's), a cell at a time: its clocks share one trunk
+  // only where the days ahead are 0 (some of these cells).
+  for (const [name, a] of [['basisAt typical', null], ['basisAt ahead', ahead]]) {
+    const m = a ? net.meta.lambdas.length : 1;
+    let worst = 0;
+    for (let i = 0; i < cells.length; i += 41) {
+      const b = { h: new Float32Array(m * net.hidden), lse: new Float32Array(1), m };
+      b.lse[0] = net.basisAt(cells[i], 160, a ? a[i] : 0, m, b.h, 0);
+      const ref = net.logShares(cells[i], 160, a ? a[i] : 0);
+      for (const s of sp) worst = Math.max(worst, Math.abs(ref[s] - Math.log(atlas.shares(b, s)[0])));
+    }
+    out[name] = { worst };
+  }
   // all(): every species, one place over a season of days (the card's "Out here now"), against net.ts row by row.
   const n = 62;
   const season = new Float32Array(n * P);
@@ -48,7 +77,7 @@ window.check = (meta, b64, cells) => {
   }
   return out;
 };`;
-const js = buildSync({ stdin: { contents: entry, resolveDir: process.cwd(), loader: 'ts' }, bundle: true, write: false, format: 'iife' }).outputFiles[0].text;
+const js = buildSync({ stdin: { contents: entry, resolveDir: process.cwd(), loader: 'ts' }, bundle: true, write: false, format: 'iife', define: { 'import.meta.env.BASE_URL': '"/"' } }).outputFiles[0].text;
 const meta = JSON.parse(readFileSync('public/atlas/model.json', 'utf8'));
 const b64 = readFileSync('public/atlas/model.bin').toString('base64');
 const cells = JSON.parse(readFileSync('public/atlas/cells.json', 'utf8'));
