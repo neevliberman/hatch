@@ -30,7 +30,8 @@ from pipeline.atlas.run_gate import wilson, weighted_quantile  # noqa: E402
 from pipeline.atlas.score import Calendar, score  # noqa: E402
 
 PLACE = DATA / "place"
-OUT = ROOT / "pipeline/atlas/results/place"
+OUT = ROOT / "pipeline/atlas/results/place"  # gate.json + per_species.csv (committed)
+RAW = PLACE / "raw"  # per-fold, per-variant results (git-ignored, ~8 MB)
 FOLDS = {"N": ("Wisconsin", "Minnesota"), "E": ("Michigan", "Ohio"), "S": ("Missouri", "Kentucky")}
 VARIANTS = ("L", "E", "EP")
 CANDIDATE = "EP"
@@ -142,7 +143,7 @@ def run_fold(df, fold, places, epochs, tag):
     ys = {k: D.labels(t, sp) for k, t in tests.items()}
     log(f"fold {fold}: {len(sp)} species, {len(tr):,} train, "
         + ", ".join(f"{k} {len(t):,}" for k, t in tests.items()))
-    out = OUT / tag / fold
+    out = RAW / tag / fold
     out.mkdir(parents=True, exist_ok=True)
     cal_f = out / "calendar.json"
     if not cal_f.exists():
@@ -193,7 +194,7 @@ def evaluate(model, t, y, n_out):
 
 def summarise(tag):
     """The gate, from the saved per-fold results (PREREG_PLACE.md)."""
-    base = OUT / tag
+    base = RAW / tag
     folds = [f for f in FOLDS if all((base / f / f"{v}.json").exists() for v in VARIANTS)]
     s = {"folds": folds, "variants": {}}
     for v in VARIANTS:
@@ -243,6 +244,28 @@ def summarise(tag):
     return s
 
 
+def per_species_csv(tag):
+    """One row per scored (fold, test, species): each variant's gain over the calendar (nats) and days error."""
+    rows = []
+    for f in FOLDS:
+        base = None
+        for v in VARIANTS:
+            fp = RAW / tag / f / f"{v}.json"
+            if not fp.exists():
+                return
+            t = pd.DataFrame(json.loads(fp.read_text())["table"]).rename(columns={"model": f"ll_{v}", "days": f"days_{v}"})
+            base = t if base is None else base.merge(t[["test", "species", f"ll_{v}", f"days_{v}"]], on=["test", "species"])
+        base.insert(0, "fold", f)
+        rows.append(base)
+    t = pd.concat(rows)
+    t = t[(t.n_train >= SCORED_TRAIN) & (t.n_test >= SCORED_TEST)]
+    for v in VARIANTS:
+        t[f"gain_{v}"] = t[f"ll_{v}"] - t.calendar
+    cols = ["fold", "test", "species", "n_train", "n_test"] + [f"gain_{v}" for v in VARIANTS] + \
+        [f"days_{v}" for v in VARIANTS] + ["cal_days"]
+    t[cols].to_csv(OUT / tag / "per_species.csv", index=False, float_format="%.2f")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--smoke", action="store_true")
@@ -264,6 +287,7 @@ def main():
     s = summarise(tag)
     (OUT / tag).mkdir(parents=True, exist_ok=True)
     (OUT / tag / "gate.json").write_text(json.dumps(s, indent=1))
+    per_species_csv(tag)
     if not args.smoke:
         log(json.dumps({v: {k: {kk: d[k][kk] for kk in ("win_share", "loglik_per_record", "median_days")}
                             for k in ("region", "inyear")} for v, d in s["variants"].items()}, indent=1))

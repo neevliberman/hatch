@@ -93,4 +93,7 @@ per variant), stated in the result; anything else is an amendment.
   reproduce the known gap.
 
 ## Amendments
-(none yet)
+(none)
+
+Note, 4 Nov 2026, before any result: one pass took 3.4 min, so the pre-declared fallback (6 passes for all
+variants) was invoked about 3 minutes into the first network; that network was discarded unscored.
