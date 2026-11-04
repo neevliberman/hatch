@@ -1,0 +1,207 @@
+{
+ "version": "atlas-run2",
+ "n_out": 1946,
+ "hidden": 256,
+ "depth": 3,
+ "lambdas": [
+  0.0,
+  0.5,
+  1.0
+ ],
+ "place_freqs": [
+  1,
+  2,
+  4,
+  8
+ ],
+ "time_harmonics": 8,
+ "box": {
+  "s": 36.5,
+  "n": 49.5,
+  "w": -97.5,
+  "e": -80.5
+ },
+ "norm_dd": {
+  "center": 600.0,
+  "scale": 200.0
+ },
+ "tensors": [
+  {
+   "name": "clock_logits",
+   "shape": [
+    1946,
+    3
+   ],
+   "offset": 0
+  },
+  {
+   "name": "lambdas",
+   "shape": [
+    3
+   ],
+   "offset": 5838
+  },
+  {
+   "name": "inp.0.weight",
+   "shape": [
+    256,
+    35
+   ],
+   "offset": 5841
+  },
+  {
+   "name": "inp.0.bias",
+   "shape": [
+    256
+   ],
+   "offset": 14801
+  },
+  {
+   "name": "blocks.0.net.0.weight",
+   "shape": [
+    256,
+    256
+   ],
+   "offset": 15057
+  },
+  {
+   "name": "blocks.0.net.0.bias",
+   "shape": [
+    256
+   ],
+   "offset": 80593
+  },
+  {
+   "name": "blocks.0.net.3.weight",
+   "shape": [
+    256,
+    256
+   ],
+   "offset": 80849
+  },
+  {
+   "name": "blocks.0.net.3.bias",
+   "shape": [
+    256
+   ],
+   "offset": 146385
+  },
+  {
+   "name": "blocks.0.norm.weight",
+   "shape": [
+    256
+   ],
+   "offset": 146641
+  },
+  {
+   "name": "blocks.0.norm.bias",
+   "shape": [
+    256
+   ],
+   "offset": 146897
+  },
+  {
+   "name": "blocks.1.net.0.weight",
+   "shape": [
+    256,
+    256
+   ],
+   "offset": 147153
+  },
+  {
+   "name": "blocks.1.net.0.bias",
+   "shape": [
+    256
+   ],
+   "offset": 212689
+  },
+  {
+   "name": "blocks.1.net.3.weight",
+   "shape": [
+    256,
+    256
+   ],
+   "offset": 212945
+  },
+  {
+   "name": "blocks.1.net.3.bias",
+   "shape": [
+    256
+   ],
+   "offset": 278481
+  },
+  {
+   "name": "blocks.1.norm.weight",
+   "shape": [
+    256
+   ],
+   "offset": 278737
+  },
+  {
+   "name": "blocks.1.norm.bias",
+   "shape": [
+    256
+   ],
+   "offset": 278993
+  },
+  {
+   "name": "blocks.2.net.0.weight",
+   "shape": [
+    256,
+    256
+   ],
+   "offset": 279249
+  },
+  {
+   "name": "blocks.2.net.0.bias",
+   "shape": [
+    256
+   ],
+   "offset": 344785
+  },
+  {
+   "name": "blocks.2.net.3.weight",
+   "shape": [
+    256,
+    256
+   ],
+   "offset": 345041
+  },
+  {
+   "name": "blocks.2.net.3.bias",
+   "shape": [
+    256
+   ],
+   "offset": 410577
+  },
+  {
+   "name": "blocks.2.norm.weight",
+   "shape": [
+    256
+   ],
+   "offset": 410833
+  },
+  {
+   "name": "blocks.2.norm.bias",
+   "shape": [
+    256
+   ],
+   "offset": 411089
+  },
+  {
+   "name": "head.weight",
+   "shape": [
+    1946,
+    256
+   ],
+   "offset": 411345
+  },
+  {
+   "name": "head.bias",
+   "shape": [
+    1946
+   ],
+   "offset": 909521
+  }
+ ]
+}
