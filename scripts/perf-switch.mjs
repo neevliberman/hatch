@@ -82,6 +82,8 @@ const probe = (cpuOnly) => {
       if (want !== h.current().id && !P.drawnAt[want] && h.map.drawn().includes(want)) seen = [want];
     }
     if (P.loaderAt === null && document.getElementById('loader')?.classList.contains('done')) P.loaderAt = now;
+    if (P.linkingAt === undefined && document.getElementById('app')?.classList.contains('linking')) P.linkingAt = now;
+    if (P.lunaAt === undefined && window.__hatch?.map.drawn().some((l) => l.startsWith('luna-forecast'))) P.lunaAt = now;
     // Any species' first field on screen: its hexagons in the drawn layers, with the map shown (a plain visit's luna).
     if (P.hexAt === undefined && document.querySelector('#map.drawn') && hexes()) P.hexSeen ? (P.hexAt = now) : (P.hexSeen = true);
     requestAnimationFrame(tick);
@@ -329,7 +331,7 @@ const firstRun = async (kind) => {
     const drawn = kind === 'link' ? P.drawnAt[id] : P.hexAt;
     const before = (xs) => xs.filter(([s]) => s < drawn);
     return {
-      drawn, loader: P.loaderAt,
+      drawn, loader: P.loaderAt, linkingAt: P.linkingAt, lunaAt: P.lunaAt,
       after: Math.max(0, ...P.long.filter(([s, d]) => s + d > drawn && s < drawn + after).map(([, d]) => d)),
       long: Math.max(0, ...before(P.long).map(([, d]) => d)),
       gap: Math.max(0, ...before(P.gaps).map(([, d]) => d)),
@@ -339,7 +341,7 @@ const firstRun = async (kind) => {
   }, [kind, fid, AFTER]);
   await ctx.close();
   const out = { drawn: r0(m.drawn), loader: r0(m.loader), long: r0(m.long), gap: r0(m.gap), after: r0(m.after) };
-  if (process.env.DETAIL) Object.assign(out, { longs: m.longs, files: m.files });
+  if (process.env.DETAIL) Object.assign(out, { longs: m.longs, files: m.files, linkingAt: r0(m.linkingAt), lunaAt: r0(m.lunaAt) });
   return { out, profile };
 };
 

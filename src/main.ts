@@ -671,13 +671,14 @@ function start() {
     void setSpecies(askedSpecies).finally(() => {
       const mine = speciesPending !== null; // not ended by a pick meanwhile
       speciesPending = null;
+      // A species that never loaded (an unknown key, a failed file) leaves luna on screen: not the card the link meant.
+      // (Checked by layer, not key: a link may name a species by another key, as ?species=photinus-pyralis.) Before
+      // endCue, whose redraw would pin it on luna.
+      if (cur === luna) askedPin = null;
       if (mine) {
         if (cur === luna) endCue(); // it never loaded: luna, now
         else cueUntilDrawn();
       }
-      // A species that never loaded (an unknown key, a failed file) leaves luna on screen: not the card the link meant.
-      // (Checked by layer, not key: a link may name a species by another key, as ?species=photinus-pyralis.)
-      if (cur === luna) askedPin = null;
       updateProbe(); // and now its ?pin=
       settlePin();
     });
