@@ -114,7 +114,22 @@ Before any full result exists, the smoke run and the measured timing are recorde
 floats at full precision). Big scratch files (GBIF chunks, records, checkpoints, PRISM grids) are deleted at the end.
 
 ## Run log (filled in before results)
-(pending)
+Written 4 Nov 2026 ~20:45 UTC, after the smoke run and before the full run started. No full-run network existed.
+- **Records**: re-pulled 4 Nov 2026 (19:40-20:33 UTC; one transient GBIF failure, resumed from the saved ranges):
+  2,923,717 raw records, 2015-2025, within 0.01% of round 1's 2,923,938.
+- **Res-6 features**: PRISM grid pulled in 20 ACIS bbox calls (4 tiles x 5 variables), 109,176 covered 4 km points,
+  59,633 res-6 grid cells, ~2 min. Check against round 1's res-4 features (mean of each res-4 cell's res-6 children,
+  every 5th cell): correlation 0.98-1.00 for the climate and land-cover features, 0.90 for elevation (PRISM's DEM vs
+  Copernicus).
+- **Smoke run** (2% sample, 2 passes, seeds 0-1, all 5 variants, 2 workers): ran end to end in 2.5 min, wrote
+  gate.json and per_species.csv. Numbers not used. It showed the pre-declared buffer drops a lot of the region
+  test: about 20% of held-out records in fold N, 42% in E and 60% in S (on the 2% sample). This is a property of the
+  rule as declared, not a reason to change it; the unbuffered test is reported alongside.
+- **Resume check**: a 3-pass fit stopped after pass 1 and resumed (with the global random state disturbed) gives
+  bit-identical weights to an uninterrupted fit.
+- **Timing**: a training step on the full-size network takes 472 ms with 1 worker x 4 threads, and 757 ms per worker
+  with 2 workers x 2 threads (378 ms effective). So the full run uses 2 workers (as allowed above): about 30 min per
+  network per worker, ~15 min effective, ~8.5-9 h for all 33 networks.
 
 ## Amendments
 (none)
