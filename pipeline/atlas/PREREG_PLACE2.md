@@ -114,7 +114,7 @@ Before any full result exists, the smoke run and the measured timing are recorde
 floats at full precision). Big scratch files (GBIF chunks, records, checkpoints, PRISM grids) are deleted at the end.
 
 ## Run log (filled in before results)
-Written 4 Nov 2026 ~20:45 UTC, after the smoke run and before the full run started. No full-run network existed.
+Written 4 Nov 2026 ~20:40 UTC, after the smoke run and before the full run started. No full-run network existed.
 - **Records**: re-pulled 4 Nov 2026 (19:40-20:33 UTC; one transient GBIF failure, resumed from the saved ranges):
   2,923,717 raw records, 2015-2025, within 0.01% of round 1's 2,923,938.
 - **Res-6 features**: PRISM grid pulled in 20 ACIS bbox calls (4 tiles x 5 variables), 109,176 covered 4 km points,
@@ -132,7 +132,7 @@ Written 4 Nov 2026 ~20:45 UTC, after the smoke run and before the full run start
   network per worker, ~15 min effective, ~8.5-9 h for all 33 networks.
 
 ## Amendments
-1. **Border buffer definition (4 Nov 2026, ~20:55 UTC, before any network had finished; no score of any network or of
+1. **Border buffer definition (4 Nov 2026, ~20:45 UTC, before any network had finished; no score of any network or of
    the calendar was looked at).** As written, a cell was a "training cell" if it held *any* training record. On the
    full data, a few hundred training-labelled records sit inside cells that are >= 90% held-out (records whose state
    field is missing, or that sit right on a state line), and each one blacked out its cell and the ring around it:
