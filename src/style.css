@@ -135,6 +135,14 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   pointer-events: none; transition: opacity 0.2s; }
 #loader.done { opacity: 0; }
 #no-webgl ~ #loader { display: none; }
+/* A ?species= link whose species is still on its way (main.ts linkCue): the caterpillar stays, small, where the key
+   sits; the key, caption and luna's notes step out of sight (their room kept, so the map does not move) and the ribbon
+   fades back, until the species' own field draws. */
+#loader.small { top: auto; bottom: calc(var(--dock-h, 96px) + 10px); left: 12px; right: auto; align-items: flex-start; }
+#loader.small p { display: none; }
+#loader.small .cat { width: 150px; height: 84px; transform: scale(0.42); transform-origin: 0 100%; margin: -49px 0 0; }
+.linking #legend, .linking #strip, .linking #asleep, .linking #end-note, .linking .breath { visibility: hidden; }
+.linking #bar .track { opacity: 0.3; }
 #loader p { margin: 0; font: 600 22px var(--font-note); color: var(--text); }
 #loader .cat { width: 150px; height: 84px; overflow: hidden; }
 #loader .strip { display: block; will-change: transform; transform: translateX(-750px); }

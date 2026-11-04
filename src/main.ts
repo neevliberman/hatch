@@ -26,7 +26,7 @@ import { markFor } from './ui/mark';
 import { shareCard } from './ui/shareCard';
 import { exoEnabled, mountExo } from './ui/exoPanel';
 import { chorusEnabled, mountChorus } from './ui/chorusPanel';
-import { isForecast, type HatchLayer, type SeasonProfile } from './core/layer';
+import { isForecast, isHexes, type HatchLayer, type SeasonProfile } from './core/layer';
 import { RADAR_HEAD, RADAR_LINKS, RADAR_SPECIES, radarDay } from './radar/index';
 import type { Radar, View } from './radar/radarReplay';
 
@@ -116,6 +116,18 @@ function start() {
   let curKey = 'luna';
   /** A ?species= link's species, until it has loaded (the address bar keeps asking for it meanwhile). */
   let speciesPending: string | null = null;
+  /** The link's species is known (a real species other than luna, with a load): its name is up, luna is not drawn for
+   * the first STAND_IN ms (until standInUntil), and the key, caption and ribbon step back until its field draws. */
+  let linkCue = false;
+  let standInUntil = 0;
+  const STAND_IN = 8000;
+  /** The loading caterpillar bows out (on the first frame, or a link's species' first field). */
+  const loaderOut = () => {
+    const l = document.getElementById('loader');
+    if (!l || l.classList.contains('done')) return;
+    l.classList.add('done');
+    setTimeout(() => l.remove(), 250);
+  };
   /** A ?warm= link's "Warm the spring", until its Atlas species has loaded. */
   let askedWarm = Number(params.get('warm')) || 0;
   /** "Coming out near you": the line for the remembered place (set up with My area and Find, below). */
@@ -290,15 +302,16 @@ function start() {
       $('recenter').hidden = !moved;
       document.querySelector('.brand')!.classList.toggle('over-map', moved);
     },
-    // A ?species= link opens on its own species: luna is not drawn while that one loads (see map.ts standIn).
-    standIn: () => (speciesPending !== null && cur === luna ? luna.id : null),
+    // A ?species= link opens on its own species: luna is not drawn while that one loads (see map.ts standIn), for
+    // STAND_IN ms at most: a link whose species hangs gets luna back (its name and caterpillar stay up meanwhile).
+    standIn: () => (linkCue && cur === luna && performance.now() < standInUntil ? luna.id : null),
     // The loading caterpillar bows out as the first frame lands.
     onFirstDraw: () => {
       firstDrawn = true;
       startIntro();
-      const l = document.getElementById('loader');
-      l?.classList.add('done');
-      setTimeout(() => l?.remove(), 250);
+      // A ?species= link's caterpillar stays, small, where the key sits, until that species' field draws.
+      if (speciesPending) document.getElementById('loader')?.classList.add('small');
+      else loaderOut();
     },
     onView: () => {
       if (pinned) placeProbe();
@@ -307,7 +320,7 @@ function start() {
       syncUrl(); // a shared link reopens the same place and zoom
     },
     onProbe: (h, clicked) => {
-      if (radar) return;
+      if (radar || (linkCue && cur === luna)) return; // no cards from a stand-in
       if (clicked) {
         // Tap pins the card; tapping the same thing again (or empty space) unpins it. Hover alone never unpins.
         // The same picked object is the same thing, even when the pinned hit's cell was re-derived from its point and
@@ -334,7 +347,7 @@ function start() {
     map.refresh();
     updateProbe();
     placeNote();
-    srSummary.textContent = cur.summary(time.cursor);
+    srSummary.textContent = linkCue ? '' : cur.summary(time.cursor);
     radarNote();
   };
   time.subscribe(refresh);
@@ -467,6 +480,8 @@ function start() {
   const setSpecies = async (want: string, wish?: string, atPeak = false) => {
     const ticket = ++asking;
     if (want !== speciesPending) askedPin = null; // a species the reader picked drops the card, as always
+    // A pick while a link's species loads is the reader's: the link's wait ends now (luna, if picked, at once).
+    if (speciesPending !== null && want !== speciesPending) (speciesPending = null), endCue();
     // A chip asks for its season's peak: not while "Warm the spring" is on (that season is no longer the year's own,
     // and has no slide to show). Its photos start loading now, alongside the species.
     atPeak &&= warmth.value === 0;
@@ -606,19 +621,60 @@ function start() {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-species]');
     if (b?.dataset.species) void setSpecies(b.dataset.species);
   });
+  let cueTimer = 0;
+  const cueOn = (on: boolean) => {
+    $('app').classList.toggle('linking', on);
+    // The time bar and the keyboard explorer would act on a map that is not up yet.
+    for (const id of ['bar', 'explore']) $(id).inert = on;
+  };
+  const startCue = (key: string, name: string) => {
+    linkCue = true;
+    standInUntil = performance.now() + STAND_IN;
+    speciesPick.show(key, name);
+    cueOn(true);
+    cueTimer = window.setTimeout(refresh, STAND_IN); // luna again under the name, if its species is still not here
+    refresh();
+  };
+  const endCue = () => {
+    clearTimeout(cueTimer);
+    loaderOut();
+    if (!linkCue) return refresh();
+    linkCue = false;
+    cueOn(false);
+    if (cur === luna) speciesPick.show(curKey, curLabel);
+    refresh();
+  };
+  /** The link's species is on: its cue goes once its field (or a tracker's map) has drawn. */
+  const cueUntilDrawn = () => {
+    const t0 = performance.now();
+    const wait = () => {
+      if (!linkCue) return loaderOut();
+      if (cur.tracker || performance.now() - t0 > 60000 || map.drawn().some((id) => isHexes(id) && !id.startsWith('luna-'))) return endCue();
+      requestAnimationFrame(wait);
+    };
+    wait();
+  };
   // ?species=<key> opens on that species (?species=firefly links from before the list still work).
   const askedSpecies = params.get('species');
   if (askedSpecies && askedSpecies !== 'luna') {
-    // An Atlas species (none of the hand-built ones): its code and files start loading now, beside the map's first frame,
-    // not once the species list has been read and parsed; a link to the Atlas year fetches its days ahead too.
-    if (__BASEMAP__ && !SPECIES.some((e) => e.key === askedSpecies || (e.sci && atlasKey(e.sci) === askedSpecies))) {
-      void import('./atlas/atlas').then((m) => m.loadAtlas()).then((a) => { if (asked === String(ATLAS_YEAR)) void a?.ahead(ATLAS_YEAR); }).catch(() => {});
-      void import('./layers/atlasLayer').catch(() => {});
-    }
     speciesPending = askedSpecies;
+    // Once the link's species is known to be one (not a typo, an old key, or luna by another name), its wait is
+    // shown for what it is: its name in the header, no luna under it (on a slow phone drawing luna held the species
+    // back by seconds), and the key, caption and ribbon stepping back. Anything else shows luna at once.
+    void findSpecies(askedSpecies)
+      .then((e) => {
+        if (speciesPending === null) return;
+        if (!e || e.key === 'luna' || !e.load) return endCue();
+        startCue(e.key, e.label);
+      })
+      .catch(() => speciesPending !== null && endCue());
     void setSpecies(askedSpecies).finally(() => {
+      const mine = speciesPending !== null; // not ended by a pick meanwhile
       speciesPending = null;
-      if (cur === luna) map.refresh(); // it never loaded: luna stays, drawn now
+      if (mine) {
+        if (cur === luna) endCue(); // it never loaded: luna, now
+        else cueUntilDrawn();
+      }
       // A species that never loaded (an unknown key, a failed file) leaves luna on screen: not the card the link meant.
       // (Checked by layer, not key: a link may name a species by another key, as ?species=photinus-pyralis.)
       if (cur === luna) askedPin = null;

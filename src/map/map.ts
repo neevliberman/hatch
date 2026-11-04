@@ -102,6 +102,8 @@ interface Opts {
 export function createMap({ container, registry, time, onProbe, padding, onMove, onView, covers, onFirstDraw, standIn }: Opts): MapHandle {
   // deck.gl 9 needs WebGL2. Without it (GPU blocklisted, hardware acceleration off) say so, instead of an empty map.
   const gl = document.createElement('canvas').getContext('webgl2');
+  const info = gl?.getExtension('WEBGL_debug_renderer_info');
+  const software = !!gl && /swiftshader|llvmpipe|softpipe|software/i.test(String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER)));
   gl?.getExtension('WEBGL_lose_context')?.loseContext(); // only a test: give the context back
   if (!gl) {
     // Beside the map, not in it: the map's role="img" would hide the message from screen readers.
@@ -260,6 +262,12 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
   // The first frame: the forecast washes in from south to north, like watercolour soaking into paper. Milliseconds
   // since the first draw, handed to the layers; undefined once done (and from the start, for reduced motion).
   let wash: number | undefined = still.matches ? undefined : 0;
+  let washEnd = false;
+  // Drawn in software (SwiftShader, llvmpipe: no usable graphics card), where a frame takes a second or more, so a fade
+  // shows as a frame or two at most. Its fades stay at zero: each one that started read the colours back from the
+  // graphics card and so waited for every frame queued there, the page frozen (10 s once, for the first play after a
+  // software-drawn 2560x1440 map's first frames).
+  const slow = software;
   let drawn = false;
   // The map stays hidden until a frame is drawn at its real size, fitted for that size: otherwise a phone can flash a
   // blurry, zoomed-in first frame (drawn for a guessed size, then stretched) before the re-fit. Two seconds at most.
@@ -284,7 +292,10 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     const step = () => {
       const e = performance.now() - t0;
       wash = e < 900 ? e : undefined;
+      // The wash's last change (its colours settling to the day's) is no fade either.
+      washEnd = wash === undefined;
       refresh();
+      washEnd = false;
       if (wash !== undefined) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -593,7 +604,7 @@ export function createMap({ container, registry, time, onProbe, padding, onMove,
     refreshedAt = zoom;
     const { under, mid } = basemapLayers(zoom);
     // `playing` is whether playback glides: a slow device's playback draws plain day steps (see TimeAxis.gliding).
-    const quiet = wash !== undefined;
+    const quiet = wash !== undefined || washEnd || slow;
     const skip = standIn?.();
     const dataLayers: Layer[] = registry.activeLayers().filter((l) => l.id !== skip)
       .flatMap((l) => l.render({ t: time.cursor, zoom, theme, wash, playing: time.gliding, frac: time.frac, quiet }).map(recoloured))

@@ -352,15 +352,16 @@ for (let r = 0; r < RUNS; r++) {
     if (!PARTS.includes(kind)) continue;
     const { out, profile } = await firstRun(kind);
     t[kind] = out;
-    if (profile && r === 0) t.profile = profile;
+    if (profile && r === 0) (t.profiles ??= {})[kind] = profile;
   }
   runs.push(t);
-  const { profile, ...rest } = t;
+  const { profile, profiles, ...rest } = t;
   console.log(JSON.stringify({ run: r + 1, ...rest }));
-  if (profile) {
-    console.log('-- self time --\n' + profile.self.join('\n'));
-    console.log('-- total time --\n' + profile.total.join('\n'));
-    if (profile.windows?.length) console.log('-- long tasks --\n' + profile.windows.join('\n'));
+  for (const [name, p] of Object.entries({ ...(profile ? { switch: profile } : {}), ...profiles })) {
+    console.log(`== profile: ${name}`);
+    console.log('-- self time --\n' + p.self.join('\n'));
+    console.log('-- total time --\n' + p.total.join('\n'));
+    if (p.windows?.length) console.log('-- long tasks --\n' + p.windows.join('\n'));
   }
 }
 const med = {};
