@@ -2206,7 +2206,11 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000, polling: 250 });
       // [query, the top row's key, or a test of its name]
       for (const [q, want] of [['luna', 'luna'], ['monarch', 'monarch'], ['firefly', 'firefly'], ['cicada', /^[\w' -]* Cicada$/], ['bumble', /Bumble Bee$/],
-        ['red-spotted purple', 'limenitis-arthemis-astyanax'], ['appalachian brown', 'lethe-satyrodes'], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
+        ['red-spotted purple', 'limenitis-arthemis-astyanax'], ['appalachian brown', 'lethe-satyrodes'],
+        // Old names still find the species (reconcile.py renamed or merged them): GBIF's Latin name, the old genus, and the
+        // merged row's common name.
+        ['papilio cresphontes', 'heraclides-cresphontes'], ['lethe eurydice', 'lethe-satyrodes'], ['red-spotted admiral', 'limenitis-arthemis-astyanax'],
+        ['speyeria', /Fritillary$/], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
         await page.locator('#sp-q').fill(q);
         const top = page.locator('#sp-list .sp-row').first();
         await top.waitFor({ timeout: 10000 }).catch(() => {});
@@ -2238,6 +2242,24 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#sp-q').press('Enter');
       await page.waitForFunction(() => /^luna/.test(window.__hatch.current().id), null, { timeout: 30000, polling: 250 })
         .catch(async () => fail(`Enter on "luna" opened ${await page.evaluate(() => window.__hatch.current().id)}`));
+      // A watch list saved under old keys (from before reconcile.py) comes back under the keys the list uses now, once
+      // each: the merged Limenitis row folds into the Red-spotted Purple, and every chip has its countdown.
+      const old = ['polites-coras', 'papilio-cresphontes', 'lethe-eurydice', 'limenitis-arthemis', 'limenitis-arthemis-astyanax'];
+      const now = ['polites-peckius', 'heraclides-cresphontes', 'lethe-satyrodes', 'limenitis-arthemis-astyanax'];
+      await page.evaluate((v) => localStorage.setItem('hatch-watch', JSON.stringify(v)), old);
+      await page.goto(`${origin}/?noauto&today=2027-01-15&species=limenitis-arthemis`);
+      await page.waitForFunction(() => window.__hatch?.current?.().id === 'limenitis-arthemis-astyanax-atlas', null, { timeout: 60000, polling: 400 })
+        .catch(async () => fail(`?species=limenitis-arthemis opened ${await page.evaluate(() => window.__hatch?.current?.().id)}`));
+      await page.locator('#species').click({ timeout: 60000 });
+      await page.waitForFunction((n) => document.querySelectorAll('#sp-watch .sp-go').length === n
+        && [...document.querySelectorAll('#sp-watch .sp-go span')].every((e) => e.textContent.trim()), now.length, { timeout: 30000, polling: 400 }).catch(() => {});
+      const chips = await page.locator('#sp-watch .sp-go').evaluateAll((bs) => bs.map((b) => [b.dataset.key, b.querySelector('b').textContent, b.querySelector('span').textContent]));
+      if (JSON.stringify(chips.map((c) => c[0])) !== JSON.stringify(now)) fail(`old watch keys come back as ${chips.map((c) => c[0]).join(', ')}`);
+      if (chips.some((c) => !c[2].trim())) fail(`a watched species from an old key has no countdown: ${JSON.stringify(chips)}`);
+      if (chips.some((c) => c[1] === 'Red-spotted Admiral')) fail('the merged Red-spotted Admiral row is on the watch list');
+      const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('hatch-watch') ?? '[]'));
+      if (JSON.stringify(kept) !== JSON.stringify(now)) fail(`the watch list was saved as ${JSON.stringify(kept)}`);
+      if ((await page.locator('.sp-star').getAttribute('aria-pressed')) !== 'true') fail('the Red-spotted Purple, watched under an old key, shows unwatched');
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }

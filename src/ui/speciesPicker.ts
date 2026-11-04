@@ -95,7 +95,14 @@ export function mountSpeciesPicker(
   let twins: number[] = [];
   let twinsFor = '';
   const treeHost = sheet.querySelector<HTMLElement>('.sp-tree')!;
-  const indexOfKey = (key: string) => (all ? all.findIndex((s) => keyOf(s) === key) : -1);
+  // A key from before a rename or a merge (a watch list, a link) names the row shown now (atlasByKey, reconcile.py).
+  const rowOf = (key: string) => (all ? (all.find((s) => keyOf(s) === key && listed(s)) ?? atlasByKey(all, key)) : undefined);
+  const indexOfKey = (key: string) => {
+    const s = rowOf(key);
+    return s && all ? all.indexOf(s) : -1;
+  };
+  /** Watched keys as the list names them now: old keys mapped, duplicates gone. Unchanged until the list is in. */
+  const tidyWatch = (keys: string[]) => (all ? [...new Set(keys.map((k) => { const s = rowOf(k); return s ? keyOf(s) : k; }))] : keys);
 
   // The watch list: species starred from the sheet's head, kept in this browser (src/ui/watch.ts). Each shows as a chip
   // with the same one-line countdown as "Coming out near you" (src/ui/near.ts): for the species on the map with a saved
@@ -111,7 +118,7 @@ export function mountSpeciesPicker(
   const labelOf = (key: string): string | null => {
     const f = featured.find((e) => e.key === key);
     if (f) return f.label;
-    const s = all && (all.find((x) => keyOf(x) === key) ?? atlasByKey(all, key)); // a watched key from before a rename
+    const s = rowOf(key);
     return s ? nameOf(s) : key === currentKey ? currentLabel : null;
   };
   const setStar = () => {
@@ -122,6 +129,8 @@ export function mountSpeciesPicker(
     star.title = text;
   };
   const renderWatch = () => {
+    const tidy = tidyWatch(watched);
+    if (tidy.join() !== watched.join()) (watched = tidy), saveWatch(watched);
     if (all && watched.some((k) => labelOf(k) === null)) {
       watched = watched.filter((k) => labelOf(k) !== null); // a species the Atlas no longer lists
       saveWatch(watched);
@@ -158,7 +167,7 @@ export function mountSpeciesPicker(
   };
   const toggleWatch = () => {
     watchNote.hidden = true;
-    watched = loadWatch() ?? watched; // another tab may have changed it; blocked storage keeps this visit's list
+    watched = tidyWatch(loadWatch() ?? watched); // another tab may have changed it; blocked storage keeps this visit's list
     if (watched.includes(currentKey)) watched = watched.filter((k) => k !== currentKey);
     else if (watched.length >= WATCH_MAX) {
       watchNote.textContent = `Watch list is full (${WATCH_MAX}). Remove one first.`;
@@ -415,7 +424,7 @@ export function mountSpeciesPicker(
     if (b.dataset.unwatch) {
       const chip = b.closest('li');
       const next = (chip?.nextElementSibling ?? chip?.previousElementSibling)?.querySelector<HTMLElement>('.sp-go');
-      watched = (loadWatch() ?? watched).filter((k) => k !== b.dataset.unwatch);
+      watched = tidyWatch(loadWatch() ?? watched).filter((k) => k !== b.dataset.unwatch);
       saveWatch(watched);
       renderWatch();
       (next ? watchStrip.querySelector<HTMLElement>(`.sp-go[data-key="${next.dataset.key}"]`) : star)?.focus();

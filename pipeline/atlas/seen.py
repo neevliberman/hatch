@@ -189,7 +189,8 @@ def main():
         ratio, shift = judge(seen[s], expected[s], phi, phi_t)
         rows.append([int(seen[s].sum()), round(float(expected[s].sum()), 1), ratio, shift])
 
-    picks = surprises(rows[:-1], skip=periodicals(sp))
+    shown = json.loads((OUT / "species.json").read_text())[:-1]  # the same rows, in the network's order
+    picks = surprises(rows[:-1], skip=periodicals(sp) | unlisted(shown))
     o, e = ribbon(seen, last), ribbon(expected, last)
     top = np.maximum(o.max(1), e.max(1))[:, None]
     scaled = np.stack([e, o], 1) / np.where(top > 0, top, 1)[:, None]

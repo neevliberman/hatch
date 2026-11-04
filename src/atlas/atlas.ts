@@ -1,7 +1,7 @@
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import { AtlasGpu } from './gpu';
 import { AtlasNet, type ModelMeta, type Place } from './net';
-import { ATLAS_YEAR, atlasUrl, json, loadIndex, pickOffSchedule, type AtlasSpecies, type OffSchedule } from './index';
+import { ATLAS_YEAR, atlasUrl, json, loadIndex, pickOffSchedule, unlistedIn, type AtlasSpecies, type OffSchedule } from './index';
 
 export { ATLAS_YEAR, atlasKey, atlasYearInfo, loadIndex, seasonsOf, type AtlasSpecies, type Result } from './index';
 
@@ -199,7 +199,7 @@ export class Atlas {
   /** The n species whose ATLAS_YEAR season ran furthest off schedule (>= 50 photos expected): [index, days early (negative: late)]. */
   async offSchedule(n = 10): Promise<OffSchedule> {
     await this.seen(0);
-    return pickOffSchedule((await this.seenFiles)?.file.species ?? [], n);
+    return pickOffSchedule((await this.seenFiles)?.file.species ?? [], n, unlistedIn(this.species));
   }
   private seenFiles: Promise<{ bytes: Uint8Array; file: SeenFile } | null> | null = null;
 

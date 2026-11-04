@@ -40,6 +40,8 @@ export interface AtlasSpecies {
 
 /** Whether a species is listed (search, browse, the strips): every row but one shown under another (`into`). */
 export const listed = (s: Pick<AtlasSpecies, 'into'>) => s.into === undefined;
+/** For the strips' picks: whether row i of the species list is one shown under another (never one of the n picked). */
+export const unlistedIn = (species: readonly Pick<AtlasSpecies, 'into'>[] | null) => (i: number) => !!species?.[i] && !listed(species[i]!);
 
 /** Where a species' `trend` comes from: the line's label, its credit and the link. */
 export const TREND_SOURCES: Record<string, { label: string; note: string; credit: string; creditLine: string; href: string }> = {
@@ -310,10 +312,10 @@ export type OffSchedule = [number, number][];
 /** Photos a species needs expected before its timing is worth ranking. */
 export const OFF_MIN_EXPECTED = 50;
 /** The n species with the largest |days| among those with at least OFF_MIN_EXPECTED photos expected (seen-YEAR.json rows). */
-export function pickOffSchedule(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10): OffSchedule {
+export function pickOffSchedule(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, skip: (i: number) => boolean = () => false): OffSchedule {
   const out: OffSchedule = [];
   rows.forEach((r, i) => {
-    if (r[1] >= OFF_MIN_EXPECTED && r[3] !== null && r[3] !== 0) out.push([i, r[3]]);
+    if (!skip(i) && r[1] >= OFF_MIN_EXPECTED && r[3] !== null && r[3] !== 0) out.push([i, r[3]]);
   });
   return out.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0] - b[0]).slice(0, n);
 }
@@ -325,7 +327,7 @@ const seenFile = (year: number): Promise<SeenFile | null> =>
   (seenFiling ??= json<SeenFile>(`seen-${year}.json`).then((f) => (f?.species ? f : ((seenFiling = null), null))));
 /** The year's most off-schedule species for the species picker, from seen-YEAR.json. Null when missing. */
 export function loadOffSchedule(year: number, n = 10): Promise<OffSchedule | null> {
-  return seenFile(year).then((f) => (f ? pickOffSchedule(f.species, n) : null));
+  return Promise.all([seenFile(year), loadIndex()]).then(([f, s]) => (f ? pickOffSchedule(f.species, n, unlistedIn(s)) : null));
 }
 /** Photos a species needs expected before a shortfall is worth ranking, and how far below expected counts as quiet. */
 export const QUIET_MIN_EXPECTED = 100;
@@ -342,10 +344,10 @@ export type Quiet = { i: number; seen: number; expected: number };
 /** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and
  * under QUIET_BELOW, and not `late` (a species whose identifications are still coming in). */
 // Near zero (under 5% of expected) is almost always a periodical brood's off-year or a data gap, not a quiet year.
-export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, late: (i: number) => boolean = () => false): Quiet[] {
+export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, late: (i: number) => boolean = () => false, skip: (i: number) => boolean = () => false): Quiet[] {
   const out: Quiet[] = [];
   rows.forEach((r, i) => {
-    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05 && !late(i)) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
+    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05 && !late(i) && !skip(i)) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
   });
   return out.sort((a, b) => a.seen / a.expected - b.seen / b.expected || b.expected - a.expected || a.i - b.i).slice(0, n);
 }
@@ -353,14 +355,14 @@ export function pickQuiet(rows: readonly (readonly [number, number, number | nul
  * (season.bin, seasonsOf) peaking within QUIET_LATE_DAYS of its last day. Null when missing; without season.bin none
  * are left out. */
 export function loadQuiet(year: number, n = 10): Promise<Quiet[] | null> {
-  return Promise.all([seenFile(year), loadSeasons()]).then(([f, b]) => {
+  return Promise.all([seenFile(year), loadSeasons(), loadIndex()]).then(([f, b, s]) => {
     if (!f) return null;
     const late = (i: number) => {
       const c = b && typical(b, i);
       const d = c && seasonsOf(c);
       return !!d && d.broods!.some((r) => r.peak > f.last_day - QUIET_LATE_DAYS); // any brood, not just the biggest
     };
-    return pickQuiet(f.species, n, late);
+    return pickQuiet(f.species, n, late, unlistedIn(s));
   });
 }
 /** "9 d early" / "4 d late". */
