@@ -166,9 +166,9 @@ export class AtlasNet {
     const H = this.hidden;
     const z = Float32Array.from(this.get('head.bias'));
     for (let k = 0; k < m; k++) {
-      const t = m === 1 ? day : day + this.meta.lambdas[k]! * ahead;
-      if (k === 0 || t !== day) this.trunk(place, t, h.subarray(at + k * H, at + (k + 1) * H));
-      else h.copyWithin(at + k * H, at, at + H); // this clock at the first one's time: one pass of the trunk does both
+      // No days ahead: every clock reads the same time, so one pass of the trunk does for all of them.
+      if (k > 0 && ahead === 0) h.copyWithin(at + k * H, at, at + H);
+      else this.trunk(place, m === 1 ? day : day + this.meta.lambdas[k]! * ahead, h.subarray(at + k * H, at + (k + 1) * H));
       for (let s = 0; s < this.nOut; s++) {
         let acc = 0;
         const row = s * H;

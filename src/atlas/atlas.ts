@@ -77,8 +77,10 @@ export interface Basis {
   lse: Float32Array;
   m: number;
 }
-/** Days of bases kept (about 1.2 MB each for a typical year, three times that for a year with its warmth). */
-const BASES = 6;
+/** Bytes of bases kept, newest first: a typical year's day is about 1.2 MB, a year with its warmth's (three clocks)
+ * about 3.65 MB, so about ten days or three. Enough for the day on screen and a few either side, on a phone too. */
+const BASES_BYTES = 12e6;
+const bytesOf = (b: Basis) => b.h.byteLength + b.lse.byteLength;
 
 export class Atlas {
   readonly cellIndex: Map<string, number>;
@@ -233,7 +235,9 @@ export class Atlas {
   /**
    * The network's species-independent part for every cell on a day of one run (AtlasGpu.basis), by `${run}|${day}`:
    * worked out (by `make`) for whichever species asked first, then shared, as is one still being worked out, so
-   * switching species on a day already seen costs one small sum a cell instead of the whole network. The last BASES kept.
+   * switching species on a day already seen costs one small sum a cell instead of the whole network. The last
+   * BASES_BYTES kept (dropRun lets a run's go sooner). A `make` that throws or rejects settles every caller with
+   * the rejection and is not kept, so the next ask starts afresh.
    */
   work(key: string, make: () => Promise<Basis | null>): Promise<Basis | null> {
     const have = this.bases.get(key);
@@ -245,17 +249,27 @@ export class Atlas {
     let p = this.working.get(key);
     if (!p) {
       const drop = () => this.working.delete(key);
-      p = make().then((b) => {
+      p = new Promise<Basis | null>((r) => r(make())).then((b) => {
         drop();
         if (b) {
           this.bases.set(key, b);
-          if (this.bases.size > BASES) this.bases.delete(this.bases.keys().next().value!);
+          let bytes = 0;
+          for (const v of this.bases.values()) bytes += bytesOf(v);
+          for (const [k, v] of this.bases) {
+            if (bytes <= BASES_BYTES || k === key) break;
+            this.bases.delete(k);
+            bytes -= bytesOf(v);
+          }
         }
         return b;
       }, (e) => (drop(), Promise.reject(e)));
       this.working.set(key, p);
     }
     return p;
+  }
+  /** Lets go of one run's bases (`work` keys `${run}|${day}`): the layer showing it has dropped that run. */
+  dropRun(run: string): void {
+    for (const k of [...this.bases.keys()]) if (k.startsWith(`${run}|`)) this.bases.delete(k);
   }
   private bases = new Map<string, Basis>();
   private working = new Map<string, Promise<Basis | null>>();
@@ -353,15 +367,20 @@ export class Field {
       this.onReady();
       this.pump();
     };
-    const retry = () => {
+    // Failed: once the graphics card's context is lost, straight away on the plain network; otherwise the day is left
+    // until it is asked for again (a redraw), so a failure never spins.
+    const failed = () => {
       this.doing = null;
-      this.queue.unshift(d);
+      if (this.atlas.gpu?.lost && !this.done.has(d)) this.queue.unshift(d);
       this.pump();
     };
     // Another species (or this one, earlier) worked this day out already, or is working it out now: only this
     // species' own sum on top.
     setTimeout(() => {
-      this.atlas.work(`${this.run}|${d}`, () => this.basis(d)).then((b) => (b ? finish(this.atlas.shares(b, this.sp)) : retry()), retry);
+      this.atlas
+        .work(`${this.run}|${d}`, () => this.basis(d))
+        .then((b) => (b ? finish(this.atlas.shares(b, this.sp)) : failed()))
+        .catch(failed);
     }, 0);
   }
 
@@ -382,12 +401,16 @@ export class Field {
     const H = net.hidden;
     const b: Basis = { h: new Float32Array(cells.length * m * H), lse: new Float32Array(cells.length), m };
     let c = 0;
-    return new Promise((done) => {
+    return new Promise((done, fail) => {
       const slice = () => {
-        const until = performance.now() + 12;
-        while (c < cells.length && performance.now() < until) {
-          b.lse[c] = net.basisAt(cells[c]!, d, ahead ? ahead[c]! : 0, m, b.h, c * m * H);
-          c++;
+        try {
+          const until = performance.now() + 12;
+          while (c < cells.length && performance.now() < until) {
+            b.lse[c] = net.basisAt(cells[c]!, d, ahead ? ahead[c]! : 0, m, b.h, c * m * H);
+            c++;
+          }
+        } catch (e) {
+          return fail(e);
         }
         if (c < cells.length) setTimeout(slice, 0);
         else done(b);

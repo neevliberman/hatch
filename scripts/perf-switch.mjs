@@ -1,6 +1,6 @@
 // Species-switch timing on a weak phone: software GL (SwiftShader) and the CPU slowed 4x (CDP), a phone viewport.
 // Usage: node scripts/perf-switch.mjs [runs]   (default 3; prints each run and the medians as JSON lines)
-// Env: PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (http build, default dist/; built if missing),
+// Env: PARTS (switch,scrub: which measurements, default both), PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (http build, default dist/; built if missing),
 //      CPU (throttle rate, default 4), PROFILE=1 (a CPU profile of one run's switches: the top functions by self and
 //      total time; an unminified build reads best: npx vite build --minify false --outDir dist-prof), PROFILE_FIRST=1
 //      (the same for the first load), DETAIL=1 (each switch's gaps, long tasks, network runs and files, from the tap),
@@ -207,9 +207,69 @@ const summarise = (p) => {
   return { self: top(self, 30), total: top(total, 45) };
 };
 
+// The date slider dragged a day at a time through SCRUB_DAYS new days, on the first species: in a typical year and in
+// ATLAS_YEAR (its days ahead: three clocks, the costlier run). Per day, from the slider's step until the network has
+// worked that day out (each graphics-card call logged with its day), and the longest long task over the whole drag;
+// then a quick drag (the same number of days, a step every 150 ms) until its last day is worked out.
+const SCRUB_DAYS = 10;
+const scrubRun = async (season) => {
+  const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.625, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(probe, false);
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
+  await page.goto(`${origin}/?species=${FIRST}&noauto&date=06-01${season ? `&season=${season}` : ''}`);
+  const fid = `${FIRST}-forecast-r4`;
+  await page.waitForFunction((id) => window.__perf.drawnAt[id], fid, { timeout: 180000, polling: 250 });
+  const first = await page.evaluate((id) => window.__perf.drawnAt[id], fid);
+  await page.waitForTimeout(SETTLE);
+  await page.evaluate(async () => {
+    const g = (await window.__hatch.atlas())?.gpu;
+    window.__perf.net = [];
+    for (const k of ['basis', 'run']) {
+      const f = g?.[k];
+      if (f) g[k] = function (...a) {
+        const r = f.apply(this, a);
+        if (typeof a[1] === 'number') window.__perf.net.push([a[1], performance.now()]);
+        return r;
+      };
+    }
+  });
+  // One slider step later; resolves with that step's day of year.
+  const step = () => page.evaluate(() => {
+    const r = document.getElementById('t-range');
+    r.value = String(Number(r.value) + 1);
+    r.dispatchEvent(new Event('input', { bubbles: true }));
+    const t = window.__hatch.time.cursor;
+    return [performance.now(), Math.round((t - Date.UTC(new Date(t).getUTCFullYear(), 0, 0)) / 864e5)];
+  });
+  const doneAt = (day) => page.waitForFunction((d) => window.__perf.net.find((e) => e[0] === d)?.[1], day, { timeout: 120000, polling: 250 }).then((h) => h.jsonValue());
+  const from = await page.evaluate(() => performance.now());
+  const days = [];
+  for (let k = 0; k < SCRUB_DAYS; k++) {
+    const [t0, day] = await step();
+    days.push((await doneAt(day)) - t0);
+    await page.waitForTimeout(300);
+  }
+  const long = await page.evaluate((t) => Math.max(0, ...window.__perf.long.filter(([s]) => s >= t).map(([, d]) => d)), from);
+  await page.waitForTimeout(SETTLE);
+  const quickFrom = await page.evaluate(() => performance.now());
+  let last = null;
+  for (let k = 0; k < SCRUB_DAYS; k++) {
+    last = await step();
+    await page.waitForTimeout(150);
+  }
+  const quick = (await doneAt(last[1])) - quickFrom;
+  const quickLong = await page.evaluate((t) => Math.max(0, ...window.__perf.long.filter(([s]) => s >= t).map(([, d]) => d)), quickFrom);
+  await ctx.close();
+  return { first: r0(first), perDay: r0(median(days)), dayMax: r0(Math.max(...days)), long: r0(long), quick: r0(quick), quickLong: r0(quickLong) };
+};
+
+const PARTS = (process.env.PARTS ?? 'switch,scrub').split(',');
 const runs = [];
 for (let r = 0; r < RUNS; r++) {
-  const t = await oneRun(process.env.PROFILE && r === 0);
+  const t = PARTS.includes('switch') ? await oneRun(process.env.PROFILE && r === 0) : { switches: [], first: {} };
+  if (PARTS.includes('scrub')) t.scrub = { typical: await scrubRun(null), year: await scrubRun('2026') };
   runs.push(t);
   const { profile, ...rest } = t;
   console.log(JSON.stringify({ run: r + 1, ...rest }));
@@ -218,7 +278,11 @@ for (let r = 0; r < RUNS; r++) {
     console.log('-- total time --\n' + profile.total.join('\n'));
   }
 }
-const med = {
+const med = {};
+if (PARTS.includes('scrub')) {
+  med.scrub = Object.fromEntries(['typical', 'year'].map((m) => [m, Object.fromEntries(['first', 'perDay', 'dayMax', 'long', 'quick', 'quickLong'].map((k) => [k, median(runs.map((t) => t.scrub[m][k]))]))]));
+}
+if (PARTS.includes('switch')) Object.assign(med, {
   firstDrawn: median(runs.map((t) => t.first.drawn)),
   loader: median(runs.map((t) => t.first.loader)),
   switches: SWITCHES.map((key, k) => ({
@@ -227,11 +291,13 @@ const med = {
     gap: median(runs.map((t) => t.switches[k].gap)),
     long: median(runs.map((t) => t.switches[k].long)),
   })),
-};
-med.switchDrawn = median(med.switches.map((s) => s.drawn));
-med.switchGap = median(med.switches.map((s) => s.gap));
-med.switchDrawnMax = Math.max(...med.switches.map((s) => s.drawn));
-med.switchGapMax = Math.max(...med.switches.map((s) => s.gap));
+});
+if (med.switches) {
+  med.switchDrawn = median(med.switches.map((s) => s.drawn));
+  med.switchGap = median(med.switches.map((s) => s.gap));
+  med.switchDrawnMax = Math.max(...med.switches.map((s) => s.drawn));
+  med.switchGapMax = Math.max(...med.switches.map((s) => s.gap));
+}
 console.log(JSON.stringify({ medians: med }));
 await browser.close();
 server.close();
