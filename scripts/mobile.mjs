@@ -128,7 +128,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       for (const j of [0, 1, 2, 1]) await touch('touchMove', y + j);
       for (let i = 1; i <= 8; i++) { await touch('touchMove', y - i * 12); await page.waitForTimeout(16); }
       await touch('touchEnd', 0);
-      const scrolled = await page.waitForFunction(() => document.querySelector('#drawer').scrollTop > 20, null, { timeout: 5000 }).then(() => true, () => false);
+      const scrolled = await page.waitForFunction(() => document.querySelector('#drawer').scrollTop > 20, null, { polling: 400, timeout: 5000 }).then(() => true, () => false);
       if (!scrolled) fail(`a swipe on the About text at the ${stop} stop did not scroll it`);
       await page.waitForTimeout(400);
       if ((await page.locator('#drawer.full').count()) !== full) fail(`a swipe on the About text at the ${stop} stop moved the sheet instead`);
@@ -163,7 +163,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         // worked, and a second one would find nothing to tap. A target still there gets the fallback below.
         // (Gone: hidden, slid off-screen like the closed drawer, or covered.)
         if (/performing tap action\s*$/.test(String(e.message).replace(/\x1b\[\d+m/g, '').trim()) &&
-          (await page.waitForFunction(reachable, [sel, true], { timeout: 4000 }).then(() => true, () => false))) return true;
+          (await page.waitForFunction(reachable, [sel, true], { polling: 400, timeout: 4000 }).then(() => true, () => false))) return true;
         // Software GL in CI can draw a frame or two a second, and Playwright waits for two quick identical frames
         // before it taps. So check what a finger cares about instead: the target is visible and on top at its centre.
         // Then a plain finger tap at its centre: no more waiting on frames.
@@ -193,7 +193,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     }
     if (!(await page.locator('#drawer.open').count())) fail('the i button did not open the drawer');
     // Let the slide-in finish before measuring, or a slow machine measures it mid-way and taps the drawer itself.
-    await page.waitForFunction(() => document.querySelector('#drawer').getAnimations().length === 0, null, { timeout: 3000 }).catch(() => {});
+    await page.waitForFunction(() => document.querySelector('#drawer').getAnimations().length === 0, null, { polling: 400, timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(400);
     // Tap the map: left of a side drawer, or between the top panels and a bottom sheet.
     const box = await page.locator('#drawer').boundingBox();
@@ -212,7 +212,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
     if (!(await page.locator('#drawer.open').count())) fail('a tap on the map beside the open drawer closed it');
     else if (sheet) {
       // At the middle stop the tapped hexagon's season shows in the sheet (deck holds a tap back for the double-tap window).
-      const filled = await page.waitForFunction((t) => document.querySelector('[data-spot] .spot-title')?.textContent !== t, spot0, { timeout: 6000 })
+      const filled = await page.waitForFunction((t) => document.querySelector('[data-spot] .spot-title')?.textContent !== t, spot0, { polling: 400, timeout: 6000 })
         .then(() => true, () => false);
       if (!filled) fail('a tap on the map at the middle stop did not fill the spot card');
       if (engine === 'chromium') await swipeText(box, 'middle');
@@ -228,7 +228,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
       // Slow CI frames: wait for the sheet to finish rising, or the tap aimed above it lands on it.
       // A ~2fps CI frame can take seconds to finish the rise: until it has, a tap "above" the sheet lands on the sheet.
       const risen = await page.waitForFunction(() => { const r = document.querySelector('#drawer')?.getBoundingClientRect();
-        return !!r && r.top < innerHeight * 0.15 && getComputedStyle(document.querySelector('#drawer')).transform === 'none'; }, null, { timeout: 10000 })
+        return !!r && r.top < innerHeight * 0.15 && getComputedStyle(document.querySelector('#drawer')).transform === 'none'; }, null, { polling: 400, timeout: 10000 })
         .then(() => true, () => false);
       if (!risen) fail('the tall sheet never finished rising');
       await page.waitForTimeout(300);
@@ -355,7 +355,7 @@ for (const [phone, engine, pw0, ph0, dpr] of phones) {
         (await page.evaluate(audit)).bad.forEach((m) => fail(`zoomed in, ${m}`));
         await tap('#recenter');
         // The recenter glides back (a third of a second, longer on a slow machine).
-        await page.waitForFunction((z) => window.__hatch.map.zoom() <= z + 0.05, z0, { timeout: 3000 }).catch(() => {});
+        await page.waitForFunction((z) => window.__hatch.map.zoom() <= z + 0.05, z0, { polling: 400, timeout: 3000 }).catch(() => {});
         await page.waitForTimeout(200);
         const z1 = await zoom();
         // The refit can land a little further out than the first view (an open card leaves less room), never further in.
@@ -611,8 +611,8 @@ if (existsSync(join(distDir, 'radar'))) {
         await page.screenshot({ path: `${out}/quiet-${phone}-${orient}.png` });
         const key = await chip.first().getAttribute('data-key');
         await chip.first().click({ timeout: 20000 });
-        await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`the first quiet species (${key}) did not open`));
-        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 }).catch(() => fail('a quiet species did not open on 2026'));
+        await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { polling: 400, timeout: 30000 }).catch(() => fail(`the first quiet species (${key}) did not open`));
+        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { polling: 400, timeout: 25000 }).catch(() => fail('a quiet species did not open on 2026'));
       } catch (e) {
         fail(`stopped: ${e.message.split('\n')[0]}`);
       }
@@ -645,10 +645,10 @@ if (existsSync(join(distDir, 'radar'))) {
         // A short screen (phone on its side): the strips may push the tree, but it keeps a usable 160px (the sheet scrolls).
         const th = (await page.locator('.sp-tree').boundingBox())?.height ?? 0;
         if (th < 159) fail(`the tree of life is squeezed to ${Math.round(th)}px`);
-        await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
+        await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { polling: 400, timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
         await page.screenshot({ path: `${out}/twins-${phone}-${orient}.png` });
         await chip.first().click({ timeout: 20000 });
-        await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), keys[0], { timeout: 30000 }).catch(() => fail(`the first twin (${keys[0]}) did not open`));
+        await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), keys[0], { polling: 400, timeout: 30000 }).catch(() => fail(`the first twin (${keys[0]}) did not open`));
       } catch (e) {
         fail(`stopped: ${e.message.split('\n')[0]}`);
       }
@@ -769,7 +769,7 @@ if (existsSync(join(distDir, 'radar'))) {
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     try {
       await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&date=05-25`);
-      await page.waitForFunction(() => window.__hatch.current().id === 'poecilocapsus-lineatus-atlas', null, { timeout: 60000 });
+      await page.waitForFunction(() => window.__hatch.current().id === 'poecilocapsus-lineatus-atlas', null, { polling: 400, timeout: 60000 });
       await page.locator('#bar .ribbon .range').waitFor({ state: 'attached', timeout: 20000 }).catch(() => fail('a typical year drew no band of usual years'));
       const key = await page.locator('#strip .range-note').boundingBox();
       if (!key) fail('the band has no key line');
@@ -819,12 +819,15 @@ if (existsSync(join(distDir, 'radar'))) {
       try {
         await page.goto(`${origin}/?noauto&today=2027-01-15`);
         await page.waitForTimeout(1500);
-        for (const [want, pick] of [['Luna moth', null], ['Lunate Zale Moth', ['lunate zale', 'zale-lunata']], ['Red-spotted Admiral', ['red-spotted admiral', 'limenitis-arthemis']]]) {
+        for (const [want, pick] of [['Luna moth', null], ['Lunate Zale Moth', ['lunate zale', 'zale-lunata']], ['Red-spotted Purple', ['red-spotted purple', 'limenitis-arthemis-astyanax']],
+          // The groups reconcile.py names for two species: short enough for the button too.
+          ['Eyed Browns', ['eyed browns', 'lethe-eurydice-appalachia']], ['Red Paper Wasps', ['red paper wasps', 'polistes-carolina-rubiginosus']],
+          ['Meganola Moths', ['meganola moths', 'meganola-minuscula-phylla']], ['Sharpshooter Hoppers', ['sharpshooter hoppers', 'neokolla-hieroglyphica-amphigonalia-gothica']]]) {
           if (pick) {
             await page.locator('#species').click({ timeout: 60000 });
             await page.locator('#sp-q').fill(pick[0], { timeout: 60000 });
             await page.locator(`#sp-list [data-key="${pick[1]}"]`).first().click({ timeout: 60000 });
-            await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, pick[1], { timeout: 60000 });
+            await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, pick[1], { polling: 400, timeout: 60000 });
             await page.waitForTimeout(500);
           }
           const f = await face();

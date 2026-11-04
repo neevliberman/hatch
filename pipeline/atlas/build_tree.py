@@ -29,6 +29,9 @@ SPECIES = ROOT / 'public' / 'atlas' / 'species.json'
 OUT = ROOT / 'public' / 'atlas' / 'tree.json'
 API = 'https://api.opentreeoflife.org/v3/'
 INAT = 'https://api.inaturalist.org/v1/taxa/'
+sys.path.insert(0, str(ROOT))
+from pipeline.atlas.config import records_name  # noqa: E402
+
 UA = {'User-Agent': 'hatch-atlas (github.com/neevliberman/hatch)'}
 # iNaturalist's answers, kept between runs (notebooks/data is not in git): delete it to ask again.
 CACHE = ROOT / 'notebooks' / 'data' / 'atlas' / 'tree_inat.json'
@@ -189,7 +192,7 @@ def main():
         write(old['t'], old['g'], common_names_or_old(old['t'], species))
         print(f'{OUT.stat().st_size / 1024:.1f} KB')
         return
-    names = [s['name'] for s in species]
+    names = [records_name(s) for s in species]  # GBIF's names, which the Open Tree knows
     by_genus = {s['genus']: s for s in species if s.get('order') and s.get('genus')}
     for s in species:  # a few rows lack their order / family: borrow them from a species of the same genus
         mate = by_genus.get(s['name'].split()[0])
@@ -216,8 +219,8 @@ def main():
 
     by_ott = {}
     for i, s in enumerate(species):
-        if s['name'] in ott:
-            by_ott.setdefault(ott[s['name']], i)
+        if records_name(s) in ott and 'into' not in s:  # a row shown under another (reconcile.py) has no leaf
+            by_ott.setdefault(ott[records_name(s)], i)
 
     def to_node(n):
         if n['c'] is None:
@@ -241,7 +244,7 @@ def main():
             if species[i].get(rank):
                 index[species[i][rank]].append(i)
         for i, s in enumerate(species):
-            if i in placed or not s.get(rank) or s[rank] not in index:
+            if i in placed or 'into' in s or not s.get(rank) or s[rank] not in index:
                 continue
             target = set(index[s[rank]])
 
@@ -260,7 +263,7 @@ def main():
             placed.add(i)
             grafted.append(i)
     for i, s in enumerate(species):  # no relative at all: hang from the top
-        if i not in placed and not s['name'].startswith('('):
+        if i not in placed and 'into' not in s and not s['name'].startswith('('):
             tree = ['', '', tree, i]
             placed.add(i)
             grafted.append(i)

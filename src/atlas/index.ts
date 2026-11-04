@@ -28,7 +28,22 @@ export interface AtlasSpecies {
   /** A published long-term count trend (pipeline/atlas/ohio_published.py): [source, % per year, its 95% interval low
    * and high, sites, years]. Source "oh": Ohio butterfly monitoring 1996-2016 (TREND_SOURCES). Absent for most. */
   trend?: [string, number, number, number, number, number];
+  /** GBIF's name for the records, when the Atlas shows iNaturalist's instead (pipeline/atlas/reconcile.py). A link
+   * made with the old name's key still opens it. */
+  gbif?: string;
+  /** The iNaturalist species the records hold, when GBIF's one species is two of iNaturalist's (reconcile.py). */
+  taxa?: number[];
+  /** Other Latin names search finds it by ("Satyrodes eurydice"). */
+  aka?: string[];
+  /** The row shown in this one's place (its index): GBIF split one iNaturalist species into two outputs of the network,
+   * and only the other is listed (reconcile.py). A link to this one opens that one. */
+  into?: number;
 }
+
+/** Whether a species is listed (search, browse, the strips): every row but one shown under another (`into`). */
+export const listed = (s: Pick<AtlasSpecies, 'into'>) => s.into === undefined;
+/** For the strips' picks: whether row i of the species list is one shown under another (never one of the n picked). */
+export const unlistedIn = (species: readonly Pick<AtlasSpecies, 'into'>[] | null) => (i: number) => !!species?.[i] && !listed(species[i]!);
 
 /** Where a species' `trend` comes from: the line's label, its credit and the link. */
 export const TREND_SOURCES: Record<string, { label: string; note: string; credit: string; creditLine: string; href: string }> = {
@@ -215,7 +230,7 @@ const TWIN_NUDGE = 0.01;
  * plus a tie-breaker (TWIN_NUDGE) toward species people actually photograph. Leaves out the species' own
  * genus and keeps one per genus, so near-twin congeners don't fill the row. Best first; empty for a species with no curve.
  */
-export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i' | 'name' | 'genus' | 'n'>[], i: number, n = 3): number[] {
+export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i' | 'name' | 'genus' | 'n' | 'into'>[], i: number, n = 3): number[] {
   const rows = b.length / (2 * STEPS);
   if (!(i >= 0 && i < rows)) return [];
   const at = (j: number) => j * 2 * STEPS;
@@ -233,7 +248,7 @@ export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i
   const self = species.find((s) => s.i === i);
   const scored: [number, number, string][] = [];
   for (const s of species) {
-    if (s.i === i || s.n < TWIN_MIN_RECORDS || !(s.i >= 0 && s.i < rows)) continue;
+    if (s.i === i || s.n < TWIN_MIN_RECORDS || !listed(s) || !(s.i >= 0 && s.i < rows)) continue;
     const c = at(s.i);
     const tc = top(s.i);
     if (!tc) continue;
@@ -264,6 +279,12 @@ export async function loadTwins(species: readonly AtlasSpecies[], i: number, n =
 
 /** The ?species= key for a species: its scientific name, lower case, hyphens ("papilio-glaucus"). */
 export const atlasKey = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+/** The Atlas species a ?species= key names: by its name, else by its GBIF name (a link from before reconcile.py renamed
+ * it); a row shown under another (`into`) gives that one. */
+export function atlasByKey(species: readonly AtlasSpecies[], key: string): AtlasSpecies | undefined {
+  const s = species.find((x) => atlasKey(x.name) === key) ?? species.find((x) => !!x.gbif && atlasKey(x.gbif) === key);
+  return s?.into !== undefined ? species[s.into] : s;
+}
 
 /** A year's biggest surprises (pipeline/atlas/seen.py): species index and a few words, "2.0×", "3%", "11 d late". */
 export interface Surprise {
@@ -293,10 +314,10 @@ export type OffSchedule = [number, number][];
 /** Photos a species needs expected before its timing is worth ranking. */
 export const OFF_MIN_EXPECTED = 50;
 /** The n species with the largest |days| among those with at least OFF_MIN_EXPECTED photos expected (seen-YEAR.json rows). */
-export function pickOffSchedule(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10): OffSchedule {
+export function pickOffSchedule(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, skip: (i: number) => boolean = () => false): OffSchedule {
   const out: OffSchedule = [];
   rows.forEach((r, i) => {
-    if (r[1] >= OFF_MIN_EXPECTED && r[3] !== null && r[3] !== 0) out.push([i, r[3]]);
+    if (!skip(i) && r[1] >= OFF_MIN_EXPECTED && r[3] !== null && r[3] !== 0) out.push([i, r[3]]);
   });
   return out.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0] - b[0]).slice(0, n);
 }
@@ -308,7 +329,7 @@ const seenFile = (year: number): Promise<SeenFile | null> =>
   (seenFiling ??= json<SeenFile>(`seen-${year}.json`).then((f) => (f?.species ? f : ((seenFiling = null), null))));
 /** The year's most off-schedule species for the species picker, from seen-YEAR.json. Null when missing. */
 export function loadOffSchedule(year: number, n = 10): Promise<OffSchedule | null> {
-  return seenFile(year).then((f) => (f ? pickOffSchedule(f.species, n) : null));
+  return Promise.all([seenFile(year), loadIndex()]).then(([f, s]) => (f ? pickOffSchedule(f.species, n, unlistedIn(s)) : null));
 }
 /** Photos a species needs expected before a shortfall is worth ranking, and how far below expected counts as quiet. */
 export const QUIET_MIN_EXPECTED = 100;
@@ -325,10 +346,10 @@ export type Quiet = { i: number; seen: number; expected: number };
 /** The n species with the fewest photos against expected: at least QUIET_MIN_EXPECTED expected, ratio outside chance and
  * under QUIET_BELOW, and not `late` (a species whose identifications are still coming in). */
 // Near zero (under 5% of expected) is almost always a periodical brood's off-year or a data gap, not a quiet year.
-export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, late: (i: number) => boolean = () => false): Quiet[] {
+export function pickQuiet(rows: readonly (readonly [number, number, number | null, number | null])[], n = 10, late: (i: number) => boolean = () => false, skip: (i: number) => boolean = () => false): Quiet[] {
   const out: Quiet[] = [];
   rows.forEach((r, i) => {
-    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05 && !late(i)) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
+    if (r[1] >= QUIET_MIN_EXPECTED && r[2] !== null && r[2] < QUIET_BELOW && r[0] >= r[1] * 0.05 && !late(i) && !skip(i)) out.push({ i, seen: r[0], expected: Math.round(r[1]) });
   });
   return out.sort((a, b) => a.seen / a.expected - b.seen / b.expected || b.expected - a.expected || a.i - b.i).slice(0, n);
 }
@@ -336,14 +357,14 @@ export function pickQuiet(rows: readonly (readonly [number, number, number | nul
  * (season.bin, seasonsOf) peaking within QUIET_LATE_DAYS of its last day. Null when missing; without season.bin none
  * are left out. */
 export function loadQuiet(year: number, n = 10): Promise<Quiet[] | null> {
-  return Promise.all([seenFile(year), loadSeasons()]).then(([f, b]) => {
+  return Promise.all([seenFile(year), loadSeasons(), loadIndex()]).then(([f, b, s]) => {
     if (!f) return null;
     const late = (i: number) => {
       const c = b && typical(b, i);
       const d = c && seasonsOf(c);
       return !!d && d.broods!.some((r) => r.peak > f.last_day - QUIET_LATE_DAYS); // any brood, not just the biggest
     };
-    return pickQuiet(f.species, n, late);
+    return pickQuiet(f.species, n, late, unlistedIn(s));
   });
 }
 /** "9 d early" / "4 d late". */

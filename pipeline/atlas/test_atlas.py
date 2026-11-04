@@ -91,7 +91,7 @@ def test_tree_holds_every_species_once_and_names_whole_groups():
         return [n] if isinstance(n, int) else [i for c in n[2:] for i in tips(c)]
 
     got = tips(tree)
-    assert sorted(got) == list(range(len(species)))
+    assert sorted(got) == [i for i, s in enumerate(species) if "into" not in s]  # a row shown under another: no tip
     key = {"o": "order", "f": "family", "g": "genus"}
 
     def check(n):
@@ -205,6 +205,7 @@ def test_track_record_matches_the_gate_and_ships():
     exactly what per_species.csv says. The gate's 753 wins of 798 in 2026 are 743 beats and 10 of the 22 ties."""
     import json
     from pathlib import Path
+    from pipeline.atlas.config import records_name
     from pipeline.atlas.track_record import outcome, track_record
     assert [outcome(g, 50, 500) for g in (10, 2.9, -2.9, -10)] == [1, 0, 0, -1]
     assert outcome(500, 19, 500) is None and outcome(500, 50, 399) is None
@@ -214,7 +215,7 @@ def test_track_record_matches_the_gate_and_ships():
     assert rec["Bombus impatiens"] == [1, 5660, 1, 3234] and rec["Spilosoma virginica"] == [0, 1000, -1, 231]
     assert "Magicicada septendecim" not in rec  # no brood in 2026: too few photos to test
     species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
-    assert {s["name"]: s["rec"] for s in species if "rec" in s} == rec and not any("test" in s for s in species)
+    assert {records_name(s): s["rec"] for s in species if "rec" in s} == rec and not any("test" in s for s in species)
 
 
 def test_names_fill_in_english_from_the_other_sources():
@@ -249,7 +250,7 @@ def test_names_fill_in_english_from_the_other_sources():
                          ("Kentish owlet", vt[0], None), ("Flower moth", vt[0], None)], "Scythris sinensis", ["Flower Moths"]) is None
     assert pick_english([("Golden-eyed Lacewing", *vt), ("Golden-eyed Lacewing", *mv)], "Chrysopa oculata") == "Golden-eyed Lacewing"
     species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
-    purple = next(s for s in species if s["name"] == "Limenitis astyanax")
+    purple = next(s for s in species if s.get("gbif") == "Limenitis astyanax")
     assert purple["common"] == "Red-spotted Purple" and purple["taxon"] == 58585 and purple["family"] == "Nymphalidae"
     bad = {"Pleasing Fungus Beetle", "Hunchback Bee Fly", "Gerdana Moth", "Kentish Owlet", "Valgus Hemipterus"}
     assert not [s["common"] for s in species if s.get("common") in bad]
@@ -360,3 +361,48 @@ def test_spread_never_bands_identical_years():
     one = np.round(rng.normal(170, 10, 200))  # the very same photos every year: every slide 0, no noise at all
     doy = np.tile(one, len(YEARS))
     assert spread(doy, rng.uniform(37, 48, doy.size), np.repeat(YEARS, 200), rng, rng.uniform(-95, -82, doy.size))[0] is None
+
+
+def test_reconcile_names_rows_as_their_records():
+    """reconcile.py: a GBIF species holding two of iNaturalist's is named for both (the Eyed and Appalachian Browns,
+    which GBIF files as one); the Red-spotted Purple, a subspecies to iNaturalist, is named so, and the rest of its
+    species is not listed beside it; a row whose records are one iNaturalist taxon goes by iNaturalist's name. No two
+    listed rows share a taxon, and every renamed row keeps GBIF's name, which joins it to its records."""
+    import json
+    from pathlib import Path
+    from pipeline.atlas.config import records_name
+    from pipeline.atlas.reconcile import GROUPS, INTO, prune_tree, same_taxon
+    assert same_taxon({"name": "Polites peckius", "rank": "species"}, {"polites peckius": 9})
+    assert same_taxon({"name": "Callophrys augustinus", "rank": "species"}, {"callophrys augustinus": 9, "callophrys augustinus augustinus": 1})
+    assert not same_taxon({"name": "Lethe appalachia", "rank": "species"}, {"lethe appalachia": 9, "lethe eurydice": 5})
+    assert same_taxon({"name": "Limenitis arthemis astyanax", "rank": "subspecies"}, {"limenitis arthemis astyanax": 9})
+    assert not same_taxon({"name": "Limenitis arthemis astyanax", "rank": "subspecies"}, {"limenitis arthemis": 9})
+    assert not same_taxon({"name": "Actias luna", "rank": "species"}, None)
+    tree = {"g": [3, 4], "t": ["Insecta", "", ["", "", 1, 4], ["Lethe", "g", 2, 3]]}
+    assert prune_tree(tree, {4}) == {"g": [3], "t": ["Insecta", "", 1, ["Lethe", "g", 2, 3]]}
+    assert prune_tree(tree, {2, 3}) == {"g": [4], "t": ["Insecta", "", ["", "", 1, 4]]}
+    moved = {"g": [], "c": {"Lethe": "Pearly-eyes"}, "t": ["Insecta", "", 1, ["Lethe", "g", ["", "", 2, 3], 4]]}
+    assert prune_tree(moved, set(), {1: "Danaus", 2: "Lethe", 3: "Lethe", 4: "Enodia"}) == {
+        "g": [], "c": {"Lethe": "Pearly-eyes"}, "t": ["Insecta", "", 1, ["", "", ["Lethe", "g", ["", "", 2, 3]], 4]]}
+    assert prune_tree(moved, set(), {1: "Danaus", 2: "Enodia", 3: "Enodia", 4: "Enodia"})["c"] == {}
+
+    species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
+    by = {records_name(s): s for s in species}
+    browns = by["Lethe eurydice"]
+    assert browns["name"] == "Lethe eurydice / appalachia" and browns["taxon"] == 1265201 and set(browns["taxa"]) == {141531, 132227}
+    assert browns["common"] == "Eyed Browns" and "Satyrodes eurydice" in browns["aka"]
+    groups = [s for s in species if "taxa" in s]  # one Latin form, and a short common name for the header
+    assert len(groups) == 4 and all(" / " in s["name"] and s["common"] and len(s["common"]) <= 20 for s in groups)
+    assert by["Limenitis astyanax"]["name"] == "Limenitis arthemis astyanax"
+    assert by["Limenitis arthemis"]["into"] == by["Limenitis astyanax"]["i"]
+    assert all(by[g]["name"] == f["name"] for g, f in GROUPS.items()) and all("into" in by[g] for g in INTO)
+    listed = [s for s in species if "into" not in s]
+    assert len({s["taxon"] for s in listed}) == len(listed)
+    assert len({s["name"] for s in species}) == len(species) and all(s["gbif"] != s["name"] for s in species if "gbif" in s)
+    assert by["Polites coras"]["name"] == "Polites peckius" and by["Polites coras"]["taxon"] == 133631
+    tree = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/tree.json").read_text())
+
+    def leaves(n):
+        return [n] if isinstance(n, int) else [x for c in n[2:] for x in leaves(c)]
+    assert by["Limenitis arthemis"]["i"] not in leaves(tree["t"]) and browns["i"] in leaves(tree["t"])
+

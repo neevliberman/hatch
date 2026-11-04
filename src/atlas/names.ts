@@ -37,12 +37,13 @@ export function plural(s: AtlasSpecies): string {
 }
 
 /** Lower case, accents and apostrophes dropped, for matching: "cassins" finds "Cassin's", "e" finds "é". */
-const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\u2018\u2019`]/g, '').toLowerCase();
+// Brackets and slashes read as spaces, so "satyrodes" starts a word of "Lethe (Satyrodes)" and "appalachia" one of "eurydice/appalachia".
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\u2018\u2019`]/g, '').replace(/[()/]/g, ' ').replace(/\s+/g, ' ').toLowerCase();
 
 /**
  * Search the species list. Every word must start a word of the common name, Latin name, genus, family or order (or the
  * order's plain name). Best first, by tier:
- * 4. the whole common name, a featured species' label, or the Latin name, exactly;
+ * 4. the whole common name, a featured species' label, or the Latin name (or an old one, `gbif`), exactly;
  * 3. every word is a whole word of the common name ("luna" in "North American Luna Moth", "cicada" in "Swamp Cicada"),
  *    or a featured species (it has a richer layer) whose name the words start;
  * 2. every word starts a word of the common name ("luna" in "Lunate Zale Moth", "cicada" in "Cicada-killer Wasp");
@@ -60,16 +61,24 @@ export function searchSpecies(all: readonly AtlasSpecies[], text: string, featur
     const ws = n.split(' ');
     return words.every((w) => ws.includes(w));
   };
+  // A row shown under another (`into`, pipeline/atlas/reconcile.py) is never listed, but its names find that row:
+  // "red-spotted admiral" finds the Red-spotted Purple.
+  const under = new Map<number, AtlasSpecies[]>();
+  for (const s of all) if (s.into !== undefined) under.set(s.into, [...(under.get(s.into) ?? []), s]);
   const scored: { s: AtlasSpecies; tier: number; feat: number }[] = [];
   for (const s of all) {
+    if (s.into !== undefined) continue; // shown under another row (index.ts listed)
     const f = featured.get(s.name);
     const label = f === undefined ? undefined : fold(f);
-    const names = [fold(s.common ?? ''), label ?? ''].filter(Boolean);
+    const aka = under.get(s.i) ?? [];
+    const names = [fold(s.common ?? ''), label ?? '', ...aka.map((a) => fold(a.common ?? ''))].filter(Boolean);
     const sci = fold(s.name);
-    const hay = fold(`${names.join(' ')} ${s.name} ${s.genus ?? ''} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`);
+    // Its old Latin names too: GBIF's ("Speyeria cybele", now Argynnis cybele) and those of the rows under it.
+    const old = [s.gbif, ...(s.aka ?? []), ...aka.flatMap((a) => [a.name, a.gbif])].filter((x): x is string => !!x).map(fold).map((x) => x.trim());
+    const hay = fold(`${names.join(' ')} ${s.name} ${old.join(' ')} ${s.genus ?? ''} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`);
     if (!words.every((w) => starts(hay, w))) continue;
     const named = names.some((n) => words.every((w) => starts(n, w)));
-    const tier = names.includes(t) || sci === t ? 4 : names.some(whole) || (named && label !== undefined) ? 3 : named ? 2 : 1;
+    const tier = names.includes(t) || sci === t || old.includes(t) ? 4 : names.some(whole) || (named && label !== undefined) ? 3 : named ? 2 : 1;
     scored.push({ s, tier, feat: label !== undefined ? 1 : 0 });
   }
   return scored

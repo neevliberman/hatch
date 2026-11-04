@@ -471,6 +471,8 @@ function start() {
     if (atPeak && __BASEMAP__) void import('./atlas/atlas').then((m) => m.loadAtlas()).then((a) => a?.seen(0));
     const entry = (await findSpecies(want)) ?? SPECIES[0]!;
     if (ticket !== asking) return;
+    // A link by a renamed Atlas species' old key (src/atlas/index.ts atlasByKey) is still this link: its season holds.
+    if (speciesPending === want && entry.key !== want && entry.sci) speciesPending = entry.key;
     if (!loaded.has(entry.key)) {
       if (!entry.load) return;
       // One load per species, however many times it is picked meanwhile (a slow Atlas load, a double tap on a card).

@@ -464,7 +464,7 @@ const screenUnit = async ([engine, width, height], browser = browsers[engine]) =
   const d1 = await page.locator('#t-date').textContent();
   await page.keyboard.press('Space');
   // Software GL in CI can draw a frame or two a second: give playback a few seconds to move the date.
-  const played = await page.waitForFunction((d) => document.querySelector('#t-date')?.textContent !== d, d1, { timeout: 4000 }).then(() => true, () => false);
+  const played = await page.waitForFunction((d) => document.querySelector('#t-date')?.textContent !== d, d1, { polling: 400, timeout: 4000 }).then(() => true, () => false);
   await page.keyboard.press('Space');
   if (!played) fail('Space did not play');
 
@@ -672,7 +672,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForTimeout(200);
       if (served !== null && (await page.locator('#t-doy').textContent()) !== 'forecast') fail('a day after "today" is not marked forecast');
       await page.evaluate(() => window.__hatch.map.view([-87.9, 42.0], 8.6));
-      await page.waitForFunction(() => window.__hatch.luna.res() > 4, null, { timeout: 60000 }).catch(() => {});
+      await page.waitForFunction(() => window.__hatch.luna.res() > 4, null, { polling: 400, timeout: 60000 }).catch(() => {});
       if ((await page.evaluate(() => window.__hatch.luna.res())) <= 4) fail('live mode stayed on the big hexagons when zoomed in');
       if (label === 'in-season default') {
         // About panel: the live card and the weather credits.
@@ -694,12 +694,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         // Back out to the whole Midwest first. Zoomed in, each species switch redraws the fine hexagons, and on software GL
         // (CI) one frame can take 10-25 s; a click waits for two frames, so the picker's rows timed out at 30 s.
         await page.evaluate(() => window.__hatch.map.fit(window.__hatch.padding()));
-        await page.waitForFunction(() => window.__hatch.luna.res() <= 4, null, { timeout: 60000 }).catch(() => fail('live mode stayed on the fine hexagons after zooming out'));
+        await page.waitForFunction(() => window.__hatch.luna.res() <= 4, null, { polling: 400, timeout: 60000 }).catch(() => fail('live mode stayed on the fine hexagons after zooming out'));
         // The firefly has a part in the served file: picking it from live mode stays live, and its menu offers live.
         // The beetle has none: it lands on all years, its menu has no live option, and says why at the top.
         if (await page.locator('#species').isVisible()) {
           await pickSpecies(page, 'firefly');
-          await page.waitForFunction(() => window.__hatch.current().id === 'firefly-replay', null, { timeout: 60000 }).catch(() => fail('the firefly never loaded'));
+          await page.waitForFunction(() => window.__hatch.current().id === 'firefly-replay', null, { polling: 400, timeout: 60000 }).catch(() => fail('the firefly never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'live') fail(`firefly from live mode opened on ${await page.locator('#season').inputValue()}`);
           if (!(await page.locator('#season option[value=live]').count())) fail('the firefly season menu does not offer live mode');
@@ -709,7 +709,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
           if (ffDate && (await page.locator('#t-date').textContent()) !== ffDate)
             fail(`firefly live mode opened on ${await page.locator('#t-date').textContent()}, not its as-of day ${ffDate}`);
           await pickSpecies(page, 'japanese-beetle');
-          await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 60000 }).catch(() => fail('the beetle never loaded'));
+          await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { polling: 400, timeout: 60000 }).catch(() => fail('the beetle never loaded'));
           await page.waitForTimeout(800);
           if ((await page.locator('#season').inputValue()) !== 'typical') fail(`the beetle (no live entry) from live mode opened on ${await page.locator('#season').inputValue()}`);
           if (await page.locator('#season option[value=live]').count()) fail('the beetle season menu offers live mode without a live entry');
@@ -746,7 +746,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const shotS = (step) => page.screenshot({ path: `${out}/species-${label.replace(/\W+/g, '-')}-${step}.png` });
     try {
       await page.goto(origin + '/?species=japanese-beetle&noauto&today=2027-01-15&date=07-05');
-      await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { timeout: 30000 })
+      await page.waitForFunction(() => window.__hatch.current().id === 'japanese-beetle-replay', null, { polling: 400, timeout: 30000 })
         .catch(() => fail('a ?species=japanese-beetle link never opened on the beetle'));
       await page.waitForTimeout(1500);
       await page.locator('#species').click();
@@ -771,7 +771,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // Every other species from the menu, then back: each loads (its own layer id) and is drawn.
       for (const k of listed.filter((k) => k !== 'japanese-beetle')) {
         await pickSpecies(page, k);
-        await page.waitForFunction((k) => /-(replay|front)$/.test(window.__hatch.current().id) && window.__hatch.current().id.startsWith(`${k}-`), k, { timeout: 30000 }).catch(() => fail(`${k} never loaded`));
+        await page.waitForFunction((k) => /-(replay|front)$/.test(window.__hatch.current().id) && window.__hatch.current().id.startsWith(`${k}-`), k, { polling: 400, timeout: 30000 }).catch(() => fail(`${k} never loaded`));
         // A tracker (monarch, red admiral) has no forecast: the page drops its "Colors: forecast" caveat; the others keep it.
         const tracker = await page.evaluate(() => window.__hatch.current().tracker === true);
         if ((await page.locator('#app.tracker').count()) !== (tracker ? 1 : 0)) fail(`${k}: the page's tracker mode does not match the layer (tracker=${tracker})`);
@@ -803,7 +803,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     // timeout while the network fills the map, which must not fail the checks around it.
     const shotA = (step) => page.screenshot({ path: `${out}/atlas-${step}.png`, timeout: 60000 })
       .catch((e) => console.log(`atlas-${step} screenshot skipped: ${e.message.split('\n')[0]}`));
-    const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { timeout: 30000 }).then(() => true, () => false);
+    const isOn = (id) => page.waitForFunction((id) => window.__hatch.current().id === id, id, { polling: 400, timeout: 30000 }).then(() => true, () => false);
     const clearSpot = (box) => clearSpotOn(page, box);
     try {
       await page.goto(origin + '/?species=papilio-glaucus&noauto&date=08-01');
@@ -816,7 +816,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       });
       if (drawn < 300) fail(`only ${drawn} coloured cells on 1 August`);
       // Its real photos as dots (dots/<i>.bin): a typical year's 1 August has hundreds of tiger swallowtails lit.
-      const lit = await page.waitForFunction(() => window.__hatch.current().points(window.__hatch.time.cursor).length, null, { timeout: 10000 })
+      const lit = await page.waitForFunction(() => window.__hatch.current().points(window.__hatch.time.cursor).length, null, { polling: 400, timeout: 10000 })
         .then((h) => h.jsonValue(), () => 0);
       if (lit < 50) fail(`only ${lit} photo dots lit on 1 August`);
       await shotA('1-field');
@@ -879,7 +879,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const title = await page.locator('.tol-card b').textContent();
       await shotA('2c-tree-species');
       await page.locator('.tol-go').click();
-      await page.waitForFunction((t) => document.querySelector('#species')?.getAttribute('aria-label')?.includes(t), title, { timeout: 30000 })
+      await page.waitForFunction((t) => document.querySelector('#species')?.getAttribute('aria-label')?.includes(t), title, { polling: 400, timeout: 30000 })
         .catch(() => fail(`"Show on map" for ${title} did not switch to it`));
       // The year's surprises, a second strip over the tree: one opens on 2026, the year it surprised.
       await page.locator('#species').click();
@@ -898,7 +898,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (!(await page.locator('#season option[value="2026"]').count())) fail('the season menu does not offer 2026');
       else {
         await page.locator('#season').selectOption('2026');
-        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 }).catch(() => fail('2026 never took'));
+        await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { polling: 400, timeout: 25000 }).catch(() => fail('2026 never took'));
       }
       // Warm the spring: +3 °F reruns the season (a spring bug comes out sooner), the link keeps it, a ?warm= link
       // reopens it, and closing it puts spring back as it was.
@@ -914,7 +914,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#warm').click();
       await page.locator('#warm-in').fill('3');
       await page.locator('#warm-in').dispatchEvent('input');
-      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { timeout: 90000 })
+      await page.waitForFunction(() => /earlier/.test(document.getElementById('warm-out').textContent), null, { polling: 400, timeout: 90000 })
         .catch(async () => fail(`+3 °F never said "earlier": "${await page.locator('#warm-out').textContent()}"`));
       await page.waitForTimeout(3000);
       const after = await ink();
@@ -924,7 +924,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         .catch(() => fail(`the link dropped the warmth: ${page.url()}`));
       await page.goto(origin + '/?species=poecilocapsus-lineatus&noauto&date=05-20&warm=-2');
       await isOn('poecilocapsus-lineatus-atlas');
-      await page.waitForFunction(() => /later/.test(document.getElementById('warm-out').textContent), null, { timeout: 30000 })
+      await page.waitForFunction(() => /later/.test(document.getElementById('warm-out').textContent), null, { polling: 400, timeout: 30000 })
         .catch(() => fail('a ?warm=-2 link did not open spring 2 °F cooler'));
       await page.locator('#warm-row .warm-x').click();
       if ((await page.locator('#warm-in').inputValue()) !== '0' || !(await page.locator('#warm-row').isHidden())) fail('closing the slider left spring warmed');
@@ -941,7 +941,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if (!(await page.locator('#strip .vs-note').isVisible())) fail('the time bar draws expected vs seen with no key saying which is which');
       const ohio = await clearSpot([-84.5, 39.5, -81, 41.5]);
       await page.mouse.click(ohio[0], ohio[1]);
-      await page.waitForFunction(() => /Across the map in 2026: \d+(\.\d)?× as many photos as expected/.test(document.getElementById('probe').textContent), null, { timeout: 10000 })
+      await page.waitForFunction(() => /Across the map in 2026: \d+(\.\d)?× as many photos as expected/.test(document.getElementById('probe').textContent), null, { polling: 400, timeout: 10000 })
         .catch(async () => fail(`the 2026 card does not say how the year went: "${await page.locator('#probe').innerText()}"`));
       await shotA('5-seen');
       // A pinned card names others out here; one tap switches to it.
@@ -955,7 +955,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await shotA('3-card');
       const want = await other.getAttribute('data-species');
       await other.click();
-      await page.waitForFunction((k) => window.__hatch.current().id.startsWith(`${k}-`) || (k === 'danaus-plexippus' && window.__hatch.current().id.startsWith('monarch-')), want, { timeout: 30000 })
+      await page.waitForFunction((k) => window.__hatch.current().id.startsWith(`${k}-`) || (k === 'danaus-plexippus' && window.__hatch.current().id.startsWith('monarch-')), want, { polling: 400, timeout: 30000 })
         .catch(() => fail(`tapping ${want} on the card did not switch to it`));
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
@@ -1354,7 +1354,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     };
     const go = async (key) => {
       await page.goto(`${origin}/?noauto&today=2027-01-15&date=08-01${key ? `&species=${key}` : ''}`);
-      if (key) await page.waitForFunction((k) => window.__hatch?.current?.().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`${key} never opened`));
+      if (key) await page.waitForFunction((k) => window.__hatch?.current?.().id === `${k}-atlas`, key, { polling: 400, timeout: 30000 }).catch(() => fail(`${key} never opened`));
       await page.waitForTimeout(1200);
     };
     try {
@@ -1386,10 +1386,10 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.evaluate(() => localStorage.setItem('hatch-place', JSON.stringify({ name: 'Chicago, IL', lat: 41.88, lng: -87.63 })));
       await go('papilio-glaucus');
       await open();
-      await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 3, null, { timeout: 10000 })
+      await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 3, null, { polling: 400, timeout: 10000 })
         .catch(async () => fail(`the Watching row shows ${await chips().count()} of 3 species after a reload`));
       // Their countdowns arrive once season.bin is in.
-      await page.waitForFunction(() => [...document.querySelectorAll('#sp-watch .sp-go span')].every((s) => /^out (now|in \d+ days?)$/.test(s.textContent)), null, { timeout: 15000 })
+      await page.waitForFunction(() => [...document.querySelectorAll('#sp-watch .sp-go span')].every((s) => /^out (now|in \d+ days?)$/.test(s.textContent)), null, { polling: 400, timeout: 15000 })
         .catch(async () => fail(`the Watching countdowns read ${JSON.stringify(await page.locator('#sp-watch .sp-go span').allTextContents())}`));
       if ((await star.getAttribute('aria-pressed')) !== 'true') fail('the star is not on for a watched species after a reload');
       const row = await page.locator('#sp-watch').boundingBox();
@@ -1411,7 +1411,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if ((await page.evaluate(() => document.activeElement?.dataset.unwatch)) !== 'papilio-glaucus') fail('a re-render of the Watching row dropped focus from a chip\'s cross');
       // A chip opens its species; with a saved place, that chip and the line under the map then say the same.
       await page.locator('#sp-watch [data-key="papilio-polyxenes"]').click();
-      await page.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { timeout: 30000 }).catch(() => fail('a Watching chip did not open its species'));
+      await page.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { polling: 400, timeout: 30000 }).catch(() => fail('a Watching chip did not open its species'));
       await page.locator('#near').waitFor({ state: 'visible', timeout: 30000 }).catch(() => fail('the saved place\'s line did not show'));
       await open();
       const chipSays = (await page.locator('#sp-watch [data-key="papilio-polyxenes"] span').textContent()) ?? '';
@@ -1429,7 +1429,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.evaluate(([k, v]) => localStorage.setItem(k, JSON.stringify(v)), [KEY, names.filter((n) => !['papilio-polyxenes', 'actias-luna', 'photinus-pyralis', 'popillia-japonica', 'danaus-plexippus', 'vanessa-atalanta'].includes(n)).slice(0, 12)]);
       await go('papilio-polyxenes');
       await open();
-      await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 12, null, { timeout: 10000 })
+      await page.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 12, null, { polling: 400, timeout: 10000 })
         .catch(async () => fail(`twelve saved species show ${await chips().count()} chips`));
       await star.click();
       if ((await star.getAttribute('aria-pressed')) !== 'false' || !/full/.test((await page.locator('#sp-wnote').textContent()) ?? '') || (await chips().count()) !== 12) fail('a thirteenth species was not refused');
@@ -1456,12 +1456,12 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       if ((await blocked.locator('.sp-star').getAttribute('aria-pressed')) !== 'true') fail('with storage blocked the star does not work for the visit');
       // A second species starred in the same visit joins the first instead of replacing it (a failed read is not an empty list).
       await blocked.locator('#sp-q').fill('papilio polyxenes');
-      await blocked.waitForFunction(() => /match/.test(document.querySelector('.sp-crumbs')?.textContent ?? ''), null, { timeout: 15000 });
+      await blocked.waitForFunction(() => /match/.test(document.querySelector('.sp-crumbs')?.textContent ?? ''), null, { polling: 400, timeout: 15000 });
       await blocked.locator('#sp-q').press('Enter');
-      await blocked.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { timeout: 30000 }).catch(() => fail('with storage blocked a searched species did not open'));
+      await blocked.waitForFunction(() => window.__hatch?.current?.().id === 'papilio-polyxenes-atlas', null, { polling: 400, timeout: 30000 }).catch(() => fail('with storage blocked a searched species did not open'));
       await blocked.locator('#species').click();
       await blocked.locator('.sp-star').click();
-      await blocked.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 2, null, { timeout: 10000 })
+      await blocked.waitForFunction(() => document.querySelectorAll('#sp-watch .sp-go').length === 2, null, { polling: 400, timeout: 10000 })
         .catch(async () => fail(`with storage blocked, starring a second species left ${await blocked.locator('#sp-watch .sp-go').count()} chips, not 2`));
       // And a cross removes only its own (the search box still holds the last search, which hides the row: clear it).
       await blocked.locator('#sp-q').fill('');
@@ -1519,8 +1519,8 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.screenshot({ path: `${out}/quiet-${phone ? 'phone' : 'desktop'}.png`, timeout: 60000 }).catch(() => {});
       const key = await chip.first().getAttribute('data-key');
       await chip.first().click();
-      await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { timeout: 30000 }).catch(() => fail(`the first quiet species (${key}) did not open`));
-      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { timeout: 25000 }).catch(() => fail('a quiet species did not open on 2026'));
+      await page.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, key, { polling: 400, timeout: 30000 }).catch(() => fail(`the first quiet species (${key}) did not open`));
+      await page.waitForFunction(() => window.__hatch.current().mode() === '2026', null, { polling: 400, timeout: 25000 }).catch(() => fail('a quiet species did not open on 2026'));
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
@@ -1660,17 +1660,17 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const sb = await page.locator('#sp-twins').boundingBox();
       const sh = await page.locator('#species-sheet').boundingBox();
       if (!sb || !sh || sb.x < sh.x - 1 || sb.x + sb.width > sh.x + sh.width + 1 || sb.y + sb.height > sh.y + sh.height + 1) fail('the "Flies with" strip spills out of the species sheet');
-      await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
+      await page.waitForFunction(() => [...document.querySelectorAll('#sp-twins img')].every((i) => i.complete), null, { polling: 400, timeout: 8000 }).catch(() => {}); // lazy photos: in before the shot
       await page.screenshot({ path: `${out}/twins-${phone ? 'phone' : 'desktop'}.png`, timeout: 60000 }).catch(() => {});
       const key = keys[0];
       await chip.first().click();
-      await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), key, { timeout: 30000 }).catch(() => fail(`the first twin (${key}) did not open`));
+      await page.waitForFunction((k) => [k, `${k}-atlas`].includes(window.__hatch.current().id), key, { polling: 400, timeout: 30000 }).catch(() => fail(`the first twin (${key}) did not open`));
       await page.waitForTimeout(500);
       await page.locator('#species').click();
       await page.waitForFunction((k) => {
         const ks = [...document.querySelectorAll('#sp-twins [data-key]')].map((e) => e.dataset.key);
         return ks.length === 3 && !ks.includes(k);
-      }, key, { timeout: 15000 }).catch(() => fail(`after switching to ${key}, its "Flies with" strip is missing or lists itself`));
+      }, key, { polling: 400, timeout: 15000 }).catch(() => fail(`after switching to ${key}, its "Flies with" strip is missing or lists itself`));
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
@@ -1776,7 +1776,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       const page = await ctx.newPage();
       page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && fail(`console error: ${m.text()}`));
       page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
-      const isOn = (id) => page.waitForFunction((k) => window.__hatch.current().id === k, id, { timeout: 60000 });
+      const isOn = (id) => page.waitForFunction((k) => window.__hatch.current().id === k, id, { polling: 400, timeout: 60000 });
       try {
         await page.goto(`${origin}/?species=poecilocapsus-lineatus&noauto&date=05-25`);
         await isOn('poecilocapsus-lineatus-atlas');
@@ -2056,7 +2056,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     const rest = [['papilio-polyxenes', 'Papilio polyxenes'], ['bombus-griseocollis', 'Bombus griseocollis'], ['xylocopa-virginica', 'Xylocopa virginica'],
       ['plathemis-lydia', 'Plathemis lydia'], ['epargyreus-clarus', 'Epargyreus clarus'], ['phyciodes-tharos', 'Phyciodes tharos'], ['pieris-rapae', 'Pieris rapae'],
       ['junonia-coenia', 'Junonia coenia'], ['oncopeltus-fasciatus', 'Oncopeltus fasciatus']];
-    const isOn = (p, k) => p.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, k, { timeout: 60000 });
+    const isOn = (p, k) => p.waitForFunction((k) => window.__hatch.current().id === `${k}-atlas`, k, { polling: 400, timeout: 60000 });
     const pick = async (k, q) => {
       // Software GL can spend 10-25 s on one frame, and a click waits for two: generous timeouts, as elsewhere in the Atlas.
       await page.locator('#species').click({ timeout: 90000 });
@@ -2148,7 +2148,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       block = false;
       await retry.click();
       if (!(await page.evaluate(() => document.activeElement?.id === 'sp-q'))) fail('after "Try again" focus did not go to the search box');
-      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5 && !document.querySelector('[data-retry]'), null, { timeout: 20000 })
+      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5 && !document.querySelector('[data-retry]'), null, { polling: 400, timeout: 20000 })
         .catch(() => fail('"Try again" did not load the species list'));
       // Nothing watched: the strip says how to start.
       await page.locator('#sp-watch .sp-none').waitFor({ timeout: 15000 }).catch(() => fail('the empty watch list says nothing'));
@@ -2167,7 +2167,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       // The town box: a name with no match says so as it is typed.
       await page.locator('#find').click();
       await page.locator('#find-q').fill('Zzyzx');
-      await page.waitForFunction(() => document.querySelector('#finder .find-none[role="status"]')?.textContent === 'No town by that name here.', null, { timeout: 10000 })
+      await page.waitForFunction(() => document.querySelector('#finder .find-none[role="status"]')?.textContent === 'No town by that name here.', null, { polling: 400, timeout: 10000 })
         .catch(() => fail('the town box says nothing (in a live region) for a name with no match'));
       await shotE('3-no-town');
       await page.locator('#find-q').press('Escape');
@@ -2206,16 +2206,28 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000, polling: 250 });
       // [query, the top row's key, or a test of its name]
       for (const [q, want] of [['luna', 'luna'], ['monarch', 'monarch'], ['firefly', 'firefly'], ['cicada', /^[\w' -]* Cicada$/], ['bumble', /Bumble Bee$/],
-        ['red-spotted purple', 'limenitis-astyanax'], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
+        ['red-spotted purple', 'limenitis-arthemis-astyanax'], ['appalachian brown', 'lethe-eurydice-appalachia'],
+        // Old names still find the species (reconcile.py renamed or merged them): GBIF's Latin name, the old genus, and the
+        // merged row's common name.
+        ['papilio cresphontes', 'heraclides-cresphontes'], ['lethe eurydice', 'lethe-eurydice-appalachia'], ['red-spotted admiral', 'limenitis-arthemis-astyanax'],
+        ['speyeria', /Fritillary$/], ['satyrodes', 'lethe-eurydice-appalachia'], ['Satyrodes eurydice', 'lethe-eurydice-appalachia'],
+        ['lethe eurydice / appalachia', 'lethe-eurydice-appalachia'], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
         await page.locator('#sp-q').fill(q);
         const top = page.locator('#sp-list .sp-row').first();
         await top.waitFor({ timeout: 10000 }).catch(() => {});
         const [key, name] = await top.evaluate((b) => [b.dataset.key, b.querySelector('.sp-name').firstChild.textContent]).catch(() => [null, null]);
         if (typeof want === 'string' ? key !== want : !want.test(name ?? '')) fail(`searching "${q}" puts "${name}" (${key}) first`);
-        if (q === 'red-spotted purple' && name !== 'Red-spotted Purple') fail(`Limenitis astyanax is listed as "${name}"`);
+        if (q === 'red-spotted purple' && name !== 'Red-spotted Purple') fail(`Limenitis arthemis astyanax is listed as "${name}"`);
+        if (q === 'appalachian brown' && name !== 'Eyed Browns') fail(`Lethe eurydice / appalachia is listed as "${name}"`);
         // A featured species shows its own label, as on the featured strip.
         if (q === 'luna' && name !== 'Luna moth') fail(`searching "luna" lists the luna moth as "${name}"`);
       }
+      // One species, one row: the rest of Limenitis arthemis is shown under the Red-spotted Purple (reconcile.py), never
+      // beside it.
+      await page.locator('#sp-q').fill('limenitis');
+      await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 2, null, { timeout: 10000, polling: 250 }).catch(() => {});
+      const lims = await page.locator('#sp-list .sp-row').evaluateAll((bs) => bs.map((b) => b.dataset.key));
+      if (lims.includes('limenitis-arthemis') || !lims.includes('limenitis-arthemis-astyanax')) fail(`searching "limenitis" lists ${lims.join(', ')}`);
       // A word start later in the name counts like the name's own start, and a tie goes to the species with more records:
       // "lunate" lists the lunate species by their record counts (species.json n), whichever word "Lunate" is.
       await page.locator('#sp-q').fill('lunate');
@@ -2231,6 +2243,34 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#sp-q').press('Enter');
       await page.waitForFunction(() => /^luna/.test(window.__hatch.current().id), null, { timeout: 30000, polling: 250 })
         .catch(async () => fail(`Enter on "luna" opened ${await page.evaluate(() => window.__hatch.current().id)}`));
+      // A group's name (reconcile.py: two species GBIF files as one) fits the species button whole, on one line.
+      for (const key of ['lethe-eurydice-appalachia', 'polistes-carolina-rubiginosus', 'meganola-minuscula-phylla', 'neokolla-hieroglyphica-amphigonalia-gothica']) {
+        await page.goto(`${origin}/?noauto&today=2027-01-15&species=${key}`);
+        if (!(await page.waitForFunction((k) => window.__hatch?.current?.().id === `${k}-atlas`, key, { timeout: 60000, polling: 400 }).then(() => true, () => false))) {
+          fail(`${key} never opened`);
+          continue;
+        }
+        const f = await page.locator('#species .sp-face').evaluate((e) => [e.textContent, e.scrollWidth, e.clientWidth]);
+        if (f[1] > f[2] + 1) fail(`"${f[0]}" is cut off in the species button (${f[1]} px in ${f[2]})`);
+      }
+      // A watch list saved under old keys (from before reconcile.py) comes back under the keys the list uses now, once
+      // each: the merged Limenitis row folds into the Red-spotted Purple, and every chip has its countdown.
+      const old = ['polites-coras', 'papilio-cresphontes', 'lethe-eurydice', 'limenitis-arthemis', 'limenitis-arthemis-astyanax'];
+      const now = ['polites-peckius', 'heraclides-cresphontes', 'lethe-eurydice-appalachia', 'limenitis-arthemis-astyanax'];
+      await page.evaluate((v) => localStorage.setItem('hatch-watch', JSON.stringify(v)), old);
+      await page.goto(`${origin}/?noauto&today=2027-01-15&species=limenitis-arthemis`);
+      await page.waitForFunction(() => window.__hatch?.current?.().id === 'limenitis-arthemis-astyanax-atlas', null, { timeout: 60000, polling: 400 })
+        .catch(async () => fail(`?species=limenitis-arthemis opened ${await page.evaluate(() => window.__hatch?.current?.().id)}`));
+      await page.locator('#species').click({ timeout: 60000 });
+      await page.waitForFunction((n) => document.querySelectorAll('#sp-watch .sp-go').length === n
+        && [...document.querySelectorAll('#sp-watch .sp-go span')].every((e) => e.textContent.trim()), now.length, { timeout: 30000, polling: 400 }).catch(() => {});
+      const chips = await page.locator('#sp-watch .sp-go').evaluateAll((bs) => bs.map((b) => [b.dataset.key, b.querySelector('b').textContent, b.querySelector('span').textContent]));
+      if (JSON.stringify(chips.map((c) => c[0])) !== JSON.stringify(now)) fail(`old watch keys come back as ${chips.map((c) => c[0]).join(', ')}`);
+      if (chips.some((c) => !c[2].trim())) fail(`a watched species from an old key has no countdown: ${JSON.stringify(chips)}`);
+      if (chips.some((c) => c[1] === 'Red-spotted Admiral')) fail('the merged Red-spotted Admiral row is on the watch list');
+      const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('hatch-watch') ?? '[]'));
+      if (JSON.stringify(kept) !== JSON.stringify(now)) fail(`the watch list was saved as ${JSON.stringify(kept)}`);
+      if ((await page.locator('.sp-star').getAttribute('aria-pressed')) !== 'true') fail('the Red-spotted Purple, watched under an old key, shows unwatched');
     } catch (e) {
       fail(`stopped: ${e.message.split('\n')[0]}`);
     }
@@ -2315,15 +2355,16 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     page.on('pageerror', (e) => fail(`pageerror: ${e.message}`));
     const poll = (fn, arg) => page.waitForFunction(fn, arg, { timeout: 90000, polling: 400 }).then(() => true, () => false);
     const cases = [
-      ['limenitis-astyanax', 'Ohio trend, 1996–2016: −6%/yr (likely −10 to −3)'],
+      // A link by the Red-spotted Purple's old (GBIF) key opens it under its iNaturalist name (reconcile.py).
+      ['limenitis-astyanax', 'Ohio trend, 1996–2016: −6%/yr (likely −10 to −3)', 'limenitis-arthemis-astyanax'],
       ['cercyonis-pegala', 'Ohio trend, 1996–2016: −7%/yr (likely −9 to −5)'],
       ['papilio-glaucus', 'Ohio trend, 1996–2016: no clear trend'],
       ['bombus-impatiens', null],
     ];
     try {
-      for (const [key, want] of cases) {
+      for (const [key, want, opens = key] of cases) {
         await page.goto(`${origin}/?species=${key}&noauto&today=2027-01-15`);
-        if (!(await poll((k) => window.__hatch?.current()?.id === `${k}-atlas`, key))) { fail(`${key}: never opened`); continue; }
+        if (!(await poll((k) => window.__hatch?.current()?.id === `${k}-atlas`, opens))) { fail(`${key}: never opened ${opens}`); continue; }
         await page.locator('#why').click();
         if (!(await poll(() => {
           const d = document.querySelector('#drawer.open');
@@ -2640,7 +2681,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
     try {
       await page.goto(`${origin}/?noauto`);
       // The map is ready once its forecast answers for a place (central Illinois).
-      await page.waitForFunction(() => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null, null, { timeout: 60000 });
+      await page.waitForFunction(() => window.__hatch?.current()?.cellAt([-89.2, 40.1]) != null, null, { polling: 400, timeout: 60000 });
       const tap = (loc) => (phone ? loc.tap() : loc.click());
       await check('species button', '#species');
       await tap(page.locator('#species'));
@@ -2659,7 +2700,7 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
         await tap(page.locator('#probe .probe-close'));
       }
       await tap(page.locator('#share'));
-      await page.waitForFunction(() => document.querySelector('#action-msg')?.textContent, null, { timeout: 10000 }).catch(() => fail('Share said nothing'));
+      await page.waitForFunction(() => document.querySelector('#action-msg')?.textContent, null, { polling: 400, timeout: 10000 }).catch(() => fail('Share said nothing'));
       await check('note', '#action-msg');
       await tap(page.locator('#find'));
       await page.locator('#finder').waitFor();

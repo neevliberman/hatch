@@ -16,3 +16,9 @@ OUT = ROOT / "public/atlas"
 YEAR = 2026         # the year main's own files are for (ahead-, seen-YEAR); weekly.py builds later years
 SEASON = (60, 304)  # 1 Mar to 31 Oct (365-day calendar): the ribbon's days
 STEP = 4
+
+
+def records_name(row):
+    """The name a species.json row's records go by (GBIF's), which joins it to the records, per_species.csv and the
+    Ohio tables: "gbif" when reconcile.py shows iNaturalist's name instead, else its name."""
+    return row.get("gbif", row["name"])

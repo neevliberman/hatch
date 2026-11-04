@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from pipeline.atlas import ohio_trends as O
+from pipeline.atlas.config import records_name
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -81,7 +82,7 @@ def test_thresholds():
 
 
 def test_names_match_renames_and_skip_complexes():
-    atlas = {s["name"] for s in json.loads((ROOT / "public/atlas/species.json").read_text())}
+    atlas = {records_name(s) for s in json.loads((ROOT / "public/atlas/species.json").read_text())}
     names = pd.DataFrame({"CommonName": ["Red-spotted Purple", "White Admiral", "Azures", "Monarch", "Sachem"],
                           "Latin": ["Limenitis arthemis", "Limenitis arthemis", "Celastrina ladon",
                                     "Danaus plexippus", "Atalopedes campestris"]})
@@ -127,7 +128,7 @@ def test_values_are_rounded_once_to_what_the_card_writes():
 
 def test_published_records_match_thresholds_and_names():
     from pipeline.atlas.ohio_published import records
-    atlas = {s["name"] for s in json.loads((ROOT / "public/atlas/species.json").read_text())}
+    atlas = {records_name(s) for s in json.loads((ROOT / "public/atlas/species.json").read_text())}
     ship, table = records(PUBLISHED, atlas)
     assert ship == {"Limenitis astyanax": ["oh", -6, -10, -3, 87, 21], "Tharsalea hyllus": ["oh", -6, -13, 1, 23, 21],
                     "Papilio glaucus": ["oh", -1, -4, 2, 101, 21], "Ancyloxypha numitor": ["oh", 5, 2, 9, 84, 21],
@@ -144,7 +145,7 @@ def test_shipped_trends_are_butterflies_and_well_formed():
     for s in with_trend:
         src, pct, lo, hi, n_sites, n_years = s["trend"]
         assert src == "oh" and s["order"] == "Lepidoptera" and lo <= pct <= hi and n_sites >= 10 and n_years >= 10
-    t = {s["name"]: s["trend"] for s in with_trend}
+    t = {records_name(s): s["trend"] for s in with_trend}  # GBIF's names, as the Ohio tables join them
     assert t["Limenitis astyanax"] == ["oh", -6, -10, -3, 87, 21] and t["Danaus plexippus"] == ["oh", -7, -11, -2, 104, 21]
     assert "Polites coras" in t and "Atrytone delaware" in t and t["Papilio glaucus"][2] < 0 < t["Papilio glaucus"][3]
     assert "Bombus impatiens" not in t and "Lethe eurydice" not in t and "Celastrina ladon" not in t

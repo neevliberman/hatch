@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from pipeline.atlas.ohio_trends import atlas_names  # noqa: E402
+from pipeline.atlas.config import records_name  # noqa: E402
 
 OUT = ROOT / "public/atlas"
 SOURCE = "oh"
@@ -33,10 +34,10 @@ MIN_SITES, MIN_YEARS = 10, 10
 Z = 1.959964
 # Matched by name but left out on purpose, with why.
 EXCLUDE = {
-    # The Atlas row "Lethe eurydice" carries iNaturalist taxon 132227, which is L. appalachia (Appalachian Brown), the
-    # sibling species the deposit counts separately; its name and its photos disagree, and the two are often confused
-    # in the field. So the eyed brown's trend could land on the wrong species. (The Atlas row is not fixed here.)
-    "Northern Eyed Brown": "sibling-species confusion and an Atlas common-name mismatch",
+    # GBIF files L. appalachia (Appalachian Brown) under Lethe eurydice, so the Atlas row by that name holds both browns
+    # (reconcile.py names it for both), while the deposit counts the two separately and they are often confused in the
+    # field. The eyed brown's trend alone would land on a row that is mostly Appalachian Browns.
+    "Northern Eyed Brown": "sibling-species confusion: the Atlas row holds both browns",
 }
 
 
@@ -85,11 +86,11 @@ def main():
     paper = pd.read_csv(fetch() / "speciesTrends.csv")
     path = OUT / "species.json"
     species = json.loads(path.read_text())
-    ship, table = records(paper, {s["name"] for s in species})
+    ship, table = records(paper, {records_name(s) for s in species})
     for s in species:
         s.pop("trend", None)
-        if s["name"] in ship:
-            s["trend"] = ship[s["name"]]
+        if records_name(s) in ship:
+            s["trend"] = ship[records_name(s)]
     path.write_text(json.dumps(species, separators=(",", ":"), ensure_ascii=False))
     res = ROOT / "pipeline/atlas/results/ohio"
     res.mkdir(parents=True, exist_ok=True)

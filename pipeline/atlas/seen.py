@@ -132,13 +132,19 @@ def periodicals(names):
     return frozenset(i for i, s in enumerate(names) if periodical(s))
 
 
+def unlisted(species):
+    """The indices of species.json rows shown under another row ("into", reconcile.py): never a surprise of their own."""
+    return frozenset(i for i, s in enumerate(species) if "into" in s)
+
+
 def repick():
     """Pick the surprises again from the shipped seen-YEAR.json and species.json (no records or network needed): for a
     change to surprises() alone, such as a species it now leaves out."""
     path = OUT / f"seen-{YEAR}.json"
     f = json.loads(path.read_text())
-    names = [s["name"] for s in json.loads((OUT / "species.json").read_text())[:-1]]
-    f["surprises"] = surprises(f["species"][:-1], skip=periodicals(names))
+    species = json.loads((OUT / "species.json").read_text())[:-1]
+    names = [s["name"] for s in species]
+    f["surprises"] = surprises(f["species"][:-1], skip=periodicals(names) | unlisted(species))
     path.write_text(json.dumps(f, separators=(",", ":")))
     print("surprises:", ", ".join(names[i] for i in f["surprises"]))
 
@@ -183,7 +189,8 @@ def main():
         ratio, shift = judge(seen[s], expected[s], phi, phi_t)
         rows.append([int(seen[s].sum()), round(float(expected[s].sum()), 1), ratio, shift])
 
-    picks = surprises(rows[:-1], skip=periodicals(sp))
+    shown = json.loads((OUT / "species.json").read_text())[:-1]  # the same rows, in the network's order
+    picks = surprises(rows[:-1], skip=periodicals(sp) | unlisted(shown))
     o, e = ribbon(seen, last), ribbon(expected, last)
     top = np.maximum(o.max(1), e.max(1))[:, None]
     scaled = np.stack([e, o], 1) / np.where(top > 0, top, 1)[:, None]

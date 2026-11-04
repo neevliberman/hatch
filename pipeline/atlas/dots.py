@@ -24,7 +24,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from pipeline.atlas import data as D  # noqa: E402
-from pipeline.atlas.config import BOX, FIRST_YEAR, LAST_YEAR, OUT, YEAR  # noqa: E402
+from pipeline.atlas.config import BOX, FIRST_YEAR, LAST_YEAR, OUT, YEAR, records_name  # noqa: E402
 
 CAP = 5_000
 STATES = ("Minnesota", "Wisconsin", "Michigan", "Iowa", "Illinois", "Indiana", "Ohio")
@@ -71,7 +71,7 @@ def main():
         f.unlink()
     total = shown = 0
     for i, s in enumerate(species):
-        g = by.get(s["name"])
+        g = by.get(records_name(s))
         if g is None:  # an empty file, so the page never asks for one that isn't there
             (out / f"{i}.bin").write_bytes(b"")
             continue
