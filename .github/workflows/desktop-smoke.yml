@@ -27,9 +27,10 @@ jobs:
       matrix:
         include:
           # dist/ for Chromium: the live-mode checks serve it over http. dist-single/ is what the screens load.
-          - { suite: desktop, engine: chromium, build: 'build:all', shard: 1, of: 3 }
-          - { suite: desktop, engine: chromium, build: 'build:all', shard: 2, of: 3 }
-          - { suite: desktop, engine: chromium, build: 'build:all', shard: 3, of: 3 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 1, of: 4 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 2, of: 4 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 3, of: 4 }
+          - { suite: desktop, engine: chromium, build: 'build:all', shard: 4, of: 4 }
           - { suite: desktop, engine: firefox, build: 'build:single' }
           - { suite: desktop, engine: webkit, build: 'build:single' }
           # Zoomed in (scripts/fine.mjs, Chromium, dist/ over http): the finer hexagons load, draw, and give a card when
