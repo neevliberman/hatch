@@ -363,7 +363,7 @@ export function mountScrubber(
 
   window.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || root.inert) return; // inert: a link's species is still loading (main.ts)
     const onRange = t === range; // native range already handles arrows
     // Other controls own their keys: Space ticks a checkbox or opens the season menu, arrows move inside a select.
     if (!onRange && t.closest('input, select, textarea, a, [contenteditable]')) return;

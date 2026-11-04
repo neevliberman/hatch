@@ -1,6 +1,7 @@
 // Species-switch timing on a weak phone: software GL (SwiftShader) and the CPU slowed 4x (CDP), a phone viewport.
 // Usage: node scripts/perf-switch.mjs [runs]   (default 3; prints each run and the medians as JSON lines)
-// Env: PARTS (switch,scrub: which measurements, default both), PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (http build, default dist/; built if missing),
+// Env: PARTS (switch,scrub,link,cold: which measurements, default switch,scrub; link: the first field from a ?species=
+//      link; cold: a plain first visit, luna's field; each with the longest long task before that field), PLAYWRIGHT_PATH (module path), CHROMIUM (browser binary), DIST_DIR (http build, default dist/; built if missing),
 //      CPU (throttle rate, default 4), PROFILE=1 (a CPU profile of one run's switches: the top functions by self and
 //      total time; an unminified build reads best: npx vite build --minify false --outDir dist-prof), PROFILE_FIRST=1
 //      (the same for the first load), DETAIL=1 (each switch's gaps, long tasks, network runs and files, from the tap),
@@ -62,6 +63,12 @@ const probe = (cpuOnly) => {
   try {
     new PerformanceObserver((l) => l.getEntries().forEach((e) => P.long.push([e.startTime, e.duration]))).observe({ type: 'longtask', buffered: true });
   } catch {}
+  // A plain visit's first field: luna's hexagons are in the page, so they are on screen with the map's first frame (the
+  // map shows itself after a render), unless they were not in that frame: then at the frame after they are.
+  const hexes = () => window.__hatch?.map.drawn().some((l) => /-forecast-r\d/.test(l));
+  new MutationObserver(() => {
+    if (P.hexAt === undefined && document.querySelector('#map.drawn') && hexes()) P.hexAt = performance.now();
+  }).observe(document, { attributes: true, attributeFilter: ['class'], subtree: true });
   let last = performance.now();
   let seen = null;
   const tick = (now) => {
@@ -75,6 +82,10 @@ const probe = (cpuOnly) => {
       if (want !== h.current().id && !P.drawnAt[want] && h.map.drawn().includes(want)) seen = [want];
     }
     if (P.loaderAt === null && document.getElementById('loader')?.classList.contains('done')) P.loaderAt = now;
+    if (P.linkingAt === undefined && document.getElementById('app')?.classList.contains('linking')) P.linkingAt = now;
+    if (P.lunaAt === undefined && window.__hatch?.map.drawn().some((l) => l.startsWith('luna-forecast'))) P.lunaAt = now;
+    // Any species' first field on screen: its hexagons in the drawn layers, with the map shown (a plain visit's luna).
+    if (P.hexAt === undefined && document.querySelector('#map.drawn') && hexes()) P.hexSeen ? (P.hexAt = now) : (P.hexSeen = true);
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -182,7 +193,7 @@ const oneRun = async (profile) => {
 };
 
 // Self time and total time by function (name, file, line), from a CDP CPU profile.
-const summarise = (p) => {
+const summarise = (p, spans = [], offset = 0) => {
   const byId = new Map(p.nodes.map((n) => [n.id, n]));
   const parent = new Map();
   for (const n of p.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
@@ -204,7 +215,27 @@ const summarise = (p) => {
     }
   }
   const top = (m, n) => [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([l, us]) => `${Math.round(us / 1000)} ms  ${l}`);
-  return { self: top(self, 30), total: top(total, 45) };
+  const windows = spans.map(([s0, d]) => {
+    const w = new Map();
+    const ws = new Map();
+    let ts = p.startTime;
+    p.samples.forEach((id, k) => {
+      ts += dt[k] ?? 0;
+      const ms = ts / 1000 - offset;
+      if (ms < s0 || ms > s0 + d) return;
+      const us = dt[k + 1] ?? 0;
+      ws.set(label(byId.get(id)), (ws.get(label(byId.get(id))) ?? 0) + us);
+      const seen = new Set();
+      for (let x = id; x !== undefined; x = parent.get(x)) {
+        const l = label(byId.get(x));
+        if (seen.has(l) || l.startsWith('(root)')) continue;
+        seen.add(l);
+        w.set(l, (w.get(l) ?? 0) + us);
+      }
+    });
+    return `@${Math.round(s0)}+${Math.round(d)}: self ${top(ws, 4).join(', ')}\n    ` + top(w, 14).join('\n    ');
+  });
+  return { self: top(self, 30), total: top(total, 45), windows };
 };
 
 // The date slider dragged a day at a time through SCRUB_DAYS new days, on the first species: in a typical year and in
@@ -265,20 +296,80 @@ const scrubRun = async (season) => {
   return { first: r0(first), perDay: r0(median(days)), dayMax: r0(Math.max(...days)), long: r0(long), quick: r0(quick), quickLong: r0(quickLong) };
 };
 
+// The first field only, in a fresh context (no cache): a ?species= link (its own field, as oneRun's first) or a plain
+// first visit (luna's field, the opening playback left to start). Also when the loader went, the longest long task
+// and longest frame gap before the field was drawn, the longest long task in the 8 s after it, and the files' timings
+// (DETAIL=1).
+const AFTER = 8000;
+const firstRun = async (kind) => {
+  const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2.625, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(probe, false);
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
+  if (process.env.PROFILE_FIRST) {
+    await cdp.send('Profiler.enable');
+    await cdp.send('Profiler.setSamplingInterval', { interval: 500 });
+    await cdp.send('Profiler.start');
+  }
+  const fid = `${FIRST}-forecast-r4`;
+  await page.goto(kind === 'link' ? `${origin}/?species=${FIRST}&noauto&date=06-15` : `${origin}/`);
+  const at = kind === 'link' ? (id) => window.__perf.drawnAt[id] : () => window.__perf.hexAt;
+  await page.waitForFunction(at, fid, { timeout: 180000, polling: 250 });
+  // And the longest long task in the AFTER ms after it (the first moments a reader would try the map).
+  await page.waitForTimeout(AFTER);
+  let profile = null;
+  if (process.env.PROFILE_FIRST) {
+    const now = await page.evaluate(() => performance.now());
+    const p = (await cdp.send('Profiler.stop')).profile;
+    // Each long task over 800 ms on its own: what ran in it (page time = profile time - offset, near enough).
+    const spans = await page.evaluate(() => window.__perf.long.filter(([, d]) => d > 800));
+    profile = summarise(p, spans, p.endTime / 1000 - now);
+  }
+  const m = await page.evaluate(([kind, id, after]) => {
+    const P = window.__perf;
+    const drawn = kind === 'link' ? P.drawnAt[id] : P.hexAt;
+    const before = (xs) => xs.filter(([s]) => s < drawn);
+    return {
+      drawn, loader: P.loaderAt, linkingAt: P.linkingAt, lunaAt: P.lunaAt,
+      after: Math.max(0, ...P.long.filter(([s, d]) => s + d > drawn && s < drawn + after).map(([, d]) => d)),
+      long: Math.max(0, ...before(P.long).map(([, d]) => d)),
+      gap: Math.max(0, ...before(P.gaps).map(([, d]) => d)),
+      longs: before(P.long).map(([s, d]) => `${Math.round(s)}+${Math.round(d)}`).join(' '),
+      files: performance.getEntriesByType('resource').filter((e) => e.startTime < drawn).map((e) => `${e.name.split('/').slice(-2).join('/').split('?')[0]}@${Math.round(e.startTime)}-${Math.round(e.responseEnd)}`).join(' '),
+    };
+  }, [kind, fid, AFTER]);
+  await ctx.close();
+  const out = { drawn: r0(m.drawn), loader: r0(m.loader), long: r0(m.long), gap: r0(m.gap), after: r0(m.after) };
+  if (process.env.DETAIL) Object.assign(out, { longs: m.longs, files: m.files, linkingAt: r0(m.linkingAt), lunaAt: r0(m.lunaAt) });
+  return { out, profile };
+};
+
 const PARTS = (process.env.PARTS ?? 'switch,scrub').split(',');
 const runs = [];
 for (let r = 0; r < RUNS; r++) {
   const t = PARTS.includes('switch') ? await oneRun(process.env.PROFILE && r === 0) : { switches: [], first: {} };
   if (PARTS.includes('scrub')) t.scrub = { typical: await scrubRun(null), year: await scrubRun('2026') };
+  for (const kind of ['link', 'cold']) {
+    if (!PARTS.includes(kind)) continue;
+    const { out, profile } = await firstRun(kind);
+    t[kind] = out;
+    if (profile && r === 0) (t.profiles ??= {})[kind] = profile;
+  }
   runs.push(t);
-  const { profile, ...rest } = t;
+  const { profile, profiles, ...rest } = t;
   console.log(JSON.stringify({ run: r + 1, ...rest }));
-  if (profile) {
-    console.log('-- self time --\n' + profile.self.join('\n'));
-    console.log('-- total time --\n' + profile.total.join('\n'));
+  for (const [name, p] of Object.entries({ ...(profile ? { switch: profile } : {}), ...profiles })) {
+    console.log(`== profile: ${name}`);
+    console.log('-- self time --\n' + p.self.join('\n'));
+    console.log('-- total time --\n' + p.total.join('\n'));
+    if (p.windows?.length) console.log('-- long tasks --\n' + p.windows.join('\n'));
   }
 }
 const med = {};
+for (const kind of ['link', 'cold']) {
+  if (PARTS.includes(kind)) med[kind] = Object.fromEntries(['drawn', 'loader', 'long', 'gap', 'after'].map((k) => [k, median(runs.map((t) => t[kind][k]))]));
+}
 if (PARTS.includes('scrub')) {
   med.scrub = Object.fromEntries(['typical', 'year'].map((m) => [m, Object.fromEntries(['first', 'perDay', 'dayMax', 'long', 'quick', 'quickLong'].map((k) => [k, median(runs.map((t) => t.scrub[m][k]))]))]));
 }

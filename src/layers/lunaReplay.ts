@@ -606,11 +606,11 @@ export function createLunaLayer(initial: Mode = TYPICAL, onData: () => void = ()
       return p;
     },
 
-    render({ t, zoom, theme, wash, playing, frac = 0 }) {
+    render({ t, zoom, theme, wash, playing, frac = 0, quiet }) {
       const doy = dayOfYear(t);
       // While playing, the dots get the in-between day and the hexes blend into their next colour (see motion.ts).
       const anim = animating(playing);
-      const fade = hexFade(anim);
+      const fade = hexFade(anim, quiet);
       const d = anim ? doy + frac : doy;
       const { res, days } = pickRes(resForZoom(zoom));
       shownDays = days;

@@ -381,7 +381,7 @@ export function createOneGenerationLayer(
       return p;
     },
 
-    render({ t, zoom, theme, wash, playing, frac = 0 }) {
+    render({ t, zoom, theme, wash, playing, frac = 0, quiet }) {
       const doy = dayOfYear(t);
       const anim = animating(playing);
       const d = anim ? doy + frac : doy; // the in-between day while playing, like luna's dots
@@ -407,7 +407,7 @@ export function createOneGenerationLayer(
       return [
         new H3HexagonLayer<Cell>({
           // One id per level: reusing an id across levels left the other level's hexes drawn (see lunaReplay.ts).
-          id: `${key}-forecast-r${res}${hexFade(anim).id}`,
+          id: `${key}-forecast-r${res}${hexFade(anim, quiet).id}`,
           data: hexes,
           getHexagon: (c) => c.id,
           // The first-frame wash (a ?species= link), on the coarse hexagons only.
@@ -423,7 +423,7 @@ export function createOneGenerationLayer(
           autoHighlight: true,
           highlightColor: palette.hoverTint,
           updateTriggers: { getFillColor: [doy, mode, res, wash], getLineColor: [wash, res] },
-          transitions: hexFade(anim).transitions,
+          transitions: hexFade(anim, quiet).transitions,
         }),
         new H3HexagonLayer<Cell, FillStyleExtensionProps<Cell>>({
           id: `${key}-unseen-r${res}`,
