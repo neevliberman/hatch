@@ -288,7 +288,7 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
         got = lastRank.get(c);
         if (!got) return { title: 'Out here now', list: [], pending: true };
       } else {
-        got = outNow(allHere(c, r), atlas.volume, doy, SEASON[0], STEP, (i) => i === sp.i || i === other);
+        got = outNow(allHere(c, r), atlas.volume, doy, SEASON[0], STEP, (i) => i === sp.i || i === other || atlas.species[i]?.into !== undefined);
         if (ranks.size > 50) ranks.delete(ranks.keys().next().value!);
         ranks.set(k, got);
         if (lastRank.size > 50) lastRank.delete(lastRank.keys().next().value!);
@@ -691,7 +691,9 @@ export function createAtlasLayer(atlas: Atlas, sp: AtlasSpecies, initial: Mode, 
       if (ts) out.push({ text: ts.creditLine, href: ts.href });
       if (sp.photo && sp.credit && sp.taxon) out.push({ text: `${name} photo: ${sp.credit}, via iNaturalist.`, href: `https://www.inaturalist.org/taxa/${sp.taxon}` });
       if (sp.taxon) {
-        out.push({ text: `Recent ${name} sightings on iNaturalist.`, href: `https://www.inaturalist.org/observations?taxon_id=${sp.taxon}&order_by=observed_on` });
+        // A row that holds two of iNaturalist's species (pipeline/atlas/reconcile.py) links to both.
+        const ids = sp.taxa?.length ? `taxon_ids=${sp.taxa.join(',')}` : `taxon_id=${sp.taxon}`;
+        out.push({ text: `Recent ${name} sightings on iNaturalist.`, href: `https://www.inaturalist.org/observations?${ids}&order_by=observed_on` });
         out.push({ text: 'Seen one? Add it to iNaturalist.', href: 'https://www.inaturalist.org/observations/upload' });
       }
       return out;

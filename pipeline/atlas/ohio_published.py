@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from pipeline.atlas.ohio_trends import atlas_names  # noqa: E402
+from pipeline.atlas.config import records_name  # noqa: E402
 
 OUT = ROOT / "public/atlas"
 SOURCE = "oh"
@@ -85,11 +86,11 @@ def main():
     paper = pd.read_csv(fetch() / "speciesTrends.csv")
     path = OUT / "species.json"
     species = json.loads(path.read_text())
-    ship, table = records(paper, {s["name"] for s in species})
+    ship, table = records(paper, {records_name(s) for s in species})
     for s in species:
         s.pop("trend", None)
-        if s["name"] in ship:
-            s["trend"] = ship[s["name"]]
+        if records_name(s) in ship:
+            s["trend"] = ship[records_name(s)]
     path.write_text(json.dumps(species, separators=(",", ":"), ensure_ascii=False))
     res = ROOT / "pipeline/atlas/results/ohio"
     res.mkdir(parents=True, exist_ok=True)

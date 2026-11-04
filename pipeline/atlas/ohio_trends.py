@@ -21,6 +21,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 OUT = ROOT / "public/atlas"
+from pipeline.atlas.config import records_name  # noqa: E402
 RESULTS = ROOT / "pipeline/atlas/results/ohio"
 FIRST, LAST = 1996, 2016
 MIN_SURVEYS, MIN_SITE_YEARS = 10, 3   # the paper's site-year filter
@@ -229,7 +230,7 @@ def main():
     paper = pd.read_csv(cache / "speciesTrends.csv")
     names = pd.read_csv(cache / "species_names.csv")
     species = json.loads((OUT / "species.json").read_text())
-    match = atlas_names(names, {s["name"] for s in species})
+    match = atlas_names(names, {records_name(s) for s in species})
     sp["shown"] = sp.apply(lambda r: shown(r.to_dict()), axis=1)
     sp["verdict"] = [verdict(a, b) for a, b in zip(sp.lo, sp.hi)]
     sp["atlas"] = sp.CommonName.map(match)

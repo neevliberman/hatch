@@ -1,5 +1,5 @@
 import type { SpeciesEntry } from '../species';
-import { atlasKey, atlasYearInfo, fetchOnce, json, loadAtlasYear, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
+import { atlasByKey, atlasKey, atlasYearInfo, listed, fetchOnce, json, loadAtlasYear, loadIndex, loadOffSchedule, loadQuiet, loadSurprises, loadTwins, offNote, outOn, seasonDues, type AtlasSpecies, type Quiet, type Surprise } from '../atlas/index';
 import { nameOf, ORDER_NAMES, searchSpecies } from '../atlas/names';
 import type { Due } from '../core/layer';
 import { CROSS, STAR } from './icons';
@@ -111,7 +111,7 @@ export function mountSpeciesPicker(
   const labelOf = (key: string): string | null => {
     const f = featured.find((e) => e.key === key);
     if (f) return f.label;
-    const s = all?.find((x) => keyOf(x) === key);
+    const s = all && (all.find((x) => keyOf(x) === key) ?? atlasByKey(all, key)); // a watched key from before a rename
     return s ? nameOf(s) : key === currentKey ? currentLabel : null;
   };
   const setStar = () => {
@@ -247,7 +247,7 @@ export function mountSpeciesPicker(
   const surprises = () =>
     odd
       .map(({ i, note }) => {
-        const s = all?.find((x) => x.i === i);
+        const s = all?.find((x) => x.i === i && listed(x));
         return s ? row(s).replace('data-key=', `data-season="${surpriseYear()}" data-key=`).replace('</span></button>', `</span><span class="sp-n">${esc(note)}</span></button>`) : '';
       })
       .join('');
@@ -255,7 +255,7 @@ export function mountSpeciesPicker(
   const offRows = () =>
     off
       .map(([i, d]) => {
-        const s = all?.find((x) => x.i === i);
+        const s = all?.find((x) => x.i === i && listed(x));
         const n = `<span class="sp-n sp-${d > 0 ? 'early' : 'late'}">${offNote(d)}</span>`;
         return s ? row(s).replace('data-key=', `data-season="${surpriseYear()}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
@@ -264,7 +264,7 @@ export function mountSpeciesPicker(
   const quietRows = () =>
     quiet
       .map(({ i, seen, expected }) => {
-        const s = all?.find((x) => x.i === i);
+        const s = all?.find((x) => x.i === i && listed(x));
         const n = `<span class="sp-n" title="${seen} identified photos so far, ${expected} expected">${seen} of ${expected}</span>`;
         return s ? row(s).replace('data-key=', `data-season="${surpriseYear()}" data-key=`).replace('</span></button>', `</span>${n}</button>`) : '';
       })
@@ -272,7 +272,7 @@ export function mountSpeciesPicker(
   const twinRows = () =>
     twins
       .map((i) => {
-        const s = all?.find((x) => x.i === i);
+        const s = all?.find((x) => x.i === i && listed(x));
         return s ? row(s) : '';
       })
       .join('');
@@ -346,12 +346,12 @@ export function mountSpeciesPicker(
     if (!path.order) {
       list.innerHTML =
         `<li class="sp-sec">Featured forecasts</li>${featuredRows()}${twinList()}${surpriseRows()}${offList()}${quietList()}${all.length ? '<li class="sp-sec">Browse</li>' : ''}` +
-        tally(all, 'order').map(([o, n]) => counted(group(ORDER_NAMES[o] ?? o, o, `data-order="${esc(o)}"`), n)).join('');
+        tally(all.filter(listed), 'order').map(([o, n]) => counted(group(ORDER_NAMES[o] ?? o, o, `data-order="${esc(o)}"`), n)).join('');
     } else if (!path.family) {
-      const inOrder = all.filter((s) => s.order === path.order);
+      const inOrder = all.filter((s) => s.order === path.order && listed(s));
       list.innerHTML = tally(inOrder, 'family').map(([f, n]) => counted(group(f, '', `data-family="${esc(f)}"`), n)).join('');
     } else {
-      list.innerHTML = all.filter((s) => s.family === path.family).sort((a, b) => b.n - a.n).map(row).join('');
+      list.innerHTML = all.filter((s) => s.family === path.family && listed(s)).sort((a, b) => b.n - a.n).map(row).join('');
     }
   };
 
@@ -476,7 +476,8 @@ export function mountSpeciesPicker(
       const s = all ?? (await loadIndex());
       if (!s?.length) return;
       all = s;
-      pick(keyOf(s[Math.floor(Math.random() * s.length)]!));
+      const shown = s.filter(listed);
+      pick(keyOf(shown[Math.floor(Math.random() * shown.length)]!));
     },
     show(key, label) {
       currentKey = key;

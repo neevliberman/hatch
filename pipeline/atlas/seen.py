@@ -132,13 +132,19 @@ def periodicals(names):
     return frozenset(i for i, s in enumerate(names) if periodical(s))
 
 
+def unlisted(species):
+    """The indices of species.json rows shown under another row ("into", reconcile.py): never a surprise of their own."""
+    return frozenset(i for i, s in enumerate(species) if "into" in s)
+
+
 def repick():
     """Pick the surprises again from the shipped seen-YEAR.json and species.json (no records or network needed): for a
     change to surprises() alone, such as a species it now leaves out."""
     path = OUT / f"seen-{YEAR}.json"
     f = json.loads(path.read_text())
-    names = [s["name"] for s in json.loads((OUT / "species.json").read_text())[:-1]]
-    f["surprises"] = surprises(f["species"][:-1], skip=periodicals(names))
+    species = json.loads((OUT / "species.json").read_text())[:-1]
+    names = [s["name"] for s in species]
+    f["surprises"] = surprises(f["species"][:-1], skip=periodicals(names) | unlisted(species))
     path.write_text(json.dumps(f, separators=(",", ":")))
     print("surprises:", ", ".join(names[i] for i in f["surprises"]))
 

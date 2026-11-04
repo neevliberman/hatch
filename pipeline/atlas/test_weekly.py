@@ -9,6 +9,7 @@ import subprocess
 import urllib.error
 from pathlib import Path
 
+import h3
 import numpy as np
 import pandas as pd
 import pytest
@@ -310,6 +311,22 @@ def test_label_photos_filters_bursts_and_labels():
     assert (p.label == len(SPECIES) - 1).sum() > 500          # named only to genus or family: "other"
     early = W.label_photos(photo_rows(), 2026, 150, SPECIES[:-1], [c["h"] for c in CELLS])
     assert early.doy.max() <= 150
+
+
+def test_label_photos_follows_the_rows_taxa():
+    """A photo goes to the row of its own taxon when it has one (the Red-spotted Purple, a subspecies), else to its
+    species' row; a row holding two of iNaturalist's species (reconcile.py "taxa") takes photos of either."""
+    rows = [{"name": "Limenitis arthemis astyanax", "taxon": 58585}, {"name": "Limenitis arthemis", "taxon": 60607, "into": 0},
+            {"name": "Lethe (Satyrodes)", "taxon": 1265201, "taxa": [141531, 132227]}]
+    c = CELLS[len(CELLS) // 2]["h"]
+    lat, lng = h3.cell_to_latlng(c)
+    t = [58585, 60607, 58583, 141531, 132227, 1265201]           # purple, the species, a white admiral, both browns, subgenus
+    sp = [60607, 60607, 60607, 141531, 132227, 0]
+    df = pd.DataFrame({"id": range(1, 7), "day": "2026-06-01", "lat": lat, "lng": lng, "user": range(1, 7), "taxon": t,
+                       "rank": [5.0, 10.0, 5.0, 10.0, 10.0, 12.0], "species": sp})
+    p = W.label_photos(df, 2026, 300, rows, [c])
+    assert p.sort_values("id").label.tolist() == [0, 1, 1, 2, 2, 3]
+    assert W.row_taxa(rows) == {58585: 0, 60607: 1, 1265201: 2, 141531: 2, 132227: 2}
 
 
 def fake_weather(as_of):

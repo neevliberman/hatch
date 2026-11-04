@@ -28,7 +28,18 @@ export interface AtlasSpecies {
   /** A published long-term count trend (pipeline/atlas/ohio_published.py): [source, % per year, its 95% interval low
    * and high, sites, years]. Source "oh": Ohio butterfly monitoring 1996-2016 (TREND_SOURCES). Absent for most. */
   trend?: [string, number, number, number, number, number];
+  /** GBIF's name for the records, when the Atlas shows iNaturalist's instead (pipeline/atlas/reconcile.py). A link
+   * made with the old name's key still opens it. */
+  gbif?: string;
+  /** The iNaturalist species the records hold, when GBIF's one species is two of iNaturalist's (reconcile.py). */
+  taxa?: number[];
+  /** The row shown in this one's place (its index): GBIF split one iNaturalist species into two outputs of the network,
+   * and only the other is listed (reconcile.py). A link to this one opens that one. */
+  into?: number;
 }
+
+/** Whether a species is listed (search, browse, the strips): every row but one shown under another (`into`). */
+export const listed = (s: Pick<AtlasSpecies, 'into'>) => s.into === undefined;
 
 /** Where a species' `trend` comes from: the line's label, its credit and the link. */
 export const TREND_SOURCES: Record<string, { label: string; note: string; credit: string; creditLine: string; href: string }> = {
@@ -215,7 +226,7 @@ const TWIN_NUDGE = 0.01;
  * plus a tie-breaker (TWIN_NUDGE) toward species people actually photograph. Leaves out the species' own
  * genus and keeps one per genus, so near-twin congeners don't fill the row. Best first; empty for a species with no curve.
  */
-export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i' | 'name' | 'genus' | 'n'>[], i: number, n = 3): number[] {
+export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i' | 'name' | 'genus' | 'n' | 'into'>[], i: number, n = 3): number[] {
   const rows = b.length / (2 * STEPS);
   if (!(i >= 0 && i < rows)) return [];
   const at = (j: number) => j * 2 * STEPS;
@@ -233,7 +244,7 @@ export function pickTwins(b: Uint8Array, species: readonly Pick<AtlasSpecies, 'i
   const self = species.find((s) => s.i === i);
   const scored: [number, number, string][] = [];
   for (const s of species) {
-    if (s.i === i || s.n < TWIN_MIN_RECORDS || !(s.i >= 0 && s.i < rows)) continue;
+    if (s.i === i || s.n < TWIN_MIN_RECORDS || !listed(s) || !(s.i >= 0 && s.i < rows)) continue;
     const c = at(s.i);
     const tc = top(s.i);
     if (!tc) continue;
@@ -264,6 +275,12 @@ export async function loadTwins(species: readonly AtlasSpecies[], i: number, n =
 
 /** The ?species= key for a species: its scientific name, lower case, hyphens ("papilio-glaucus"). */
 export const atlasKey = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+/** The Atlas species a ?species= key names: by its name, else by its GBIF name (a link from before reconcile.py renamed
+ * it); a row shown under another (`into`) gives that one. */
+export function atlasByKey(species: readonly AtlasSpecies[], key: string): AtlasSpecies | undefined {
+  const s = species.find((x) => atlasKey(x.name) === key) ?? species.find((x) => !!x.gbif && atlasKey(x.gbif) === key);
+  return s?.into !== undefined ? species[s.into] : s;
+}
 
 /** A year's biggest surprises (pipeline/atlas/seen.py): species index and a few words, "2.0×", "3%", "11 d late". */
 export interface Surprise {

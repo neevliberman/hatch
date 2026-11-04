@@ -385,6 +385,17 @@ def quarter_days(a):
 
 
 # ---------------------------------------------------------------- photos -> expected vs seen
+def row_taxa(species):
+    """{iNaturalist taxon id: species.json row} for labelling photos: each row's taxon, and every species in its "taxa"
+    when GBIF's one species is several of iNaturalist's (reconcile.py: the Eyed and the Appalachian Brown)."""
+    out = {}
+    for i, s in enumerate(species):
+        for t in [s.get("taxon"), *s.get("taxa", [])]:
+            if t:
+                out[int(t)] = i
+    return out
+
+
 def label_photos(df, year, last_day, species, cells):
     """Cached rows -> the photos seen.py counts: this year's, through `last_day`, inside a map cell, one per observer x
     taxon x cell x day (data.load_records' burst filter). Adds doy, ci (cell index) and label (species index; the last,
@@ -399,10 +410,12 @@ def label_photos(df, year, last_day, species, cells):
     at = {c: i for i, c in enumerate(cells)}
     df["ci"] = [at.get(h3.latlng_to_cell(a, b, WARMTH_RES), -1) for a, b in zip(df.lat.to_numpy(), df.lng.to_numpy())]
     df = df[df.ci >= 0]
-    taxa = {int(s["taxon"]): i for i, s in enumerate(species) if s.get("taxon")}
+    taxa = row_taxa(species)
     sp = df.species.to_numpy()
     own = df.taxon.map(taxa)
-    df["label"] = np.where(sp > 0, pd.Series(sp, index=df.index).map(taxa).fillna(own).fillna(len(species)),
+    # A photo of a taxon with a row of its own (a subspecies GBIF keeps as a species: the Red-spotted Purple) goes to
+    # that row, as GBIF files it; any other photo named to a species goes to its species' row.
+    df["label"] = np.where(sp > 0, own.fillna(pd.Series(sp, index=df.index).map(taxa)).fillna(len(species)),
                            len(species)).astype(int)
     # the burst filter's key: the species if named to one, else whatever it was named to (data.py: genus, family, ...)
     df["key"] = np.where(sp > 0, sp, -df.taxon.to_numpy())
@@ -586,7 +599,7 @@ def build(year, today, out, cache_dir=CACHE, taxa=None, full=False, max_pages=No
     seen, expected = expected_seen(net, p, ahead, cells_dd, cell_ll)
     rows, phi, phi_t = judge_all(seen, expected)
     names = [s["name"] for s in species[:-1]]
-    picks = SEEN.surprises(rows[:-1], skip=SEEN.periodicals(names))
+    picks = SEEN.surprises(rows[:-1], skip=SEEN.periodicals(names) | SEEN.unlisted(species[:-1]))
     t_net = time.time() - t1
     print(f"network: {len(p):,} photos through day {last_day} in {t_net:.0f} s; dispersion counts {phi:.1f}, "
           f"timing {phi_t:.1f}; {sum(r[2] is not None for r in rows)} species off in numbers, "

@@ -62,6 +62,7 @@ export function searchSpecies(all: readonly AtlasSpecies[], text: string, featur
   };
   const scored: { s: AtlasSpecies; tier: number; feat: number }[] = [];
   for (const s of all) {
+    if (s.into !== undefined) continue; // shown under another row (index.ts listed)
     const f = featured.get(s.name);
     const label = f === undefined ? undefined : fold(f);
     const names = [fold(s.common ?? ''), label ?? ''].filter(Boolean);

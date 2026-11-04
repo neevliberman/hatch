@@ -44,15 +44,15 @@ def track_record(res: pd.DataFrame | None = None) -> dict:
 
 def main():
     sys.path.insert(0, str(ROOT))
-    from pipeline.atlas.config import OUT
+    from pipeline.atlas.config import OUT, records_name
     path = OUT / "species.json"
     rows = json.loads(path.read_text())
     rec = track_record()
     for row in rows[:-1]:
         row.pop("test", None)  # the old one-bit 2026 result; rec holds it and more
         row.pop("rec", None)
-        if row["name"] in rec:
-            row["rec"] = rec[row["name"]]
+        if records_name(row) in rec:
+            row["rec"] = rec[records_name(row)]
     path.write_text(json.dumps(rows, separators=(",", ":"), ensure_ascii=False))
     k = [r.get("rec", [None] * 4) for r in rows[:-1]]
     for name, i in (("2026", 0), ("WI/MN", 2)):
