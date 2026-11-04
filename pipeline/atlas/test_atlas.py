@@ -389,8 +389,10 @@ def test_reconcile_names_rows_as_their_records():
     species = json.loads((Path(__file__).resolve().parents[2] / "public/atlas/species.json").read_text())[:-1]
     by = {records_name(s): s for s in species}
     browns = by["Lethe eurydice"]
-    assert browns["name"] == "Lethe (Satyrodes)" and browns["taxon"] == 1265201 and set(browns["taxa"]) == {141531, 132227}
-    assert browns["common"] == "Eyed and Appalachian Browns"
+    assert browns["name"] == "Lethe eurydice / appalachia" and browns["taxon"] == 1265201 and set(browns["taxa"]) == {141531, 132227}
+    assert browns["common"] == "Eyed & Appalachian Browns" and "Satyrodes eurydice" in browns["aka"]
+    groups = [s for s in species if "taxa" in s]  # one Latin form, and a short common name for the header
+    assert len(groups) == 4 and all(" / " in s["name"] and s["common"] and len(s["common"]) <= 28 for s in groups)
     assert by["Limenitis astyanax"]["name"] == "Limenitis arthemis astyanax"
     assert by["Limenitis arthemis"]["into"] == by["Limenitis astyanax"]["i"]
     assert all(by[g]["name"] == f["name"] for g, f in GROUPS.items()) and all("into" in by[g] for g in INTO)

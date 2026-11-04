@@ -5,8 +5,9 @@ are iNaturalist's, from the commonest iNaturalist taxon among its records (expor
 taxonomies part, a row can say one species and show another (check_taxa.py finds them):
 - GROUPS: one GBIF species holding two of iNaturalist's. GBIF files Lethe appalachia (Appalachian Brown) under Lethe
   eurydice (Eyed Brown), so the row "Lethe eurydice" was 62% Appalachian Browns, and took that taxon, name and photo.
-  The network learned the two as one, so the row is named for both: one iNaturalist taxon that holds exactly the two
-  when there is one (the subgenus Satyrodes), and "taxa" lists both, so this year's photos of either count for it.
+  The network learned the two as one, so the row is named for both ("Lethe eurydice / appalachia"), its taxon is one
+  that holds exactly the two when iNaturalist has one (the subgenus Satyrodes), and "taxa" lists both, so this year's
+  photos of either count for it.
 - INTO: one iNaturalist species that GBIF splits into two. iNaturalist ranks the Red-spotted Purple as a subspecies of
   Limenitis arthemis; GBIF keeps it a species, so the rest (White Admirals and every photo named only to the species,
   Red-spotted Purples among them) was a second row, "Red-spotted Admiral". Merging the two needs the network
@@ -31,17 +32,19 @@ from pipeline.atlas import check_taxa as C  # noqa: E402
 from pipeline.atlas.config import OUT, records_name  # noqa: E402
 from pipeline.atlas.names import INAT, get  # noqa: E402
 
-# GBIF's name -> what the row shows. "taxon": the iNaturalist taxon for its photo and page (one holding exactly the
-# group when iNaturalist has one, else the commonest species); "taxa": every iNaturalist species in the records.
+# GBIF's name -> what the row shows: both Latin names joined by " / ", and a common name short enough for the header.
+# "taxon": the iNaturalist taxon for its photo and page (one holding exactly the group when iNaturalist has one, else the
+# commonest species); "taxa": every iNaturalist species in the records; "aka": other names search should find.
 GROUPS = {
-    "Lethe eurydice": {"name": "Lethe (Satyrodes)", "common": "Eyed and Appalachian Browns", "taxon": 1265201,
-                       "taxa": [141531, 132227]},  # 731 Eyed, 1,219 Appalachian (GBIF, the box, 2015-2024)
-    "Polistes carolina": {"name": "Polistes carolina / rubiginosus", "common": "Fine- and Coarse-backed Red Paper Wasps",
-                          "taxon": 370906, "taxa": [121792, 370906]},  # 109 P. carolina, 202 P. rubiginosus
-    "Meganola minuscula": {"name": "Meganola minuscula / phylla", "common": "Confused and Coastal Plain Meganola Moths",
+    "Lethe eurydice": {"name": "Lethe eurydice / appalachia", "common": "Eyed & Appalachian Browns", "taxon": 1265201,
+                       "taxa": [141531, 132227], "aka": ["Satyrodes eurydice", "Satyrodes appalachia", "Lethe (Satyrodes)"]},
+    # 731 Eyed, 1,219 Appalachian (GBIF, the box, 2015-2024); the taxon is the subgenus Satyrodes, exactly the two.
+    "Polistes carolina": {"name": "Polistes carolina / rubiginosus", "common": "Red Paper Wasps", "taxon": 370906,
+                          "taxa": [121792, 370906]},  # 109 P. carolina, 202 P. rubiginosus
+    "Meganola minuscula": {"name": "Meganola minuscula / phylla", "common": "Confused & Coastal Meganolas",
                            "taxon": 332250, "taxa": [224526, 332250]},  # 34 M. minuscula, 65 M. phylla
-    "Neokolla hieroglyphica": {"name": "Neokolla hieroglyphica / Amphigonalia gothica", "common": None, "taxon": 225650,
-                               "taxa": [225650, 1422830]},  # 198 N. hieroglyphica, 157 A. gothica
+    "Neokolla hieroglyphica": {"name": "Neokolla hieroglyphica / Amphigonalia gothica", "common": "Sharpshooter Leafhoppers",
+                               "taxon": 225650, "taxa": [225650, 1422830]},  # 198 N. hieroglyphica, 157 A. gothica
 }
 # GBIF's name -> GBIF's name of the row shown in its place.
 INTO = {"Limenitis arthemis": "Limenitis astyanax"}
@@ -73,7 +76,7 @@ def reconcile(rows, log=print):
         r = by_gbif.get(gname)
         if not r:
             continue
-        new = {"name": fix["name"], "common": fix["common"], "taxon": fix["taxon"], "taxa": fix["taxa"]}
+        new = {"name": fix["name"], "common": fix["common"], "taxon": fix["taxon"], "taxa": fix["taxa"], **({"aka": fix["aka"]} if "aka" in fix else {})}
         if r.get("taxon") != fix["taxon"]:
             new["photo"], new["credit"] = photo(fix["taxon"])
         if any(r.get(k) != v for k, v in new.items()):

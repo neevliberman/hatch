@@ -33,6 +33,8 @@ export interface AtlasSpecies {
   gbif?: string;
   /** The iNaturalist species the records hold, when GBIF's one species is two of iNaturalist's (reconcile.py). */
   taxa?: number[];
+  /** Other Latin names search finds it by ("Satyrodes eurydice"). */
+  aka?: string[];
   /** The row shown in this one's place (its index): GBIF split one iNaturalist species into two outputs of the network,
    * and only the other is listed (reconcile.py). A link to this one opens that one. */
   into?: number;

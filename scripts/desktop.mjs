@@ -2206,18 +2206,19 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.waitForFunction(() => document.querySelectorAll('#sp-list .sp-row').length >= 5, null, { timeout: 30000, polling: 250 });
       // [query, the top row's key, or a test of its name]
       for (const [q, want] of [['luna', 'luna'], ['monarch', 'monarch'], ['firefly', 'firefly'], ['cicada', /^[\w' -]* Cicada$/], ['bumble', /Bumble Bee$/],
-        ['red-spotted purple', 'limenitis-arthemis-astyanax'], ['appalachian brown', 'lethe-satyrodes'],
+        ['red-spotted purple', 'limenitis-arthemis-astyanax'], ['appalachian brown', 'lethe-eurydice-appalachia'],
         // Old names still find the species (reconcile.py renamed or merged them): GBIF's Latin name, the old genus, and the
         // merged row's common name.
-        ['papilio cresphontes', 'heraclides-cresphontes'], ['lethe eurydice', 'lethe-satyrodes'], ['red-spotted admiral', 'limenitis-arthemis-astyanax'],
-        ['speyeria', /Fritillary$/], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
+        ['papilio cresphontes', 'heraclides-cresphontes'], ['lethe eurydice', 'lethe-eurydice-appalachia'], ['red-spotted admiral', 'limenitis-arthemis-astyanax'],
+        ['speyeria', /Fritillary$/], ['satyrodes', 'lethe-eurydice-appalachia'], ['Satyrodes eurydice', 'lethe-eurydice-appalachia'],
+        ['lethe eurydice / appalachia', 'lethe-eurydice-appalachia'], ['cassins', /^Cassin's 17-year Cicada$/], ['CASSÍN’S 17', /^Cassin's 17-year Cicada$/]]) {
         await page.locator('#sp-q').fill(q);
         const top = page.locator('#sp-list .sp-row').first();
         await top.waitFor({ timeout: 10000 }).catch(() => {});
         const [key, name] = await top.evaluate((b) => [b.dataset.key, b.querySelector('.sp-name').firstChild.textContent]).catch(() => [null, null]);
         if (typeof want === 'string' ? key !== want : !want.test(name ?? '')) fail(`searching "${q}" puts "${name}" (${key}) first`);
         if (q === 'red-spotted purple' && name !== 'Red-spotted Purple') fail(`Limenitis arthemis astyanax is listed as "${name}"`);
-        if (q === 'appalachian brown' && name !== 'Eyed and Appalachian Browns') fail(`Lethe (Satyrodes) is listed as "${name}"`);
+        if (q === 'appalachian brown' && name !== 'Eyed & Appalachian Browns') fail(`Lethe eurydice / appalachia is listed as "${name}"`);
         // A featured species shows its own label, as on the featured strip.
         if (q === 'luna' && name !== 'Luna moth') fail(`searching "luna" lists the luna moth as "${name}"`);
       }
@@ -2242,10 +2243,20 @@ if (engines.includes('chromium') && existsSync(join(distDir, 'live/latest.json')
       await page.locator('#sp-q').press('Enter');
       await page.waitForFunction(() => /^luna/.test(window.__hatch.current().id), null, { timeout: 30000, polling: 250 })
         .catch(async () => fail(`Enter on "luna" opened ${await page.evaluate(() => window.__hatch.current().id)}`));
+      // A group's name (reconcile.py: two species GBIF files as one) fits the species button whole, on one line.
+      for (const key of ['lethe-eurydice-appalachia', 'polistes-carolina-rubiginosus', 'meganola-minuscula-phylla', 'neokolla-hieroglyphica-amphigonalia-gothica']) {
+        await page.goto(`${origin}/?noauto&today=2027-01-15&species=${key}`);
+        if (!(await page.waitForFunction((k) => window.__hatch?.current?.().id === `${k}-atlas`, key, { timeout: 60000, polling: 400 }).then(() => true, () => false))) {
+          fail(`${key} never opened`);
+          continue;
+        }
+        const f = await page.locator('#species .sp-face').evaluate((e) => [e.textContent, e.scrollWidth, e.clientWidth]);
+        if (f[1] > f[2] + 1) fail(`"${f[0]}" is cut off in the species button (${f[1]} px in ${f[2]})`);
+      }
       // A watch list saved under old keys (from before reconcile.py) comes back under the keys the list uses now, once
       // each: the merged Limenitis row folds into the Red-spotted Purple, and every chip has its countdown.
       const old = ['polites-coras', 'papilio-cresphontes', 'lethe-eurydice', 'limenitis-arthemis', 'limenitis-arthemis-astyanax'];
-      const now = ['polites-peckius', 'heraclides-cresphontes', 'lethe-satyrodes', 'limenitis-arthemis-astyanax'];
+      const now = ['polites-peckius', 'heraclides-cresphontes', 'lethe-eurydice-appalachia', 'limenitis-arthemis-astyanax'];
       await page.evaluate((v) => localStorage.setItem('hatch-watch', JSON.stringify(v)), old);
       await page.goto(`${origin}/?noauto&today=2027-01-15&species=limenitis-arthemis`);
       await page.waitForFunction(() => window.__hatch?.current?.().id === 'limenitis-arthemis-astyanax-atlas', null, { timeout: 60000, polling: 400 })

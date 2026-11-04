@@ -37,7 +37,8 @@ export function plural(s: AtlasSpecies): string {
 }
 
 /** Lower case, accents and apostrophes dropped, for matching: "cassins" finds "Cassin's", "e" finds "é". */
-const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\u2018\u2019`]/g, '').toLowerCase();
+// Brackets and slashes read as spaces, so "satyrodes" starts a word of "Lethe (Satyrodes)" and "appalachia" one of "eurydice/appalachia".
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\u2018\u2019`]/g, '').replace(/[()/]/g, ' ').replace(/\s+/g, ' ').toLowerCase();
 
 /**
  * Search the species list. Every word must start a word of the common name, Latin name, genus, family or order (or the
@@ -73,7 +74,7 @@ export function searchSpecies(all: readonly AtlasSpecies[], text: string, featur
     const names = [fold(s.common ?? ''), label ?? '', ...aka.map((a) => fold(a.common ?? ''))].filter(Boolean);
     const sci = fold(s.name);
     // Its old Latin names too: GBIF's ("Speyeria cybele", now Argynnis cybele) and those of the rows under it.
-    const old = [s.gbif, ...aka.flatMap((a) => [a.name, a.gbif])].filter((x): x is string => !!x).map(fold);
+    const old = [s.gbif, ...(s.aka ?? []), ...aka.flatMap((a) => [a.name, a.gbif])].filter((x): x is string => !!x).map(fold).map((x) => x.trim());
     const hay = fold(`${names.join(' ')} ${s.name} ${old.join(' ')} ${s.genus ?? ''} ${s.family ?? ''} ${s.order ?? ''} ${ORDER_NAMES[s.order ?? ''] ?? ''}`);
     if (!words.every((w) => starts(hay, w))) continue;
     const named = names.some((n) => words.every((w) => starts(n, w)));
