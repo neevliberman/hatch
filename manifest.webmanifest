@@ -1,0 +1,19 @@
+{
+  "name": "Hatch: when insects come out",
+  "short_name": "Hatch",
+  "description": "When will insects like luna moths and fireflies come out near you? A forecast for the Midwest, checked against real sightings.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8f2e3",
+  "theme_color": "#f8f2e3",
+  "categories": ["education", "science", "nature"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/hatch.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
